@@ -22,6 +22,65 @@ struct VariableInfo {
     mutable: bool,
 }
 
+#[derive(Clone, Copy)]
+enum LoopKind {
+    Loop,
+    While,
+}
+
+struct LoopContext {
+    kind: LoopKind,
+    break_type: Option<Type>,
+}
+
+impl LoopContext {
+    fn new(kind: LoopKind) -> Self {
+        Self {
+            kind,
+            break_type: None,
+        }
+    }
+
+    fn record_break(&mut self, ty: Type) -> Result<(), CompileError> {
+        match self.kind {
+            LoopKind::Loop => {
+                if let Some(existing) = self.break_type {
+                    if existing != ty {
+                        return Err(CompileError::new(format!(
+                            "break value type mismatch: expected `{}` but found `{}`",
+                            type_name(existing),
+                            type_name(ty)
+                        )));
+                    }
+                } else {
+                    self.break_type = Some(ty);
+                }
+                Ok(())
+            }
+            LoopKind::While => {
+                if ty != Type::Unit {
+                    Err(CompileError::new(
+                        "`break` with a value is only allowed inside `loop` expressions",
+                    ))
+                } else {
+                    Ok(())
+                }
+            }
+        }
+    }
+}
+
+fn type_name(ty: Type) -> &'static str {
+    match ty {
+        Type::I32 => "i32",
+        Type::I64 => "i64",
+        Type::F32 => "f32",
+        Type::F64 => "f64",
+        Type::Bool => "bool",
+        Type::Unit => "()",
+    }
+}
+
 struct ScopeGuard<'a> {
     checker: &'a mut TypeChecker,
 }
@@ -56,7 +115,7 @@ pub struct TypeChecker {
     functions: HashMap<String, FunctionSignature>,
     scopes: Vec<HashMap<String, VariableInfo>>,
     current_return_type: Type,
-    loop_depth: usize,
+    loop_stack: Vec<LoopContext>,
 }
 
 impl TypeChecker {
@@ -65,7 +124,7 @@ impl TypeChecker {
             functions: HashMap::new(),
             scopes: Vec::new(),
             current_return_type: Type::Unit,
-            loop_depth: 0,
+            loop_stack: Vec::new(),
         }
     }
 
@@ -316,10 +375,34 @@ impl TypeChecker {
         &mut self,
         stmt: ast::BreakStatement,
     ) -> Result<hir::BreakStatement, CompileError> {
-        if self.loop_depth == 0 {
-            Err(CompileError::new("`break` outside of loop").with_span(stmt.span))
+        if self.loop_stack.is_empty() {
+            return Err(CompileError::new("`break` outside of loop").with_span(stmt.span));
+        }
+        if let Some(expr) = stmt.value {
+            let value = self.check_expression(expr)?;
+            let context = self
+                .loop_stack
+                .last_mut()
+                .expect("loop context should exist");
+            context
+                .record_break(value.ty())
+                .map_err(|err| err.with_span(stmt.span))?;
+            Ok(hir::BreakStatement {
+                value: Some(value),
+                span: stmt.span,
+            })
         } else {
-            Ok(hir::BreakStatement { span: stmt.span })
+            let context = self
+                .loop_stack
+                .last_mut()
+                .expect("loop context should exist");
+            context
+                .record_break(Type::Unit)
+                .map_err(|err| err.with_span(stmt.span))?;
+            Ok(hir::BreakStatement {
+                value: None,
+                span: stmt.span,
+            })
         }
     }
 
@@ -327,7 +410,7 @@ impl TypeChecker {
         &mut self,
         stmt: ast::ContinueStatement,
     ) -> Result<hir::ContinueStatement, CompileError> {
-        if self.loop_depth == 0 {
+        if self.loop_stack.is_empty() {
             Err(CompileError::new("`continue` outside of loop").with_span(stmt.span))
         } else {
             Ok(hir::ContinueStatement { span: stmt.span })
@@ -354,15 +437,21 @@ impl TypeChecker {
 
     fn check_loop(&mut self, loop_expr: ast::LoopExpr) -> Result<hir::Expression, CompileError> {
         let ast::LoopExpr { body, span } = loop_expr;
-        self.loop_depth += 1;
-        let body = {
-            let result = self.check_block(body);
-            self.loop_depth -= 1;
-            result?
+        self.loop_stack.push(LoopContext::new(LoopKind::Loop));
+        let (body, loop_type) = match self.check_block(body) {
+            Ok(body) => {
+                let context = self.loop_stack.pop().expect("loop context should exist");
+                let ty = context.break_type.unwrap_or(Type::Unit);
+                (body, ty)
+            }
+            Err(err) => {
+                self.loop_stack.pop();
+                return Err(err);
+            }
         };
         Ok(hir::Expression::Loop(hir::LoopExpr {
             body: Box::new(body),
-            ty: Type::Unit,
+            ty: loop_type,
             span,
         }))
     }
@@ -377,11 +466,16 @@ impl TypeChecker {
         if condition.ty() != Type::Bool {
             return Err(CompileError::new("while condition must be boolean").with_span(span));
         }
-        self.loop_depth += 1;
-        let body = {
-            let result = self.check_block(body);
-            self.loop_depth -= 1;
-            result?
+        self.loop_stack.push(LoopContext::new(LoopKind::While));
+        let body = match self.check_block(body) {
+            Ok(body) => {
+                self.loop_stack.pop();
+                body
+            }
+            Err(err) => {
+                self.loop_stack.pop();
+                return Err(err);
+            }
         };
         Ok(hir::Expression::While(hir::WhileExpr {
             condition: Box::new(condition),
