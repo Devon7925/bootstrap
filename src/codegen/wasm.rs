@@ -286,22 +286,36 @@ impl<'a> FunctionEmitter<'a> {
     }
 
     fn emit_literal(&mut self, lit: &hir::Literal) -> Result<(), CompileError> {
-        match lit.value {
-            LiteralValue::Int(value) => {
+        match (lit.ty, &lit.value) {
+            (Type::I32, LiteralValue::Int(value)) => {
                 self.instructions.push(0x41);
-                encode_i32(&mut self.instructions, value as i32);
+                encode_i32(&mut self.instructions, *value as i32);
+                Ok(())
             }
-            LiteralValue::Float(value) => {
+            (Type::I64, LiteralValue::Int(value)) => {
+                self.instructions.push(0x42);
+                encode_i64(&mut self.instructions, *value);
+                Ok(())
+            }
+            (Type::F32, LiteralValue::Float(value)) => {
                 self.instructions.push(0x43);
                 self.instructions
-                    .extend_from_slice(&((value as f32).to_bits().to_le_bytes()));
+                    .extend_from_slice(&(*value as f32).to_bits().to_le_bytes());
+                Ok(())
             }
-            LiteralValue::Bool(value) => {
+            (Type::F64, LiteralValue::Float(value)) => {
+                self.instructions.push(0x44);
+                self.instructions
+                    .extend_from_slice(&value.to_bits().to_le_bytes());
+                Ok(())
+            }
+            (Type::Bool, LiteralValue::Bool(value)) => {
                 self.instructions.push(0x41);
-                encode_i32(&mut self.instructions, if value { 1 } else { 0 });
+                encode_i32(&mut self.instructions, if *value { 1 } else { 0 });
+                Ok(())
             }
+            _ => Err(CompileError::new("invalid literal representation")),
         }
-        Ok(())
     }
 
     fn emit_variable(&mut self, var: &hir::Variable) -> Result<(), CompileError> {

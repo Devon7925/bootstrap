@@ -24,8 +24,14 @@ pub enum TokenKind {
     Struct,
     Enum,
     Identifier(String),
-    IntLiteral(i64),
-    FloatLiteral(f64),
+    IntLiteral {
+        value: i64,
+        suffix: Option<IntLiteralSuffix>,
+    },
+    FloatLiteral {
+        value: f64,
+        suffix: Option<FloatLiteralSuffix>,
+    },
     Colon,
     Semicolon,
     Comma,
@@ -50,6 +56,18 @@ pub enum TokenKind {
     OrOr,
     Assign,
     Eof,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IntLiteralSuffix {
+    I32,
+    I64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FloatLiteralSuffix {
+    F32,
+    F64,
 }
 
 pub struct Lexer<'a> {
@@ -125,17 +143,20 @@ impl<'a> Lexer<'a> {
     fn lex_number(&mut self, start_pos: usize, first_char: char) -> Result<Token, LexerError> {
         let mut buffer = String::new();
         buffer.push(first_char);
-        let mut end_pos = start_pos + first_char.len_utf8();
+        let mut literal_end = start_pos + first_char.len_utf8();
+        let mut span_end = literal_end;
         let mut seen_dot = false;
 
         while let Some(ch) = self.peek() {
             if ch.is_ascii_digit() {
-                end_pos = self.current_pos() + ch.len_utf8();
+                literal_end = self.current_pos() + ch.len_utf8();
+                span_end = literal_end;
                 buffer.push(ch);
                 self.advance();
             } else if ch == '.' && !seen_dot {
                 seen_dot = true;
-                end_pos = self.current_pos() + ch.len_utf8();
+                literal_end = self.current_pos() + ch.len_utf8();
+                span_end = literal_end;
                 buffer.push(ch);
                 self.advance();
             } else {
@@ -143,28 +164,109 @@ impl<'a> Lexer<'a> {
             }
         }
 
+        #[derive(Clone, Copy)]
+        enum NumericSuffix {
+            Int(IntLiteralSuffix),
+            Float(FloatLiteralSuffix),
+        }
+
+        let mut suffix_kind: Option<NumericSuffix> = None;
+        let mut suffix_span: Option<Span> = None;
+        if let Some(ch) = self.peek() {
+            if ch.is_ascii_alphabetic() {
+                let suffix_start = self.current_pos();
+                let mut suffix_buf = String::new();
+                while let Some(ch) = self.peek() {
+                    if ch.is_ascii_alphanumeric() {
+                        span_end = self.current_pos() + ch.len_utf8();
+                        suffix_buf.push(ch);
+                        self.advance();
+                    } else {
+                        break;
+                    }
+                }
+                let parsed_span = Span::new(suffix_start, span_end);
+                suffix_span = Some(parsed_span);
+                suffix_kind = Some(match suffix_buf.as_str() {
+                    "i32" => NumericSuffix::Int(IntLiteralSuffix::I32),
+                    "i64" => NumericSuffix::Int(IntLiteralSuffix::I64),
+                    "f32" => NumericSuffix::Float(FloatLiteralSuffix::F32),
+                    "f64" => NumericSuffix::Float(FloatLiteralSuffix::F64),
+                    _ => {
+                        return Err(LexerError {
+                            message: format!("invalid numeric suffix `{suffix_buf}`"),
+                            span: parsed_span,
+                        });
+                    }
+                });
+            }
+        }
+
+        let total_end = span_end;
+        let literal_span = Span::new(start_pos, literal_end);
+
         if seen_dot {
-            buffer
-                .parse::<f64>()
-                .map(|value| Token {
-                    kind: TokenKind::FloatLiteral(value),
-                    span: Span::new(start_pos, end_pos),
-                })
-                .map_err(|_| LexerError {
-                    message: format!("invalid float literal `{buffer}`"),
-                    span: Span::new(start_pos, end_pos),
-                })
+            if let Some(NumericSuffix::Int(_)) = suffix_kind {
+                return Err(LexerError {
+                    message: "floating literal cannot use integer suffix".into(),
+                    span: suffix_span.expect("suffix span must exist when suffix parsed"),
+                });
+            }
+            let value = buffer.parse::<f64>().map_err(|_| LexerError {
+                message: format!("invalid float literal `{buffer}`"),
+                span: literal_span,
+            })?;
+            let suffix = match suffix_kind {
+                Some(NumericSuffix::Float(s)) => Some(s),
+                Some(NumericSuffix::Int(_)) => unreachable!(),
+                None => None,
+            };
+            Ok(Token {
+                kind: TokenKind::FloatLiteral { value, suffix },
+                span: Span::new(start_pos, total_end),
+            })
         } else {
-            buffer
-                .parse::<i64>()
-                .map(|value| Token {
-                    kind: TokenKind::IntLiteral(value),
-                    span: Span::new(start_pos, end_pos),
-                })
-                .map_err(|_| LexerError {
-                    message: format!("invalid integer literal `{buffer}`"),
-                    span: Span::new(start_pos, end_pos),
-                })
+            match suffix_kind {
+                Some(NumericSuffix::Float(s)) => {
+                    let value = buffer.parse::<f64>().map_err(|_| LexerError {
+                        message: format!("invalid float literal `{buffer}`"),
+                        span: literal_span,
+                    })?;
+                    Ok(Token {
+                        kind: TokenKind::FloatLiteral {
+                            value,
+                            suffix: Some(s),
+                        },
+                        span: Span::new(start_pos, total_end),
+                    })
+                }
+                Some(NumericSuffix::Int(s)) => {
+                    let value = buffer.parse::<i64>().map_err(|_| LexerError {
+                        message: format!("invalid integer literal `{buffer}`"),
+                        span: literal_span,
+                    })?;
+                    Ok(Token {
+                        kind: TokenKind::IntLiteral {
+                            value,
+                            suffix: Some(s),
+                        },
+                        span: Span::new(start_pos, total_end),
+                    })
+                }
+                None => {
+                    let value = buffer.parse::<i64>().map_err(|_| LexerError {
+                        message: format!("invalid integer literal `{buffer}`"),
+                        span: literal_span,
+                    })?;
+                    Ok(Token {
+                        kind: TokenKind::IntLiteral {
+                            value,
+                            suffix: None,
+                        },
+                        span: Span::new(start_pos, total_end),
+                    })
+                }
+            }
         }
     }
 

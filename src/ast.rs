@@ -112,9 +112,33 @@ pub struct Literal {
 
 #[derive(Debug, Clone)]
 pub enum LiteralValue {
-    Int(i64),
-    Float(f64),
+    Int(IntLiteral),
+    Float(FloatLiteral),
     Bool(bool),
+}
+
+#[derive(Debug, Clone)]
+pub struct IntLiteral {
+    pub value: i64,
+    pub suffix: Option<IntSuffix>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IntSuffix {
+    I32,
+    I64,
+}
+
+#[derive(Debug, Clone)]
+pub struct FloatLiteral {
+    pub value: f64,
+    pub suffix: Option<FloatSuffix>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FloatSuffix {
+    F32,
+    F64,
 }
 
 #[derive(Debug, Clone)]
