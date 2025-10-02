@@ -3,6 +3,66 @@ use std::fs;
 use bootstrap::compile;
 use wasmi::{Engine, Linker, Memory, Module, Store, TypedFunc};
 
+fn stage1_compile_program(
+    store: &mut Store<()>,
+    memory: &Memory,
+    compile_func: &TypedFunc<(i32, i32, i32), i32>,
+    input_cursor: &mut usize,
+    output_cursor: &mut i32,
+    source: &str,
+) -> Vec<u8> {
+    memory
+        .write(&mut *store, *input_cursor, source.as_bytes())
+        .expect("failed to write source for stage1");
+
+    let produced_len = compile_func
+        .call(
+            &mut *store,
+            (*input_cursor as i32, source.len() as i32, *output_cursor),
+        )
+        .expect("stage1 compile invocation failed");
+    assert!(produced_len > 0, "stage1 compiler returned no bytes");
+
+    let mut output = vec![0u8; produced_len as usize];
+    memory
+        .read(&*store, *output_cursor as usize, &mut output)
+        .expect("failed to read stage1 output");
+
+    *input_cursor += 256;
+    *output_cursor += 4096;
+
+    output
+}
+
+fn run_stage1_output(engine: &Engine, wasm: &[u8]) -> i32 {
+    let target_module = Module::new(engine, wasm).expect("failed to create target module");
+    let mut target_store = Store::new(engine, ());
+    let target_linker = Linker::new(engine);
+    let target_instance = target_linker
+        .instantiate(&mut target_store, &target_module)
+        .expect("failed to instantiate target module")
+        .start(&mut target_store)
+        .expect("failed to start target module");
+
+    let target_memory: Memory = target_instance
+        .get_memory(&mut target_store, "memory")
+        .expect("compiled module should export memory");
+    assert_eq!(
+        target_memory
+            .current_pages(&target_store)
+            .to_bytes()
+            .expect("memory pages to bytes"),
+        65536
+    );
+
+    let main_fn: TypedFunc<(), i32> = target_instance
+        .get_typed_func(&mut target_store, "main")
+        .expect("compiled module should export main");
+    main_fn
+        .call(&mut target_store, ())
+        .expect("failed to execute compiled main")
+}
+
 #[test]
 fn stage1_constant_compiler_emits_wasm() {
     let source =
@@ -28,192 +88,71 @@ fn stage1_constant_compiler_emits_wasm() {
         .get_memory(&mut store, "memory")
         .expect("stage1 module must export memory");
 
-    let input = b"fn main() -> i32 { return 7; }";
-    let input_offset = 0usize;
-    memory
-        .write(&mut store, input_offset, input)
-        .expect("failed to write input for stage1");
+    let mut input_cursor = 0usize;
+    let mut output_cursor = 1024i32;
 
-    let output_offset = 1024i32;
     let compile_func: TypedFunc<(i32, i32, i32), i32> = instance
         .get_typed_func(&mut store, "compile")
         .expect("expected exported compile function");
-    let produced_len = compile_func
-        .call(
-            &mut store,
-            (input_offset as i32, input.len() as i32, output_offset),
-        )
-        .expect("stage1 compile invocation failed");
-    assert!(produced_len > 0, "stage1 compiler returned no bytes");
 
-    let mut output = vec![0u8; produced_len as usize];
-    memory
-        .read(&store, output_offset as usize, &mut output)
-        .expect("failed to read stage1 output");
-
+    let output = stage1_compile_program(
+        &mut store,
+        &memory,
+        &compile_func,
+        &mut input_cursor,
+        &mut output_cursor,
+        "fn main() -> i32 { return 7; }",
+    );
     assert!(output.starts_with(&[0x00, 0x61, 0x73, 0x6d]));
+    assert_eq!(run_stage1_output(&engine, &output), 7);
 
-    let target_module =
-        Module::new(&engine, output.as_slice()).expect("failed to create target module");
-    let mut target_store = Store::new(&engine, ());
-    let target_linker = Linker::new(&engine);
-    let target_instance = target_linker
-        .instantiate(&mut target_store, &target_module)
-        .expect("failed to instantiate target module")
-        .start(&mut target_store)
-        .expect("failed to start target module");
-
-    let target_memory: Memory = target_instance
-        .get_memory(&mut target_store, "memory")
-        .expect("target module should export memory");
-    assert_eq!(
-        target_memory
-            .current_pages(&target_store)
-            .to_bytes()
-            .unwrap(),
-        65536
+    let output_two = stage1_compile_program(
+        &mut store,
+        &memory,
+        &compile_func,
+        &mut input_cursor,
+        &mut output_cursor,
+        "fn main() -> i32 {\n    -9\n}\n",
     );
+    assert_eq!(run_stage1_output(&engine, &output_two), -9);
 
-    let main_fn: TypedFunc<(), i32> = target_instance
-        .get_typed_func(&mut target_store, "main")
-        .expect("compiled module should export main");
-    let main_result = main_fn
-        .call(&mut target_store, ())
-        .expect("failed to execute compiled main");
-    assert_eq!(main_result, 7);
-
-    let input_two = b"fn main() -> i32 {\n    -9\n}\n";
-    let input_offset_two = input_offset + 256usize;
-    memory
-        .write(&mut store, input_offset_two, input_two)
-        .expect("failed to write second input for stage1");
-
-    let output_offset_two = output_offset + 2048;
-    let produced_len_two = compile_func
-        .call(
-            &mut store,
-            (
-                input_offset_two as i32,
-                input_two.len() as i32,
-                output_offset_two,
-            ),
-        )
-        .expect("stage1 compile invocation failed for second program");
-    assert!(
-        produced_len_two > 0,
-        "stage1 compiler returned no bytes for second program"
+    let output_three = stage1_compile_program(
+        &mut store,
+        &memory,
+        &compile_func,
+        &mut input_cursor,
+        &mut output_cursor,
+        "fn main() -> i32 {\n    return 5 + 3 - 2 + -4;\n}\n",
     );
+    assert_eq!(run_stage1_output(&engine, &output_three), 2);
 
-    let mut output_two = vec![0u8; produced_len_two as usize];
-    memory
-        .read(&store, output_offset_two as usize, &mut output_two)
-        .expect("failed to read stage1 second output");
-
-    let target_module_two =
-        Module::new(&engine, output_two.as_slice()).expect("failed to create second target module");
-    let mut target_store_two = Store::new(&engine, ());
-    let target_linker_two = Linker::new(&engine);
-    let target_instance_two = target_linker_two
-        .instantiate(&mut target_store_two, &target_module_two)
-        .expect("failed to instantiate second target module")
-        .start(&mut target_store_two)
-        .expect("failed to start second target module");
-
-    let main_fn_two: TypedFunc<(), i32> = target_instance_two
-        .get_typed_func(&mut target_store_two, "main")
-        .expect("second compiled module should export main");
-    let main_result_two = main_fn_two
-        .call(&mut target_store_two, ())
-        .expect("failed to execute second compiled main");
-    assert_eq!(main_result_two, -9);
-
-    let input_three = b"fn main() -> i32 {\n    return 5 + 3 - 2 + -4;\n}\n";
-    let input_offset_three = input_offset_two + 256usize;
-    memory
-        .write(&mut store, input_offset_three, input_three)
-        .expect("failed to write third input for stage1");
-
-    let output_offset_three = output_offset_two + 4096;
-    let produced_len_three = compile_func
-        .call(
-            &mut store,
-            (
-                input_offset_three as i32,
-                input_three.len() as i32,
-                output_offset_three,
-            ),
-        )
-        .expect("stage1 compile invocation failed for third program");
-    assert!(
-        produced_len_three > 0,
-        "stage1 compiler returned no bytes for third program"
+    let output_four = stage1_compile_program(
+        &mut store,
+        &memory,
+        &compile_func,
+        &mut input_cursor,
+        &mut output_cursor,
+        "fn main() -> i32 {\n    return -(1 + 2) + (3 - (4 - 5));\n}\n",
     );
+    assert_eq!(run_stage1_output(&engine, &output_four), 1);
 
-    let mut output_three = vec![0u8; produced_len_three as usize];
-    memory
-        .read(&store, output_offset_three as usize, &mut output_three)
-        .expect("failed to read stage1 third output");
-
-    let target_module_three = Module::new(&engine, output_three.as_slice())
-        .expect("failed to create third target module");
-    let mut target_store_three = Store::new(&engine, ());
-    let target_linker_three = Linker::new(&engine);
-    let target_instance_three = target_linker_three
-        .instantiate(&mut target_store_three, &target_module_three)
-        .expect("failed to instantiate third target module")
-        .start(&mut target_store_three)
-        .expect("failed to start third target module");
-
-    let main_fn_three: TypedFunc<(), i32> = target_instance_three
-        .get_typed_func(&mut target_store_three, "main")
-        .expect("third compiled module should export main");
-    let main_result_three = main_fn_three
-        .call(&mut target_store_three, ())
-        .expect("failed to execute third compiled main");
-    assert_eq!(main_result_three, 2);
-
-    let input_four = b"fn main() -> i32 {\n    return -(1 + 2) + (3 - (4 - 5));\n}\n";
-    let input_offset_four = input_offset_three + 256usize;
-    memory
-        .write(&mut store, input_offset_four, input_four)
-        .expect("failed to write fourth input for stage1");
-
-    let output_offset_four = output_offset_three + 4096;
-    let produced_len_four = compile_func
-        .call(
-            &mut store,
-            (
-                input_offset_four as i32,
-                input_four.len() as i32,
-                output_offset_four,
-            ),
-        )
-        .expect("stage1 compile invocation failed for fourth program");
-    assert!(
-        produced_len_four > 0,
-        "stage1 compiler returned no bytes for fourth program"
+    let output_five = stage1_compile_program(
+        &mut store,
+        &memory,
+        &compile_func,
+        &mut input_cursor,
+        &mut output_cursor,
+        "fn main() -> i32 {\n    return 6 * 7;\n}\n",
     );
+    assert_eq!(run_stage1_output(&engine, &output_five), 42);
 
-    let mut output_four = vec![0u8; produced_len_four as usize];
-    memory
-        .read(&store, output_offset_four as usize, &mut output_four)
-        .expect("failed to read stage1 fourth output");
-
-    let target_module_four = Module::new(&engine, output_four.as_slice())
-        .expect("failed to create fourth target module");
-    let mut target_store_four = Store::new(&engine, ());
-    let target_linker_four = Linker::new(&engine);
-    let target_instance_four = target_linker_four
-        .instantiate(&mut target_store_four, &target_module_four)
-        .expect("failed to instantiate fourth target module")
-        .start(&mut target_store_four)
-        .expect("failed to start fourth target module");
-
-    let main_fn_four: TypedFunc<(), i32> = target_instance_four
-        .get_typed_func(&mut target_store_four, "main")
-        .expect("fourth compiled module should export main");
-    let main_result_four = main_fn_four
-        .call(&mut target_store_four, ())
-        .expect("failed to execute fourth compiled main");
-    assert_eq!(main_result_four, 1);
+    let output_six = stage1_compile_program(
+        &mut store,
+        &memory,
+        &compile_func,
+        &mut input_cursor,
+        &mut output_cursor,
+        "fn main() -> i32 {\n    return 30 / 2 + 4 * 3;\n}\n",
+    );
+    assert_eq!(run_stage1_output(&engine, &output_six), 27);
 }
