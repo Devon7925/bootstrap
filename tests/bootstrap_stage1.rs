@@ -184,6 +184,7 @@ fn main() -> i32 {
     };
     0
 }
+
 "#;
 
     let output = compiler
@@ -191,4 +192,38 @@ fn main() -> i32 {
         .expect("stage1 should compile boolean short-circuit test");
 
     assert_eq!(run_wasm_main(compiler.engine(), &output), 0);
+}
+
+#[test]
+fn stage1_compiler_accepts_tightly_spaced_return_expressions() {
+    let source = fs::read_to_string("examples/stage1_minimal.bp")
+        .expect("failed to load stage1 source");
+
+    let stage1_compilation = compile(&source).expect("failed to compile stage1 source");
+    let stage1_wasm = stage1_compilation
+        .to_wasm()
+        .expect("failed to encode stage1 wasm");
+
+    let mut compiler = CompilerInstance::new(stage1_wasm.as_slice());
+    let mut input_cursor = 0usize;
+    let mut output_cursor = 1024i32;
+
+    let program = r#"
+fn returns_negative() -> i32 {
+    if true {
+        return-1;
+    };
+    0
+}
+
+fn main() -> i32 {
+    returns_negative()
+}
+"#;
+
+    let output = compiler
+        .compile_with_layout(&mut input_cursor, &mut output_cursor, program)
+        .expect("stage1 should accept return expressions without intervening whitespace");
+
+    assert_eq!(run_wasm_main(compiler.engine(), &output), -1);
 }

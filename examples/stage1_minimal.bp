@@ -1779,7 +1779,7 @@ fn parse_return_statement(
     };
     if idx < len {
         let after_byte: i32 = peek_byte(base, len, idx);
-        if !is_whitespace(after_byte) {
+        if is_identifier_continue(after_byte) {
             return -1;
         };
     };
