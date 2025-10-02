@@ -135,6 +135,62 @@ impl TypeChecker {
                 return_type: Type::Unit,
             },
         );
+        functions.insert(
+            "load_i32".to_string(),
+            FunctionSignature {
+                params: vec![Type::I32],
+                return_type: Type::I32,
+            },
+        );
+        functions.insert(
+            "store_i32".to_string(),
+            FunctionSignature {
+                params: vec![Type::I32, Type::I32],
+                return_type: Type::Unit,
+            },
+        );
+        functions.insert(
+            "load_i64".to_string(),
+            FunctionSignature {
+                params: vec![Type::I32],
+                return_type: Type::I64,
+            },
+        );
+        functions.insert(
+            "store_i64".to_string(),
+            FunctionSignature {
+                params: vec![Type::I32, Type::I64],
+                return_type: Type::Unit,
+            },
+        );
+        functions.insert(
+            "load_f32".to_string(),
+            FunctionSignature {
+                params: vec![Type::I32],
+                return_type: Type::F32,
+            },
+        );
+        functions.insert(
+            "store_f32".to_string(),
+            FunctionSignature {
+                params: vec![Type::I32, Type::F32],
+                return_type: Type::Unit,
+            },
+        );
+        functions.insert(
+            "load_f64".to_string(),
+            FunctionSignature {
+                params: vec![Type::I32],
+                return_type: Type::F64,
+            },
+        );
+        functions.insert(
+            "store_f64".to_string(),
+            FunctionSignature {
+                params: vec![Type::I32, Type::F64],
+                return_type: Type::Unit,
+            },
+        );
 
         Self {
             functions,
@@ -155,12 +211,14 @@ impl TypeChecker {
             let return_type = self.type_from_type_expr(&function.return_type)?;
             if function.name == "main" {
                 if !param_types.is_empty() {
-                    return Err(CompileError::new("`main` cannot take parameters")
-                        .with_span(function.span));
+                    return Err(
+                        CompileError::new("`main` cannot take parameters").with_span(function.span)
+                    );
                 }
                 if return_type != Type::I32 {
-                    return Err(CompileError::new("`main` must return `i32`")
-                        .with_span(function.span));
+                    return Err(
+                        CompileError::new("`main` must return `i32`").with_span(function.span)
+                    );
                 }
                 main_found = true;
             }

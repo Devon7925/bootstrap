@@ -66,14 +66,19 @@ one WebAssembly page (64KiB). Hosts can write byte buffers, such as UTF-8
 strings, into this memory and pass their pointer/length pairs to compiled
 functions (for example to model `&[u8]` inputs) while we continue building out
 first-class slice support in the language itself. The bootstrap compiler also
-exposes two intrinsics for interacting with linear memory directly:
+exposes a set of intrinsics for interacting with linear memory directly:
 
-* `load_u8(ptr: i32) -> i32` reads a single byte from linear memory.
-* `store_u8(ptr: i32, value: i32)` writes the low 8 bits of `value` to linear
-  memory.
+* `load_u8(ptr: i32) -> i32` and `store_u8(ptr: i32, value: i32)` operate on
+  single bytes.
+* `load_i32(ptr: i32) -> i32` / `store_i32(ptr: i32, value: i32)` and
+  `load_i64(ptr: i32) -> i64` / `store_i64(ptr: i32, value: i64)` read and write
+  integer words.
+* `load_f32(ptr: i32) -> f32` / `store_f32(ptr: i32, value: f32)` and
+  `load_f64(ptr: i32) -> f64` / `store_f64(ptr: i32, value: f64)` cover floating
+  point data.
 
-These intrinsics allow user code to manipulate byte-oriented buffers without
-requiring a standard library yet.
+These intrinsics allow user code to manipulate byte- and word-oriented buffers
+without requiring a standard library yet.
 
 ## Supported Language Features
 
