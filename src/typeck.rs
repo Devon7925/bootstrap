@@ -341,6 +341,7 @@ impl TypeChecker {
             AstExpression::Binary(bin) => self.check_binary(bin),
             AstExpression::Unary(un) => self.check_unary(un),
             AstExpression::Call(call) => self.check_call(call),
+            AstExpression::Group(group) => self.check_expression(*group.expr),
             AstExpression::If(if_expr) => self.check_if(if_expr),
             AstExpression::Block(block) => {
                 let block = self.check_block(block)?;
