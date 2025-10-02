@@ -430,6 +430,31 @@ impl<'a> FunctionEmitter<'a> {
                 Type::F64 => 0x66,
                 _ => return Err(CompileError::new("unsupported comparison operand type")),
             },
+            BitAnd => match operand_ty {
+                Type::I32 => 0x71,
+                Type::I64 => 0x83,
+                _ => return Err(CompileError::new("`&` only supports integer operands")),
+            },
+            BitOr => match operand_ty {
+                Type::I32 => 0x72,
+                Type::I64 => 0x84,
+                _ => return Err(CompileError::new("`|` only supports integer operands")),
+            },
+            BitXor => match operand_ty {
+                Type::I32 => 0x73,
+                Type::I64 => 0x85,
+                _ => return Err(CompileError::new("`^` only supports integer operands")),
+            },
+            Shl => match operand_ty {
+                Type::I32 => 0x74,
+                Type::I64 => 0x86,
+                _ => return Err(CompileError::new("`<<` only supports integer operands")),
+            },
+            Shr => match operand_ty {
+                Type::I32 => 0x75,
+                Type::I64 => 0x87,
+                _ => return Err(CompileError::new("`>>` only supports integer operands")),
+            },
             And | Or => unreachable!(),
         };
         self.instructions.push(opcode);

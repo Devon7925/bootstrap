@@ -1,0 +1,438 @@
+fn write_byte(base: i32, offset: i32, value: i32) -> i32 {
+    store_u8(base + offset, value & 255);
+    offset + 1
+}
+
+fn write_u32_leb(base: i32, offset: i32, value: i32) -> i32 {
+    let mut remaining: i32 = value;
+    let mut out: i32 = offset;
+    loop {
+        let mut byte: i32 = remaining & 127;
+        remaining = remaining >> 7;
+        if remaining != 0 {
+            byte = byte | 128;
+        };
+        out = write_byte(base, out, byte);
+        if remaining == 0 {
+            break;
+        };
+    };
+    out
+}
+
+fn write_i32_leb(base: i32, offset: i32, value: i32) -> i32 {
+    let mut remaining: i32 = value;
+    let mut out: i32 = offset;
+    loop {
+        let byte: i32 = remaining & 127;
+        remaining = remaining >> 7;
+        let sign_bit: i32 = byte & 64;
+        let done: bool = (remaining == 0 && sign_bit == 0) || (remaining == -1 && sign_bit != 0);
+        let mut out_byte: i32 = byte;
+        if !done {
+            out_byte = out_byte | 128;
+        };
+        out = write_byte(base, out, out_byte);
+        if done {
+            break;
+        };
+    };
+    out
+}
+
+fn leb_u32_len(value: i32) -> i32 {
+    let mut remaining: i32 = value;
+    let mut count: i32 = 0;
+    loop {
+        count = count + 1;
+        remaining = remaining >> 7;
+        if remaining == 0 {
+            break;
+        };
+    };
+    count
+}
+
+fn leb_i32_len(value: i32) -> i32 {
+    let mut remaining: i32 = value;
+    let mut count: i32 = 0;
+    loop {
+        let byte: i32 = remaining & 127;
+        remaining = remaining >> 7;
+        let sign_bit: i32 = byte & 64;
+        let done: bool = (remaining == 0 && sign_bit == 0) || (remaining == -1 && sign_bit != 0);
+        count = count + 1;
+        if done {
+            break;
+        };
+    };
+    count
+}
+
+fn write_magic(base: i32, offset: i32) -> i32 {
+    let mut out: i32 = offset;
+    out = write_byte(base, out, 0);
+    out = write_byte(base, out, 97);
+    out = write_byte(base, out, 115);
+    out = write_byte(base, out, 109);
+    out = write_byte(base, out, 1);
+    out = write_byte(base, out, 0);
+    out = write_byte(base, out, 0);
+    out = write_byte(base, out, 0);
+    out
+}
+
+fn is_whitespace(byte: i32) -> bool {
+    byte == 32 || byte == 9 || byte == 10 || byte == 13
+}
+
+fn skip_whitespace(base: i32, len: i32, offset: i32) -> i32 {
+    let mut idx: i32 = offset;
+    loop {
+        if idx >= len {
+            break;
+        };
+        let byte: i32 = load_u8(base + idx);
+        if !is_whitespace(byte) {
+            break;
+        };
+        idx = idx + 1;
+    };
+    idx
+}
+
+fn expect_char(base: i32, len: i32, offset: i32, expected: i32) -> i32 {
+    if offset >= len {
+        return -1;
+    };
+    let byte: i32 = load_u8(base + offset);
+    if byte != expected {
+        return -1;
+    };
+    offset + 1
+}
+
+fn expect_keyword_fn(base: i32, len: i32, offset: i32) -> i32 {
+    let mut idx: i32 = expect_char(base, len, offset, 102);
+    if idx < 0 {
+        return -1;
+    };
+    idx = expect_char(base, len, idx, 110);
+    if idx < 0 {
+        return -1;
+    };
+    idx
+}
+
+fn expect_keyword_main(base: i32, len: i32, offset: i32) -> i32 {
+    let mut idx: i32 = expect_char(base, len, offset, 109);
+    if idx < 0 {
+        return -1;
+    };
+    idx = expect_char(base, len, idx, 97);
+    if idx < 0 {
+        return -1;
+    };
+    idx = expect_char(base, len, idx, 105);
+    if idx < 0 {
+        return -1;
+    };
+    idx = expect_char(base, len, idx, 110);
+    if idx < 0 {
+        return -1;
+    };
+    idx
+}
+
+fn expect_keyword_i32(base: i32, len: i32, offset: i32) -> i32 {
+    let mut idx: i32 = expect_char(base, len, offset, 105);
+    if idx < 0 {
+        return -1;
+    };
+    idx = expect_char(base, len, idx, 51);
+    if idx < 0 {
+        return -1;
+    };
+    idx = expect_char(base, len, idx, 50);
+    if idx < 0 {
+        return -1;
+    };
+    idx
+}
+
+fn peek_byte(base: i32, len: i32, offset: i32) -> i32 {
+    if offset >= len {
+        -1
+    } else {
+        load_u8(base + offset)
+    }
+}
+
+fn write_type_section(base: i32, offset: i32) -> i32 {
+    let mut out: i32 = offset;
+    out = write_byte(base, out, 1);
+    out = write_u32_leb(base, out, 5);
+    out = write_byte(base, out, 1);
+    out = write_byte(base, out, 96);
+    out = write_byte(base, out, 0);
+    out = write_byte(base, out, 1);
+    out = write_byte(base, out, 127);
+    out
+}
+
+fn write_function_section(base: i32, offset: i32) -> i32 {
+    let mut out: i32 = offset;
+    out = write_byte(base, out, 3);
+    out = write_u32_leb(base, out, 2);
+    out = write_u32_leb(base, out, 1);
+    out = write_u32_leb(base, out, 0);
+    out
+}
+
+fn write_memory_section(base: i32, offset: i32) -> i32 {
+    let mut out: i32 = offset;
+    out = write_byte(base, out, 5);
+    out = write_u32_leb(base, out, 3);
+    out = write_u32_leb(base, out, 1);
+    out = write_u32_leb(base, out, 0);
+    out = write_u32_leb(base, out, 1);
+    out
+}
+
+fn write_export_section(base: i32, offset: i32) -> i32 {
+    let mut out: i32 = offset;
+    out = write_byte(base, out, 7);
+    out = write_u32_leb(base, out, 17);
+    out = write_u32_leb(base, out, 2);
+    out = write_u32_leb(base, out, 6);
+    out = write_byte(base, out, 109);
+    out = write_byte(base, out, 101);
+    out = write_byte(base, out, 109);
+    out = write_byte(base, out, 111);
+    out = write_byte(base, out, 114);
+    out = write_byte(base, out, 121);
+    out = write_byte(base, out, 2);
+    out = write_u32_leb(base, out, 0);
+    out = write_u32_leb(base, out, 4);
+    out = write_byte(base, out, 109);
+    out = write_byte(base, out, 97);
+    out = write_byte(base, out, 105);
+    out = write_byte(base, out, 110);
+    out = write_byte(base, out, 0);
+    out = write_u32_leb(base, out, 0);
+    out
+}
+
+fn write_code_section(base: i32, offset: i32, value: i32) -> i32 {
+    let value_len: i32 = leb_i32_len(value);
+    let body_size: i32 = value_len + 3;
+    let body_size_len: i32 = leb_u32_len(body_size);
+    let section_size: i32 = 1 + body_size_len + body_size;
+    let mut out: i32 = offset;
+    out = write_byte(base, out, 10);
+    out = write_u32_leb(base, out, section_size);
+    out = write_u32_leb(base, out, 1);
+    out = write_u32_leb(base, out, body_size);
+    out = write_byte(base, out, 0);
+    out = write_byte(base, out, 65);
+    out = write_i32_leb(base, out, value);
+    out = write_byte(base, out, 11);
+    out
+}
+
+fn write_constant_module(base: i32, value: i32) -> i32 {
+    let mut offset: i32 = 0;
+    offset = write_magic(base, offset);
+    offset = write_type_section(base, offset);
+    offset = write_function_section(base, offset);
+    offset = write_memory_section(base, offset);
+    offset = write_export_section(base, offset);
+    write_code_section(base, offset, value)
+}
+
+fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
+    if input_len == 0 {
+        return -1;
+    };
+
+    let mut offset: i32 = skip_whitespace(input_ptr, input_len, 0);
+
+    offset = expect_keyword_fn(input_ptr, input_len, offset);
+    if offset < 0 {
+        return -1;
+    };
+
+    if offset >= input_len {
+        return -1;
+    };
+    let after_fn_byte: i32 = peek_byte(input_ptr, input_len, offset);
+    if after_fn_byte < 0 || !is_whitespace(after_fn_byte) {
+        return -1;
+    };
+    let mut next_offset: i32 = skip_whitespace(input_ptr, input_len, offset);
+    if next_offset == offset {
+        return -1;
+    };
+    offset = next_offset;
+
+    offset = expect_keyword_main(input_ptr, input_len, offset);
+    if offset < 0 {
+        return -1;
+    };
+
+    if offset >= input_len {
+        return -1;
+    };
+    let after_main_byte: i32 = peek_byte(input_ptr, input_len, offset);
+    if after_main_byte != 40 && !is_whitespace(after_main_byte) {
+        return -1;
+    };
+    offset = skip_whitespace(input_ptr, input_len, offset);
+
+    offset = expect_char(input_ptr, input_len, offset, 40);
+    if offset < 0 {
+        return -1;
+    };
+
+    offset = skip_whitespace(input_ptr, input_len, offset);
+
+    offset = expect_char(input_ptr, input_len, offset, 41);
+    if offset < 0 {
+        return -1;
+    };
+
+    offset = skip_whitespace(input_ptr, input_len, offset);
+
+    offset = expect_char(input_ptr, input_len, offset, 45);
+    if offset < 0 {
+        return -1;
+    };
+    offset = expect_char(input_ptr, input_len, offset, 62);
+    if offset < 0 {
+        return -1;
+    };
+
+    offset = skip_whitespace(input_ptr, input_len, offset);
+
+    offset = expect_keyword_i32(input_ptr, input_len, offset);
+    if offset < 0 {
+        return -1;
+    };
+
+    if offset >= input_len {
+        return -1;
+    };
+    let after_type_byte: i32 = peek_byte(input_ptr, input_len, offset);
+    if after_type_byte != 123 && !is_whitespace(after_type_byte) {
+        return -1;
+    };
+    offset = skip_whitespace(input_ptr, input_len, offset);
+
+    offset = expect_char(input_ptr, input_len, offset, 123);
+    if offset < 0 {
+        return -1;
+    };
+
+    offset = skip_whitespace(input_ptr, input_len, offset);
+
+    if offset >= input_len {
+        return -1;
+    };
+
+    if offset + 6 <= input_len {
+        let r: i32 = peek_byte(input_ptr, input_len, offset);
+        if r == 114 {
+            let e: i32 = peek_byte(input_ptr, input_len, offset + 1);
+            let t: i32 = peek_byte(input_ptr, input_len, offset + 2);
+            let u: i32 = peek_byte(input_ptr, input_len, offset + 3);
+            let rn: i32 = peek_byte(input_ptr, input_len, offset + 4);
+            let n: i32 = peek_byte(input_ptr, input_len, offset + 5);
+            if e == 101 && t == 116 && u == 117 && rn == 114 && n == 110 {
+                let after_return: i32 = offset + 6;
+                if after_return >= input_len {
+                    return -1;
+                };
+                let after_return_byte: i32 = peek_byte(input_ptr, input_len, after_return);
+                if !is_whitespace(after_return_byte) {
+                    return -1;
+                };
+                let skipped: i32 = skip_whitespace(input_ptr, input_len, after_return);
+                if skipped == after_return {
+                    return -1;
+                };
+                offset = skipped;
+            };
+        };
+    };
+
+    if offset >= input_len {
+        return -1;
+    };
+
+    let mut sign: i32 = 1;
+    let mut current_byte: i32 = peek_byte(input_ptr, input_len, offset);
+    if current_byte == 45 {
+        sign = -1;
+        offset = offset + 1;
+        if offset >= input_len {
+            return -1;
+        };
+        current_byte = peek_byte(input_ptr, input_len, offset);
+    } else if current_byte == 43 {
+        offset = offset + 1;
+        if offset >= input_len {
+            return -1;
+        };
+        current_byte = peek_byte(input_ptr, input_len, offset);
+    };
+
+    let mut has_digit: bool = false;
+    let mut value: i32 = 0;
+    loop {
+        if offset >= input_len {
+            break;
+        };
+        let digit_byte: i32 = peek_byte(input_ptr, input_len, offset);
+        if digit_byte < 48 || digit_byte > 57 {
+            break;
+        };
+        let digit: i32 = digit_byte - 48;
+        value = value * 10 + digit;
+        has_digit = true;
+        offset = offset + 1;
+    };
+
+    if !has_digit {
+        return -1;
+    };
+
+    if sign == -1 {
+        value = 0 - value;
+    };
+
+    offset = skip_whitespace(input_ptr, input_len, offset);
+
+    if offset < input_len {
+        let maybe_semicolon: i32 = peek_byte(input_ptr, input_len, offset);
+        if maybe_semicolon == 59 {
+            offset = offset + 1;
+            offset = skip_whitespace(input_ptr, input_len, offset);
+        };
+    };
+
+    offset = expect_char(input_ptr, input_len, offset, 125);
+    if offset < 0 {
+        return -1;
+    };
+
+    offset = skip_whitespace(input_ptr, input_len, offset);
+    if offset != input_len {
+        return -1;
+    };
+
+    write_constant_module(out_ptr, value)
+}
+
+fn main() -> i32 {
+    0
+}

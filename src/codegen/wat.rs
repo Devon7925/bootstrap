@@ -356,6 +356,31 @@ impl<'a> FunctionEmitter<'a> {
                 Type::F64 => "f64.ge",
                 _ => return Err(CompileError::new("unsupported comparison operand type")),
             },
+            BitAnd => match operand_ty {
+                Type::I32 => "i32.and",
+                Type::I64 => "i64.and",
+                _ => return Err(CompileError::new("`&` only supports integer operands")),
+            },
+            BitOr => match operand_ty {
+                Type::I32 => "i32.or",
+                Type::I64 => "i64.or",
+                _ => return Err(CompileError::new("`|` only supports integer operands")),
+            },
+            BitXor => match operand_ty {
+                Type::I32 => "i32.xor",
+                Type::I64 => "i64.xor",
+                _ => return Err(CompileError::new("`^` only supports integer operands")),
+            },
+            Shl => match operand_ty {
+                Type::I32 => "i32.shl",
+                Type::I64 => "i64.shl",
+                _ => return Err(CompileError::new("`<<` only supports integer operands")),
+            },
+            Shr => match operand_ty {
+                Type::I32 => "i32.shr_s",
+                Type::I64 => "i64.shr_s",
+                _ => return Err(CompileError::new("`>>` only supports integer operands")),
+            },
             And | Or => unreachable!(),
         };
         self.push_line(op);

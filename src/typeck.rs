@@ -776,6 +776,42 @@ impl TypeChecker {
                 }
                 Ok(left)
             }
+            AstBinaryOp::BitAnd | AstBinaryOp::BitOr | AstBinaryOp::BitXor => {
+                if left != right {
+                    return Err(CompileError::new(format!(
+                        "bitwise operands must share type, found `{}` and `{}`",
+                        self.format_type(left),
+                        self.format_type(right)
+                    ))
+                    .with_span(span));
+                }
+                if !left.is_integer() {
+                    return Err(CompileError::new(format!(
+                        "bitwise operations require integer types, found `{}`",
+                        self.format_type(left)
+                    ))
+                    .with_span(span));
+                }
+                Ok(left)
+            }
+            AstBinaryOp::Shl | AstBinaryOp::Shr => {
+                if left != right {
+                    return Err(CompileError::new(format!(
+                        "shift operands must share type, found `{}` and `{}`",
+                        self.format_type(left),
+                        self.format_type(right)
+                    ))
+                    .with_span(span));
+                }
+                if !left.is_integer() {
+                    return Err(CompileError::new(format!(
+                        "shifts are only supported for integer types, found `{}`",
+                        self.format_type(left)
+                    ))
+                    .with_span(span));
+                }
+                Ok(left)
+            }
             AstBinaryOp::Eq | AstBinaryOp::Ne => {
                 if left == right {
                     Ok(Type::Bool)
@@ -818,6 +854,11 @@ impl TypeChecker {
             AstBinaryOp::Ge => BinaryOp::Ge,
             AstBinaryOp::And => BinaryOp::And,
             AstBinaryOp::Or => BinaryOp::Or,
+            AstBinaryOp::BitAnd => BinaryOp::BitAnd,
+            AstBinaryOp::BitOr => BinaryOp::BitOr,
+            AstBinaryOp::BitXor => BinaryOp::BitXor,
+            AstBinaryOp::Shl => BinaryOp::Shl,
+            AstBinaryOp::Shr => BinaryOp::Shr,
         }
     }
 

@@ -52,6 +52,11 @@ pub enum TokenKind {
     LessThanEqual,
     GreaterThan,
     GreaterThanEqual,
+    ShiftLeft,
+    ShiftRight,
+    Ampersand,
+    Pipe,
+    Caret,
     AndAnd,
     OrOr,
     Assign,
@@ -446,7 +451,14 @@ impl<'a> Iterator for Lexer<'a> {
             }
             '<' => {
                 if let Some(next) = self.peek() {
-                    if next == '=' {
+                    if next == '<' {
+                        let end_pos = self.current_pos() + next.len_utf8();
+                        self.advance();
+                        Ok(Token {
+                            kind: TokenKind::ShiftLeft,
+                            span: Span::new(start_pos, end_pos),
+                        })
+                    } else if next == '=' {
                         let end_pos = self.current_pos() + next.len_utf8();
                         self.advance();
                         Ok(Token {
@@ -468,7 +480,14 @@ impl<'a> Iterator for Lexer<'a> {
             }
             '>' => {
                 if let Some(next) = self.peek() {
-                    if next == '=' {
+                    if next == '>' {
+                        let end_pos = self.current_pos() + next.len_utf8();
+                        self.advance();
+                        Ok(Token {
+                            kind: TokenKind::ShiftRight,
+                            span: Span::new(start_pos, end_pos),
+                        })
+                    } else if next == '=' {
                         let end_pos = self.current_pos() + next.len_utf8();
                         self.advance();
                         Ok(Token {
@@ -498,14 +517,14 @@ impl<'a> Iterator for Lexer<'a> {
                             span: Span::new(start_pos, end_pos),
                         })
                     } else {
-                        Err(LexerError {
-                            message: "unexpected '&'".into(),
+                        Ok(Token {
+                            kind: TokenKind::Ampersand,
                             span: Span::new(start_pos, start_pos + ch.len_utf8()),
                         })
                     }
                 } else {
-                    Err(LexerError {
-                        message: "unexpected '&'".into(),
+                    Ok(Token {
+                        kind: TokenKind::Ampersand,
                         span: Span::new(start_pos, start_pos + ch.len_utf8()),
                     })
                 }
@@ -520,18 +539,22 @@ impl<'a> Iterator for Lexer<'a> {
                             span: Span::new(start_pos, end_pos),
                         })
                     } else {
-                        Err(LexerError {
-                            message: "unexpected '|'".into(),
+                        Ok(Token {
+                            kind: TokenKind::Pipe,
                             span: Span::new(start_pos, start_pos + ch.len_utf8()),
                         })
                     }
                 } else {
-                    Err(LexerError {
-                        message: "unexpected '|'".into(),
+                    Ok(Token {
+                        kind: TokenKind::Pipe,
                         span: Span::new(start_pos, start_pos + ch.len_utf8()),
                     })
                 }
             }
+            '^' => Ok(Token {
+                kind: TokenKind::Caret,
+                span: Span::new(start_pos, start_pos + ch.len_utf8()),
+            }),
             _ => Err(LexerError {
                 message: format!("unexpected character '{ch}'"),
                 span: Span::new(start_pos, start_pos + ch.len_utf8()),
