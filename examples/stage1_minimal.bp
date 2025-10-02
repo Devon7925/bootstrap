@@ -900,6 +900,12 @@ fn parse_or(
             return -1;
         };
         idx = idx + 2;
+        let saved_instr_offset: i32 = load_i32(instr_offset_ptr);
+        let mut instr_offset: i32 = saved_instr_offset;
+        instr_offset = emit_if(instr_base, instr_offset, 127);
+        instr_offset = emit_i32_const(instr_base, instr_offset, 1);
+        instr_offset = emit_else(instr_base, instr_offset);
+        store_i32(instr_offset_ptr, instr_offset);
         let next_idx: i32 = parse_and(
             base,
             len,
@@ -914,11 +920,12 @@ fn parse_or(
             functions_count_ptr
             );
         if next_idx < 0 {
+            store_i32(instr_offset_ptr, saved_instr_offset);
             return -1;
         };
         idx = next_idx;
-        let mut instr_offset: i32 = load_i32(instr_offset_ptr);
-        instr_offset = emit_or(instr_base, instr_offset);
+        instr_offset = load_i32(instr_offset_ptr);
+        instr_offset = emit_end(instr_base, instr_offset);
         store_i32(instr_offset_ptr, instr_offset);
     };
 
@@ -976,6 +983,10 @@ fn parse_and(
             return -1;
         };
         idx = idx + 2;
+        let saved_instr_offset: i32 = load_i32(instr_offset_ptr);
+        let mut instr_offset: i32 = saved_instr_offset;
+        instr_offset = emit_if(instr_base, instr_offset, 127);
+        store_i32(instr_offset_ptr, instr_offset);
         let next_idx: i32 = parse_equality(
             base,
             len,
@@ -990,11 +1001,14 @@ fn parse_and(
             functions_count_ptr
             );
         if next_idx < 0 {
+            store_i32(instr_offset_ptr, saved_instr_offset);
             return -1;
         };
         idx = next_idx;
-        let mut instr_offset: i32 = load_i32(instr_offset_ptr);
-        instr_offset = emit_and(instr_base, instr_offset);
+        instr_offset = load_i32(instr_offset_ptr);
+        instr_offset = emit_else(instr_base, instr_offset);
+        instr_offset = emit_i32_const(instr_base, instr_offset, 0);
+        instr_offset = emit_end(instr_base, instr_offset);
         store_i32(instr_offset_ptr, instr_offset);
     };
 
