@@ -414,6 +414,19 @@ impl<'a> Parser<'a> {
                     span: token.span,
                 }))
             }
+            TokenKind::LParen => {
+                let lparen = self.advance();
+                let expr = self.parse_expression()?;
+                let rparen = self.expect(
+                    |k| matches!(k, TokenKind::RParen),
+                    "expected ')' to close expression",
+                )?;
+                let span = Span::new(lparen.span.start, rparen.span.end);
+                Ok(Expression::Group(GroupExpr {
+                    expr: Box::new(expr),
+                    span,
+                }))
+            }
             TokenKind::If => self.parse_if_expression(),
             TokenKind::Loop => self.parse_loop_expression(),
             TokenKind::While => self.parse_while_expression(),

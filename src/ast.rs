@@ -98,6 +98,7 @@ pub enum Expression {
     Binary(BinaryExpr),
     Unary(UnaryExpr),
     Call(CallExpr),
+    Group(GroupExpr),
     If(IfExpr),
     Block(Block),
     Loop(LoopExpr),
@@ -193,6 +194,12 @@ pub struct CallExpr {
 }
 
 #[derive(Debug, Clone)]
+pub struct GroupExpr {
+    pub expr: Box<Expression>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
 pub struct IfExpr {
     pub condition: Box<Expression>,
     pub then_branch: Block,
@@ -221,6 +228,7 @@ impl Expression {
             Expression::Binary(expr) => expr.span,
             Expression::Unary(expr) => expr.span,
             Expression::Call(call) => call.span,
+            Expression::Group(group) => group.span,
             Expression::If(if_expr) => if_expr.span,
             Expression::Block(block) => block.span,
             Expression::Loop(loop_expr) => loop_expr.span,
