@@ -166,8 +166,13 @@ impl<'a> Parser<'a> {
                     let span = Span::new(expr.span().start, semi.span.end);
                     statements.push(Statement::Expr(ExpressionStatement { expr, span }));
                 } else if matches!(expr, Expression::Loop(_) | Expression::While(_)) {
-                    let span = expr.span();
-                    statements.push(Statement::Expr(ExpressionStatement { expr, span }));
+                    if self.current_is(|k| matches!(k, TokenKind::RBrace)) {
+                        tail = Some(Box::new(expr));
+                        break;
+                    } else {
+                        let span = expr.span();
+                        statements.push(Statement::Expr(ExpressionStatement { expr, span }));
+                    }
                 } else {
                     tail = Some(Box::new(expr));
                     break;
@@ -260,7 +265,19 @@ impl<'a> Parser<'a> {
 
     fn parse_break_statement(&mut self) -> Result<BreakStatement, CompileError> {
         let token = self.expect(|k| matches!(k, TokenKind::Break), "expected 'break'")?;
-        Ok(BreakStatement { span: token.span })
+        if self.current_is(|k| matches!(k, TokenKind::Semicolon)) {
+            Ok(BreakStatement {
+                value: None,
+                span: token.span,
+            })
+        } else {
+            let value = self.parse_expression()?;
+            let span = Span::new(token.span.start, value.span().end);
+            Ok(BreakStatement {
+                value: Some(value),
+                span,
+            })
+        }
     }
 
     fn parse_continue_statement(&mut self) -> Result<ContinueStatement, CompileError> {

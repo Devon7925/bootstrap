@@ -83,6 +83,7 @@ pub struct ReturnStatement {
 
 #[derive(Debug, Clone)]
 pub struct BreakStatement {
+    pub value: Option<Expression>,
     pub span: Span,
 }
 

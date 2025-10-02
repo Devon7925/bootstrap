@@ -197,11 +197,16 @@ impl<'a> FunctionEmitter<'a> {
                 }
                 Ok(())
             }
-            Statement::Break(_) => {
-                let labels = self
+            Statement::Break(stmt) => {
+                let break_label = self
                     .current_loop_labels()
-                    .ok_or_else(|| CompileError::new("`break` outside of loop"))?;
-                self.push_line(&format!("br {}", labels.break_label));
+                    .ok_or_else(|| CompileError::new("`break` outside of loop"))?
+                    .break_label
+                    .clone();
+                if let Some(value) = &stmt.value {
+                    self.emit_expression(value)?;
+                }
+                self.push_line(&format!("br {}", break_label));
                 Ok(())
             }
             Statement::Continue(_) => {
@@ -468,7 +473,11 @@ impl<'a> FunctionEmitter<'a> {
     fn emit_loop(&mut self, loop_expr: &hir::LoopExpr) -> Result<(), CompileError> {
         let break_label = self.make_symbol("loop_break");
         let continue_label = self.make_symbol("loop_body");
-        self.push_line(&format!("(block {}", break_label));
+        let mut block_line = format!("(block {}", break_label);
+        if loop_expr.ty != Type::Unit {
+            block_line.push_str(&format!(" (result {})", wasm_value_type(loop_expr.ty)?));
+        }
+        self.push_line(&block_line);
         self.indent += 1;
         self.push_line(&format!("(loop {}", continue_label));
         self.indent += 1;

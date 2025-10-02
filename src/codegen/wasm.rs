@@ -127,6 +127,7 @@ struct Binding {
 struct LoopContext {
     break_index: usize,
     continue_index: usize,
+    result_local: Option<u32>,
 }
 
 enum LabelKind {
@@ -252,12 +253,24 @@ impl<'a> FunctionEmitter<'a> {
                 }
                 Ok(())
             }
-            Statement::Break(_) => {
-                let labels = self
+            Statement::Break(stmt) => {
+                let (break_index, result_local) = self
                     .loop_stack
                     .last()
+                    .map(|labels| (labels.break_index, labels.result_local))
                     .ok_or_else(|| CompileError::new("`break` outside of loop"))?;
-                self.emit_br(labels.break_index);
+                if let Some(value) = &stmt.value {
+                    self.emit_expression(value)?;
+                    if let Some(local) = result_local {
+                        self.emit_local_set(local);
+                    }
+                } else if result_local.is_some() {
+                    return Err(
+                        CompileError::new("`break` in this loop must provide a value")
+                            .with_span(stmt.span),
+                    );
+                }
+                self.emit_br(break_index);
                 Ok(())
             }
             Statement::Continue(_) => {
@@ -518,26 +531,37 @@ impl<'a> FunctionEmitter<'a> {
     }
 
     fn emit_loop(&mut self, loop_expr: &hir::LoopExpr) -> Result<(), CompileError> {
-        let block_index = self.start_block();
+        let result_local = if loop_expr.ty == Type::Unit {
+            None
+        } else {
+            Some(self.allocate_local(loop_expr.ty))
+        };
+        let block_index = self.start_block(None);
         let loop_index = self.start_loop();
         self.loop_stack.push(LoopContext {
             break_index: block_index,
             continue_index: loop_index,
+            result_local,
         });
-        self.emit_block(loop_expr.body.as_ref(), TailMode::Drop)?;
+        let body_result = self.emit_block(loop_expr.body.as_ref(), TailMode::Drop);
+        let context = self.loop_stack.pop().expect("loop context should exist");
+        body_result?;
         self.emit_br(loop_index);
-        self.loop_stack.pop();
         self.end_block();
         self.end_block();
+        if let Some(local) = context.result_local {
+            self.emit_local_get(local);
+        }
         Ok(())
     }
 
     fn emit_while(&mut self, while_expr: &hir::WhileExpr) -> Result<(), CompileError> {
-        let block_index = self.start_block();
+        let block_index = self.start_block(None);
         let loop_index = self.start_loop();
         self.loop_stack.push(LoopContext {
             break_index: block_index,
             continue_index: loop_index,
+            result_local: None,
         });
 
         self.emit_expression(&while_expr.condition)?;
@@ -574,9 +598,13 @@ impl<'a> FunctionEmitter<'a> {
         encode_u32(&mut self.instructions, depth);
     }
 
-    fn start_block(&mut self) -> usize {
+    fn start_block(&mut self, result: Option<u8>) -> usize {
         self.instructions.push(0x02);
-        self.instructions.push(0x40);
+        if let Some(result) = result {
+            self.instructions.push(result);
+        } else {
+            self.instructions.push(0x40);
+        }
         self.push_label(LabelKind::Block)
     }
 
