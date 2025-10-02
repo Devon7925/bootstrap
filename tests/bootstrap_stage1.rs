@@ -195,4 +195,24 @@ fn stage1_constant_compiler_emits_wasm() {
         "fn main() -> i32 {\n    let cond: bool = 3 > 5;\n    let computed: i32 = if cond {\n        1\n    } else {\n        let base: i32 = 2;\n        base * 5\n    };\n    let chained: i32 = if cond {\n        10\n    } else if true {\n        20\n    } else {\n        30\n    };\n    computed + chained\n}\n",
     );
     assert_eq!(run_stage1_output(&engine, &output_ten), 30);
+
+    let output_eleven = stage1_compile_program(
+        &mut store,
+        &memory,
+        &compile_func,
+        &mut input_cursor,
+        &mut output_cursor,
+        "fn main() -> i32 {\n    let mut acc: i32 = 0;\n    let mut i: i32 = 0;\n    loop {\n        if i == 5 {\n            break;\n        };\n        acc = acc + i;\n        i = i + 1;\n    };\n    acc\n}\n",
+    );
+    assert_eq!(run_stage1_output(&engine, &output_eleven), 10);
+
+    let output_twelve = stage1_compile_program(
+        &mut store,
+        &memory,
+        &compile_func,
+        &mut input_cursor,
+        &mut output_cursor,
+        "fn main() -> i32 {\n    let mut total: i32 = 0;\n    let mut i: i32 = 0;\n    loop {\n        i = i + 1;\n        if i > 6 {\n            break;\n        };\n        let parity: i32 = i - (i / 2) * 2;\n        if parity == 1 {\n            continue;\n        };\n        total = total + i;\n    };\n    total\n}\n",
+    );
+    assert_eq!(run_stage1_output(&engine, &output_twelve), 12);
 }
