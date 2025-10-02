@@ -227,3 +227,103 @@ fn main() -> i32 {
 
     assert_eq!(run_wasm_main(compiler.engine(), &output), -1);
 }
+
+#[test]
+fn stage1_compiler_supports_mutating_boolean_variables() {
+    let source = fs::read_to_string("examples/stage1_minimal.bp")
+        .expect("failed to load stage1 source");
+
+    let stage1_compilation = compile(&source).expect("failed to compile stage1 source");
+    let stage1_wasm = stage1_compilation
+        .to_wasm()
+        .expect("failed to encode stage1 wasm");
+
+    let mut compiler = CompilerInstance::new(stage1_wasm.as_slice());
+    let mut input_cursor = 0usize;
+    let mut output_cursor = 1024i32;
+
+    let program = r#"
+fn main() -> i32 {
+    let mut flag: bool = false;
+    if flag {
+        return 1;
+    };
+    flag = !flag;
+    if flag {
+        return 2;
+    };
+    0
+}
+"#;
+
+    let output = compiler
+        .compile_with_layout(&mut input_cursor, &mut output_cursor, program)
+        .expect("stage1 should compile programs that mutate boolean locals");
+
+    assert_eq!(run_wasm_main(compiler.engine(), &output), 2);
+}
+
+#[test]
+#[ignore = "stage1_minimal currently allows mismatched branch types without an error"]
+fn stage1_compiler_rejects_if_branches_with_mismatched_types() {
+    let source = fs::read_to_string("examples/stage1_minimal.bp")
+        .expect("failed to load stage1 source");
+
+    let stage1_compilation = compile(&source).expect("failed to compile stage1 source");
+    let stage1_wasm = stage1_compilation
+        .to_wasm()
+        .expect("failed to encode stage1 wasm");
+
+    let mut compiler = CompilerInstance::new(stage1_wasm.as_slice());
+    let mut input_cursor = 0usize;
+    let mut output_cursor = 1024i32;
+
+    let program = r#"
+fn main() -> i32 {
+    let cond: bool = true;
+    if cond {
+        1
+    } else {
+        false
+    }
+}
+"#;
+
+    let result = compiler.compile_with_layout(&mut input_cursor, &mut output_cursor, program);
+
+    assert!(
+        result.is_err(),
+        "stage1 should reject if expressions when the branch types differ"
+    );
+}
+
+#[test]
+#[ignore = "stage1_minimal currently allows reassigning locals with values of a different type"]
+fn stage1_compiler_rejects_assigning_mismatched_types() {
+    let source = fs::read_to_string("examples/stage1_minimal.bp")
+        .expect("failed to load stage1 source");
+
+    let stage1_compilation = compile(&source).expect("failed to compile stage1 source");
+    let stage1_wasm = stage1_compilation
+        .to_wasm()
+        .expect("failed to encode stage1 wasm");
+
+    let mut compiler = CompilerInstance::new(stage1_wasm.as_slice());
+    let mut input_cursor = 0usize;
+    let mut output_cursor = 1024i32;
+
+    let program = r#"
+fn main() -> i32 {
+    let mut value: i32 = 4;
+    value = true;
+    value
+}
+"#;
+
+    let result = compiler.compile_with_layout(&mut input_cursor, &mut output_cursor, program);
+
+    assert!(
+        result.is_err(),
+        "stage1 should reject assignments that change the local's type"
+    );
+}
