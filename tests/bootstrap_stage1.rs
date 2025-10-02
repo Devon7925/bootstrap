@@ -52,7 +52,7 @@ fn run_stage1_output(engine: &Engine, wasm: &[u8]) -> i32 {
             .current_pages(&target_store)
             .to_bytes()
             .expect("memory pages to bytes"),
-        65536
+        131072
     );
 
     let main_fn: TypedFunc<(), i32> = target_instance
@@ -215,4 +215,24 @@ fn stage1_constant_compiler_emits_wasm() {
         "fn main() -> i32 {\n    let mut total: i32 = 0;\n    let mut i: i32 = 0;\n    loop {\n        i = i + 1;\n        if i > 6 {\n            break;\n        };\n        let parity: i32 = i - (i / 2) * 2;\n        if parity == 1 {\n            continue;\n        };\n        total = total + i;\n    };\n    total\n}\n",
     );
     assert_eq!(run_stage1_output(&engine, &output_twelve), 12);
+
+    let output_thirteen = stage1_compile_program(
+        &mut store,
+        &memory,
+        &compile_func,
+        &mut input_cursor,
+        &mut output_cursor,
+        "fn helper() -> i32 {\n    return 5;\n}\n\nfn main() -> i32 {\n    helper()\n}\n",
+    );
+    assert_eq!(run_stage1_output(&engine, &output_thirteen), 5);
+
+    let output_fourteen = stage1_compile_program(
+        &mut store,
+        &memory,
+        &compile_func,
+        &mut input_cursor,
+        &mut output_cursor,
+        "fn increment(value: i32) -> i32 {\n    value + 1\n}\n\nfn is_even(value: i32) -> bool {\n    return value - (value / 2) * 2 == 0;\n}\n\nfn pick(flag: bool, left: i32, right: i32) -> i32 {\n    if flag {\n        left\n    } else {\n        right\n    }\n}\n\nfn main() -> i32 {\n    let base: i32 = increment(7);\n    pick(is_even(base), base, 5)\n}\n",
+    );
+    assert_eq!(run_stage1_output(&engine, &output_fourteen), 8);
 }
