@@ -16,6 +16,7 @@ impl WatGenerator {
     pub fn emit_program(&self, program: &hir::Program) -> Result<String, CompileError> {
         let mut module = String::new();
         module.push_str("(module\n");
+        module.push_str("  (memory (export \"memory\") 1)\n");
 
         let mut function_names = Vec::new();
         for function in &program.functions {

@@ -65,8 +65,20 @@ impl WasmGenerator {
         }
         push_section(&mut module, 3, &function_section);
 
+        let mut memory_section = Vec::new();
+        encode_u32(&mut memory_section, 1);
+        memory_section.push(0x00);
+        encode_u32(&mut memory_section, 1);
+        push_section(&mut module, 5, &memory_section);
+
         let mut export_section = Vec::new();
-        encode_u32(&mut export_section, program.functions.len() as u32);
+        encode_u32(
+            &mut export_section,
+            (program.functions.len() + 1) as u32,
+        );
+        encode_name(&mut export_section, "memory");
+        export_section.push(0x02);
+        encode_u32(&mut export_section, 0);
         for (index, function) in program.functions.iter().enumerate() {
             encode_name(&mut export_section, &function.name);
             export_section.push(0x00);
