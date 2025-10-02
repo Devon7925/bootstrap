@@ -41,3 +41,51 @@ fn main(ptr: i32, len: i32) -> i32 {
         .expect("failed to execute main");
     assert_eq!(result, 42);
 }
+
+#[test]
+fn reads_last_byte_from_input_slice() {
+    let source = r#"
+fn main(ptr: i32, len: i32) -> i32 {
+    if len == 0 {
+        return -1;
+    };
+
+    let last: i32 = len - 1;
+    load_u8(ptr + last)
+}
+"#;
+
+    let compilation = compile(source).expect("failed to compile source");
+    let wasm = compilation
+        .to_wasm()
+        .expect("failed to encode module to wasm bytes");
+
+    let engine = Engine::default();
+    let module = Module::new(&engine, wasm.as_slice()).expect("failed to build module");
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = linker
+        .instantiate(&mut store, &module)
+        .expect("failed to instantiate")
+        .start(&mut store)
+        .expect("failed to start module");
+
+    let memory: Memory = instance
+        .get_memory(&mut store, "memory")
+        .expect("expected exported linear memory");
+
+    let input = b"bootstrap";
+    let offset = 32usize;
+    memory
+        .write(&mut store, offset, input)
+        .expect("failed to write input into linear memory");
+
+    let main: TypedFunc<(i32, i32), i32> = instance
+        .get_typed_func(&mut store, "main")
+        .expect("expected exported main function");
+    let result = main
+        .call(&mut store, (offset as i32, input.len() as i32))
+        .expect("failed to execute main");
+
+    assert_eq!(result as u8, *input.last().expect("non-empty slice"));
+}

@@ -120,8 +120,17 @@ pub struct TypeChecker {
 
 impl TypeChecker {
     pub fn new() -> Self {
+        let mut functions = HashMap::new();
+        functions.insert(
+            "load_u8".to_string(),
+            FunctionSignature {
+                params: vec![Type::I32],
+                return_type: Type::I32,
+            },
+        );
+
         Self {
-            functions: HashMap::new(),
+            functions,
             scopes: Vec::new(),
             current_return_type: Type::Unit,
             loop_stack: Vec::new(),
@@ -136,6 +145,13 @@ impl TypeChecker {
                 .map(|param| self.type_from_type_expr(&param.ty))
                 .collect::<Result<Vec<_>, _>>()?;
             let return_type = self.type_from_type_expr(&function.return_type)?;
+            if self.functions.contains_key(&function.name) {
+                return Err(CompileError::new(format!(
+                    "function `{}` already defined",
+                    function.name
+                ))
+                .with_span(function.span));
+            }
             self.functions.insert(
                 function.name.clone(),
                 FunctionSignature {

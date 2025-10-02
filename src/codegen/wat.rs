@@ -256,6 +256,9 @@ impl<'a> FunctionEmitter<'a> {
                 for arg in &call.args {
                     self.emit_expression(arg)?;
                 }
+                if self.emit_intrinsic_call(call)? {
+                    return Ok(());
+                }
                 self.push_line(&format!("call ${}", call.callee));
                 Ok(())
             }
@@ -357,6 +360,21 @@ impl<'a> FunctionEmitter<'a> {
         };
         self.push_line(op);
         Ok(())
+    }
+
+    fn emit_intrinsic_call(&mut self, call: &hir::CallExpr) -> Result<bool, CompileError> {
+        match call.callee.as_str() {
+            "load_u8" => {
+                if call.args.len() != 1 {
+                    return Err(CompileError::new(
+                        "`load_u8` intrinsic expects a single pointer argument",
+                    ));
+                }
+                self.push_line("i32.load8_u");
+                Ok(true)
+            }
+            _ => Ok(false),
+        }
     }
 
     fn emit_logical(&mut self, expr: &hir::BinaryExpr) -> Result<(), CompileError> {

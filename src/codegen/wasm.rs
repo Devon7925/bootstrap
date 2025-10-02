@@ -72,10 +72,7 @@ impl WasmGenerator {
         push_section(&mut module, 5, &memory_section);
 
         let mut export_section = Vec::new();
-        encode_u32(
-            &mut export_section,
-            (program.functions.len() + 1) as u32,
-        );
+        encode_u32(&mut export_section, (program.functions.len() + 1) as u32);
         encode_name(&mut export_section, "memory");
         export_section.push(0x02);
         encode_u32(&mut export_section, 0);
@@ -503,6 +500,9 @@ impl<'a> FunctionEmitter<'a> {
         for arg in &call.args {
             self.emit_expression(arg)?;
         }
+        if self.emit_intrinsic_call(call)? {
+            return Ok(());
+        }
         let index = self
             .function_indices
             .get(&call.callee)
@@ -511,6 +511,23 @@ impl<'a> FunctionEmitter<'a> {
         self.instructions.push(0x10);
         encode_u32(&mut self.instructions, index);
         Ok(())
+    }
+
+    fn emit_intrinsic_call(&mut self, call: &hir::CallExpr) -> Result<bool, CompileError> {
+        match call.callee.as_str() {
+            "load_u8" => {
+                if call.args.len() != 1 {
+                    return Err(CompileError::new(
+                        "`load_u8` intrinsic expects a single pointer argument",
+                    ));
+                }
+                self.instructions.push(0x2d);
+                encode_u32(&mut self.instructions, 0);
+                encode_u32(&mut self.instructions, 0);
+                Ok(true)
+            }
+            _ => Ok(false),
+        }
     }
 
     fn emit_if(&mut self, if_expr: &hir::IfExpr) -> Result<(), CompileError> {
