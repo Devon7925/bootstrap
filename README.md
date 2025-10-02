@@ -55,6 +55,10 @@ The WAT output defines a Wasm module with exported `add` and `main` functions; t
 binary output contains the corresponding `.wasm` module, and `--run` executes it
 directly with Node.js.
 
+Every compiled program must provide an entry point with the exact signature
+`fn main() -> i32`. Additional helper functions can be exported alongside `main`
+for host interop.
+
 ### WebAssembly Interop
 
 Generated modules export a linear memory named `memory` with an initial size of

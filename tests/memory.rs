@@ -4,8 +4,12 @@ use wasmi::{Engine, Linker, Memory, Module, Store, TypedFunc};
 #[test]
 fn exports_single_page_memory() {
     let source = r#"
-fn main(ptr: i32, len: i32) -> i32 {
+fn slice_len(_ptr: i32, len: i32) -> i32 {
     len
+}
+
+fn main() -> i32 {
+    0
 }
 "#;
 
@@ -33,10 +37,10 @@ fn main(ptr: i32, len: i32) -> i32 {
         .expect("memory size to fit into usize");
     assert_eq!(memory_bytes, 65536);
 
-    let main: TypedFunc<(i32, i32), i32> = instance
-        .get_typed_func(&mut store, "main")
-        .expect("expected exported main function");
-    let result = main
+    let slice_len: TypedFunc<(i32, i32), i32> = instance
+        .get_typed_func(&mut store, "slice_len")
+        .expect("expected exported slice_len function");
+    let result = slice_len
         .call(&mut store, (0, 42))
         .expect("failed to execute main");
     assert_eq!(result, 42);
@@ -45,13 +49,17 @@ fn main(ptr: i32, len: i32) -> i32 {
 #[test]
 fn reads_last_byte_from_input_slice() {
     let source = r#"
-fn main(ptr: i32, len: i32) -> i32 {
+fn last_byte(ptr: i32, len: i32) -> i32 {
     if len == 0 {
         return -1;
     };
 
     let last: i32 = len - 1;
     load_u8(ptr + last)
+}
+
+fn main() -> i32 {
+    0
 }
 "#;
 
@@ -80,10 +88,10 @@ fn main(ptr: i32, len: i32) -> i32 {
         .write(&mut store, offset, input)
         .expect("failed to write input into linear memory");
 
-    let main: TypedFunc<(i32, i32), i32> = instance
-        .get_typed_func(&mut store, "main")
-        .expect("expected exported main function");
-    let result = main
+    let last_byte: TypedFunc<(i32, i32), i32> = instance
+        .get_typed_func(&mut store, "last_byte")
+        .expect("expected exported last_byte function");
+    let result = last_byte
         .call(&mut store, (offset as i32, input.len() as i32))
         .expect("failed to execute main");
 
@@ -93,9 +101,13 @@ fn main(ptr: i32, len: i32) -> i32 {
 #[test]
 fn writes_byte_into_memory() {
     let source = r#"
-fn main(ptr: i32, value: i32) -> i32 {
+fn write_then_read(ptr: i32, value: i32) -> i32 {
     store_u8(ptr, value);
     load_u8(ptr)
+}
+
+fn main() -> i32 {
+    0
 }
 "#;
 
@@ -118,13 +130,13 @@ fn main(ptr: i32, value: i32) -> i32 {
         .get_memory(&mut store, "memory")
         .expect("expected exported linear memory");
 
-    let main: TypedFunc<(i32, i32), i32> = instance
-        .get_typed_func(&mut store, "main")
-        .expect("expected exported main function");
+    let write_then_read: TypedFunc<(i32, i32), i32> = instance
+        .get_typed_func(&mut store, "write_then_read")
+        .expect("expected exported write_then_read function");
 
     let offset = 128i32;
     let value = 173i32;
-    let result = main
+    let result = write_then_read
         .call(&mut store, (offset, value))
         .expect("failed to execute main");
 

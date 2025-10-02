@@ -145,6 +145,7 @@ impl TypeChecker {
     }
 
     pub fn check(mut self, program: ast::Program) -> Result<hir::Program, CompileError> {
+        let mut main_found = false;
         for function in &program.functions {
             let param_types = function
                 .params
@@ -152,6 +153,17 @@ impl TypeChecker {
                 .map(|param| self.type_from_type_expr(&param.ty))
                 .collect::<Result<Vec<_>, _>>()?;
             let return_type = self.type_from_type_expr(&function.return_type)?;
+            if function.name == "main" {
+                if !param_types.is_empty() {
+                    return Err(CompileError::new("`main` cannot take parameters")
+                        .with_span(function.span));
+                }
+                if return_type != Type::I32 {
+                    return Err(CompileError::new("`main` must return `i32`")
+                        .with_span(function.span));
+                }
+                main_found = true;
+            }
             if self.functions.contains_key(&function.name) {
                 return Err(CompileError::new(format!(
                     "function `{}` already defined",
@@ -166,6 +178,10 @@ impl TypeChecker {
                     return_type,
                 },
             );
+        }
+
+        if !main_found {
+            return Err(CompileError::new("program must define `fn main() -> i32`"));
         }
 
         let mut functions = Vec::new();
