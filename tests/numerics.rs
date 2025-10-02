@@ -20,8 +20,8 @@ fn sum_f64() -> f64 {
     total
 }
 
-fn main() -> i64 {
-    add_wide(10i64, 5i64)
+fn main() -> i32 {
+    0
 }
 "#;
 
@@ -39,7 +39,10 @@ fn main() -> i64 {
         .start(&mut store)
         .expect("failed to start module");
 
-    let main_func: TypedFunc<(), i64> = instance
+    let add_wide_func: TypedFunc<(i64, i64), i64> = instance
+        .get_typed_func(&mut store, "add_wide")
+        .expect("expected exported add_wide");
+    let main_func: TypedFunc<(), i32> = instance
         .get_typed_func(&mut store, "main")
         .expect("expected exported main");
     let sum_f32_func: Func = instance
@@ -49,10 +52,15 @@ fn main() -> i64 {
         .get_func(&mut store, "sum_f64")
         .expect("expected exported sum_f64");
 
+    let add_wide_result = add_wide_func
+        .call(&mut store, (10, 5))
+        .expect("failed to execute add_wide");
+    assert_eq!(add_wide_result, 16);
+
     let main_result = main_func
         .call(&mut store, ())
         .expect("failed to execute main");
-    assert_eq!(main_result, 16);
+    assert_eq!(main_result, 0);
 
     let mut f32_results = [Value::F32(0.0f32.into())];
     sum_f32_func
@@ -74,8 +82,12 @@ fn main() -> i64 {
 #[test]
 fn float_remainder_is_rejected() {
     let source = r#"
-fn main() -> f32 {
+fn float_mod() -> f32 {
     5.0f32 % 2.0f32
+}
+
+fn main() -> i32 {
+    0
 }
 "#;
 

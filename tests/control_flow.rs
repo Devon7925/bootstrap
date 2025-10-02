@@ -165,6 +165,10 @@ fn bad() -> i32 {
         break;
     }
 }
+
+fn main() -> i32 {
+    bad()
+}
 "#;
 
     let error = match compile(source) {
@@ -185,6 +189,10 @@ fn bad() {
     while (false) {
         break 1;
     }
+}
+
+fn main() -> i32 {
+    0
 }
 "#;
 
