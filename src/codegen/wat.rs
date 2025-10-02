@@ -373,6 +373,15 @@ impl<'a> FunctionEmitter<'a> {
                 self.push_line("i32.load8_u");
                 Ok(true)
             }
+            "store_u8" => {
+                if call.args.len() != 2 {
+                    return Err(CompileError::new(
+                        "`store_u8` intrinsic expects a pointer and value",
+                    ));
+                }
+                self.push_line("i32.store8");
+                Ok(true)
+            }
             _ => Ok(false),
         }
     }

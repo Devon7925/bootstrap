@@ -526,6 +526,17 @@ impl<'a> FunctionEmitter<'a> {
                 encode_u32(&mut self.instructions, 0);
                 Ok(true)
             }
+            "store_u8" => {
+                if call.args.len() != 2 {
+                    return Err(CompileError::new(
+                        "`store_u8` intrinsic expects a pointer and value",
+                    ));
+                }
+                self.instructions.push(0x3a);
+                encode_u32(&mut self.instructions, 0);
+                encode_u32(&mut self.instructions, 0);
+                Ok(true)
+            }
             _ => Ok(false),
         }
     }

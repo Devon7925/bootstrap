@@ -15,6 +15,7 @@ This document captures the initial plan for the bootstrap compiler. The overall 
 - **Statements**: `let` binding (immutable or `mut`), assignment, block, `return`, `break`, `continue`, expression statements.
 - **Expressions**: integer/float literals, variable ref, unary/binary arithmetic (`+ - * / %`), comparison (`== != < <= > >=`), logical (`&& || !`), call expression.
 - **Control Flow**: `if { } else { }` expressions, `loop { }`, `break`, `continue`, `while ( condition ) { ... }` desugared into loops.
+- **Intrinsics**: `load_u8(ptr: i32) -> i32` and `store_u8(ptr: i32, value: i32)` provide byte-level access to linear memory while we build richer data structures.
 
 ## Compiler Pipeline
 
