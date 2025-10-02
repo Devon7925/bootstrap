@@ -171,4 +171,49 @@ fn stage1_constant_compiler_emits_wasm() {
         .call(&mut target_store_three, ())
         .expect("failed to execute third compiled main");
     assert_eq!(main_result_three, 2);
+
+    let input_four = b"fn main() -> i32 {\n    return -(1 + 2) + (3 - (4 - 5));\n}\n";
+    let input_offset_four = input_offset_three + 256usize;
+    memory
+        .write(&mut store, input_offset_four, input_four)
+        .expect("failed to write fourth input for stage1");
+
+    let output_offset_four = output_offset_three + 4096;
+    let produced_len_four = compile_func
+        .call(
+            &mut store,
+            (
+                input_offset_four as i32,
+                input_four.len() as i32,
+                output_offset_four,
+            ),
+        )
+        .expect("stage1 compile invocation failed for fourth program");
+    assert!(
+        produced_len_four > 0,
+        "stage1 compiler returned no bytes for fourth program"
+    );
+
+    let mut output_four = vec![0u8; produced_len_four as usize];
+    memory
+        .read(&store, output_offset_four as usize, &mut output_four)
+        .expect("failed to read stage1 fourth output");
+
+    let target_module_four = Module::new(&engine, output_four.as_slice())
+        .expect("failed to create fourth target module");
+    let mut target_store_four = Store::new(&engine, ());
+    let target_linker_four = Linker::new(&engine);
+    let target_instance_four = target_linker_four
+        .instantiate(&mut target_store_four, &target_module_four)
+        .expect("failed to instantiate fourth target module")
+        .start(&mut target_store_four)
+        .expect("failed to start fourth target module");
+
+    let main_fn_four: TypedFunc<(), i32> = target_instance_four
+        .get_typed_func(&mut target_store_four, "main")
+        .expect("fourth compiled module should export main");
+    let main_result_four = main_fn_four
+        .call(&mut target_store_four, ())
+        .expect("failed to execute fourth compiled main");
+    assert_eq!(main_result_four, 1);
 }
