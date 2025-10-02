@@ -56,6 +56,7 @@ pub struct TypeChecker {
     functions: HashMap<String, FunctionSignature>,
     scopes: Vec<HashMap<String, VariableInfo>>,
     current_return_type: Type,
+    loop_depth: usize,
 }
 
 impl TypeChecker {
@@ -64,6 +65,7 @@ impl TypeChecker {
             functions: HashMap::new(),
             scopes: Vec::new(),
             current_return_type: Type::Unit,
+            loop_depth: 0,
         }
     }
 
@@ -175,6 +177,10 @@ impl TypeChecker {
                 AstStatement::Return(stmt) => {
                     let typed = scoped.check_return(stmt)?;
                     statements.push(hir::Statement::Return(typed));
+                }
+                AstStatement::Break(stmt) => {
+                    let typed = scoped.check_break(stmt)?;
+                    statements.push(hir::Statement::Break(typed));
                 }
                 AstStatement::Expr(stmt) => {
                     let expr = scoped.check_expression(stmt.expr)?;
@@ -302,6 +308,17 @@ impl TypeChecker {
         }
     }
 
+    fn check_break(
+        &mut self,
+        stmt: ast::BreakStatement,
+    ) -> Result<hir::BreakStatement, CompileError> {
+        if self.loop_depth == 0 {
+            Err(CompileError::new("`break` outside of loop").with_span(stmt.span))
+        } else {
+            Ok(hir::BreakStatement { span: stmt.span })
+        }
+    }
+
     fn check_expression(&mut self, expr: ast::Expression) -> Result<hir::Expression, CompileError> {
         match expr {
             AstExpression::Literal(lit) => self.check_literal(lit),
@@ -314,7 +331,48 @@ impl TypeChecker {
                 let block = self.check_block(block)?;
                 Ok(hir::Expression::Block(block))
             }
+            AstExpression::Loop(loop_expr) => self.check_loop(loop_expr),
+            AstExpression::While(while_expr) => self.check_while(while_expr),
         }
+    }
+
+    fn check_loop(&mut self, loop_expr: ast::LoopExpr) -> Result<hir::Expression, CompileError> {
+        let ast::LoopExpr { body, span } = loop_expr;
+        self.loop_depth += 1;
+        let body = {
+            let result = self.check_block(body);
+            self.loop_depth -= 1;
+            result?
+        };
+        Ok(hir::Expression::Loop(hir::LoopExpr {
+            body: Box::new(body),
+            ty: Type::Unit,
+            span,
+        }))
+    }
+
+    fn check_while(&mut self, while_expr: ast::WhileExpr) -> Result<hir::Expression, CompileError> {
+        let ast::WhileExpr {
+            condition,
+            body,
+            span,
+        } = while_expr;
+        let condition = self.check_expression(*condition)?;
+        if condition.ty() != Type::Bool {
+            return Err(CompileError::new("while condition must be boolean").with_span(span));
+        }
+        self.loop_depth += 1;
+        let body = {
+            let result = self.check_block(body);
+            self.loop_depth -= 1;
+            result?
+        };
+        Ok(hir::Expression::While(hir::WhileExpr {
+            condition: Box::new(condition),
+            body: Box::new(body),
+            ty: Type::Unit,
+            span,
+        }))
     }
 
     fn check_literal(&self, lit: ast::Literal) -> Result<hir::Expression, CompileError> {

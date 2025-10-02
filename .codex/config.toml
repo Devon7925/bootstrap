@@ -1,0 +1,19 @@
+[sandbox_workspace_write]
+network_access = true
+
+[network]
+# "restricted" = ask for anything not on allowlist. "enabled" = no prompts.
+mode = "restricted"
+
+# Limit to safe HTTP methods for Cargo’s fetches
+methods = ["GET", "HEAD", "OPTIONS"]
+
+# Allow the crates index and tarball hosts and, if you use the git index, GitHub.
+allow = [
+  "https://index.crates.io",                   # sparse index
+  "https://crates.io",                         # API redirects and metadata
+  "https://static.crates.io",                  # crate tarballs CDN
+  "https://github.com/rust-lang/crates.io-index",
+  "https://github.com",
+  "https://raw.githubusercontent.com"
+]

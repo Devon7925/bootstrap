@@ -49,6 +49,7 @@ pub enum Statement {
     Assign(AssignStatement),
     Return(ReturnStatement),
     Expr(ExpressionStatement),
+    Break(BreakStatement),
 }
 
 #[derive(Debug, Clone)]
@@ -80,6 +81,11 @@ pub struct ReturnStatement {
 }
 
 #[derive(Debug, Clone)]
+pub struct BreakStatement {
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
 pub enum Expression {
     Literal(Literal),
     Variable(Variable),
@@ -88,6 +94,8 @@ pub enum Expression {
     Call(CallExpr),
     If(IfExpr),
     Block(Block),
+    Loop(LoopExpr),
+    While(WhileExpr),
 }
 
 #[derive(Debug, Clone)]
@@ -162,6 +170,19 @@ pub struct IfExpr {
     pub span: Span,
 }
 
+#[derive(Debug, Clone)]
+pub struct LoopExpr {
+    pub body: Block,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct WhileExpr {
+    pub condition: Box<Expression>,
+    pub body: Block,
+    pub span: Span,
+}
+
 impl Expression {
     pub fn span(&self) -> Span {
         match self {
@@ -172,6 +193,8 @@ impl Expression {
             Expression::Call(call) => call.span,
             Expression::If(if_expr) => if_expr.span,
             Expression::Block(block) => block.span,
+            Expression::Loop(loop_expr) => loop_expr.span,
+            Expression::While(while_expr) => while_expr.span,
         }
     }
 }

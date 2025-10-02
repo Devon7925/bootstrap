@@ -42,6 +42,7 @@ struct FunctionEmitter<'a> {
     instructions: Vec<String>,
     indent: usize,
     temp_counter: usize,
+    loop_stack: Vec<LoopLabels>,
 }
 
 struct Parameter {
@@ -52,6 +53,11 @@ struct Parameter {
 struct Local {
     wasm_name: String,
     wasm_type: &'static str,
+}
+
+struct LoopLabels {
+    break_label: String,
+    continue_label: String,
 }
 
 enum TailMode {
@@ -69,6 +75,7 @@ impl<'a> FunctionEmitter<'a> {
             instructions: Vec::new(),
             indent: 2,
             temp_counter: 0,
+            loop_stack: Vec::new(),
         }
     }
 
@@ -190,6 +197,13 @@ impl<'a> FunctionEmitter<'a> {
                 }
                 Ok(())
             }
+            Statement::Break(_) => {
+                let labels = self
+                    .current_loop_labels()
+                    .ok_or_else(|| CompileError::new("`break` outside of loop"))?;
+                self.push_line(&format!("br {}", labels.break_label));
+                Ok(())
+            }
         }
     }
 
@@ -228,6 +242,8 @@ impl<'a> FunctionEmitter<'a> {
                 self.emit_block(block, TailMode::Preserve)?;
                 Ok(())
             }
+            Expression::Loop(loop_expr) => self.emit_loop(loop_expr),
+            Expression::While(while_expr) => self.emit_while(while_expr),
         }
     }
 
@@ -433,6 +449,66 @@ impl<'a> FunctionEmitter<'a> {
         Ok(())
     }
 
+    fn emit_loop(&mut self, loop_expr: &hir::LoopExpr) -> Result<(), CompileError> {
+        let break_label = self.make_symbol("loop_break");
+        let continue_label = self.make_symbol("loop_body");
+        self.push_line(&format!("(block {}", break_label));
+        self.indent += 1;
+        self.push_line(&format!("(loop {}", continue_label));
+        self.indent += 1;
+
+        self.loop_stack.push(LoopLabels {
+            break_label: break_label.clone(),
+            continue_label: continue_label.clone(),
+        });
+        let body_result = self.emit_block(loop_expr.body.as_ref(), TailMode::Drop);
+        self.loop_stack.pop();
+        if let Err(err) = body_result {
+            self.indent -= 1;
+            self.indent -= 1;
+            return Err(err);
+        }
+
+        self.push_line(&format!("br {}", continue_label));
+        self.indent -= 1;
+        self.push_line(")");
+        self.indent -= 1;
+        self.push_line(")");
+        Ok(())
+    }
+
+    fn emit_while(&mut self, while_expr: &hir::WhileExpr) -> Result<(), CompileError> {
+        let break_label = self.make_symbol("while_break");
+        let continue_label = self.make_symbol("while_loop");
+        self.push_line(&format!("(block {}", break_label));
+        self.indent += 1;
+        self.push_line(&format!("(loop {}", continue_label));
+        self.indent += 1;
+
+        self.emit_expression(&while_expr.condition)?;
+        self.push_line("i32.eqz");
+        self.push_line(&format!("br_if {}", break_label));
+
+        self.loop_stack.push(LoopLabels {
+            break_label: break_label.clone(),
+            continue_label: continue_label.clone(),
+        });
+        let body_result = self.emit_block(while_expr.body.as_ref(), TailMode::Drop);
+        self.loop_stack.pop();
+        if let Err(err) = body_result {
+            self.indent -= 1;
+            self.indent -= 1;
+            return Err(err);
+        }
+
+        self.push_line(&format!("br {}", continue_label));
+        self.indent -= 1;
+        self.push_line(")");
+        self.indent -= 1;
+        self.push_line(")");
+        Ok(())
+    }
+
     fn make_symbol(&mut self, prefix: &str) -> String {
         let sanitized = sanitize(prefix);
         let name = format!("${}_{:03}", sanitized, self.temp_counter);
@@ -453,6 +529,10 @@ impl<'a> FunctionEmitter<'a> {
             }
         }
         Err(CompileError::new(format!("unknown identifier `{}`", name)))
+    }
+
+    fn current_loop_labels(&self) -> Option<&LoopLabels> {
+        self.loop_stack.last()
     }
 
     fn push_scope(&mut self) {

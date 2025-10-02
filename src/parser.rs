@@ -143,11 +143,21 @@ impl<'a> Parser<'a> {
                     |k| matches!(k, TokenKind::Semicolon),
                     "expected ';' after assignment",
                 )?;
+            } else if self.current_is(|k| matches!(k, TokenKind::Break)) {
+                let stmt = self.parse_break_statement()?;
+                statements.push(Statement::Break(stmt));
+                self.expect(
+                    |k| matches!(k, TokenKind::Semicolon),
+                    "expected ';' after break",
+                )?;
             } else {
                 let expr = self.parse_expression()?;
                 if self.current_is(|k| matches!(k, TokenKind::Semicolon)) {
                     let semi = self.advance();
                     let span = Span::new(expr.span().start, semi.span.end);
+                    statements.push(Statement::Expr(ExpressionStatement { expr, span }));
+                } else if matches!(expr, Expression::Loop(_) | Expression::While(_)) {
+                    let span = expr.span();
                     statements.push(Statement::Expr(ExpressionStatement { expr, span }));
                 } else {
                     tail = Some(Box::new(expr));
@@ -237,6 +247,11 @@ impl<'a> Parser<'a> {
                 span,
             })
         }
+    }
+
+    fn parse_break_statement(&mut self) -> Result<BreakStatement, CompileError> {
+        let token = self.expect(|k| matches!(k, TokenKind::Break), "expected 'break'")?;
+        Ok(BreakStatement { span: token.span })
     }
 
     fn parse_expression(&mut self) -> Result<Expression, CompileError> {
@@ -374,6 +389,8 @@ impl<'a> Parser<'a> {
                 }))
             }
             TokenKind::If => self.parse_if_expression(),
+            TokenKind::Loop => self.parse_loop_expression(),
+            TokenKind::While => self.parse_while_expression(),
             TokenKind::LBrace => {
                 let block = self.parse_block()?;
                 Ok(Expression::Block(block))
@@ -406,6 +423,33 @@ impl<'a> Parser<'a> {
             condition: Box::new(condition),
             then_branch,
             else_branch,
+            span,
+        }))
+    }
+
+    fn parse_loop_expression(&mut self) -> Result<Expression, CompileError> {
+        let loop_token = self.expect(|k| matches!(k, TokenKind::Loop), "expected 'loop'")?;
+        let body = self.parse_block()?;
+        let span = Span::new(loop_token.span.start, body.span.end);
+        Ok(Expression::Loop(LoopExpr { body, span }))
+    }
+
+    fn parse_while_expression(&mut self) -> Result<Expression, CompileError> {
+        let while_token = self.expect(|k| matches!(k, TokenKind::While), "expected 'while'")?;
+        self.expect(
+            |k| matches!(k, TokenKind::LParen),
+            "expected '(' after while",
+        )?;
+        let condition = self.parse_expression()?;
+        self.expect(
+            |k| matches!(k, TokenKind::RParen),
+            "expected ')' after while condition",
+        )?;
+        let body = self.parse_block()?;
+        let span = Span::new(while_token.span.start, body.span.end);
+        Ok(Expression::While(WhileExpr {
+            condition: Box::new(condition),
+            body,
             span,
         }))
     }
