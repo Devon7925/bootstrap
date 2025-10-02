@@ -55,6 +55,14 @@ The WAT output defines a Wasm module with exported `add` and `main` functions; t
 binary output contains the corresponding `.wasm` module, and `--run` executes it
 directly with Node.js.
 
+### WebAssembly Interop
+
+Generated modules export a linear memory named `memory` with an initial size of
+one WebAssembly page (64KiB). Hosts can write byte buffers, such as UTF-8
+strings, into this memory and pass their pointer/length pairs to compiled
+functions (for example to model `&[u8]` inputs) while we continue building out
+first-class slice support in the language itself.
+
 ## Supported Language Features
 
 - `fn` definitions with typed parameters and return values (`i32`, `i64`, `f32`, `f64`, `bool`, `()`)
