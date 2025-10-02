@@ -70,3 +70,25 @@ fn main() -> i64 {
     let f64_result = f64::from_bits(f64_value);
     assert!((f64_result - 3.5).abs() < 1e-9);
 }
+
+#[test]
+fn float_remainder_is_rejected() {
+    let source = r#"
+fn main() -> f32 {
+    5.0f32 % 2.0f32
+}
+"#;
+
+    let error = match compile(source) {
+        Ok(_) => panic!("expected float remainder to be rejected"),
+        Err(err) => err,
+    };
+
+    assert!(
+        error
+            .message
+            .contains("remainder is only supported for integer types"),
+        "unexpected error message: {}",
+        error.message
+    );
+}
