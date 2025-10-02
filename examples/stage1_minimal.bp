@@ -17,6 +17,14 @@ fn emit_sub(base: i32, offset: i32) -> i32 {
     write_byte(base, offset, 107)
 }
 
+fn emit_mul(base: i32, offset: i32) -> i32 {
+    write_byte(base, offset, 108)
+}
+
+fn emit_div(base: i32, offset: i32) -> i32 {
+    write_byte(base, offset, 109)
+}
+
 fn emit_end(base: i32, offset: i32) -> i32 {
     write_byte(base, offset, 11)
 }
@@ -280,7 +288,7 @@ fn parse_expression(
     instr_base: i32,
     instr_offset_ptr: i32
 ) -> i32 {
-    let mut idx: i32 = parse_value(base, len, offset, instr_base, instr_offset_ptr);
+    let mut idx: i32 = parse_term(base, len, offset, instr_base, instr_offset_ptr);
     if idx < 0 {
         return -1;
     };
@@ -295,7 +303,7 @@ fn parse_expression(
         if op_byte == 43 || op_byte == 45 {
             idx = idx + 1;
             let next_idx: i32 =
-                parse_value(base, len, idx, instr_base, instr_offset_ptr);
+                parse_term(base, len, idx, instr_base, instr_offset_ptr);
             if next_idx < 0 {
                 return -1;
             };
@@ -316,6 +324,50 @@ fn parse_expression(
         };
 
         return -1;
+    };
+
+    idx
+}
+
+fn parse_term(
+    base: i32,
+    len: i32,
+    offset: i32,
+    instr_base: i32,
+    instr_offset_ptr: i32
+) -> i32 {
+    let mut idx: i32 = parse_value(base, len, offset, instr_base, instr_offset_ptr);
+    if idx < 0 {
+        return -1;
+    };
+
+    loop {
+        idx = skip_whitespace(base, len, idx);
+        if idx >= len {
+            break;
+        };
+
+        let op_byte: i32 = peek_byte(base, len, idx);
+        if op_byte == 42 || op_byte == 47 {
+            idx = idx + 1;
+            let next_idx: i32 =
+                parse_value(base, len, idx, instr_base, instr_offset_ptr);
+            if next_idx < 0 {
+                return -1;
+            };
+            idx = next_idx;
+
+            let mut instr_offset: i32 = load_i32(instr_offset_ptr);
+            if op_byte == 42 {
+                instr_offset = emit_mul(instr_base, instr_offset);
+            } else {
+                instr_offset = emit_div(instr_base, instr_offset);
+            };
+            store_i32(instr_offset_ptr, instr_offset);
+            continue;
+        };
+
+        break;
     };
 
     idx
