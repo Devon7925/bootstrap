@@ -87,6 +87,9 @@ impl<'a> Parser<'a> {
 
             if self.current_is(|k| matches!(k, TokenKind::Comma)) {
                 self.advance();
+                if self.current_is(|k| matches!(k, TokenKind::RParen)) {
+                    break;
+                }
             } else {
                 break;
             }
@@ -355,6 +358,9 @@ impl<'a> Parser<'a> {
                         args.push(arg);
                         if self.current_is(|k| matches!(k, TokenKind::Comma)) {
                             self.advance();
+                            if self.current_is(|k| matches!(k, TokenKind::RParen)) {
+                                break;
+                            }
                         } else {
                             break;
                         }
