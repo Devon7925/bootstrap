@@ -81,9 +81,9 @@ fn emit_or(base: i32, offset: i32) -> i32 {
     write_byte(base, offset, 114)
 }
 
-fn emit_if(base: i32, offset: i32) -> i32 {
+fn emit_if(base: i32, offset: i32, block_type: i32) -> i32 {
     let mut out: i32 = write_byte(base, offset, 4);
-    out = write_byte(base, out, 64);
+    out = write_byte(base, out, block_type);
     out
 }
 
@@ -1017,6 +1017,27 @@ fn parse_primary(
     };
 
     let head_byte: i32 = peek_byte(base, len, idx);
+    if head_byte == 105 {
+        if idx + 1 >= len {
+            return -1;
+        };
+        let second: i32 = peek_byte(base, len, idx + 1);
+        if second == 102 {
+            let after_keyword: i32 = idx + 2;
+            if after_keyword == len || !is_identifier_continue(peek_byte(base, len, after_keyword)) {
+                return parse_if_expression(
+                    base,
+                    len,
+                    idx,
+                    instr_base,
+                    instr_offset_ptr,
+                    locals_base,
+                    locals_count_ptr
+                );
+            };
+        };
+    };
+
     if head_byte == 40 {
         idx = idx + 1;
         let inner_idx: i32 = parse_expression(
@@ -1414,6 +1435,68 @@ fn parse_block_statements(
     }
 }
 
+fn parse_block_expression(
+    base: i32,
+    len: i32,
+    offset: i32,
+    instr_base: i32,
+    instr_offset_ptr: i32,
+    locals_base: i32,
+    locals_count_ptr: i32
+) -> i32 {
+    let mut current_offset: i32 = offset;
+    let mut result_offset: i32 = -1;
+    loop {
+        current_offset = skip_whitespace(base, len, current_offset);
+        if current_offset >= len {
+            return -1;
+        };
+        let current_byte: i32 = peek_byte(base, len, current_offset);
+        if current_byte == 125 {
+            return -1;
+        };
+        let prev_instr_offset: i32 = load_i32(instr_offset_ptr);
+        let stmt_offset: i32 = parse_statement(
+            base,
+            len,
+            current_offset,
+            instr_base,
+            instr_offset_ptr,
+            locals_base,
+            locals_count_ptr
+        );
+        if stmt_offset >= 0 {
+            current_offset = stmt_offset;
+            continue;
+        };
+        if stmt_offset != -1 {
+            return -1;
+        };
+        store_i32(instr_offset_ptr, prev_instr_offset);
+        let expr_offset: i32 = parse_expression(
+            base,
+            len,
+            current_offset,
+            instr_base,
+            instr_offset_ptr,
+            locals_base,
+            locals_count_ptr
+        );
+        if expr_offset < 0 {
+            return -1;
+        };
+        let mut after_expr: i32 = skip_whitespace(base, len, expr_offset);
+        after_expr = expect_char(base, len, after_expr, 125);
+        if after_expr < 0 {
+            return -1;
+        };
+        result_offset = after_expr;
+        break;
+    }
+
+    result_offset
+}
+
 fn parse_if_statement(
     base: i32,
     len: i32,
@@ -1453,7 +1536,7 @@ fn parse_if_statement(
     };
 
     let mut instr_offset: i32 = load_i32(instr_offset_ptr);
-    instr_offset = emit_if(instr_base, instr_offset);
+    instr_offset = emit_if(instr_base, instr_offset, 64);
     store_i32(instr_offset_ptr, instr_offset);
 
     let mut after_block: i32 = parse_block_statements(
@@ -1536,6 +1619,127 @@ fn parse_if_statement(
             idx = idx + 1;
         };
     };
+
+    idx
+}
+
+fn parse_if_expression(
+    base: i32,
+    len: i32,
+    offset: i32,
+    instr_base: i32,
+    instr_offset_ptr: i32,
+    locals_base: i32,
+    locals_count_ptr: i32
+) -> i32 {
+    let mut idx: i32 = expect_keyword_if(base, len, offset);
+    if idx < 0 {
+        return -1;
+    };
+    if idx < len {
+        let after_byte: i32 = peek_byte(base, len, idx);
+        if after_byte != 123 && !is_whitespace(after_byte) && after_byte != 40 {
+            return -1;
+        };
+    };
+    idx = skip_whitespace(base, len, idx);
+    idx = parse_expression(
+        base,
+        len,
+        idx,
+        instr_base,
+        instr_offset_ptr,
+        locals_base,
+        locals_count_ptr
+    );
+    if idx < 0 {
+        return -1;
+    };
+    idx = skip_whitespace(base, len, idx);
+    idx = expect_char(base, len, idx, 123);
+    if idx < 0 {
+        return -1;
+    };
+
+    let mut instr_offset: i32 = load_i32(instr_offset_ptr);
+    instr_offset = emit_if(instr_base, instr_offset, 127);
+    store_i32(instr_offset_ptr, instr_offset);
+
+    let mut after_block: i32 = parse_block_expression(
+        base,
+        len,
+        idx,
+        instr_base,
+        instr_offset_ptr,
+        locals_base,
+        locals_count_ptr
+    );
+    if after_block < 0 {
+        return -1;
+    };
+
+    idx = skip_whitespace(base, len, after_block);
+
+    if idx + 4 > len {
+        return -1;
+    };
+    let e_char: i32 = peek_byte(base, len, idx);
+    let l_char: i32 = peek_byte(base, len, idx + 1);
+    let s_char: i32 = peek_byte(base, len, idx + 2);
+    let e2_char: i32 = peek_byte(base, len, idx + 3);
+    if e_char != 101 || l_char != 108 || s_char != 115 || e2_char != 101 {
+        return -1;
+    };
+    let after_else: i32 = idx + 4;
+    if after_else < len && is_identifier_continue(peek_byte(base, len, after_else)) {
+        return -1;
+    };
+    idx = skip_whitespace(base, len, after_else);
+
+    let mut instr_offset_else: i32 = load_i32(instr_offset_ptr);
+    instr_offset_else = emit_else(instr_base, instr_offset_else);
+    store_i32(instr_offset_ptr, instr_offset_else);
+
+    if idx >= len {
+        return -1;
+    };
+    let next_byte: i32 = peek_byte(base, len, idx);
+    if next_byte == 123 {
+        idx = expect_char(base, len, idx, 123);
+        idx = parse_block_expression(
+            base,
+            len,
+            idx,
+            instr_base,
+            instr_offset_ptr,
+            locals_base,
+            locals_count_ptr
+        );
+        if idx < 0 {
+            return -1;
+        };
+        idx = skip_whitespace(base, len, idx);
+    } else if next_byte == 105 {
+        idx = parse_if_expression(
+            base,
+            len,
+            idx,
+            instr_base,
+            instr_offset_ptr,
+            locals_base,
+            locals_count_ptr
+        );
+        if idx < 0 {
+            return -1;
+        };
+        idx = skip_whitespace(base, len, idx);
+    } else {
+        return -1;
+    };
+
+    let mut final_instr_offset: i32 = load_i32(instr_offset_ptr);
+    final_instr_offset = emit_end(instr_base, final_instr_offset);
+    store_i32(instr_offset_ptr, final_instr_offset);
 
     idx
 }

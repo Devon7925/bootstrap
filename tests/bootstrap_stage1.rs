@@ -185,4 +185,14 @@ fn stage1_constant_compiler_emits_wasm() {
         "fn main() -> i32 {\n    let mut value: i32 = 1;\n    let cond: bool = 2 + 2 == 4 && !(3 < 2);\n    if cond {\n        value = value + 4;\n    };\n    if 10 <= 5 || cond {\n        value = value + 8;\n    };\n    value\n}\n",
     );
     assert_eq!(run_stage1_output(&engine, &output_nine), 13);
+
+    let output_ten = stage1_compile_program(
+        &mut store,
+        &memory,
+        &compile_func,
+        &mut input_cursor,
+        &mut output_cursor,
+        "fn main() -> i32 {\n    let cond: bool = 3 > 5;\n    let computed: i32 = if cond {\n        1\n    } else {\n        let base: i32 = 2;\n        base * 5\n    };\n    let chained: i32 = if cond {\n        10\n    } else if true {\n        20\n    } else {\n        30\n    };\n    computed + chained\n}\n",
+    );
+    assert_eq!(run_stage1_output(&engine, &output_ten), 30);
 }
