@@ -382,6 +382,78 @@ impl<'a> FunctionEmitter<'a> {
                 self.push_line("i32.store8");
                 Ok(true)
             }
+            "load_i32" => {
+                if call.args.len() != 1 {
+                    return Err(CompileError::new(
+                        "`load_i32` intrinsic expects a single pointer argument",
+                    ));
+                }
+                self.push_line("i32.load");
+                Ok(true)
+            }
+            "store_i32" => {
+                if call.args.len() != 2 {
+                    return Err(CompileError::new(
+                        "`store_i32` intrinsic expects a pointer and value",
+                    ));
+                }
+                self.push_line("i32.store");
+                Ok(true)
+            }
+            "load_i64" => {
+                if call.args.len() != 1 {
+                    return Err(CompileError::new(
+                        "`load_i64` intrinsic expects a single pointer argument",
+                    ));
+                }
+                self.push_line("i64.load");
+                Ok(true)
+            }
+            "store_i64" => {
+                if call.args.len() != 2 {
+                    return Err(CompileError::new(
+                        "`store_i64` intrinsic expects a pointer and value",
+                    ));
+                }
+                self.push_line("i64.store");
+                Ok(true)
+            }
+            "load_f32" => {
+                if call.args.len() != 1 {
+                    return Err(CompileError::new(
+                        "`load_f32` intrinsic expects a single pointer argument",
+                    ));
+                }
+                self.push_line("f32.load");
+                Ok(true)
+            }
+            "store_f32" => {
+                if call.args.len() != 2 {
+                    return Err(CompileError::new(
+                        "`store_f32` intrinsic expects a pointer and value",
+                    ));
+                }
+                self.push_line("f32.store");
+                Ok(true)
+            }
+            "load_f64" => {
+                if call.args.len() != 1 {
+                    return Err(CompileError::new(
+                        "`load_f64` intrinsic expects a single pointer argument",
+                    ));
+                }
+                self.push_line("f64.load");
+                Ok(true)
+            }
+            "store_f64" => {
+                if call.args.len() != 2 {
+                    return Err(CompileError::new(
+                        "`store_f64` intrinsic expects a pointer and value",
+                    ));
+                }
+                self.push_line("f64.store");
+                Ok(true)
+            }
             _ => Ok(false),
         }
     }

@@ -1,5 +1,5 @@
 use bootstrap::compile;
-use wasmi::{Engine, Linker, Memory, Module, Store, TypedFunc};
+use wasmi::{Engine, Func, Linker, Memory, Module, Store, TypedFunc, Value};
 
 #[test]
 fn exports_single_page_memory() {
@@ -147,4 +147,98 @@ fn main() -> i32 {
         .read(&store, offset as usize, &mut buffer)
         .expect("failed to read written byte");
     assert_eq!(buffer[0], value as u8);
+}
+
+#[test]
+fn stores_and_loads_word_values() {
+    let source = r#"
+fn roundtrip_i32(ptr: i32, value: i32) -> i32 {
+    store_i32(ptr, value);
+    load_i32(ptr)
+}
+
+fn roundtrip_i64(ptr: i32, value: i64) -> i64 {
+    store_i64(ptr, value);
+    load_i64(ptr)
+}
+
+fn roundtrip_f32(ptr: i32, value: f32) -> f32 {
+    store_f32(ptr, value);
+    load_f32(ptr)
+}
+
+fn roundtrip_f64(ptr: i32, value: f64) -> f64 {
+    store_f64(ptr, value);
+    load_f64(ptr)
+}
+
+fn main() -> i32 {
+    0
+}
+"#;
+
+    let compilation = compile(source).expect("failed to compile source");
+    let wasm = compilation
+        .to_wasm()
+        .expect("failed to encode module to wasm bytes");
+
+    let engine = Engine::default();
+    let module = Module::new(&engine, wasm.as_slice()).expect("failed to build module");
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = linker
+        .instantiate(&mut store, &module)
+        .expect("failed to instantiate")
+        .start(&mut store)
+        .expect("failed to start module");
+
+    let roundtrip_i32: TypedFunc<(i32, i32), i32> = instance
+        .get_typed_func(&mut store, "roundtrip_i32")
+        .expect("expected exported roundtrip_i32 function");
+    let roundtrip_i64: TypedFunc<(i32, i64), i64> = instance
+        .get_typed_func(&mut store, "roundtrip_i64")
+        .expect("expected exported roundtrip_i64 function");
+    let roundtrip_f32: Func = instance
+        .get_func(&mut store, "roundtrip_f32")
+        .expect("expected exported roundtrip_f32 function");
+    let roundtrip_f64: Func = instance
+        .get_func(&mut store, "roundtrip_f64")
+        .expect("expected exported roundtrip_f64 function");
+
+    let i32_result = roundtrip_i32
+        .call(&mut store, (256, 0x7fff_ff12))
+        .expect("failed to execute roundtrip_i32");
+    assert_eq!(i32_result, 0x7fff_ff12);
+
+    let i64_value: i64 = 0x7fff_ffff_ffff_ff13;
+    let i64_result = roundtrip_i64
+        .call(&mut store, (512, i64_value))
+        .expect("failed to execute roundtrip_i64");
+    assert_eq!(i64_result, i64_value);
+
+    let f32_value: f32 = 123.5;
+    let mut f32_results = [Value::F32(0.0f32.into())];
+    roundtrip_f32
+        .call(
+            &mut store,
+            &[Value::I32(768), Value::F32(f32_value.into())],
+            &mut f32_results,
+        )
+        .expect("failed to execute roundtrip_f32");
+    let f32_bits = f32_results[0].f32().expect("expected f32 result").to_bits();
+    let f32_result = f32::from_bits(f32_bits);
+    assert!((f32_result - f32_value).abs() < f32::EPSILON);
+
+    let f64_value: f64 = 98765.4321;
+    let mut f64_results = [Value::F64(0.0f64.into())];
+    roundtrip_f64
+        .call(
+            &mut store,
+            &[Value::I32(1024), Value::F64(f64_value.into())],
+            &mut f64_results,
+        )
+        .expect("failed to execute roundtrip_f64");
+    let f64_bits = f64_results[0].f64().expect("expected f64 result").to_bits();
+    let f64_result = f64::from_bits(f64_bits);
+    assert!((f64_result - f64_value).abs() < f64::EPSILON);
 }
