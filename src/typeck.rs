@@ -128,6 +128,13 @@ impl TypeChecker {
                 return_type: Type::I32,
             },
         );
+        functions.insert(
+            "store_u8".to_string(),
+            FunctionSignature {
+                params: vec![Type::I32, Type::I32],
+                return_type: Type::Unit,
+            },
+        );
 
         Self {
             functions,

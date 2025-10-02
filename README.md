@@ -61,7 +61,15 @@ Generated modules export a linear memory named `memory` with an initial size of
 one WebAssembly page (64KiB). Hosts can write byte buffers, such as UTF-8
 strings, into this memory and pass their pointer/length pairs to compiled
 functions (for example to model `&[u8]` inputs) while we continue building out
-first-class slice support in the language itself.
+first-class slice support in the language itself. The bootstrap compiler also
+exposes two intrinsics for interacting with linear memory directly:
+
+* `load_u8(ptr: i32) -> i32` reads a single byte from linear memory.
+* `store_u8(ptr: i32, value: i32)` writes the low 8 bits of `value` to linear
+  memory.
+
+These intrinsics allow user code to manipulate byte-oriented buffers without
+requiring a standard library yet.
 
 ## Supported Language Features
 

@@ -89,3 +89,50 @@ fn main(ptr: i32, len: i32) -> i32 {
 
     assert_eq!(result as u8, *input.last().expect("non-empty slice"));
 }
+
+#[test]
+fn writes_byte_into_memory() {
+    let source = r#"
+fn main(ptr: i32, value: i32) -> i32 {
+    store_u8(ptr, value);
+    load_u8(ptr)
+}
+"#;
+
+    let compilation = compile(source).expect("failed to compile source");
+    let wasm = compilation
+        .to_wasm()
+        .expect("failed to encode module to wasm bytes");
+
+    let engine = Engine::default();
+    let module = Module::new(&engine, wasm.as_slice()).expect("failed to build module");
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = linker
+        .instantiate(&mut store, &module)
+        .expect("failed to instantiate")
+        .start(&mut store)
+        .expect("failed to start module");
+
+    let memory: Memory = instance
+        .get_memory(&mut store, "memory")
+        .expect("expected exported linear memory");
+
+    let main: TypedFunc<(i32, i32), i32> = instance
+        .get_typed_func(&mut store, "main")
+        .expect("expected exported main function");
+
+    let offset = 128i32;
+    let value = 173i32;
+    let result = main
+        .call(&mut store, (offset, value))
+        .expect("failed to execute main");
+
+    assert_eq!(result as u8, value as u8);
+
+    let mut buffer = [0u8; 1];
+    memory
+        .read(&store, offset as usize, &mut buffer)
+        .expect("failed to read written byte");
+    assert_eq!(buffer[0], value as u8);
+}
