@@ -13,10 +13,19 @@ Compilation currently produces the `bootstrapc` binary (via `cargo run`/`cargo b
 ## Usage
 
 ```
-cargo run -- <source.bp> [-o <output.wat>]
+cargo run -- <source.bp> [options]
+
+Options:
+  -o <path>           Write output to file (.wat or .wasm)
+  --emit <wat|wasm>   Choose output format for stdout (default: wat)
+  --run               Execute the compiled module with Node.js
 ```
 
-If `-o` is omitted the generated WAT module is printed to stdout. The compiler reports lexical, syntactic, and basic typing errors with byte spans.
+If `-o` is omitted the generated WAT module is printed to stdout. Use `--emit wasm`
+to stream a binary module instead, or specify a `.wasm` path with `-o`. The compiler
+reports lexical, syntactic, and basic typing errors with byte spans. `--run` compiles
+to Wasm and invokes the system `node` executable to call the module's exported
+`main` function, printing its return value when present.
 
 ### Example
 
@@ -34,13 +43,17 @@ fn main() -> i32 {
 }
 ```
 
-Command:
+Commands:
 
 ```
 cargo run -- examples/hello.bp -o hello.wat
+cargo run -- examples/hello.bp -o hello.wasm
+cargo run -- examples/hello.bp --run
 ```
 
-The resulting `hello.wat` defines a Wasm module with exported `add` and `main` functions.
+The WAT output defines a Wasm module with exported `add` and `main` functions; the
+binary output contains the corresponding `.wasm` module, and `--run` executes it
+directly with Node.js.
 
 ## Supported Language Features
 
