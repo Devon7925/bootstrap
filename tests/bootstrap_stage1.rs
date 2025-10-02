@@ -150,3 +150,45 @@ fn stage1_constant_compiler_emits_wasm() {
         .expect("stage1 should compile multi-function program");
     assert_eq!(run_wasm_main(compiler.engine(), &output_fourteen), 8);
 }
+
+#[test]
+fn stage1_compiler_short_circuits_boolean_operators() {
+    let source = fs::read_to_string("examples/stage1_minimal.bp")
+        .expect("failed to load stage1 source");
+
+    let stage1_compilation = compile(&source).expect("failed to compile stage1 source");
+    let stage1_wasm = stage1_compilation
+        .to_wasm()
+        .expect("failed to encode stage1 wasm");
+
+    let mut compiler = CompilerInstance::new(stage1_wasm.as_slice());
+    let mut input_cursor = 0usize;
+    let mut output_cursor = 1024i32;
+
+    let program = r#"
+fn main() -> i32 {
+    if false && (if true {
+        return 1;
+        true
+    } else {
+        false
+    }) {
+        return 2;
+    };
+    if true || (if true {
+        return 3;
+        false
+    } else {
+        false
+    }) {
+    };
+    0
+}
+"#;
+
+    let output = compiler
+        .compile_with_layout(&mut input_cursor, &mut output_cursor, program)
+        .expect("stage1 should compile boolean short-circuit test");
+
+    assert_eq!(run_wasm_main(compiler.engine(), &output), 0);
+}
