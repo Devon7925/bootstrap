@@ -155,4 +155,14 @@ fn stage1_constant_compiler_emits_wasm() {
         "fn main() -> i32 {\n    return 30 / 2 + 4 * 3;\n}\n",
     );
     assert_eq!(run_stage1_output(&engine, &output_six), 27);
+
+    let output_seven = stage1_compile_program(
+        &mut store,
+        &memory,
+        &compile_func,
+        &mut input_cursor,
+        &mut output_cursor,
+        "fn main() -> i32 {\n    let x: i32 = 2 + 3;\n    let y: i32 = x * 10;\n    y / 2\n}\n",
+    );
+    assert_eq!(run_stage1_output(&engine, &output_seven), 25);
 }
