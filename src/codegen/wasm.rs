@@ -126,6 +126,7 @@ struct Binding {
 
 struct LoopContext {
     break_index: usize,
+    continue_index: usize,
 }
 
 enum LabelKind {
@@ -257,6 +258,14 @@ impl<'a> FunctionEmitter<'a> {
                     .last()
                     .ok_or_else(|| CompileError::new("`break` outside of loop"))?;
                 self.emit_br(labels.break_index);
+                Ok(())
+            }
+            Statement::Continue(_) => {
+                let labels = self
+                    .loop_stack
+                    .last()
+                    .ok_or_else(|| CompileError::new("`continue` outside of loop"))?;
+                self.emit_br(labels.continue_index);
                 Ok(())
             }
         }
@@ -499,6 +508,7 @@ impl<'a> FunctionEmitter<'a> {
         let loop_index = self.start_loop();
         self.loop_stack.push(LoopContext {
             break_index: block_index,
+            continue_index: loop_index,
         });
         self.emit_block(loop_expr.body.as_ref(), TailMode::Drop)?;
         self.emit_br(loop_index);
@@ -513,6 +523,7 @@ impl<'a> FunctionEmitter<'a> {
         let loop_index = self.start_loop();
         self.loop_stack.push(LoopContext {
             break_index: block_index,
+            continue_index: loop_index,
         });
 
         self.emit_expression(&while_expr.condition)?;

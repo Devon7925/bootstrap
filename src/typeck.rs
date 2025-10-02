@@ -182,6 +182,10 @@ impl TypeChecker {
                     let typed = scoped.check_break(stmt)?;
                     statements.push(hir::Statement::Break(typed));
                 }
+                AstStatement::Continue(stmt) => {
+                    let typed = scoped.check_continue(stmt)?;
+                    statements.push(hir::Statement::Continue(typed));
+                }
                 AstStatement::Expr(stmt) => {
                     let expr = scoped.check_expression(stmt.expr)?;
                     statements.push(hir::Statement::Expr(hir::ExpressionStatement {
@@ -316,6 +320,17 @@ impl TypeChecker {
             Err(CompileError::new("`break` outside of loop").with_span(stmt.span))
         } else {
             Ok(hir::BreakStatement { span: stmt.span })
+        }
+    }
+
+    fn check_continue(
+        &mut self,
+        stmt: ast::ContinueStatement,
+    ) -> Result<hir::ContinueStatement, CompileError> {
+        if self.loop_depth == 0 {
+            Err(CompileError::new("`continue` outside of loop").with_span(stmt.span))
+        } else {
+            Ok(hir::ContinueStatement { span: stmt.span })
         }
     }
 

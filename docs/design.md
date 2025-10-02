@@ -12,9 +12,9 @@ This document captures the initial plan for the bootstrap compiler. The overall 
 
 - **Program**: a list of `fn` definitions. The entry point is `fn main() -> i32`.
 - **Types**: `i32`, `i64`, `f32`, `f64`, user-defined `struct` and `enum` declarations are parsed but not yet lowered. Borrowing & pointers are parsed as syntax stubs only.
-- **Statements**: `let` binding (immutable or `mut`), assignment, block, `return`, expression statements.
+- **Statements**: `let` binding (immutable or `mut`), assignment, block, `return`, `break`, `continue`, expression statements.
 - **Expressions**: integer/float literals, variable ref, unary/binary arithmetic (`+ - * / %`), comparison (`== != < <= > >=`), logical (`&& || !`), call expression.
-- **Control Flow**: `if { } else { }` expressions, `loop { }`, `break`, `while ( condition ) { ... }` desugared into loops.
+- **Control Flow**: `if { } else { }` expressions, `loop { }`, `break`, `continue`, `while ( condition ) { ... }` desugared into loops.
 
 ## Compiler Pipeline
 

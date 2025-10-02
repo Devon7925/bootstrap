@@ -150,6 +150,13 @@ impl<'a> Parser<'a> {
                     |k| matches!(k, TokenKind::Semicolon),
                     "expected ';' after break",
                 )?;
+            } else if self.current_is(|k| matches!(k, TokenKind::Continue)) {
+                let stmt = self.parse_continue_statement()?;
+                statements.push(Statement::Continue(stmt));
+                self.expect(
+                    |k| matches!(k, TokenKind::Semicolon),
+                    "expected ';' after continue",
+                )?;
             } else {
                 let expr = self.parse_expression()?;
                 if self.current_is(|k| matches!(k, TokenKind::Semicolon)) {
@@ -252,6 +259,11 @@ impl<'a> Parser<'a> {
     fn parse_break_statement(&mut self) -> Result<BreakStatement, CompileError> {
         let token = self.expect(|k| matches!(k, TokenKind::Break), "expected 'break'")?;
         Ok(BreakStatement { span: token.span })
+    }
+
+    fn parse_continue_statement(&mut self) -> Result<ContinueStatement, CompileError> {
+        let token = self.expect(|k| matches!(k, TokenKind::Continue), "expected 'continue'")?;
+        Ok(ContinueStatement { span: token.span })
     }
 
     fn parse_expression(&mut self) -> Result<Expression, CompileError> {
