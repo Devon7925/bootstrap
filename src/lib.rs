@@ -7,6 +7,7 @@ pub mod parser;
 pub mod span;
 pub mod typeck;
 
+use crate::codegen::wasm::WasmGenerator;
 use crate::codegen::wat::WatGenerator;
 use crate::error::CompileError;
 use crate::lexer::Lexer;
@@ -15,6 +16,7 @@ use crate::typeck::TypeChecker;
 
 pub struct Compilation {
     wat: String,
+    wasm: Vec<u8>,
 }
 
 impl Compilation {
@@ -26,14 +28,16 @@ impl Compilation {
         self.wat
     }
 
+    pub fn wasm(&self) -> &[u8] {
+        &self.wasm
+    }
+
     pub fn to_wasm(&self) -> Result<Vec<u8>, CompileError> {
-        wat::parse_str(&self.wat).map_err(|err| {
-            CompileError::new(format!("failed to encode wasm from generated WAT: {err}"))
-        })
+        Ok(self.wasm.clone())
     }
 
     pub fn into_wasm(self) -> Result<Vec<u8>, CompileError> {
-        self.to_wasm()
+        Ok(self.wasm)
     }
 }
 
@@ -43,7 +47,8 @@ pub fn compile(source: &str) -> Result<Compilation, CompileError> {
     let program = parser.parse_program()?;
     let typed_program = TypeChecker::new().check(program)?;
     let wat = WatGenerator::default().emit_program(&typed_program)?;
-    Ok(Compilation { wat })
+    let wasm = WasmGenerator::default().emit_program(&typed_program)?;
+    Ok(Compilation { wat, wasm })
 }
 
 pub fn compile_to_wat(source: &str) -> Result<String, CompileError> {
