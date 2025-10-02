@@ -35,7 +35,7 @@ fn main() -> i32 {
         .current_pages(&store)
         .to_bytes()
         .expect("memory size to fit into usize");
-    assert_eq!(memory_bytes, 131072);
+    assert_eq!(memory_bytes, 262144);
 
     let slice_len: TypedFunc<(i32, i32), i32> = instance
         .get_typed_func(&mut store, "slice_len")
