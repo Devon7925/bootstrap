@@ -68,7 +68,7 @@ impl WasmGenerator {
         let mut memory_section = Vec::new();
         encode_u32(&mut memory_section, 1);
         memory_section.push(0x00);
-        encode_u32(&mut memory_section, 1);
+        encode_u32(&mut memory_section, 2);
         push_section(&mut module, 5, &memory_section);
 
         let mut export_section = Vec::new();
