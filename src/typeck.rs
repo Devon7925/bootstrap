@@ -651,11 +651,7 @@ impl TypeChecker {
         span: Span,
     ) -> Result<Type, CompileError> {
         match op {
-            AstBinaryOp::Add
-            | AstBinaryOp::Sub
-            | AstBinaryOp::Mul
-            | AstBinaryOp::Div
-            | AstBinaryOp::Rem => {
+            AstBinaryOp::Add | AstBinaryOp::Sub | AstBinaryOp::Mul | AstBinaryOp::Div => {
                 if left == right && left.is_numeric() {
                     Ok(left)
                 } else {
@@ -664,6 +660,24 @@ impl TypeChecker {
                             .with_span(span),
                     )
                 }
+            }
+            AstBinaryOp::Rem => {
+                if left != right {
+                    return Err(CompileError::new(format!(
+                        "remainder operands must share type, found `{}` and `{}`",
+                        self.format_type(left),
+                        self.format_type(right)
+                    ))
+                    .with_span(span));
+                }
+                if !left.is_integer() {
+                    return Err(CompileError::new(format!(
+                        "remainder is only supported for integer types, found `{}`",
+                        self.format_type(left)
+                    ))
+                    .with_span(span));
+                }
+                Ok(left)
             }
             AstBinaryOp::Eq | AstBinaryOp::Ne => {
                 if left == right {
