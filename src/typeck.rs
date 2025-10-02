@@ -392,8 +392,26 @@ impl TypeChecker {
 
     fn check_literal(&self, lit: ast::Literal) -> Result<hir::Expression, CompileError> {
         let (value, ty) = match lit.value {
-            ast::LiteralValue::Int(value) => (LiteralValue::Int(value), Type::I32),
-            ast::LiteralValue::Float(value) => (LiteralValue::Float(value), Type::F32),
+            ast::LiteralValue::Int(int_lit) => {
+                let ty = match int_lit.suffix.unwrap_or(ast::IntSuffix::I32) {
+                    ast::IntSuffix::I32 => Type::I32,
+                    ast::IntSuffix::I64 => Type::I64,
+                };
+                if ty == Type::I32
+                    && (int_lit.value < i32::MIN as i64 || int_lit.value > i32::MAX as i64)
+                {
+                    return Err(CompileError::new("integer literal out of range for i32")
+                        .with_span(lit.span));
+                }
+                (LiteralValue::Int(int_lit.value), ty)
+            }
+            ast::LiteralValue::Float(float_lit) => {
+                let ty = match float_lit.suffix.unwrap_or(ast::FloatSuffix::F32) {
+                    ast::FloatSuffix::F32 => Type::F32,
+                    ast::FloatSuffix::F64 => Type::F64,
+                };
+                (LiteralValue::Float(float_lit.value), ty)
+            }
             ast::LiteralValue::Bool(value) => (LiteralValue::Bool(value), Type::Bool),
         };
         Ok(hir::Expression::Literal(hir::Literal {

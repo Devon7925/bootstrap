@@ -1,6 +1,8 @@
 use crate::ast::*;
 use crate::error::CompileError;
-use crate::lexer::{Token, TokenKind};
+use crate::lexer::{
+    FloatLiteralSuffix as LexerFloatSuffix, IntLiteralSuffix as LexerIntSuffix, Token, TokenKind,
+};
 use crate::span::Span;
 
 pub struct Parser<'a> {
@@ -365,17 +367,29 @@ impl<'a> Parser<'a> {
     fn parse_primary(&mut self) -> Result<Expression, CompileError> {
         let token = self.current().clone();
         match &token.kind {
-            TokenKind::IntLiteral(value) => {
+            TokenKind::IntLiteral { value, suffix } => {
                 self.advance();
                 Ok(Expression::Literal(Literal {
-                    value: LiteralValue::Int(*value),
+                    value: LiteralValue::Int(IntLiteral {
+                        value: *value,
+                        suffix: suffix.map(|s| match s {
+                            LexerIntSuffix::I32 => IntSuffix::I32,
+                            LexerIntSuffix::I64 => IntSuffix::I64,
+                        }),
+                    }),
                     span: token.span,
                 }))
             }
-            TokenKind::FloatLiteral(value) => {
+            TokenKind::FloatLiteral { value, suffix } => {
                 self.advance();
                 Ok(Expression::Literal(Literal {
-                    value: LiteralValue::Float(*value),
+                    value: LiteralValue::Float(FloatLiteral {
+                        value: *value,
+                        suffix: suffix.map(|s| match s {
+                            LexerFloatSuffix::F32 => FloatSuffix::F32,
+                            LexerFloatSuffix::F64 => FloatSuffix::F64,
+                        }),
+                    }),
                     span: token.span,
                 }))
             }

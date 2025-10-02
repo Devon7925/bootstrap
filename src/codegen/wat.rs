@@ -216,20 +216,29 @@ impl<'a> FunctionEmitter<'a> {
 
     fn emit_expression(&mut self, expr: &Expression) -> Result<(), CompileError> {
         match expr {
-            Expression::Literal(lit) => {
-                match &lit.value {
-                    LiteralValue::Int(value) => {
-                        self.push_line(&format!("i32.const {}", value));
-                    }
-                    LiteralValue::Float(value) => {
-                        self.push_line(&format!("f32.const {}", *value as f32));
-                    }
-                    LiteralValue::Bool(value) => {
-                        self.push_line(&format!("i32.const {}", if *value { 1 } else { 0 }));
-                    }
+            Expression::Literal(lit) => match (lit.ty, &lit.value) {
+                (Type::I32, LiteralValue::Int(value)) => {
+                    self.push_line(&format!("i32.const {}", value));
+                    Ok(())
                 }
-                Ok(())
-            }
+                (Type::I64, LiteralValue::Int(value)) => {
+                    self.push_line(&format!("i64.const {}", value));
+                    Ok(())
+                }
+                (Type::F32, LiteralValue::Float(value)) => {
+                    self.push_line(&format!("f32.const {}", *value as f32));
+                    Ok(())
+                }
+                (Type::F64, LiteralValue::Float(value)) => {
+                    self.push_line(&format!("f64.const {}", value));
+                    Ok(())
+                }
+                (Type::Bool, LiteralValue::Bool(value)) => {
+                    self.push_line(&format!("i32.const {}", if *value { 1 } else { 0 }));
+                    Ok(())
+                }
+                _ => Err(CompileError::new("invalid literal representation")),
+            },
             Expression::Variable(var) => {
                 let wasm_name = self.lookup_binding(&var.name)?;
                 self.push_line(&format!("local.get {}", wasm_name));
