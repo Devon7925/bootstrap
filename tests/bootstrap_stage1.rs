@@ -109,8 +109,8 @@ fn stage1_constant_compiler_emits_wasm() {
         .read(&store, output_offset_two as usize, &mut output_two)
         .expect("failed to read stage1 second output");
 
-    let target_module_two = Module::new(&engine, output_two.as_slice())
-        .expect("failed to create second target module");
+    let target_module_two =
+        Module::new(&engine, output_two.as_slice()).expect("failed to create second target module");
     let mut target_store_two = Store::new(&engine, ());
     let target_linker_two = Linker::new(&engine);
     let target_instance_two = target_linker_two
@@ -126,4 +126,49 @@ fn stage1_constant_compiler_emits_wasm() {
         .call(&mut target_store_two, ())
         .expect("failed to execute second compiled main");
     assert_eq!(main_result_two, -9);
+
+    let input_three = b"fn main() -> i32 {\n    return 5 + 3 - 2 + -4;\n}\n";
+    let input_offset_three = input_offset_two + 256usize;
+    memory
+        .write(&mut store, input_offset_three, input_three)
+        .expect("failed to write third input for stage1");
+
+    let output_offset_three = output_offset_two + 4096;
+    let produced_len_three = compile_func
+        .call(
+            &mut store,
+            (
+                input_offset_three as i32,
+                input_three.len() as i32,
+                output_offset_three,
+            ),
+        )
+        .expect("stage1 compile invocation failed for third program");
+    assert!(
+        produced_len_three > 0,
+        "stage1 compiler returned no bytes for third program"
+    );
+
+    let mut output_three = vec![0u8; produced_len_three as usize];
+    memory
+        .read(&store, output_offset_three as usize, &mut output_three)
+        .expect("failed to read stage1 third output");
+
+    let target_module_three = Module::new(&engine, output_three.as_slice())
+        .expect("failed to create third target module");
+    let mut target_store_three = Store::new(&engine, ());
+    let target_linker_three = Linker::new(&engine);
+    let target_instance_three = target_linker_three
+        .instantiate(&mut target_store_three, &target_module_three)
+        .expect("failed to instantiate third target module")
+        .start(&mut target_store_three)
+        .expect("failed to start third target module");
+
+    let main_fn_three: TypedFunc<(), i32> = target_instance_three
+        .get_typed_func(&mut target_store_three, "main")
+        .expect("third compiled module should export main");
+    let main_result_three = main_fn_three
+        .call(&mut target_store_three, ())
+        .expect("failed to execute third compiled main");
+    assert_eq!(main_result_three, 2);
 }

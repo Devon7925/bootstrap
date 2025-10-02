@@ -3,6 +3,24 @@ fn write_byte(base: i32, offset: i32, value: i32) -> i32 {
     offset + 1
 }
 
+fn emit_i32_const(base: i32, offset: i32, value: i32) -> i32 {
+    let mut out: i32 = write_byte(base, offset, 65);
+    out = write_i32_leb(base, out, value);
+    out
+}
+
+fn emit_add(base: i32, offset: i32) -> i32 {
+    write_byte(base, offset, 106)
+}
+
+fn emit_sub(base: i32, offset: i32) -> i32 {
+    write_byte(base, offset, 107)
+}
+
+fn emit_end(base: i32, offset: i32) -> i32 {
+    write_byte(base, offset, 11)
+}
+
 fn write_u32_leb(base: i32, offset: i32, value: i32) -> i32 {
     let mut remaining: i32 = value;
     let mut out: i32 = offset;
@@ -223,9 +241,8 @@ fn write_export_section(base: i32, offset: i32) -> i32 {
     out
 }
 
-fn write_code_section(base: i32, offset: i32, value: i32) -> i32 {
-    let value_len: i32 = leb_i32_len(value);
-    let body_size: i32 = value_len + 3;
+fn write_code_section(base: i32, offset: i32, instr_base: i32, instr_len: i32) -> i32 {
+    let body_size: i32 = instr_len + 1;
     let body_size_len: i32 = leb_u32_len(body_size);
     let section_size: i32 = 1 + body_size_len + body_size;
     let mut out: i32 = offset;
@@ -234,20 +251,26 @@ fn write_code_section(base: i32, offset: i32, value: i32) -> i32 {
     out = write_u32_leb(base, out, 1);
     out = write_u32_leb(base, out, body_size);
     out = write_byte(base, out, 0);
-    out = write_byte(base, out, 65);
-    out = write_i32_leb(base, out, value);
-    out = write_byte(base, out, 11);
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= instr_len {
+            break;
+        };
+        let byte: i32 = load_u8(instr_base + idx);
+        out = write_byte(base, out, byte);
+        idx = idx + 1;
+    };
     out
 }
 
-fn write_constant_module(base: i32, value: i32) -> i32 {
+fn write_constant_module(base: i32, instr_base: i32, instr_len: i32) -> i32 {
     let mut offset: i32 = 0;
     offset = write_magic(base, offset);
     offset = write_type_section(base, offset);
     offset = write_function_section(base, offset);
     offset = write_memory_section(base, offset);
     offset = write_export_section(base, offset);
-    write_code_section(base, offset, value)
+    write_code_section(base, offset, instr_base, instr_len)
 }
 
 fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
@@ -369,6 +392,13 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
         return -1;
     };
 
+    let instr_base: i32 = out_ptr + 8192;
+    let mut instr_offset: i32 = 0;
+
+    if offset >= input_len {
+        return -1;
+    };
+
     let mut sign: i32 = 1;
     let mut current_byte: i32 = peek_byte(input_ptr, input_len, offset);
     if current_byte == 45 {
@@ -410,6 +440,73 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
         value = 0 - value;
     };
 
+    instr_offset = emit_i32_const(instr_base, instr_offset, value);
+
+    loop {
+        offset = skip_whitespace(input_ptr, input_len, offset);
+        if offset >= input_len {
+            break;
+        };
+        let op_byte: i32 = peek_byte(input_ptr, input_len, offset);
+        if op_byte != 43 && op_byte != 45 {
+            break;
+        };
+        offset = offset + 1;
+        offset = skip_whitespace(input_ptr, input_len, offset);
+
+        if offset >= input_len {
+            return -1;
+        };
+
+        let mut next_sign: i32 = 1;
+        let mut next_byte: i32 = peek_byte(input_ptr, input_len, offset);
+        if next_byte == 45 {
+            next_sign = -1;
+            offset = offset + 1;
+            if offset >= input_len {
+                return -1;
+            };
+            next_byte = peek_byte(input_ptr, input_len, offset);
+        } else if next_byte == 43 {
+            offset = offset + 1;
+            if offset >= input_len {
+                return -1;
+            };
+            next_byte = peek_byte(input_ptr, input_len, offset);
+        };
+
+        let mut next_has_digit: bool = false;
+        let mut next_value: i32 = 0;
+        loop {
+            if offset >= input_len {
+                break;
+            };
+            let digit_byte: i32 = peek_byte(input_ptr, input_len, offset);
+            if digit_byte < 48 || digit_byte > 57 {
+                break;
+            };
+            let digit: i32 = digit_byte - 48;
+            next_value = next_value * 10 + digit;
+            next_has_digit = true;
+            offset = offset + 1;
+        };
+
+        if !next_has_digit {
+            return -1;
+        };
+
+        if next_sign == -1 {
+            next_value = 0 - next_value;
+        };
+
+        instr_offset = emit_i32_const(instr_base, instr_offset, next_value);
+        if op_byte == 43 {
+            instr_offset = emit_add(instr_base, instr_offset);
+        } else {
+            instr_offset = emit_sub(instr_base, instr_offset);
+        };
+    };
+
     offset = skip_whitespace(input_ptr, input_len, offset);
 
     if offset < input_len {
@@ -430,7 +527,8 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
         return -1;
     };
 
-    write_constant_module(out_ptr, value)
+    instr_offset = emit_end(instr_base, instr_offset);
+    write_constant_module(out_ptr, instr_base, instr_offset)
 }
 
 fn main() -> i32 {

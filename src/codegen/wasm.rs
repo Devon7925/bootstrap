@@ -672,9 +672,15 @@ impl<'a> FunctionEmitter<'a> {
         )?;
         if let Some(else_expr) = &if_expr.else_branch {
             self.start_else();
-            self.emit_expression(else_expr)?;
-            if result_type.is_none() && else_expr.ty() != Type::Unit {
-                self.instructions.push(0x1a);
+            if result_type.is_some() {
+                self.emit_expression(else_expr)?;
+            } else if let Expression::Block(block) = else_expr.as_ref() {
+                self.emit_block(block, TailMode::Drop)?;
+            } else {
+                self.emit_expression(else_expr)?;
+                if else_expr.ty() != Type::Unit {
+                    self.instructions.push(0x1a);
+                }
             }
         } else if result_type.is_some() {
             return Err(CompileError::new("if expression missing else branch"));
