@@ -61,13 +61,14 @@ directly with Node.js.
 - Expression-oriented blocks with lexical scopes, `let`/`mut`, assignments, and trailing expressions
 - Expressions: literals, variables, arithmetic/comparison/logical operators, function calls, unary `-` and `!`
 - `if` / `else` expressions with boolean conditions
+- `loop` and `while` constructs with `break`/`continue`
 - Early `return` statements
 
 The type checker enforces exact type matches, short-circuit boolean semantics, and requires non-unit functions to end in an expression that supplies the return value.
 
 ## Limitations & Next Steps
 
-- No loops, pattern matching, structs/enums, or borrow checking yet
+- No pattern matching, structs/enums, or borrow checking yet
 - No WGSL backend; the IR is intentionally shaped so we can add it later
 - Only integer remainders are implemented; float `%` emits an error
 - Error messages surface byte spans but lack line/column rendering

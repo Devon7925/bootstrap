@@ -204,6 +204,13 @@ impl<'a> FunctionEmitter<'a> {
                 self.push_line(&format!("br {}", labels.break_label));
                 Ok(())
             }
+            Statement::Continue(_) => {
+                let labels = self
+                    .current_loop_labels()
+                    .ok_or_else(|| CompileError::new("`continue` outside of loop"))?;
+                self.push_line(&format!("br {}", labels.continue_label));
+                Ok(())
+            }
         }
     }
 

@@ -35,6 +35,7 @@ pub enum Statement {
     Return(ReturnStatement),
     Expr(ExpressionStatement),
     Break(BreakStatement),
+    Continue(ContinueStatement),
 }
 
 #[derive(Debug, Clone)]
@@ -61,6 +62,11 @@ pub struct ReturnStatement {
 
 #[derive(Debug, Clone)]
 pub struct BreakStatement {
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct ContinueStatement {
     pub span: Span,
 }
 
