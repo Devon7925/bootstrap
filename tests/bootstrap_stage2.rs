@@ -5,7 +5,7 @@ use bootstrap::compile;
 #[path = "wasm_harness.rs"]
 mod wasm_harness;
 
-use wasm_harness::{run_wasm_main, CompilerInstance};
+use wasm_harness::{CompilerInstance, run_wasm_main};
 
 fn prepare_stage1_compiler() -> (CompilerInstance, String) {
     let stage1_source =
@@ -25,8 +25,7 @@ const STAGE1_MAX_FUNCTIONS: usize = 512;
 
 fn stage1_output_ptr(compiler: &CompilerInstance) -> i32 {
     let memory_size = compiler.memory_size_bytes();
-    let reserved = STAGE1_FUNCTIONS_BASE_OFFSET
-        + STAGE1_MAX_FUNCTIONS * STAGE1_FUNCTION_ENTRY_SIZE;
+    let reserved = STAGE1_FUNCTIONS_BASE_OFFSET + STAGE1_MAX_FUNCTIONS * STAGE1_FUNCTION_ENTRY_SIZE;
     assert!(
         memory_size > reserved,
         "stage1 memory must exceed reserved layout"
@@ -58,6 +57,11 @@ fn stage1_compiler_bootstraps_stage2() {
     let stage3_wasm = stage2
         .compile_at(0, stage2_output_address, &stage1_source)
         .expect("stage2 should compile the stage1 source");
+
+    assert_eq!(
+        &stage2_wasm, &stage3_wasm,
+        "stage2 and stage3 wasm outputs should be identical",
+    );
 
     // Stage3 should be a fully functional compiler capable of compiling user
     // programs. Compile a small program and execute it to verify the output.
@@ -91,7 +95,6 @@ fn main() -> i32 {
         "compiled sample program should execute correctly",
     );
 }
-
 
 #[test]
 fn stage1_compiler_accepts_break_with_value_statements() {
@@ -307,8 +310,7 @@ fn main() -> i32 {
 }
 "#;
 
-    compile(source)
-        .expect("host compiler should accept function calls in inequality conditions");
+    compile(source).expect("host compiler should accept function calls in inequality conditions");
 
     stage1
         .compile_at(0, output_ptr, source)
@@ -331,8 +333,7 @@ fn main() -> i32 {
 }
 "#;
 
-    compile(source)
-        .expect("host compiler should accept expression arguments in function calls");
+    compile(source).expect("host compiler should accept expression arguments in function calls");
 
     stage1
         .compile_at(0, output_ptr, source)
@@ -583,8 +584,7 @@ fn main() -> i32 {
 }
 "#;
 
-    compile(source)
-        .expect("host compiler should accept if expression blocks with tail values");
+    compile(source).expect("host compiler should accept if expression blocks with tail values");
 
     stage1
         .compile_at(0, output_ptr, source)
@@ -636,9 +636,9 @@ fn stage1_compiler_minimal_write_type_section_repro() {
 
     compile(&source).expect("host compiler should accept large function bodies");
 
-    stage1
-        .compile_at(0, output_ptr, &source)
-        .expect("stage1 should compile large function bodies without exhausting its instruction buffer");
+    stage1.compile_at(0, output_ptr, &source).expect(
+        "stage1 should compile large function bodies without exhausting its instruction buffer",
+    );
 }
 
 #[test]
@@ -764,4 +764,3 @@ fn main() -> i32 {
         .compile_at(0, output_ptr, source)
         .expect("stage1 should accept name_len shadowing repro");
 }
-

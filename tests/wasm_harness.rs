@@ -150,12 +150,8 @@ impl CompilerInstance {
         let mut instr_buf = [0u8; 4];
         let func_ptr = output_ptr as usize + FUNCTIONS_COUNT_PTR_OFFSET;
         let instr_ptr = output_ptr as usize + INSTR_OFFSET_PTR_OFFSET;
-        let _ = self
-            .memory
-            .read(&self.store, func_ptr, &mut func_buf);
-        let _ = self
-            .memory
-            .read(&self.store, instr_ptr, &mut instr_buf);
+        let _ = self.memory.read(&self.store, func_ptr, &mut func_buf);
+        let _ = self.memory.read(&self.store, instr_ptr, &mut instr_buf);
         let functions = i32::from_le_bytes(func_buf);
         let instr_offset = i32::from_le_bytes(instr_buf);
         let mut compiled_functions = 0;

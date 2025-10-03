@@ -5,6 +5,82 @@ use std::path::Path;
 use std::process::{self, Command, Stdio};
 
 use bootstrap::compile;
+use wasmi::{Engine, Linker, Memory, Module, Store, TypedFunc};
+
+const STAGE1_SOURCE_PATH: &str = "examples/stage1_minimal.bp";
+const STAGE2_OUTPUT_PATH: &str = "stage2.wasm";
+const STAGE1_INPUT_PTR: usize = 0;
+const STAGE1_FUNCTION_ENTRY_SIZE: usize = 32;
+const STAGE1_FUNCTIONS_BASE_OFFSET: usize = 851_968;
+const STAGE1_MAX_FUNCTIONS: usize = 512;
+
+fn build_stage2_wasm() -> Result<(), String> {
+    let source = fs::read_to_string(STAGE1_SOURCE_PATH)
+        .map_err(|err| format!("failed to read '{STAGE1_SOURCE_PATH}': {err}"))?;
+    let compilation = compile(&source).map_err(|err| err.to_string())?;
+    let stage1_wasm = compilation
+        .to_wasm()
+        .map_err(|err| err.to_string())?;
+
+    let engine = Engine::default();
+    let module = Module::new(&engine, stage1_wasm.as_slice())
+        .map_err(|err| format!("failed to create stage1 module: {err}"))?;
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = linker
+        .instantiate(&mut store, &module)
+        .and_then(|inst| inst.start(&mut store))
+        .map_err(|err| format!("failed to instantiate stage1 module: {err}"))?;
+
+    let memory: Memory = instance
+        .get_memory(&mut store, "memory")
+        .ok_or_else(|| "stage1 module does not export memory".to_string())?;
+    let compile: TypedFunc<(i32, i32, i32), i32> = instance
+        .get_typed_func(&mut store, "compile")
+        .map_err(|err| format!("failed to find stage1 compile function: {err}"))?;
+
+    let memory_size = memory
+        .current_pages(&store)
+        .to_bytes()
+        .ok_or_else(|| "failed to compute stage1 memory size".to_string())? as usize;
+    let reserved = STAGE1_FUNCTIONS_BASE_OFFSET + STAGE1_MAX_FUNCTIONS * STAGE1_FUNCTION_ENTRY_SIZE;
+    if memory_size <= reserved {
+        return Err("stage1 memory is smaller than reserved layout".into());
+    }
+
+    let output_ptr = (memory_size - reserved) as i32;
+    if source.len() >= output_ptr as usize {
+        return Err("stage1 source overlaps output buffer".into());
+    }
+
+    memory
+        .write(&mut store, STAGE1_INPUT_PTR, source.as_bytes())
+        .map_err(|err| format!("failed to write stage1 source into memory: {err}"))?;
+
+    let produced_len = compile
+        .call(
+            &mut store,
+            (STAGE1_INPUT_PTR as i32, source.len() as i32, output_ptr),
+        )
+        .map_err(|err| format!("stage1 compile trapped: {err}"))?;
+    if produced_len <= 0 {
+        return Err(format!(
+            "stage1 compile returned non-positive length: {produced_len}"
+        ));
+    }
+
+    let mut stage2_wasm = vec![0u8; produced_len as usize];
+    memory
+        .read(&store, output_ptr as usize, &mut stage2_wasm)
+        .map_err(|err| format!("failed to read stage2 wasm from memory: {err}"))?;
+
+    fs::write(STAGE2_OUTPUT_PATH, &stage2_wasm)
+        .map_err(|err| format!("failed to write '{STAGE2_OUTPUT_PATH}': {err}"))?;
+
+    println!("wrote stage2 wasm to {STAGE2_OUTPUT_PATH}");
+
+    Ok(())
+}
 
 fn print_usage(program: &str) {
     eprintln!("Usage: {program} <input.bp> [options]");
@@ -76,8 +152,11 @@ const bytes = fs.readFileSync(0);
 fn main() {
     let mut args = env::args().skip(1).collect::<Vec<_>>();
     if args.is_empty() {
-        print_usage(&env::args().next().unwrap_or_else(|| "bootstrapc".into()));
-        process::exit(1);
+        if let Err(err) = build_stage2_wasm() {
+            eprintln!("{err}");
+            process::exit(1);
+        }
+        return;
     }
 
     let input_path = args.remove(0);
