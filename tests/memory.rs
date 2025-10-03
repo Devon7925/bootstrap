@@ -176,3 +176,51 @@ fn main() -> i32 {
         .expect("failed to execute roundtrip_i32");
     assert_eq!(i32_result, 0x7fff_ff12);
 }
+
+#[test]
+fn stores_and_loads_halfword_values() {
+    let source = r#"
+fn roundtrip_u16(ptr: i32, value: i32) -> i32 {
+    store_u16(ptr, value);
+    load_u16(ptr)
+}
+
+fn main() -> i32 {
+    0
+}
+"#;
+
+    let wasm = compile_with_stage1(source);
+
+    let engine = Engine::default();
+    let module = Module::new(&engine, wasm.as_slice()).expect("failed to build module");
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = linker
+        .instantiate(&mut store, &module)
+        .expect("failed to instantiate")
+        .start(&mut store)
+        .expect("failed to start module");
+
+    let memory: Memory = instance
+        .get_memory(&mut store, "memory")
+        .expect("expected exported linear memory");
+
+    let roundtrip_u16: TypedFunc<(i32, i32), i32> = instance
+        .get_typed_func(&mut store, "roundtrip_u16")
+        .expect("expected exported roundtrip_u16 function");
+
+    let offset = 512i32;
+    let value = 0xFE12i32;
+    let result = roundtrip_u16
+        .call(&mut store, (offset, value))
+        .expect("failed to execute roundtrip_u16");
+    assert_eq!(result, value & 0xffff);
+
+    let mut buffer = [0u8; 2];
+    memory
+        .read(&store, offset as usize, &mut buffer)
+        .expect("failed to read written halfword");
+    assert_eq!(buffer[0], (value & 0xff) as u8);
+    assert_eq!(buffer[1], ((value >> 8) & 0xff) as u8);
+}
