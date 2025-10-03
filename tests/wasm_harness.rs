@@ -15,6 +15,9 @@ pub struct CompilerInstance {
 const INSTR_OFFSET_PTR_OFFSET: usize = 4096;
 const FUNCTIONS_COUNT_PTR_OFFSET: usize = 851960;
 const FUNCTIONS_BASE_OFFSET: usize = 851968;
+const TYPES_COUNT_PTR_OFFSET: usize = 819196;
+const TYPES_BASE_OFFSET: usize = 819200;
+const TYPE_ENTRY_SIZE: usize = 16;
 
 #[derive(Debug, Clone, Copy)]
 pub struct CompileFailure {
@@ -22,6 +25,14 @@ pub struct CompileFailure {
     pub functions: i32,
     pub instr_offset: i32,
     pub compiled_functions: i32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TypeEntry {
+    pub name_start: i32,
+    pub name_len: i32,
+    pub value_start: i32,
+    pub value_len: i32,
 }
 
 impl CompilerInstance {
@@ -132,6 +143,24 @@ impl CompilerInstance {
             DEFAULT_OUTPUT_STRIDE,
             source,
         )
+    }
+
+    pub fn read_types_count(&self, output_ptr: i32) -> i32 {
+        self.read_i32(output_ptr + TYPES_COUNT_PTR_OFFSET as i32)
+    }
+
+    pub fn read_type_entry(&self, output_ptr: i32, index: usize) -> TypeEntry {
+        let entry_ptr = output_ptr as usize + TYPES_BASE_OFFSET + index * TYPE_ENTRY_SIZE;
+        let mut buf = [0u8; TYPE_ENTRY_SIZE];
+        self.memory
+            .read(&self.store, entry_ptr, &mut buf)
+            .expect("failed to read type entry from compiler memory");
+        TypeEntry {
+            name_start: i32::from_le_bytes([buf[0], buf[1], buf[2], buf[3]]),
+            name_len: i32::from_le_bytes([buf[4], buf[5], buf[6], buf[7]]),
+            value_start: i32::from_le_bytes([buf[8], buf[9], buf[10], buf[11]]),
+            value_len: i32::from_le_bytes([buf[12], buf[13], buf[14], buf[15]]),
+        }
     }
 
     pub fn read_i32(&self, ptr: i32) -> i32 {
