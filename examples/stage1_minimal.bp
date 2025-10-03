@@ -494,6 +494,45 @@ fn locals_find(
     -1
 }
 
+fn locals_find_in_scope(
+    base: i32,
+    len: i32,
+    locals_base: i32,
+    locals_count_ptr: i32,
+    scope_start: i32,
+    name_start: i32,
+    name_len: i32
+) -> i32 {
+    let count: i32 = load_i32(locals_count_ptr);
+    let mut idx: i32 = scope_start;
+    if idx < 0 {
+        idx = 0;
+    };
+    if idx > count {
+        idx = count;
+    };
+    loop {
+        if idx >= count {
+            break;
+        };
+        let entry: i32 = locals_base + idx * 20;
+        let stored_start: i32 = load_i32(entry);
+        let stored_len: i32 = load_i32(entry + 4);
+        if identifiers_equal(
+            base,
+            len,
+            stored_start,
+            stored_len,
+            name_start,
+            name_len
+        ) {
+            return idx;
+        };
+        idx = idx + 1;
+    };
+    -1
+}
+
 fn locals_store_entry(
     locals_base: i32,
     locals_count_ptr: i32,
@@ -2824,7 +2863,8 @@ fn parse_loop_statement(
             control_stack_count_ptr,
             functions_base,
             functions_count_ptr,
-            expr_type_ptr
+            expr_type_ptr,
+            saved_locals_count
             );
         if stmt_offset < 0 {
             store_i32(instr_offset_ptr, saved_instr_offset);
@@ -2950,7 +2990,8 @@ fn parse_loop_expression(
             control_stack_count_ptr,
             functions_base,
             functions_count_ptr,
-            expr_type_ptr
+            expr_type_ptr,
+            saved_locals_count
             );
         if stmt_offset < 0 {
             store_i32(instr_offset_ptr, saved_instr_offset);
@@ -3198,7 +3239,8 @@ fn parse_statement(
     control_stack_count_ptr: i32,
     functions_base: i32,
     functions_count_ptr: i32,
-    expr_type_ptr: i32
+    expr_type_ptr: i32,
+    scope_base: i32
 ) -> i32 {
     let mut idx: i32 = skip_whitespace(base, len, offset);
     if idx >= len {
@@ -3225,7 +3267,8 @@ fn parse_statement(
                         control_stack_count_ptr,
                         functions_base,
                         functions_count_ptr,
-                        expr_type_ptr
+                        expr_type_ptr,
+                        scope_base
                         );
                 };
             };
@@ -3460,7 +3503,8 @@ fn parse_block_statements(
             control_stack_count_ptr,
             functions_base,
             functions_count_ptr,
-            expr_type_ptr
+            expr_type_ptr,
+            saved_locals
             );
         if next_idx < 0 {
             break;
@@ -3510,7 +3554,8 @@ fn parse_block_expression(
             control_stack_count_ptr,
             functions_base,
             functions_count_ptr,
-            expr_type_ptr
+            expr_type_ptr,
+            saved_locals
             );
         if stmt_offset >= 0 {
             current_offset = stmt_offset;
@@ -3952,7 +3997,8 @@ fn parse_let_statement(
     control_stack_count_ptr: i32,
     functions_base: i32,
     functions_count_ptr: i32,
-    expr_type_ptr: i32
+    expr_type_ptr: i32,
+    scope_base: i32
 ) -> i32 {
     let mut idx: i32 = expect_keyword_let(base, len, offset);
     if idx < 0 {
@@ -4011,11 +4057,12 @@ fn parse_let_statement(
         return -1;
     };
 
-    let existing: i32 = locals_find(
+    let existing: i32 = locals_find_in_scope(
         base,
         len,
         locals_base,
         locals_count_ptr,
+        scope_base,
         name_start,
         name_len
     );
@@ -4850,6 +4897,7 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
                 functions_base,
                 functions_count_ptr,
                 expr_type_ptr,
+                0,
             );
             if stmt_offset >= 0 {
                 current_offset = stmt_offset;
