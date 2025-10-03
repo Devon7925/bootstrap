@@ -4,7 +4,7 @@ use std::io::{self, Write};
 use std::path::Path;
 use std::process::{self, Command, Stdio};
 
-use bootstrap::compile;
+use bootstrap::{Target, compile};
 use wasmi::{Engine, Linker, Memory, Module, Store, TypedFunc};
 
 const STAGE1_SOURCE_PATH: &str = "compiler/stage1.bp";
@@ -17,7 +17,7 @@ const STAGE1_MAX_FUNCTIONS: usize = 512;
 fn build_stage2_wasm() -> Result<(), String> {
     let source = fs::read_to_string(STAGE1_SOURCE_PATH)
         .map_err(|err| format!("failed to read '{STAGE1_SOURCE_PATH}': {err}"))?;
-    let compilation = compile(&source).map_err(|err| err.to_string())?;
+    let compilation = compile(&source, Target::Wasm).map_err(|err| err.to_string())?;
     let stage1_wasm = compilation.to_wasm().map_err(|err| err.to_string())?;
 
     let engine = Engine::default();
@@ -88,6 +88,7 @@ fn print_usage(program: &str) {
     eprintln!("    -o <path>           Write output to file (.wasm)");
     eprintln!("    --emit wasm         Write wasm binary to stdout (default when no -o)");
     eprintln!("    --run               Execute the compiled module with Node.js");
+    eprintln!("    --target <wasm|wgsl> Select the compilation target (default: wasm)");
 }
 
 fn run_with_node(wasm: &[u8]) -> Result<(), String> {
@@ -157,6 +158,7 @@ fn main() {
     let mut output_path: Option<String> = None;
     let mut emit_flag: Option<bool> = None;
     let mut run = false;
+    let mut target = Target::DEFAULT;
 
     let mut iter = args.iter();
     while let Some(arg) = iter.next() {
@@ -190,11 +192,36 @@ fn main() {
             }
         } else if arg == "--run" {
             run = true;
+        } else if arg == "--target" {
+            match iter.next() {
+                Some(value) => match value.as_str() {
+                    "wasm" => target = Target::Wasm,
+                    "wgsl" => target = Target::Wgsl,
+                    other => {
+                        eprintln!("error: unsupported compilation target '{other}'");
+                        process::exit(1);
+                    }
+                },
+                None => {
+                    eprintln!("error: expected value after --target");
+                    process::exit(1);
+                }
+            }
         } else {
             eprintln!("error: unexpected argument '{arg}'");
             print_usage(&env::args().next().unwrap_or_else(|| "bootstrapc".into()));
             process::exit(1);
         }
+    }
+
+    if run && target != Target::Wasm {
+        eprintln!("error: target '{target}' cannot be executed with --run");
+        process::exit(1);
+    }
+
+    if target != Target::Wasm && output_path.is_none() && emit_flag.unwrap_or(true) {
+        eprintln!("error: target '{target}' cannot be emitted to stdout as WebAssembly");
+        process::exit(1);
     }
 
     let source = match fs::read_to_string(&input_path) {
@@ -205,7 +232,7 @@ fn main() {
         }
     };
 
-    let compilation = match compile(&source) {
+    let compilation = match compile(&source, target) {
         Ok(compilation) => compilation,
         Err(err) => {
             eprintln!("{err}");
@@ -220,10 +247,21 @@ fn main() {
             .map(|ext| ext.to_ascii_lowercase())
         {
             match ext.as_str() {
-                "wasm" => {}
+                "wasm" => {
+                    if target != Target::Wasm {
+                        eprintln!("error: target '{target}' cannot be written to '.wasm' files");
+                        process::exit(1);
+                    }
+                }
                 "wat" => {
                     eprintln!("error: WAT output is no longer supported");
                     process::exit(1);
+                }
+                "wgsl" => {
+                    if target != Target::Wgsl {
+                        eprintln!("error: target '{target}' cannot be written to '.wgsl' files");
+                        process::exit(1);
+                    }
                 }
                 other => {
                     eprintln!("error: unsupported output extension '.{other}'");

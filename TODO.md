@@ -1,7 +1,7 @@
 
 # TODO
 
-- [ ] **Add target selection for CPU vs GPU compilation**
+- [x] **Add target selection for CPU vs GPU compilation**
   The concept expects both WebAssembly and WGSL backends, but the current public API only emits Wasm and the CLI exposes no way to choose other targets. Introducing a `Target` enum and a `--target` flag would set the stage for a GPU path while continuing to default to Wasm.
   *Reference:* Concept target list【F:concept.md†L3-L14】, current Wasm-only API and CLI【F:src/lib.rs†L13-L97】【F:src/main.rs†L85-L197】
 
