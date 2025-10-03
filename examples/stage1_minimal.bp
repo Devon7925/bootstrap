@@ -532,6 +532,10 @@ fn type_code_bool() -> i32 {
     1
 }
 
+fn type_code_unit() -> i32 {
+    2
+}
+
 fn set_expr_type(expr_type_ptr: i32, ty: i32) {
     store_i32(expr_type_ptr, ty);
 }
@@ -869,11 +873,14 @@ fn write_type_section(
         };
         let entry: i32 = functions_entry(functions_base, idx);
         let param_count: i32 = load_i32(entry + 8);
+        let return_type: i32 = load_i32(entry + 24);
         payload_size = payload_size + 1;
         payload_size = payload_size + leb_u32_len(param_count);
         payload_size = payload_size + param_count;
         payload_size = payload_size + 1;
-        payload_size = payload_size + 1;
+        if return_type != type_code_unit() {
+            payload_size = payload_size + 1;
+        };
         idx = idx + 1;
     };
     let mut out: i32 = offset;
@@ -889,9 +896,9 @@ fn write_type_section(
         let param_count: i32 = load_i32(entry + 8);
         let return_type: i32 = load_i32(entry + 24);
         let mut wasm_return: i32 = 127;
-        if return_type == 0 {
+        if return_type == type_code_i32() {
             wasm_return = 127;
-        } else if return_type == 1 {
+        } else if return_type == type_code_bool() {
             wasm_return = 127;
         };
         out = write_byte(base, out, 96);
@@ -904,8 +911,12 @@ fn write_type_section(
             out = write_byte(base, out, 127);
             param_idx = param_idx + 1;
         };
-        out = write_byte(base, out, 1);
-        out = write_byte(base, out, wasm_return);
+        if return_type == type_code_unit() {
+            out = write_byte(base, out, 0);
+        } else {
+            out = write_byte(base, out, 1);
+            out = write_byte(base, out, wasm_return);
+        };
         write_idx = write_idx + 1;
     };
     out
@@ -2042,7 +2053,7 @@ fn parse_primary(
                             return_type = type_code_i32();
                         } else {
                             expected_params = 2;
-                            return_type = -1;
+                            return_type = type_code_unit();
                         };
                     } else {
                         func_index = functions_find(
@@ -4000,46 +4011,57 @@ fn register_function_signatures(
         offset = param_parse_idx;
 
         offset = skip_whitespace(input_ptr, input_len, offset);
-        offset = expect_char(input_ptr, input_len, offset, 45);
-        if offset < 0 {
-            return -1;
-        };
-        offset = expect_char(input_ptr, input_len, offset, 62);
-        if offset < 0 {
-            return -1;
-        };
-        offset = skip_whitespace(input_ptr, input_len, offset);
 
-        let mut return_type: i32 = 0;
-        let mut matched_return: bool = false;
-        if offset + 4 <= input_len {
-            let b_char: i32 = peek_byte(input_ptr, input_len, offset);
-            if b_char == 98 {
-                let o_char: i32 = peek_byte(input_ptr, input_len, offset + 1);
-                let o2_char: i32 = peek_byte(input_ptr, input_len, offset + 2);
-                let l_char: i32 = peek_byte(input_ptr, input_len, offset + 3);
-                let after_bool: i32 = offset + 4;
-                if o_char == 111 && o2_char == 111 && l_char == 108 {
-                    if after_bool == input_len
-                        || !is_identifier_continue(peek_byte(input_ptr, input_len, after_bool))
-                    {
-                        offset = after_bool;
-                        matched_return = true;
-                        return_type = 1;
+        let mut return_type: i32 = type_code_unit();
+        let mut has_arrow: bool = false;
+        if offset < input_len {
+            let maybe_arrow: i32 = peek_byte(input_ptr, input_len, offset);
+            if maybe_arrow == 45 {
+                has_arrow = true;
+                offset = expect_char(input_ptr, input_len, offset, 45);
+                if offset < 0 {
+                    return -1;
+                };
+                offset = expect_char(input_ptr, input_len, offset, 62);
+                if offset < 0 {
+                    return -1;
+                };
+                offset = skip_whitespace(input_ptr, input_len, offset);
+
+                let mut matched_return: bool = false;
+                if offset + 4 <= input_len {
+                    let b_char: i32 = peek_byte(input_ptr, input_len, offset);
+                    if b_char == 98 {
+                        let o_char: i32 = peek_byte(input_ptr, input_len, offset + 1);
+                        let o2_char: i32 = peek_byte(input_ptr, input_len, offset + 2);
+                        let l_char: i32 = peek_byte(input_ptr, input_len, offset + 3);
+                        let after_bool: i32 = offset + 4;
+                        if o_char == 111 && o2_char == 111 && l_char == 108 {
+                            if after_bool == input_len
+                                || !is_identifier_continue(peek_byte(input_ptr, input_len, after_bool))
+                            {
+                                offset = after_bool;
+                                matched_return = true;
+                                return_type = type_code_bool();
+                            };
+                        };
                     };
+                };
+                if !matched_return {
+                    offset = expect_keyword_i32(input_ptr, input_len, offset);
+                    if offset < 0 {
+                        return -1;
+                    };
+                    return_type = type_code_i32();
                 };
             };
         };
-        if !matched_return {
-            offset = expect_keyword_i32(input_ptr, input_len, offset);
-            if offset < 0 {
-                return -1;
-            };
-            return_type = 0;
+        if !has_arrow {
+            return_type = type_code_unit();
         };
         store_i32(entry + 24, return_type);
         if is_main {
-            if return_type != 0 {
+            if return_type != type_code_i32() {
                 return -1;
             };
         };
@@ -4306,43 +4328,57 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
         offset = param_parse_idx;
 
         offset = skip_whitespace(input_ptr, input_len, offset);
-        offset = expect_char(input_ptr, input_len, offset, 45);
-        if offset < 0 {
-            return -1;
-        };
-        offset = expect_char(input_ptr, input_len, offset, 62);
-        if offset < 0 {
-            return -1;
-        };
-        offset = skip_whitespace(input_ptr, input_len, offset);
 
         let expected_return: i32 = load_i32(entry + 24);
-        let mut return_type: i32 = type_code_i32();
-        let mut matched_return: bool = false;
-        if offset + 4 <= input_len {
-            let b_char: i32 = peek_byte(input_ptr, input_len, offset);
-            if b_char == 98 {
-                let o_char: i32 = peek_byte(input_ptr, input_len, offset + 1);
-                let o2_char: i32 = peek_byte(input_ptr, input_len, offset + 2);
-                let l_char: i32 = peek_byte(input_ptr, input_len, offset + 3);
-                if o_char == 111 && o2_char == 111 && l_char == 108 {
-                    let after_bool: i32 = offset + 4;
-                    if after_bool == input_len
-                        || !is_identifier_continue(peek_byte(input_ptr, input_len, after_bool))
-                    {
-                        offset = after_bool;
-                        matched_return = true;
-                        return_type = type_code_bool();
+        let mut return_type: i32 = type_code_unit();
+        let mut has_arrow: bool = false;
+        if offset < input_len {
+            let maybe_arrow: i32 = peek_byte(input_ptr, input_len, offset);
+            if maybe_arrow == 45 {
+                has_arrow = true;
+                offset = expect_char(input_ptr, input_len, offset, 45);
+                if offset < 0 {
+                    return -1;
+                };
+                offset = expect_char(input_ptr, input_len, offset, 62);
+                if offset < 0 {
+                    return -1;
+                };
+                offset = skip_whitespace(input_ptr, input_len, offset);
+
+                let mut matched_return: bool = false;
+                if offset + 4 <= input_len {
+                    let b_char: i32 = peek_byte(input_ptr, input_len, offset);
+                    if b_char == 98 {
+                        let o_char: i32 = peek_byte(input_ptr, input_len, offset + 1);
+                        let o2_char: i32 = peek_byte(input_ptr, input_len, offset + 2);
+                        let l_char: i32 = peek_byte(input_ptr, input_len, offset + 3);
+                        if o_char == 111 && o2_char == 111 && l_char == 108 {
+                            let after_bool: i32 = offset + 4;
+                            if after_bool == input_len
+                                || !is_identifier_continue(peek_byte(input_ptr, input_len, after_bool))
+                            {
+                                offset = after_bool;
+                                matched_return = true;
+                                return_type = type_code_bool();
+                            };
+                        };
                     };
+                };
+                if !matched_return {
+                    offset = expect_keyword_i32(input_ptr, input_len, offset);
+                    if offset < 0 {
+                        return -1;
+                    };
+                    return_type = type_code_i32();
                 };
             };
         };
-        if !matched_return {
-            offset = expect_keyword_i32(input_ptr, input_len, offset);
-            if offset < 0 {
+        if !has_arrow {
+            if expected_return != type_code_unit() {
                 return -1;
             };
-            return_type = type_code_i32();
+            return_type = type_code_unit();
         };
         if return_type != expected_return {
             return -1;

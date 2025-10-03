@@ -45,10 +45,7 @@ fn stage1_compiler_identifies_forward_reference_blocker() {
             let total_functions = program.functions.len() as i32;
 
             assert!(functions > 0, "expected to register at least one function");
-            assert!(
-                functions < total_functions,
-                "expected failure before all functions were processed"
-            );
+            assert_eq!(functions, total_functions, "expected to register all functions");
         }
     }
 }
@@ -97,7 +94,7 @@ fn main() -> i32 {
 }
 
 #[test]
-fn stage1_compiler_identifies_unit_return_blocker() {
+fn stage1_compiler_accepts_unit_returns() {
     let (mut stage1, _) = prepare_stage1_compiler();
 
     let source = r#"
@@ -113,14 +110,7 @@ fn main() -> i32 {
 
     compile(source).expect("host compiler should accept implicit unit return");
 
-    let result = stage1.compile_at(0, 131072, source);
-    match result {
-        Ok(_) => panic!("stage1 unexpectedly compiled implicit unit return"),
-        Err(CompileFailure { produced_len, .. }) => {
-            assert!(
-                produced_len <= 0,
-                "stage1 failure should surface through compile error sentinel"
-            );
-        }
-    }
+    stage1
+        .compile_at(0, 131072, source)
+        .expect("stage1 should accept implicit unit return");
 }
