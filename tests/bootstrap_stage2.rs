@@ -746,28 +746,21 @@ fn stage1_register_function_signatures_repro() {
     let (mut stage1, _) = prepare_stage1_compiler();
     let output_ptr = stage1_output_ptr(&stage1);
 
-    // Minimal program that nests loops so `param_parse_idx` is mutated in the inner loop,
-    // then reused by the outer loop—stage1 still restores the pre-loop locals instead of
-    // merging the updates, so it cannot compile this structure yet.
+    // Minimal program with nested loops that updates `param_parse_idx` inside the inner loop
+    // and then copies it back to `offset`. Stage1 still restores the pre-loop locals instead
+    // of merging the updates, so it cannot compile this structure yet.
     let source = r#"
-fn stub_skip_whitespace(_base: i32, _len: i32, offset: i32) -> i32 { offset }
+fn skip(offset: i32) -> i32 { offset }
 
-fn stub_expect_char(_base: i32, _len: i32, offset: i32, _ch: i32) -> i32 { offset }
+fn expect(offset: i32) -> i32 { offset }
 
-fn stub_is_identifier_start(_byte: i32) -> bool { true }
+fn peek(_offset: i32) -> i32 { 0 }
 
-fn stub_is_identifier_continue(_byte: i32) -> bool { false }
-
-fn stub_peek_byte(_base: i32, _len: i32, _offset: i32) -> i32 { 0 }
-
-fn register_function_signatures(
-    input_ptr: i32,
-    input_len: i32,
-) -> i32 {
+fn register_function_signatures(input_len: i32) -> i32 {
     let mut offset: i32 = 0;
 
     loop {
-        offset = stub_skip_whitespace(input_ptr, input_len, offset);
+        offset = skip(offset);
         if offset >= input_len {
             break;
         };
@@ -777,44 +770,21 @@ fn register_function_signatures(
         if offset >= input_len {
             return -1;
         };
-        stub_peek_byte(input_ptr, input_len, offset);
-        offset = stub_skip_whitespace(input_ptr, input_len, offset);
-        if offset >= input_len {
-            return -1;
-        };
+        offset = skip(offset);
 
         let mut name_len: i32 = 0;
         loop {
-            if offset >= input_len {
-                break;
-            };
-            let ch: i32 = stub_peek_byte(input_ptr, input_len, offset);
-            if name_len == 0 {
-                if !stub_is_identifier_start(ch) {
-                    break;
-                };
-            } else if !stub_is_identifier_continue(ch) {
-                break;
-            };
             name_len = name_len + 1;
             offset = offset + 1;
-        };
-        if name_len == 0 {
-            return -1;
+            break;
         };
 
-        offset = stub_skip_whitespace(input_ptr, input_len, offset);
-        offset = stub_expect_char(input_ptr, input_len, offset, 40);
-        if offset < 0 {
-            return -1;
-        };
+        offset = skip(offset);
+        offset = expect(offset);
 
-        let mut param_parse_idx: i32 = stub_skip_whitespace(input_ptr, input_len, offset);
+        let mut param_parse_idx: i32 = skip(offset);
         loop {
-            if param_parse_idx >= input_len {
-                return -1;
-            };
-            let next_byte: i32 = stub_peek_byte(input_ptr, input_len, param_parse_idx);
+            let next_byte: i32 = peek(param_parse_idx);
             if next_byte == 41 {
                 param_parse_idx = param_parse_idx + 1;
                 break;
@@ -822,53 +792,25 @@ fn register_function_signatures(
 
             let mut name_len: i32 = 0;
             loop {
-                if param_parse_idx >= input_len {
-                    break;
-                };
-                let ch: i32 = stub_peek_byte(input_ptr, input_len, param_parse_idx);
-                if name_len == 0 {
-                    if !stub_is_identifier_start(ch) {
-                        break;
-                    };
-                } else if !stub_is_identifier_continue(ch) {
-                    break;
-                };
                 name_len = name_len + 1;
                 param_parse_idx = param_parse_idx + 1;
-            };
-            if name_len == 0 {
-                return -1;
+                break;
             };
 
-            param_parse_idx = stub_skip_whitespace(input_ptr, input_len, param_parse_idx);
-            param_parse_idx = stub_expect_char(input_ptr, input_len, param_parse_idx, 58);
-            if param_parse_idx < 0 {
-                return -1;
-            };
+            param_parse_idx = skip(param_parse_idx);
+            param_parse_idx = expect(param_parse_idx);
 
-            param_parse_idx = stub_skip_whitespace(input_ptr, input_len, param_parse_idx);
-            if param_parse_idx >= input_len {
-                return -1;
-            };
-
-            if param_parse_idx < 0 {
-                return -1;
-            };
-
-            param_parse_idx = stub_skip_whitespace(input_ptr, input_len, param_parse_idx);
-            if param_parse_idx >= input_len {
-                return -1;
-            };
-            let delimiter: i32 = stub_peek_byte(input_ptr, input_len, param_parse_idx);
+            param_parse_idx = skip(param_parse_idx);
+            let delimiter: i32 = peek(param_parse_idx);
             if delimiter == 44 {
-                param_parse_idx = stub_skip_whitespace(input_ptr, input_len, param_parse_idx + 1);
+                param_parse_idx = skip(param_parse_idx + 1);
                 continue;
             };
             if delimiter == 41 {
                 param_parse_idx = param_parse_idx + 1;
                 break;
             };
-            return -1;
+            break;
         };
 
         offset = param_parse_idx;
@@ -877,7 +819,7 @@ fn register_function_signatures(
     offset
 }
 
-fn main() -> i32 { register_function_signatures(0, 0) }
+fn main() -> i32 { register_function_signatures(0) }
 "#;
 
     compile(source).expect("host compiler should accept register_function_signatures repro");
