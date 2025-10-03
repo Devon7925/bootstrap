@@ -46,8 +46,8 @@ fn stage1_compiler_identifies_remaining_bootstrap_blocker() {
                 "stage1 should advance code generation before failing"
             );
             assert_eq!(
-                compiled_functions, 40,
-                "stage1 currently stops compiling at function index 40 (control_stack_set_type_at_depth)"
+                compiled_functions, 66,
+                "stage1 currently stops compiling at function index 66"
             );
 
             let tokens = Lexer::new(&stage1_source)
@@ -219,7 +219,7 @@ fn main() -> i32 {
 }
 
 #[test]
-fn stage1_compiler_rejects_return_without_value() {
+fn stage1_compiler_accepts_return_without_value() {
     let (mut stage1, _) = prepare_stage1_compiler();
 
     let source = r#"
@@ -237,10 +237,9 @@ fn main() -> i32 {
 
     compile(source).expect("host compiler should accept explicit unit returns");
 
-    assert!(
-        stage1.compile_at(0, 131072, source).is_err(),
-        "stage1 still rejects explicit `return;` statements"
-    );
+    stage1
+        .compile_at(0, 131072, source)
+        .expect("stage1 should accept explicit `return;` statements");
 }
 
 #[test]
