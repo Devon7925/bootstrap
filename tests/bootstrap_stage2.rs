@@ -740,3 +740,150 @@ fn main() -> i32 {
         .expect("stage1 should accept logical or expressions");
 }
 
+#[test]
+#[ignore]
+fn stage1_register_function_signatures_repro() {
+    let (mut stage1, _) = prepare_stage1_compiler();
+    let output_ptr = stage1_output_ptr(&stage1);
+
+    // Minimal program that nests loops so `param_parse_idx` is mutated in the inner loop,
+    // then reused by the outer loop—stage1 still restores the pre-loop locals instead of
+    // merging the updates, so it cannot compile this structure yet.
+    let source = r#"
+fn stub_skip_whitespace(_base: i32, _len: i32, offset: i32) -> i32 { offset }
+
+fn stub_expect_char(_base: i32, _len: i32, offset: i32, _ch: i32) -> i32 { offset }
+
+fn stub_is_identifier_start(_byte: i32) -> bool { true }
+
+fn stub_is_identifier_continue(_byte: i32) -> bool { false }
+
+fn stub_peek_byte(_base: i32, _len: i32, _offset: i32) -> i32 { 0 }
+
+fn register_function_signatures(
+    input_ptr: i32,
+    input_len: i32,
+) -> i32 {
+    let mut offset: i32 = 0;
+
+    loop {
+        offset = stub_skip_whitespace(input_ptr, input_len, offset);
+        if offset >= input_len {
+            break;
+        };
+
+        offset = offset + 1;
+
+        if offset >= input_len {
+            return -1;
+        };
+        stub_peek_byte(input_ptr, input_len, offset);
+        offset = stub_skip_whitespace(input_ptr, input_len, offset);
+        if offset >= input_len {
+            return -1;
+        };
+
+        let mut name_len: i32 = 0;
+        loop {
+            if offset >= input_len {
+                break;
+            };
+            let ch: i32 = stub_peek_byte(input_ptr, input_len, offset);
+            if name_len == 0 {
+                if !stub_is_identifier_start(ch) {
+                    break;
+                };
+            } else if !stub_is_identifier_continue(ch) {
+                break;
+            };
+            name_len = name_len + 1;
+            offset = offset + 1;
+        };
+        if name_len == 0 {
+            return -1;
+        };
+
+        offset = stub_skip_whitespace(input_ptr, input_len, offset);
+        offset = stub_expect_char(input_ptr, input_len, offset, 40);
+        if offset < 0 {
+            return -1;
+        };
+
+        let mut param_parse_idx: i32 = stub_skip_whitespace(input_ptr, input_len, offset);
+        loop {
+            if param_parse_idx >= input_len {
+                return -1;
+            };
+            let next_byte: i32 = stub_peek_byte(input_ptr, input_len, param_parse_idx);
+            if next_byte == 41 {
+                param_parse_idx = param_parse_idx + 1;
+                break;
+            };
+
+            let mut name_len: i32 = 0;
+            loop {
+                if param_parse_idx >= input_len {
+                    break;
+                };
+                let ch: i32 = stub_peek_byte(input_ptr, input_len, param_parse_idx);
+                if name_len == 0 {
+                    if !stub_is_identifier_start(ch) {
+                        break;
+                    };
+                } else if !stub_is_identifier_continue(ch) {
+                    break;
+                };
+                name_len = name_len + 1;
+                param_parse_idx = param_parse_idx + 1;
+            };
+            if name_len == 0 {
+                return -1;
+            };
+
+            param_parse_idx = stub_skip_whitespace(input_ptr, input_len, param_parse_idx);
+            param_parse_idx = stub_expect_char(input_ptr, input_len, param_parse_idx, 58);
+            if param_parse_idx < 0 {
+                return -1;
+            };
+
+            param_parse_idx = stub_skip_whitespace(input_ptr, input_len, param_parse_idx);
+            if param_parse_idx >= input_len {
+                return -1;
+            };
+
+            if param_parse_idx < 0 {
+                return -1;
+            };
+
+            param_parse_idx = stub_skip_whitespace(input_ptr, input_len, param_parse_idx);
+            if param_parse_idx >= input_len {
+                return -1;
+            };
+            let delimiter: i32 = stub_peek_byte(input_ptr, input_len, param_parse_idx);
+            if delimiter == 44 {
+                param_parse_idx = stub_skip_whitespace(input_ptr, input_len, param_parse_idx + 1);
+                continue;
+            };
+            if delimiter == 41 {
+                param_parse_idx = param_parse_idx + 1;
+                break;
+            };
+            return -1;
+        };
+
+        offset = param_parse_idx;
+    };
+
+    offset
+}
+
+fn main() -> i32 { register_function_signatures(0, 0) }
+"#;
+
+    compile(source).expect("host compiler should accept register_function_signatures repro");
+
+    stage1
+        .compile_at(0, output_ptr, source)
+        .expect_err("stage1 should fail when compiling register_function_signatures repro");
+}
+
