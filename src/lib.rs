@@ -1,11 +1,4 @@
-pub mod ast;
-pub mod codegen;
 pub mod error;
-pub mod hir;
-pub mod lexer;
-pub mod parser;
-pub mod span;
-pub mod typeck;
 
 use crate::error::CompileError;
 use wasmi::{Engine, Linker, Memory, Module, Store, TypedFunc};
