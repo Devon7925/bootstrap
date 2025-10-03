@@ -297,7 +297,6 @@ fn main() -> i32 {
 }
 
 #[test]
-#[ignore = "stage1_minimal currently allows reassigning locals with values of a different type"]
 fn stage1_compiler_rejects_assigning_mismatched_types() {
     let source = fs::read_to_string("examples/stage1_minimal.bp")
         .expect("failed to load stage1 source");
