@@ -742,48 +742,30 @@ fn main() -> i32 {
 
 #[test]
 #[ignore]
-fn stage1_register_function_signatures_repro() {
+fn stage1_shadowed_name_len_repro() {
     let (mut stage1, _) = prepare_stage1_compiler();
     let output_ptr = stage1_output_ptr(&stage1);
 
-    // Minimal program with nested loops that updates `param_parse_idx` inside the inner loop
-    // and then copies it back to `offset`. Stage1 still restores the pre-loop locals instead
-    // of merging the updates, so it cannot compile this structure yet.
+    // Stage1 rejects this program because it confuses the inner `name_len` binding with
+    // the outer one. When the loop exits the bootstrapped compiler tries to restore the
+    // outer `name_len`'s value, so it fails to compile even though the code is valid.
     let source = r#"
 fn main() -> i32 {
-    let mut offset: i32 = 0;
-
+    let mut name_len: i32 = 0;
     loop {
         let mut name_len: i32 = 0;
-        loop {
-            name_len = name_len + 1;
-            offset = offset + 1;
-            break;
-        };
-
-        let mut param_parse_idx: i32 = offset;
-        loop {
-            let mut name_len: i32 = 0;
-            loop {
-                name_len = name_len + 1;
-                param_parse_idx = param_parse_idx + 1;
-                break;
-            };
-
-            break;
-        };
-
-        offset = param_parse_idx;
+        name_len = name_len + 1;
+        break;
     };
 
-    offset
+    name_len
 }
 "#;
 
-    compile(source).expect("host compiler should accept register_function_signatures repro");
+    compile(source).expect("host compiler should accept name_len shadowing repro");
 
     stage1
         .compile_at(0, output_ptr, source)
-        .expect_err("stage1 should fail when compiling register_function_signatures repro");
+        .expect_err("stage1 should fail when compiling name_len shadowing repro");
 }
 
