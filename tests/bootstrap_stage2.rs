@@ -46,8 +46,8 @@ fn stage1_compiler_identifies_remaining_bootstrap_blocker() {
                 "stage1 should advance code generation before failing"
             );
             assert_eq!(
-                compiled_functions, 66,
-                "stage1 currently stops compiling at function index 66"
+                compiled_functions, 84,
+                "stage1 currently stops compiling at function index 84"
             );
 
             let tokens = Lexer::new(&stage1_source)
@@ -62,9 +62,18 @@ fn stage1_compiler_identifies_remaining_bootstrap_blocker() {
                 functions, total_functions,
                 "expected to register all functions"
             );
+
+            let failing_function = &program.functions[compiled_functions as usize];
+            assert_eq!(
+                failing_function.name, "write_type_section",
+                "stage1 now fails while compiling write_type_section (first function containing an else-if chain)"
+            );
         }
     }
 }
+
+// When stage1 fails we report the first function that still needs code generation
+// support in order to reach full stage2 bootstrapping.
 
 #[test]
 fn stage1_compiler_accepts_break_with_value_statements() {
