@@ -7,8 +7,7 @@ mod wasm_harness;
 
 use wasm_harness::{run_wasm_main, CompilerInstance};
 
-#[test]
-fn stage1_constant_compiler_emits_wasm() {
+fn prepare_stage1_compiler() -> (CompilerInstance, usize, i32) {
     let source =
         fs::read_to_string("examples/stage1_minimal.bp").expect("failed to load stage1 source");
 
@@ -17,11 +16,17 @@ fn stage1_constant_compiler_emits_wasm() {
         .to_wasm()
         .expect("failed to encode stage1 wasm");
 
-    let mut compiler = CompilerInstance::new(stage1_wasm.as_slice());
-    assert_eq!(compiler.memory_size_bytes(), 262144);
+    (
+        CompilerInstance::new(stage1_wasm.as_slice()),
+        0usize,
+        1024i32,
+    )
+}
 
-    let mut input_cursor = 0usize;
-    let mut output_cursor = 1024i32;
+#[test]
+fn stage1_constant_compiler_emits_wasm() {
+    let (mut compiler, mut input_cursor, mut output_cursor) = prepare_stage1_compiler();
+    assert_eq!(compiler.memory_size_bytes(), 262144);
 
     let output = compiler
         .compile_with_layout(
@@ -153,17 +158,7 @@ fn stage1_constant_compiler_emits_wasm() {
 
 #[test]
 fn stage1_compiler_short_circuits_boolean_operators() {
-    let source = fs::read_to_string("examples/stage1_minimal.bp")
-        .expect("failed to load stage1 source");
-
-    let stage1_compilation = compile(&source).expect("failed to compile stage1 source");
-    let stage1_wasm = stage1_compilation
-        .to_wasm()
-        .expect("failed to encode stage1 wasm");
-
-    let mut compiler = CompilerInstance::new(stage1_wasm.as_slice());
-    let mut input_cursor = 0usize;
-    let mut output_cursor = 1024i32;
+    let (mut compiler, mut input_cursor, mut output_cursor) = prepare_stage1_compiler();
 
     let program = r#"
 fn main() -> i32 {
@@ -196,17 +191,7 @@ fn main() -> i32 {
 
 #[test]
 fn stage1_compiler_accepts_tightly_spaced_return_expressions() {
-    let source = fs::read_to_string("examples/stage1_minimal.bp")
-        .expect("failed to load stage1 source");
-
-    let stage1_compilation = compile(&source).expect("failed to compile stage1 source");
-    let stage1_wasm = stage1_compilation
-        .to_wasm()
-        .expect("failed to encode stage1 wasm");
-
-    let mut compiler = CompilerInstance::new(stage1_wasm.as_slice());
-    let mut input_cursor = 0usize;
-    let mut output_cursor = 1024i32;
+    let (mut compiler, mut input_cursor, mut output_cursor) = prepare_stage1_compiler();
 
     let program = r#"
 fn returns_negative() -> i32 {
@@ -230,17 +215,7 @@ fn main() -> i32 {
 
 #[test]
 fn stage1_compiler_supports_mutating_boolean_variables() {
-    let source = fs::read_to_string("examples/stage1_minimal.bp")
-        .expect("failed to load stage1 source");
-
-    let stage1_compilation = compile(&source).expect("failed to compile stage1 source");
-    let stage1_wasm = stage1_compilation
-        .to_wasm()
-        .expect("failed to encode stage1 wasm");
-
-    let mut compiler = CompilerInstance::new(stage1_wasm.as_slice());
-    let mut input_cursor = 0usize;
-    let mut output_cursor = 1024i32;
+    let (mut compiler, mut input_cursor, mut output_cursor) = prepare_stage1_compiler();
 
     let program = r#"
 fn main() -> i32 {
@@ -265,17 +240,7 @@ fn main() -> i32 {
 
 #[test]
 fn stage1_compiler_rejects_if_branches_with_mismatched_types() {
-    let source = fs::read_to_string("examples/stage1_minimal.bp")
-        .expect("failed to load stage1 source");
-
-    let stage1_compilation = compile(&source).expect("failed to compile stage1 source");
-    let stage1_wasm = stage1_compilation
-        .to_wasm()
-        .expect("failed to encode stage1 wasm");
-
-    let mut compiler = CompilerInstance::new(stage1_wasm.as_slice());
-    let mut input_cursor = 0usize;
-    let mut output_cursor = 1024i32;
+    let (mut compiler, mut input_cursor, mut output_cursor) = prepare_stage1_compiler();
 
     let program = r#"
 fn main() -> i32 {
@@ -298,17 +263,7 @@ fn main() -> i32 {
 
 #[test]
 fn stage1_compiler_rejects_assigning_mismatched_types() {
-    let source = fs::read_to_string("examples/stage1_minimal.bp")
-        .expect("failed to load stage1 source");
-
-    let stage1_compilation = compile(&source).expect("failed to compile stage1 source");
-    let stage1_wasm = stage1_compilation
-        .to_wasm()
-        .expect("failed to encode stage1 wasm");
-
-    let mut compiler = CompilerInstance::new(stage1_wasm.as_slice());
-    let mut input_cursor = 0usize;
-    let mut output_cursor = 1024i32;
+    let (mut compiler, mut input_cursor, mut output_cursor) = prepare_stage1_compiler();
 
     let program = r#"
 fn main() -> i32 {
@@ -323,5 +278,251 @@ fn main() -> i32 {
     assert!(
         result.is_err(),
         "stage1 should reject assignments that change the local's type"
+    );
+}
+
+#[test]
+fn stage1_compiler_rejects_break_outside_loop() {
+    let (mut compiler, mut input_cursor, mut output_cursor) = prepare_stage1_compiler();
+
+    let program = r#"
+fn main() -> i32 {
+    break;
+    0
+}
+"#;
+
+    let result = compiler.compile_with_layout(&mut input_cursor, &mut output_cursor, program);
+
+    assert!(result.is_err(), "stage1 should reject break outside of loops");
+}
+
+#[test]
+fn stage1_compiler_rejects_continue_outside_loop() {
+    let (mut compiler, mut input_cursor, mut output_cursor) = prepare_stage1_compiler();
+
+    let program = r#"
+fn main() -> i32 {
+    continue;
+    0
+}
+"#;
+
+    let result = compiler.compile_with_layout(&mut input_cursor, &mut output_cursor, program);
+
+    assert!(result.is_err(), "stage1 should reject continue outside of loops");
+}
+
+#[test]
+fn stage1_compiler_rejects_assigning_to_immutable_variables() {
+    let (mut compiler, mut input_cursor, mut output_cursor) = prepare_stage1_compiler();
+
+    let program = r#"
+fn main() -> i32 {
+    let value: i32 = 1;
+    value = 2;
+    value
+}
+"#;
+
+    let result = compiler.compile_with_layout(&mut input_cursor, &mut output_cursor, program);
+
+    assert!(
+        result.is_err(),
+        "stage1 should reject assignments to immutable locals"
+    );
+}
+
+#[test]
+fn stage1_compiler_rejects_duplicate_local_names() {
+    let (mut compiler, mut input_cursor, mut output_cursor) = prepare_stage1_compiler();
+
+    let program = r#"
+fn main() -> i32 {
+    let mut value: i32 = 1;
+    let value: i32 = 2;
+    value
+}
+"#;
+
+    let result = compiler.compile_with_layout(&mut input_cursor, &mut output_cursor, program);
+
+    assert!(result.is_err(), "stage1 should reject duplicate local names");
+}
+
+#[test]
+fn stage1_compiler_rejects_unknown_identifiers() {
+    let (mut compiler, mut input_cursor, mut output_cursor) = prepare_stage1_compiler();
+
+    let program = r#"
+fn main() -> i32 {
+    let mut value: i32 = 1;
+    value = missing;
+    value
+}
+"#;
+
+    let result = compiler.compile_with_layout(&mut input_cursor, &mut output_cursor, program);
+
+    assert!(
+        result.is_err(),
+        "stage1 should reject uses of identifiers that are not in scope"
+    );
+}
+
+#[test]
+fn stage1_compiler_rejects_function_calls_with_wrong_arity() {
+    let (mut compiler, mut input_cursor, mut output_cursor) = prepare_stage1_compiler();
+
+    let program = r#"
+fn increment(value: i32) -> i32 {
+    value + 1
+}
+
+fn main() -> i32 {
+    increment();
+    0
+}
+"#;
+
+    let result = compiler.compile_with_layout(&mut input_cursor, &mut output_cursor, program);
+
+    assert!(result.is_err(), "stage1 should reject calls with wrong arity");
+}
+
+#[test]
+fn stage1_compiler_supports_nested_loop_control_flow() {
+    let (mut compiler, mut input_cursor, mut output_cursor) = prepare_stage1_compiler();
+
+    let program = r#"
+fn main() -> i32 {
+    let mut outer: i32 = 0;
+    let mut total: i32 = 0;
+    loop {
+        if outer == 3 {
+            break;
+        };
+        let mut inner: i32 = 0;
+        loop {
+            inner = inner + 1;
+            if inner == 2 {
+                continue;
+            };
+            if inner == 4 {
+                break;
+            };
+            total = total + outer * inner;
+        };
+        outer = outer + 1;
+    };
+    total
+}
+"#;
+
+    let output = compiler
+        .compile_with_layout(&mut input_cursor, &mut output_cursor, program)
+        .expect("stage1 should compile nested loops with break and continue");
+
+    assert_eq!(run_wasm_main(compiler.engine(), &output), 12);
+}
+
+#[test]
+fn stage1_compiler_supports_recursive_functions() {
+    let (mut compiler, mut input_cursor, mut output_cursor) = prepare_stage1_compiler();
+
+    let program = r#"
+fn factorial(value: i32) -> i32 {
+    if value == 0 {
+        1
+    } else {
+        value * factorial(value - 1)
+    }
+}
+
+fn main() -> i32 {
+    factorial(5)
+}
+"#;
+
+    let output = compiler
+        .compile_with_layout(&mut input_cursor, &mut output_cursor, program)
+        .expect("stage1 should compile recursive functions");
+
+    assert_eq!(run_wasm_main(compiler.engine(), &output), 120);
+}
+
+#[test]
+fn stage1_compiler_rejects_duplicate_function_names() {
+    let (mut compiler, mut input_cursor, mut output_cursor) = prepare_stage1_compiler();
+
+    let program = r#"
+fn helper() -> i32 { 1 }
+fn helper() -> i32 { 2 }
+fn main() -> i32 { helper() }
+"#;
+
+    let result = compiler.compile_with_layout(&mut input_cursor, &mut output_cursor, program);
+
+    assert!(
+        result.is_err(),
+        "stage1 should reject duplicate function definitions"
+    );
+}
+
+#[test]
+fn stage1_compiler_rejects_multiple_main_definitions() {
+    let (mut compiler, mut input_cursor, mut output_cursor) = prepare_stage1_compiler();
+
+    let program = r#"
+fn main() -> i32 { 0 }
+fn main() -> i32 { 1 }
+"#;
+
+    let result = compiler.compile_with_layout(&mut input_cursor, &mut output_cursor, program);
+
+    assert!(
+        result.is_err(),
+        "stage1 should reject multiple definitions of main"
+    );
+}
+
+#[test]
+fn stage1_compiler_rejects_non_i32_main_return_type() {
+    let (mut compiler, mut input_cursor, mut output_cursor) = prepare_stage1_compiler();
+
+    let program = r#"
+fn main() -> bool {
+    true
+}
+"#;
+
+    let result = compiler.compile_with_layout(&mut input_cursor, &mut output_cursor, program);
+
+    assert!(
+        result.is_err(),
+        "stage1 should require main to return an i32"
+    );
+}
+
+#[test]
+fn stage1_compiler_rejects_mismatched_let_initializer_types() {
+    let (mut compiler, mut input_cursor, mut output_cursor) = prepare_stage1_compiler();
+
+    let program = r#"
+fn main() -> i32 {
+    let flag: bool = 1;
+    if flag {
+        1
+    } else {
+        0
+    }
+}
+"#;
+
+    let result = compiler.compile_with_layout(&mut input_cursor, &mut output_cursor, program);
+
+    assert!(
+        result.is_err(),
+        "stage1 should reject let bindings whose initializer type does not match"
     );
 }
