@@ -21,12 +21,32 @@ fn prepare_stage1_compiler() -> (CompilerInstance, String) {
     (CompilerInstance::new(stage1_wasm.as_slice()), stage1_source)
 }
 
+const STAGE1_FUNCTION_ENTRY_SIZE: usize = 32;
+const STAGE1_FUNCTIONS_BASE_OFFSET: usize = 851968;
+const STAGE1_MAX_FUNCTIONS: usize = 512;
+
+fn stage1_output_ptr(compiler: &CompilerInstance) -> i32 {
+    let memory_size = compiler.memory_size_bytes();
+    let reserved = STAGE1_FUNCTIONS_BASE_OFFSET
+        + STAGE1_MAX_FUNCTIONS * STAGE1_FUNCTION_ENTRY_SIZE;
+    assert!(
+        memory_size > reserved,
+        "stage1 memory must exceed reserved layout"
+    );
+    (memory_size - reserved) as i32
+}
+
 #[test]
 fn stage1_compiler_identifies_remaining_bootstrap_blocker() {
     let (mut stage1, stage1_source) = prepare_stage1_compiler();
+    let output_ptr = stage1_output_ptr(&stage1);
+    assert!(
+        stage1_source.len() < output_ptr as usize,
+        "stage1 source must not overlap output buffer"
+    );
 
     // Compile the stage1 source with the stage1 compiler itself to produce stage2.
-    let result = stage1.compile_at(0, 131072, &stage1_source);
+    let result = stage1.compile_at(0, output_ptr, &stage1_source);
     match result {
         Ok(_) => {
             panic!("stage1 unexpectedly compiled itself without encountering bootstrap blockers")
@@ -78,6 +98,7 @@ fn stage1_compiler_identifies_remaining_bootstrap_blocker() {
 #[test]
 fn stage1_compiler_accepts_break_with_value_statements() {
     let (mut stage1, _) = prepare_stage1_compiler();
+    let output_ptr = stage1_output_ptr(&stage1);
 
     let source = r#"
 fn main() -> i32 {
@@ -95,13 +116,14 @@ fn main() -> i32 {
     compile(source).expect("host compiler should accept break-with-value");
 
     stage1
-        .compile_at(0, 131072, source)
+        .compile_at(0, output_ptr, source)
         .expect("stage1 should accept break-with-value");
 }
 
 #[test]
 fn stage1_compiler_accepts_loop_expression_results() {
     let (mut stage1, _) = prepare_stage1_compiler();
+    let output_ptr = stage1_output_ptr(&stage1);
 
     let source = r#"
 fn main() -> i32 {
@@ -114,13 +136,14 @@ fn main() -> i32 {
     compile(source).expect("host compiler should accept loop expressions with values");
 
     stage1
-        .compile_at(0, 131072, source)
+        .compile_at(0, output_ptr, source)
         .expect("stage1 should accept loop expression result");
 }
 
 #[test]
 fn stage1_compiler_accepts_else_if_chains() {
     let (mut stage1, _) = prepare_stage1_compiler();
+    let output_ptr = stage1_output_ptr(&stage1);
 
     let source = r#"
 fn main() -> i32 {
@@ -137,13 +160,14 @@ fn main() -> i32 {
     compile(source).expect("host compiler should accept else-if chains");
 
     stage1
-        .compile_at(0, 131072, source)
+        .compile_at(0, output_ptr, source)
         .expect("stage1 should accept else-if chains");
 }
 
 #[test]
 fn stage1_compiler_accepts_else_if_inside_loops() {
     let (mut stage1, _) = prepare_stage1_compiler();
+    let output_ptr = stage1_output_ptr(&stage1);
 
     let source = r#"
 fn main() -> i32 {
@@ -167,13 +191,14 @@ fn main() -> i32 {
     compile(source).expect("host compiler should accept else-if chains inside loops");
 
     stage1
-        .compile_at(0, 131072, source)
+        .compile_at(0, output_ptr, source)
         .expect("stage1 should accept else-if chains inside loops");
 }
 
 #[test]
 fn stage1_compiler_accepts_else_if_with_followup_else() {
     let (mut stage1, _) = prepare_stage1_compiler();
+    let output_ptr = stage1_output_ptr(&stage1);
 
     let source = r#"
 fn main() -> i32 {
@@ -206,13 +231,14 @@ fn main() -> i32 {
         .expect("host compiler should accept else-if chains followed by else statements");
 
     stage1
-        .compile_at(0, 131072, source)
+        .compile_at(0, output_ptr, source)
         .expect("stage1 should accept else-if chains followed by else statements");
 }
 
 #[test]
 fn stage1_compiler_accepts_unit_returns() {
     let (mut stage1, _) = prepare_stage1_compiler();
+    let output_ptr = stage1_output_ptr(&stage1);
 
     let source = r#"
 fn helper() {
@@ -228,13 +254,14 @@ fn main() -> i32 {
     compile(source).expect("host compiler should accept implicit unit return");
 
     stage1
-        .compile_at(0, 131072, source)
+        .compile_at(0, output_ptr, source)
         .expect("stage1 should accept implicit unit return");
 }
 
 #[test]
 fn stage1_compiler_accepts_line_comments() {
     let (mut stage1, _) = prepare_stage1_compiler();
+    let output_ptr = stage1_output_ptr(&stage1);
 
     let source = r#"
 fn main() -> i32 {
@@ -251,13 +278,14 @@ fn main() -> i32 {
     compile(source).expect("host compiler should accept line comments");
 
     stage1
-        .compile_at(0, 131072, source)
+        .compile_at(0, output_ptr, source)
         .expect("stage1 should accept line comments");
 }
 
 #[test]
 fn stage1_compiler_accepts_not_equal_comparisons() {
     let (mut stage1, _) = prepare_stage1_compiler();
+    let output_ptr = stage1_output_ptr(&stage1);
 
     let source = r#"
 fn main() -> i32 {
@@ -272,13 +300,14 @@ fn main() -> i32 {
     compile(source).expect("host compiler should accept not-equal comparisons");
 
     stage1
-        .compile_at(0, 131072, source)
+        .compile_at(0, output_ptr, source)
         .expect("stage1 should accept not-equal comparisons");
 }
 
 #[test]
 fn stage1_compiler_accepts_greater_equal_comparisons() {
     let (mut stage1, _) = prepare_stage1_compiler();
+    let output_ptr = stage1_output_ptr(&stage1);
 
     let source = r#"
 fn main() -> i32 {
@@ -294,13 +323,14 @@ fn main() -> i32 {
     compile(source).expect("host compiler should accept greater-equal comparisons");
 
     stage1
-        .compile_at(0, 131072, source)
+        .compile_at(0, output_ptr, source)
         .expect("stage1 should accept greater-equal comparisons");
 }
 
 #[test]
 fn stage1_compiler_accepts_bitwise_and_or_operations() {
     let (mut stage1, _) = prepare_stage1_compiler();
+    let output_ptr = stage1_output_ptr(&stage1);
 
     let source = r#"
 fn mask(value: i32) -> i32 {
@@ -315,13 +345,14 @@ fn main() -> i32 {
     compile(source).expect("host compiler should accept bitwise and/or");
 
     stage1
-        .compile_at(0, 131072, source)
+        .compile_at(0, output_ptr, source)
         .expect("stage1 should accept bitwise and/or");
 }
 
 #[test]
 fn stage1_compiler_accepts_nested_loops() {
     let (mut stage1, _) = prepare_stage1_compiler();
+    let output_ptr = stage1_output_ptr(&stage1);
 
     let source = r#"
 fn main() -> i32 {
@@ -348,13 +379,14 @@ fn main() -> i32 {
     compile(source).expect("host compiler should accept nested loops");
 
     stage1
-        .compile_at(0, 131072, source)
+        .compile_at(0, output_ptr, source)
         .expect("stage1 should accept nested loops");
 }
 
 #[test]
 fn stage1_compiler_accepts_return_without_value() {
     let (mut stage1, _) = prepare_stage1_compiler();
+    let output_ptr = stage1_output_ptr(&stage1);
 
     let source = r#"
 fn helper() {
@@ -372,13 +404,14 @@ fn main() -> i32 {
     compile(source).expect("host compiler should accept explicit unit returns");
 
     stage1
-        .compile_at(0, 131072, source)
+        .compile_at(0, output_ptr, source)
         .expect("stage1 should accept explicit `return;` statements");
 }
 
 #[test]
 fn stage1_compiler_accepts_if_expression_results() {
     let (mut stage1, _) = prepare_stage1_compiler();
+    let output_ptr = stage1_output_ptr(&stage1);
 
     let source = r#"
 fn select(flag: bool) -> i32 {
@@ -394,13 +427,14 @@ fn main() -> i32 {
     compile(source).expect("host compiler should accept if expressions with values");
 
     stage1
-        .compile_at(0, 131072, source)
+        .compile_at(0, output_ptr, source)
         .expect("stage1 should accept if expressions with values");
 }
 
 #[test]
 fn stage1_compiler_accepts_loop_local_redeclaration() {
     let (mut stage1, _) = prepare_stage1_compiler();
+    let output_ptr = stage1_output_ptr(&stage1);
 
     let source = r#"
 fn functions_entry(base: i32, index: i32) -> i32 {
@@ -443,13 +477,14 @@ fn main() -> i32 {
     compile(source).expect("host compiler should accept debug program");
 
     stage1
-        .compile_at(0, 131072, source)
+        .compile_at(0, output_ptr, source)
         .expect("stage1 should accept loop-local redeclarations");
 }
 
 #[test]
 fn stage1_compiler_accepts_if_expression_blocks_with_values() {
     let (mut stage1, _) = prepare_stage1_compiler();
+    let output_ptr = stage1_output_ptr(&stage1);
 
     let source = r#"
 fn choose(flag: bool) -> i32 {
@@ -471,13 +506,14 @@ fn main() -> i32 {
         .expect("host compiler should accept if expression blocks with tail values");
 
     stage1
-        .compile_at(0, 131072, source)
+        .compile_at(0, output_ptr, source)
         .expect("stage1 should accept if expression blocks with tail values");
 }
 
 #[test]
 fn stage1_compiler_accepts_mutable_bool_locals() {
     let (mut stage1, _) = prepare_stage1_compiler();
+    let output_ptr = stage1_output_ptr(&stage1);
 
     let source = r#"
 fn main() -> i32 {
@@ -499,13 +535,14 @@ fn main() -> i32 {
     compile(source).expect("host compiler should accept mutable bool locals");
 
     stage1
-        .compile_at(0, 131072, source)
+        .compile_at(0, output_ptr, source)
         .expect("stage1 should accept mutable bool locals");
 }
 
 #[test]
 fn stage1_compiler_accepts_bit_shifts() {
     let (mut stage1, _) = prepare_stage1_compiler();
+    let output_ptr = stage1_output_ptr(&stage1);
 
     let source = r#"
 fn main() -> i32 {
@@ -517,6 +554,6 @@ fn main() -> i32 {
     compile(source).expect("host compiler should accept shift operators");
 
     stage1
-        .compile_at(0, 131072, source)
+        .compile_at(0, output_ptr, source)
         .expect("stage1 should accept shift operators");
 }

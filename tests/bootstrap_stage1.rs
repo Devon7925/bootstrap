@@ -26,7 +26,7 @@ fn prepare_stage1_compiler() -> (CompilerInstance, usize, i32) {
 #[test]
 fn stage1_constant_compiler_emits_wasm() {
     let (mut compiler, mut input_cursor, mut output_cursor) = prepare_stage1_compiler();
-    assert_eq!(compiler.memory_size_bytes(), 262144);
+    assert_eq!(compiler.memory_size_bytes(), 1048576);
 
     let output = compiler
         .compile_with_layout(

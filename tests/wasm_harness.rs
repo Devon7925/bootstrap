@@ -12,6 +12,10 @@ pub struct CompilerInstance {
     compile: TypedFunc<(i32, i32, i32), i32>,
 }
 
+const INSTR_OFFSET_PTR_OFFSET: usize = 4096;
+const FUNCTIONS_COUNT_PTR_OFFSET: usize = 851960;
+const FUNCTIONS_BASE_OFFSET: usize = 851968;
+
 #[derive(Debug, Clone, Copy)]
 pub struct CompileFailure {
     pub produced_len: i32,
@@ -81,40 +85,17 @@ impl CompilerInstance {
             .write(&mut self.store, input_ptr, source.as_bytes())
             .expect("failed to write source into compiler memory");
 
-        let produced_len = self
-            .compile
-            .call(
-                &mut self.store,
-                (input_ptr as i32, source.len() as i32, output_ptr),
-            )
-            .expect("compiler invocation failed");
-        if produced_len <= 0 {
-            let mut func_buf = [0u8; 4];
-            let mut instr_buf = [0u8; 4];
-            let func_ptr = output_ptr as usize + 40952;
-            let instr_ptr = output_ptr as usize + 4096;
-            let _ = self.memory.read(&self.store, func_ptr, &mut func_buf);
-            let _ = self.memory.read(&self.store, instr_ptr, &mut instr_buf);
-            let functions = i32::from_le_bytes(func_buf);
-            let instr_offset = i32::from_le_bytes(instr_buf);
-            let mut compiled_functions = 0;
-            for index in 0..functions {
-                let entry = output_ptr as usize + 40960 + index as usize * 32;
-                let mut len_buf = [0u8; 4];
-                let _ = self.memory.read(&self.store, entry + 16, &mut len_buf);
-                let code_len = i32::from_le_bytes(len_buf);
-                if code_len > 0 {
-                    compiled_functions += 1;
-                } else {
-                    break;
-                }
+        let produced_len = match self.compile.call(
+            &mut self.store,
+            (input_ptr as i32, source.len() as i32, output_ptr),
+        ) {
+            Ok(len) => len,
+            Err(_) => {
+                return Err(self.read_failure(output_ptr, -1));
             }
-            return Err(CompileFailure {
-                produced_len,
-                functions,
-                instr_offset,
-                compiled_functions,
-            });
+        };
+        if produced_len <= 0 {
+            return Err(self.read_failure(output_ptr, produced_len));
         }
 
         let mut output = vec![0u8; produced_len as usize];
@@ -163,6 +144,47 @@ impl CompilerInstance {
     }
 }
 
+impl CompilerInstance {
+    fn read_failure(&mut self, output_ptr: i32, produced_len: i32) -> CompileFailure {
+        let mut func_buf = [0u8; 4];
+        let mut instr_buf = [0u8; 4];
+        let func_ptr = output_ptr as usize + FUNCTIONS_COUNT_PTR_OFFSET;
+        let instr_ptr = output_ptr as usize + INSTR_OFFSET_PTR_OFFSET;
+        let _ = self
+            .memory
+            .read(&self.store, func_ptr, &mut func_buf);
+        let _ = self
+            .memory
+            .read(&self.store, instr_ptr, &mut instr_buf);
+        let functions = i32::from_le_bytes(func_buf);
+        let instr_offset = i32::from_le_bytes(instr_buf);
+        let mut compiled_functions = 0;
+        for index in 0..functions {
+            let entry = output_ptr as usize + FUNCTIONS_BASE_OFFSET + index as usize * 32;
+            let mut len_buf = [0u8; 4];
+            if self
+                .memory
+                .read(&self.store, entry + 16, &mut len_buf)
+                .is_err()
+            {
+                break;
+            }
+            let code_len = i32::from_le_bytes(len_buf);
+            if code_len > 0 {
+                compiled_functions += 1;
+            } else {
+                break;
+            }
+        }
+        CompileFailure {
+            produced_len,
+            functions,
+            instr_offset,
+            compiled_functions,
+        }
+    }
+}
+
 pub fn run_wasm_main(engine: &Engine, wasm: &[u8]) -> i32 {
     let module = Module::new(engine, wasm).expect("failed to create target module");
     let mut store = Store::new(engine, ());
@@ -181,7 +203,7 @@ pub fn run_wasm_main(engine: &Engine, wasm: &[u8]) -> i32 {
             .current_pages(&store)
             .to_bytes()
             .expect("memory pages to bytes"),
-        262144
+        1048576
     );
 
     let main_fn: TypedFunc<(), i32> = instance

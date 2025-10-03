@@ -2,7 +2,7 @@ use bootstrap::compile;
 use wasmi::{Engine, Func, Linker, Memory, Module, Store, TypedFunc, Value};
 
 #[test]
-fn exports_single_page_memory() {
+fn exports_multi_page_memory() {
     let source = r#"
 fn slice_len(_ptr: i32, len: i32) -> i32 {
     len
@@ -35,7 +35,7 @@ fn main() -> i32 {
         .current_pages(&store)
         .to_bytes()
         .expect("memory size to fit into usize");
-    assert_eq!(memory_bytes, 262144);
+    assert_eq!(memory_bytes, 1048576);
 
     let slice_len: TypedFunc<(i32, i32), i32> = instance
         .get_typed_func(&mut store, "slice_len")
