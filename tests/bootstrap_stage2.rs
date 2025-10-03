@@ -28,16 +28,26 @@ fn stage1_compiler_identifies_remaining_bootstrap_blocker() {
     // Compile the stage1 source with the stage1 compiler itself to produce stage2.
     let result = stage1.compile_at(0, 131072, &stage1_source);
     match result {
-        Ok(_) => panic!("stage1 unexpectedly compiled itself without encountering bootstrap blockers"),
+        Ok(_) => {
+            panic!("stage1 unexpectedly compiled itself without encountering bootstrap blockers")
+        }
         Err(CompileFailure {
             produced_len,
             functions,
             instr_offset,
+            compiled_functions,
         }) => {
+            eprintln!(
+                "stage2 blocker debug: produced_len={produced_len} functions={functions} instr_offset={instr_offset} compiled_functions={compiled_functions}"
+            );
             assert_eq!(produced_len, -1);
             assert!(
                 instr_offset > 0,
                 "stage1 should advance code generation before failing"
+            );
+            assert_eq!(
+                compiled_functions, 40,
+                "stage1 currently stops compiling at function index 40 (control_stack_set_type_at_depth)"
             );
 
             let tokens = Lexer::new(&stage1_source)
@@ -48,7 +58,10 @@ fn stage1_compiler_identifies_remaining_bootstrap_blocker() {
             let total_functions = program.functions.len() as i32;
 
             assert!(functions > 0, "expected to register at least one function");
-            assert_eq!(functions, total_functions, "expected to register all functions");
+            assert_eq!(
+                functions, total_functions,
+                "expected to register all functions"
+            );
         }
     }
 }
@@ -203,4 +216,48 @@ fn main() -> i32 {
     stage1
         .compile_at(0, 131072, source)
         .expect("stage1 should accept bitwise and/or");
+}
+
+#[test]
+fn stage1_compiler_rejects_return_without_value() {
+    let (mut stage1, _) = prepare_stage1_compiler();
+
+    let source = r#"
+fn helper() {
+    if true {
+        return;
+    };
+}
+
+fn main() -> i32 {
+    helper();
+    0
+}
+"#;
+
+    compile(source).expect("host compiler should accept explicit unit returns");
+
+    assert!(
+        stage1.compile_at(0, 131072, source).is_err(),
+        "stage1 still rejects explicit `return;` statements"
+    );
+}
+
+#[test]
+fn stage1_compiler_rejects_bit_shifts() {
+    let (mut stage1, _) = prepare_stage1_compiler();
+
+    let source = r#"
+fn main() -> i32 {
+    let value: i32 = 8 >> 1;
+    value
+}
+"#;
+
+    compile(source).expect("host compiler should accept shift operators");
+
+    assert!(
+        stage1.compile_at(0, 131072, source).is_err(),
+        "stage1 still rejects shift operators"
+    );
 }

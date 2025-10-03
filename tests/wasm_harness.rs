@@ -17,6 +17,7 @@ pub struct CompileFailure {
     pub produced_len: i32,
     pub functions: i32,
     pub instr_offset: i32,
+    pub compiled_functions: i32,
 }
 
 impl CompilerInstance {
@@ -54,8 +55,7 @@ impl CompilerInstance {
     }
 
     pub fn memory_size_bytes(&self) -> usize {
-        self
-            .memory
+        self.memory
             .current_pages(&self.store)
             .to_bytes()
             .expect("memory pages to bytes") as usize
@@ -77,8 +77,7 @@ impl CompilerInstance {
             "source length must fit in i32"
         );
 
-        self
-            .memory
+        self.memory
             .write(&mut self.store, input_ptr, source.as_bytes())
             .expect("failed to write source into compiler memory");
 
@@ -94,24 +93,32 @@ impl CompilerInstance {
             let mut instr_buf = [0u8; 4];
             let func_ptr = output_ptr as usize + 40952;
             let instr_ptr = output_ptr as usize + 4096;
-            let _ = self
-                .memory
-                .read(&self.store, func_ptr, &mut func_buf);
-            let _ = self
-                .memory
-                .read(&self.store, instr_ptr, &mut instr_buf);
+            let _ = self.memory.read(&self.store, func_ptr, &mut func_buf);
+            let _ = self.memory.read(&self.store, instr_ptr, &mut instr_buf);
             let functions = i32::from_le_bytes(func_buf);
             let instr_offset = i32::from_le_bytes(instr_buf);
+            let mut compiled_functions = 0;
+            for index in 0..functions {
+                let entry = output_ptr as usize + 40960 + index as usize * 32;
+                let mut len_buf = [0u8; 4];
+                let _ = self.memory.read(&self.store, entry + 16, &mut len_buf);
+                let code_len = i32::from_le_bytes(len_buf);
+                if code_len > 0 {
+                    compiled_functions += 1;
+                } else {
+                    break;
+                }
+            }
             return Err(CompileFailure {
                 produced_len,
                 functions,
                 instr_offset,
+                compiled_functions,
             });
         }
 
         let mut output = vec![0u8; produced_len as usize];
-        self
-            .memory
+        self.memory
             .read(&self.store, output_ptr as usize, &mut output)
             .expect("failed to read compiler output");
         Ok(output)

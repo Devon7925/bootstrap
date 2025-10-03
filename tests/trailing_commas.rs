@@ -6,7 +6,7 @@ use wasmi::{Engine, Linker, Module, Store, TypedFunc};
 #[path = "wasm_harness.rs"]
 mod wasm_harness;
 
-use wasm_harness::{run_wasm_main, CompilerInstance};
+use wasm_harness::{CompilerInstance, run_wasm_main};
 
 #[test]
 fn trailing_commas_in_params_and_calls_are_accepted() {
