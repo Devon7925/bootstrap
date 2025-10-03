@@ -3262,24 +3262,13 @@ fn parse_assignment_statement(
     idx
 }
 
-fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
-    if input_len == 0 {
-        return -1;
-    };
-
-    let instr_offset_ptr: i32 = out_ptr + 4096;
-    store_i32(instr_offset_ptr, 0);
-    let instr_base: i32 = out_ptr + 8192;
-    let expr_type_ptr: i32 = out_ptr + 4092;
-    store_i32(expr_type_ptr, -1);
-    let locals_count_ptr: i32 = out_ptr + 12280;
-    let locals_base: i32 = out_ptr + 12288;
-    let control_stack_count_ptr: i32 = out_ptr + 16384;
-    let control_stack_base: i32 = out_ptr + 16388;
-    let functions_count_ptr: i32 = out_ptr + 40952;
-    let functions_base: i32 = out_ptr + 40960;
+fn register_function_signatures(
+    input_ptr: i32,
+    input_len: i32,
+    functions_base: i32,
+    functions_count_ptr: i32,
+) -> i32 {
     store_i32(functions_count_ptr, 0);
-
     let mut offset: i32 = 0;
     let mut main_index: i32 = -1;
 
@@ -3333,7 +3322,7 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
             functions_base,
             functions_count_ptr,
             name_start,
-            name_len
+            name_len,
         ) >= 0 {
             return -1;
         };
@@ -3367,8 +3356,6 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
             main_index = func_index;
         };
 
-        store_i32(locals_count_ptr, 0);
-
         offset = skip_whitespace(input_ptr, input_len, offset);
         offset = expect_char(input_ptr, input_len, offset, 40);
         if offset < 0 {
@@ -3387,8 +3374,8 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
                 break;
             };
 
-            let name_start: i32 = param_parse_idx;
             let mut name_len: i32 = 0;
+            let name_start: i32 = param_parse_idx;
             loop {
                 if param_parse_idx >= input_len {
                     break;
@@ -3408,18 +3395,6 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
                 return -1;
             };
 
-            let existing_param: i32 = locals_find(
-                input_ptr,
-                input_len,
-                locals_base,
-                locals_count_ptr,
-                name_start,
-                name_len
-            );
-            if existing_param >= 0 {
-                return -1;
-            };
-
             param_parse_idx = skip_whitespace(input_ptr, input_len, param_parse_idx);
             param_parse_idx = expect_char(input_ptr, input_len, param_parse_idx, 58);
             if param_parse_idx < 0 {
@@ -3431,7 +3406,6 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
                 return -1;
             };
 
-            let mut param_type: i32 = type_code_i32();
             let mut matched_bool: bool = false;
             if param_parse_idx + 4 <= input_len {
                 let b_char: i32 = peek_byte(input_ptr, input_len, param_parse_idx);
@@ -3439,12 +3413,13 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
                     let o_char: i32 = peek_byte(input_ptr, input_len, param_parse_idx + 1);
                     let o2_char: i32 = peek_byte(input_ptr, input_len, param_parse_idx + 2);
                     let l_char: i32 = peek_byte(input_ptr, input_len, param_parse_idx + 3);
+                    let after_bool: i32 = param_parse_idx + 4;
                     if o_char == 111 && o2_char == 111 && l_char == 108 {
-                        let after_bool: i32 = param_parse_idx + 4;
-                        if after_bool == input_len || !is_identifier_continue(peek_byte(input_ptr, input_len, after_bool)) {
+                        if after_bool == input_len
+                            || !is_identifier_continue(peek_byte(input_ptr, input_len, after_bool))
+                        {
                             param_parse_idx = after_bool;
                             matched_bool = true;
-                            param_type = type_code_bool();
                         };
                     };
                 };
@@ -3454,18 +3429,8 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
                 if param_parse_idx < 0 {
                     return -1;
                 };
-                param_type = type_code_i32();
             };
 
-            locals_store_entry(
-                locals_base,
-                locals_count_ptr,
-                name_start,
-                name_len,
-                param_count,
-                false,
-                param_type
-            );
             param_count = param_count + 1;
 
             param_parse_idx = skip_whitespace(input_ptr, input_len, param_parse_idx);
@@ -3474,17 +3439,7 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
             };
             let delimiter: i32 = peek_byte(input_ptr, input_len, param_parse_idx);
             if delimiter == 44 {
-                let mut after_comma: i32 =
-                    skip_whitespace(input_ptr, input_len, param_parse_idx + 1);
-                if after_comma >= input_len {
-                    return -1;
-                };
-                let next_token: i32 = peek_byte(input_ptr, input_len, after_comma);
-                if next_token == 41 {
-                    param_parse_idx = after_comma + 1;
-                    break;
-                };
-                param_parse_idx = after_comma;
+                param_parse_idx = skip_whitespace(input_ptr, input_len, param_parse_idx + 1);
                 continue;
             };
             if delimiter == 41 {
@@ -3516,9 +3471,11 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
                 let o_char: i32 = peek_byte(input_ptr, input_len, offset + 1);
                 let o2_char: i32 = peek_byte(input_ptr, input_len, offset + 2);
                 let l_char: i32 = peek_byte(input_ptr, input_len, offset + 3);
+                let after_bool: i32 = offset + 4;
                 if o_char == 111 && o2_char == 111 && l_char == 108 {
-                    let after_bool: i32 = offset + 4;
-                    if after_bool == input_len || !is_identifier_continue(peek_byte(input_ptr, input_len, after_bool)) {
+                    if after_bool == input_len
+                        || !is_identifier_continue(peek_byte(input_ptr, input_len, after_bool))
+                    {
                         offset = after_bool;
                         matched_return = true;
                         return_type = 1;
@@ -3536,6 +3493,315 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
         store_i32(entry + 24, return_type);
         if is_main {
             if return_type != 0 {
+                return -1;
+            };
+        };
+
+        offset = skip_whitespace(input_ptr, input_len, offset);
+        offset = expect_char(input_ptr, input_len, offset, 123);
+        if offset < 0 {
+            return -1;
+        };
+        store_i32(entry + 28, offset);
+
+        let mut depth: i32 = 1;
+        let mut scan_offset: i32 = offset;
+        loop {
+            if scan_offset >= input_len {
+                return -1;
+            };
+            let ch: i32 = peek_byte(input_ptr, input_len, scan_offset);
+            scan_offset = scan_offset + 1;
+            if ch == 123 {
+                depth = depth + 1;
+                continue;
+            };
+            if ch == 125 {
+                depth = depth - 1;
+                if depth == 0 {
+                    break;
+                };
+                continue;
+            };
+        };
+        offset = scan_offset;
+    };
+
+    main_index
+}
+
+fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
+    if input_len == 0 {
+        return -1;
+    };
+
+    let instr_offset_ptr: i32 = out_ptr + 4096;
+    store_i32(instr_offset_ptr, 0);
+    let instr_base: i32 = out_ptr + 8192;
+    let expr_type_ptr: i32 = out_ptr + 4092;
+    store_i32(expr_type_ptr, -1);
+    let locals_count_ptr: i32 = out_ptr + 12280;
+    let locals_base: i32 = out_ptr + 12288;
+    let control_stack_count_ptr: i32 = out_ptr + 16384;
+    let control_stack_base: i32 = out_ptr + 16388;
+    let functions_count_ptr: i32 = out_ptr + 40952;
+    let functions_base: i32 = out_ptr + 40960;
+    store_i32(functions_count_ptr, 0);
+
+    let main_index: i32 = register_function_signatures(
+        input_ptr,
+        input_len,
+        functions_base,
+        functions_count_ptr,
+    );
+    if main_index < 0 {
+        return -1;
+    };
+
+    let func_count: i32 = load_i32(functions_count_ptr);
+    if func_count <= 0 {
+        return -1;
+    };
+
+    let mut offset: i32 = 0;
+    let mut compiled_index: i32 = 0;
+
+    loop {
+        offset = skip_whitespace(input_ptr, input_len, offset);
+        if offset >= input_len {
+            break;
+        };
+
+        offset = expect_keyword_fn(input_ptr, input_len, offset);
+        if offset < 0 {
+            return -1;
+        };
+
+        if offset >= input_len {
+            return -1;
+        };
+        let after_fn_byte: i32 = peek_byte(input_ptr, input_len, offset);
+        if after_fn_byte < 0 || !is_whitespace(after_fn_byte) {
+            return -1;
+        };
+        offset = skip_whitespace(input_ptr, input_len, offset);
+        if offset >= input_len {
+            return -1;
+        };
+
+        let name_start: i32 = offset;
+        let mut name_len: i32 = 0;
+        loop {
+            if offset >= input_len {
+                break;
+            };
+            let ch: i32 = peek_byte(input_ptr, input_len, offset);
+            if name_len == 0 {
+                if !is_identifier_start(ch) {
+                    break;
+                };
+            } else if !is_identifier_continue(ch) {
+                break;
+            };
+            name_len = name_len + 1;
+            offset = offset + 1;
+        };
+        if name_len == 0 {
+            return -1;
+        };
+
+        if compiled_index >= func_count {
+            return -1;
+        };
+        let entry: i32 = functions_entry(functions_base, compiled_index);
+        let stored_start: i32 = load_i32(entry);
+        let stored_len: i32 = load_i32(entry + 4);
+        if stored_start != name_start || stored_len != name_len {
+            return -1;
+        };
+
+        let is_main: bool = compiled_index == main_index;
+
+        store_i32(locals_count_ptr, 0);
+
+        offset = skip_whitespace(input_ptr, input_len, offset);
+        offset = expect_char(input_ptr, input_len, offset, 40);
+        if offset < 0 {
+            return -1;
+        };
+
+        let mut param_parse_idx: i32 = skip_whitespace(input_ptr, input_len, offset);
+        let mut param_count: i32 = 0;
+        let expected_param_count: i32 = load_i32(entry + 8);
+        loop {
+            if param_parse_idx >= input_len {
+                return -1;
+            };
+            let next_byte: i32 = peek_byte(input_ptr, input_len, param_parse_idx);
+            if next_byte == 41 {
+                param_parse_idx = param_parse_idx + 1;
+                break;
+            };
+
+            let param_name_start: i32 = param_parse_idx;
+            let mut param_name_len: i32 = 0;
+            loop {
+                if param_parse_idx >= input_len {
+                    break;
+                };
+                let ch: i32 = peek_byte(input_ptr, input_len, param_parse_idx);
+                if param_name_len == 0 {
+                    if !is_identifier_start(ch) {
+                        break;
+                    };
+                } else if !is_identifier_continue(ch) {
+                    break;
+                };
+                param_name_len = param_name_len + 1;
+                param_parse_idx = param_parse_idx + 1;
+            };
+            if param_name_len == 0 {
+                return -1;
+            };
+
+            let existing_param: i32 = locals_find(
+                input_ptr,
+                input_len,
+                locals_base,
+                locals_count_ptr,
+                param_name_start,
+                param_name_len,
+            );
+            if existing_param >= 0 {
+                return -1;
+            };
+
+            param_parse_idx = skip_whitespace(input_ptr, input_len, param_parse_idx);
+            param_parse_idx = expect_char(input_ptr, input_len, param_parse_idx, 58);
+            if param_parse_idx < 0 {
+                return -1;
+            };
+
+            param_parse_idx = skip_whitespace(input_ptr, input_len, param_parse_idx);
+            if param_parse_idx >= input_len {
+                return -1;
+            };
+
+            let mut param_type: i32 = type_code_i32();
+            let mut matched_bool: bool = false;
+            if param_parse_idx + 4 <= input_len {
+                let b_char: i32 = peek_byte(input_ptr, input_len, param_parse_idx);
+                if b_char == 98 {
+                    let o_char: i32 = peek_byte(input_ptr, input_len, param_parse_idx + 1);
+                    let o2_char: i32 = peek_byte(input_ptr, input_len, param_parse_idx + 2);
+                    let l_char: i32 = peek_byte(input_ptr, input_len, param_parse_idx + 3);
+                    if o_char == 111 && o2_char == 111 && l_char == 108 {
+                        let after_bool: i32 = param_parse_idx + 4;
+                        if after_bool == input_len
+                            || !is_identifier_continue(peek_byte(input_ptr, input_len, after_bool))
+                        {
+                            param_parse_idx = after_bool;
+                            matched_bool = true;
+                            param_type = type_code_bool();
+                        };
+                    };
+                };
+            };
+            if !matched_bool {
+                param_parse_idx = expect_keyword_i32(input_ptr, input_len, param_parse_idx);
+                if param_parse_idx < 0 {
+                    return -1;
+                };
+                param_type = type_code_i32();
+            };
+
+            locals_store_entry(
+                locals_base,
+                locals_count_ptr,
+                param_name_start,
+                param_name_len,
+                param_count,
+                false,
+                param_type,
+            );
+            param_count = param_count + 1;
+
+            param_parse_idx = skip_whitespace(input_ptr, input_len, param_parse_idx);
+            if param_parse_idx >= input_len {
+                return -1;
+            };
+            let delimiter: i32 = peek_byte(input_ptr, input_len, param_parse_idx);
+            if delimiter == 44 {
+                let mut after_comma: i32 =
+                    skip_whitespace(input_ptr, input_len, param_parse_idx + 1);
+                if after_comma >= input_len {
+                    return -1;
+                };
+                let next_token: i32 = peek_byte(input_ptr, input_len, after_comma);
+                if next_token == 41 {
+                    param_parse_idx = after_comma + 1;
+                    break;
+                };
+                param_parse_idx = after_comma;
+                continue;
+            };
+            if delimiter == 41 {
+                param_parse_idx = param_parse_idx + 1;
+                break;
+            };
+            return -1;
+        };
+
+        store_i32(entry + 8, param_count);
+        if param_count != expected_param_count {
+            return -1;
+        };
+        offset = param_parse_idx;
+
+        offset = skip_whitespace(input_ptr, input_len, offset);
+        offset = expect_char(input_ptr, input_len, offset, 45);
+        if offset < 0 {
+            return -1;
+        };
+        offset = expect_char(input_ptr, input_len, offset, 62);
+        if offset < 0 {
+            return -1;
+        };
+        offset = skip_whitespace(input_ptr, input_len, offset);
+
+        let expected_return: i32 = load_i32(entry + 24);
+        let mut return_type: i32 = type_code_i32();
+        let mut matched_return: bool = false;
+        if offset + 4 <= input_len {
+            let b_char: i32 = peek_byte(input_ptr, input_len, offset);
+            if b_char == 98 {
+                let o_char: i32 = peek_byte(input_ptr, input_len, offset + 1);
+                let o2_char: i32 = peek_byte(input_ptr, input_len, offset + 2);
+                let l_char: i32 = peek_byte(input_ptr, input_len, offset + 3);
+                if o_char == 111 && o2_char == 111 && l_char == 108 {
+                    let after_bool: i32 = offset + 4;
+                    if after_bool == input_len
+                        || !is_identifier_continue(peek_byte(input_ptr, input_len, after_bool))
+                    {
+                        offset = after_bool;
+                        matched_return = true;
+                        return_type = type_code_bool();
+                    };
+                };
+            };
+        };
+        if !matched_return {
+            offset = expect_keyword_i32(input_ptr, input_len, offset);
+            if offset < 0 {
+                return -1;
+            };
+            return_type = type_code_i32();
+        };
+        if return_type != expected_return {
+            return -1;
+        };
+        if is_main {
+            if return_type != type_code_i32() {
                 return -1;
             };
         };
@@ -3582,7 +3848,7 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
                 control_stack_count_ptr,
                 functions_base,
                 functions_count_ptr,
-            expr_type_ptr
+                expr_type_ptr,
             );
             if stmt_offset >= 0 {
                 current_offset = stmt_offset;
@@ -3607,7 +3873,7 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
                 control_stack_count_ptr,
                 functions_base,
                 functions_count_ptr,
-            expr_type_ptr
+                expr_type_ptr,
             );
             if expr_offset < 0 {
                 return -1;
@@ -3633,24 +3899,20 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
         store_i32(entry + 16, code_len);
 
         let total_locals: i32 = load_i32(locals_count_ptr);
-        let stored_params: i32 = load_i32(entry + 8);
-        if total_locals < stored_params {
+        if total_locals < param_count {
             return -1;
         };
-        let local_count: i32 = total_locals - stored_params;
+        let local_count: i32 = total_locals - param_count;
         store_i32(entry + 20, local_count);
+
+        compiled_index = compiled_index + 1;
     };
 
     offset = skip_whitespace(input_ptr, input_len, offset);
     if offset != input_len {
         return -1;
     };
-
-    let func_count: i32 = load_i32(functions_count_ptr);
-    if func_count <= 0 {
-        return -1;
-    };
-    if main_index < 0 {
+    if compiled_index != func_count {
         return -1;
     };
 
@@ -3660,7 +3922,7 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
         functions_base,
         func_count,
         input_ptr,
-        input_len
+        input_len,
     )
 }
 
