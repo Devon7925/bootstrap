@@ -1,13 +1,11 @@
 use std::fs;
 
 use bootstrap::compile;
-use bootstrap::lexer::Lexer;
-use bootstrap::parser::Parser;
 
 #[path = "wasm_harness.rs"]
 mod wasm_harness;
 
-use wasm_harness::{CompileFailure, CompilerInstance};
+use wasm_harness::{run_wasm_main, CompilerInstance};
 
 fn prepare_stage1_compiler() -> (CompilerInstance, String) {
     let stage1_source =
@@ -37,63 +35,63 @@ fn stage1_output_ptr(compiler: &CompilerInstance) -> i32 {
 }
 
 #[test]
-fn stage1_compiler_identifies_remaining_bootstrap_blocker() {
+fn stage1_compiler_bootstraps_stage2() {
     let (mut stage1, stage1_source) = prepare_stage1_compiler();
-    let output_ptr = stage1_output_ptr(&stage1);
+    let stage1_output_address = stage1_output_ptr(&stage1);
     assert!(
-        stage1_source.len() < output_ptr as usize,
-        "stage1 source must not overlap output buffer"
+        stage1_source.len() < stage1_output_address as usize,
+        "stage1 source must not overlap output buffer",
     );
 
     // Compile the stage1 source with the stage1 compiler itself to produce stage2.
-    let result = stage1.compile_at(0, output_ptr, &stage1_source);
-    match result {
-        Ok(_) => {
-            panic!("stage1 unexpectedly compiled itself without encountering bootstrap blockers")
-        }
-        Err(CompileFailure {
-            produced_len,
-            functions,
-            instr_offset,
-            compiled_functions,
-        }) => {
-            eprintln!(
-                "stage2 blocker debug: produced_len={produced_len} functions={functions} instr_offset={instr_offset} compiled_functions={compiled_functions}"
-            );
-            assert_eq!(produced_len, -1);
-            assert!(
-                instr_offset > 0,
-                "stage1 should advance code generation before failing"
-            );
-            assert_eq!(
-                compiled_functions, 117,
-                "stage1 currently stops compiling at function index 117"
-            );
+    let stage2_wasm = stage1
+        .compile_at(0, stage1_output_address, &stage1_source)
+        .expect("stage1 should compile itself and produce stage2");
 
-            let tokens = Lexer::new(&stage1_source)
-                .collect::<Result<Vec<_>, _>>()
-                .expect("lex stage1 source");
-            let mut parser = Parser::new(&tokens, &stage1_source);
-            let program = parser.parse_program().expect("parse stage1 source");
-            let total_functions = program.functions.len() as i32;
+    // Ensure stage2 can be instantiated and compile the stage1 source again.
+    let mut stage2 = CompilerInstance::new(&stage2_wasm);
+    let stage2_output_address = stage1_output_ptr(&stage2);
+    assert!(
+        stage1_source.len() < stage2_output_address as usize,
+        "stage2 output buffer must accommodate stage1 source",
+    );
+    let stage3_wasm = stage2
+        .compile_at(0, stage2_output_address, &stage1_source)
+        .expect("stage2 should compile the stage1 source");
 
-            assert!(functions > 0, "expected to register at least one function");
-            assert_eq!(
-                functions, total_functions,
-                "expected to register all functions"
-            );
+    // Stage3 should be a fully functional compiler capable of compiling user
+    // programs. Compile a small program and execute it to verify the output.
+    let mut stage3 = CompilerInstance::new(&stage3_wasm);
+    let stage3_output_address = stage1_output_ptr(&stage3);
+    let sample_program = r#"
+fn main() -> i32 {
+    let mut total: i32 = 0;
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= 5 {
+            break;
+        };
+        total = total + idx;
+        idx = idx + 1;
+    };
+    total
+}
+"#;
+    assert!(
+        sample_program.len() < stage3_output_address as usize,
+        "sample program must fit in stage3 output buffer",
+    );
+    let sample_wasm = stage3
+        .compile_at(0, stage3_output_address, sample_program)
+        .expect("stage3 should compile sample program");
 
-            let failing_function = &program.functions[compiled_functions as usize];
-            assert_eq!(
-                failing_function.name, "register_function_signatures",
-                "stage1 now fails while compiling register_function_signatures (function responsible for collecting all function signatures)"
-            );
-        }
-    }
+    assert_eq!(
+        run_wasm_main(stage3.engine(), &sample_wasm),
+        10,
+        "compiled sample program should execute correctly",
+    );
 }
 
-// When stage1 fails we report the first function that still needs code generation
-// support in order to reach full stage2 bootstrapping.
 
 #[test]
 fn stage1_compiler_accepts_break_with_value_statements() {
