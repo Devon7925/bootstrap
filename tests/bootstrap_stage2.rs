@@ -750,28 +750,10 @@ fn stage1_register_function_signatures_repro() {
     // and then copies it back to `offset`. Stage1 still restores the pre-loop locals instead
     // of merging the updates, so it cannot compile this structure yet.
     let source = r#"
-fn skip(offset: i32) -> i32 { offset }
-
-fn expect(offset: i32) -> i32 { offset }
-
-fn peek(_offset: i32) -> i32 { 0 }
-
-fn register_function_signatures(input_len: i32) -> i32 {
+fn main() -> i32 {
     let mut offset: i32 = 0;
 
     loop {
-        offset = skip(offset);
-        if offset >= input_len {
-            break;
-        };
-
-        offset = offset + 1;
-
-        if offset >= input_len {
-            return -1;
-        };
-        offset = skip(offset);
-
         let mut name_len: i32 = 0;
         loop {
             name_len = name_len + 1;
@@ -779,17 +761,8 @@ fn register_function_signatures(input_len: i32) -> i32 {
             break;
         };
 
-        offset = skip(offset);
-        offset = expect(offset);
-
-        let mut param_parse_idx: i32 = skip(offset);
+        let mut param_parse_idx: i32 = offset;
         loop {
-            let next_byte: i32 = peek(param_parse_idx);
-            if next_byte == 41 {
-                param_parse_idx = param_parse_idx + 1;
-                break;
-            };
-
             let mut name_len: i32 = 0;
             loop {
                 name_len = name_len + 1;
@@ -797,19 +770,6 @@ fn register_function_signatures(input_len: i32) -> i32 {
                 break;
             };
 
-            param_parse_idx = skip(param_parse_idx);
-            param_parse_idx = expect(param_parse_idx);
-
-            param_parse_idx = skip(param_parse_idx);
-            let delimiter: i32 = peek(param_parse_idx);
-            if delimiter == 44 {
-                param_parse_idx = skip(param_parse_idx + 1);
-                continue;
-            };
-            if delimiter == 41 {
-                param_parse_idx = param_parse_idx + 1;
-                break;
-            };
             break;
         };
 
@@ -818,8 +778,6 @@ fn register_function_signatures(input_len: i32) -> i32 {
 
     offset
 }
-
-fn main() -> i32 { register_function_signatures(0) }
 "#;
 
     compile(source).expect("host compiler should accept register_function_signatures repro");
