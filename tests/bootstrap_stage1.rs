@@ -1,23 +1,16 @@
-use std::fs;
-
-use bootstrap::compile;
-
 #[path = "wasm_harness.rs"]
 mod wasm_harness;
 
 use wasm_harness::{CompilerInstance, run_wasm_main};
 
+#[path = "stage1_helpers.rs"]
+mod stage1_helpers;
+
+use stage1_helpers::stage1_wasm;
+
 fn prepare_stage1_compiler() -> (CompilerInstance, usize, i32) {
-    let source =
-        fs::read_to_string("examples/stage1_minimal.bp").expect("failed to load stage1 source");
-
-    let stage1_compilation = compile(&source).expect("failed to compile stage1 source");
-    let stage1_wasm = stage1_compilation
-        .to_wasm()
-        .expect("failed to encode stage1 wasm");
-
     (
-        CompilerInstance::new(stage1_wasm.as_slice()),
+        CompilerInstance::new(stage1_wasm()),
         0usize,
         1024i32,
     )

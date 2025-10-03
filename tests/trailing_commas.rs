@@ -1,5 +1,3 @@
-use std::fs;
-
 use bootstrap::compile;
 use wasmi::{Engine, Linker, Module, Store, TypedFunc};
 
@@ -7,6 +5,11 @@ use wasmi::{Engine, Linker, Module, Store, TypedFunc};
 mod wasm_harness;
 
 use wasm_harness::{CompilerInstance, run_wasm_main};
+
+#[path = "stage1_helpers.rs"]
+mod stage1_helpers;
+
+use stage1_helpers::stage1_wasm;
 
 #[test]
 fn trailing_commas_in_params_and_calls_are_accepted() {
@@ -48,15 +51,7 @@ fn main() -> i32 {
 
 #[test]
 fn stage1_compiler_accepts_trailing_commas() {
-    let stage1_source =
-        fs::read_to_string("examples/stage1_minimal.bp").expect("failed to load stage1 source");
-
-    let stage1_compilation = compile(&stage1_source).expect("failed to compile stage1 source");
-    let stage1_wasm = stage1_compilation
-        .to_wasm()
-        .expect("failed to encode stage1 wasm");
-
-    let mut compiler = CompilerInstance::new(stage1_wasm.as_slice());
+    let mut compiler = CompilerInstance::new(stage1_wasm());
 
     let mut input_cursor = 0usize;
     let mut output_cursor = 1024i32;
