@@ -514,7 +514,13 @@ fn locals_store_entry(
     };
     store_i32(entry + 12, mut_flag);
     store_i32(entry + 16, ty);
-    store_i32(locals_count_ptr, entry_index + 1);
+    let new_count: i32 = entry_index + 1;
+    store_i32(locals_count_ptr, new_count);
+    let locals_max_ptr: i32 = locals_count_ptr - 4;
+    let current_max: i32 = load_i32(locals_max_ptr);
+    if new_count > current_max {
+        store_i32(locals_max_ptr, new_count);
+    };
 }
 
 fn locals_is_mutable(locals_base: i32, entry_index: i32) -> bool {
@@ -2751,19 +2757,23 @@ fn parse_loop_statement(
     functions_count_ptr: i32,
     expr_type_ptr: i32
 ) -> i32 {
+    let saved_locals_count: i32 = load_i32(locals_count_ptr);
     let mut idx: i32 = expect_keyword_loop(base, len, offset);
     if idx < 0 {
+        store_i32(locals_count_ptr, saved_locals_count);
         return -1;
     };
     if idx < len {
         let after_byte: i32 = peek_byte(base, len, idx);
         if after_byte != 123 && !is_whitespace(after_byte) {
+            store_i32(locals_count_ptr, saved_locals_count);
             return -1;
         };
     };
     idx = skip_whitespace(base, len, idx);
     idx = expect_char(base, len, idx, 123);
     if idx < 0 {
+        store_i32(locals_count_ptr, saved_locals_count);
         return -1;
     };
 
@@ -2794,6 +2804,7 @@ fn parse_loop_statement(
         if current_offset >= len {
             store_i32(instr_offset_ptr, saved_instr_offset);
             store_i32(control_stack_count_ptr, saved_control_len);
+            store_i32(locals_count_ptr, saved_locals_count);
             return -1;
         };
         let current_byte: i32 = peek_byte(base, len, current_offset);
@@ -2818,6 +2829,7 @@ fn parse_loop_statement(
         if stmt_offset < 0 {
             store_i32(instr_offset_ptr, saved_instr_offset);
             store_i32(control_stack_count_ptr, saved_control_len);
+            store_i32(locals_count_ptr, saved_locals_count);
             return -1;
         };
         current_offset = stmt_offset;
@@ -2833,12 +2845,14 @@ fn parse_loop_statement(
     if popped_continue != control_kind_loop_continue() {
         store_i32(instr_offset_ptr, saved_instr_offset);
         store_i32(control_stack_count_ptr, saved_control_len);
+        store_i32(locals_count_ptr, saved_locals_count);
         return -1;
     };
     let popped_break: i32 = control_stack_pop(control_stack_base, control_stack_count_ptr);
     if popped_break != control_kind_loop_break() {
         store_i32(instr_offset_ptr, saved_instr_offset);
         store_i32(control_stack_count_ptr, saved_control_len);
+        store_i32(locals_count_ptr, saved_locals_count);
         return -1;
     };
 
@@ -2849,6 +2863,8 @@ fn parse_loop_statement(
             after_loop = after_loop + 1;
         };
     };
+
+    store_i32(locals_count_ptr, saved_locals_count);
 
     after_loop
 }
@@ -2867,19 +2883,23 @@ fn parse_loop_expression(
     functions_count_ptr: i32,
     expr_type_ptr: i32
 ) -> i32 {
+    let saved_locals_count: i32 = load_i32(locals_count_ptr);
     let mut idx: i32 = expect_keyword_loop(base, len, offset);
     if idx < 0 {
+        store_i32(locals_count_ptr, saved_locals_count);
         return -1;
     };
     if idx < len {
         let after_byte: i32 = peek_byte(base, len, idx);
         if after_byte != 123 && !is_whitespace(after_byte) {
+            store_i32(locals_count_ptr, saved_locals_count);
             return -1;
         };
     };
     idx = skip_whitespace(base, len, idx);
     idx = expect_char(base, len, idx, 123);
     if idx < 0 {
+        store_i32(locals_count_ptr, saved_locals_count);
         return -1;
     };
 
@@ -2910,6 +2930,7 @@ fn parse_loop_expression(
         if current_offset >= len {
             store_i32(instr_offset_ptr, saved_instr_offset);
             store_i32(control_stack_count_ptr, saved_control_len);
+            store_i32(locals_count_ptr, saved_locals_count);
             return -1;
         };
         let current_byte: i32 = peek_byte(base, len, current_offset);
@@ -2934,6 +2955,7 @@ fn parse_loop_expression(
         if stmt_offset < 0 {
             store_i32(instr_offset_ptr, saved_instr_offset);
             store_i32(control_stack_count_ptr, saved_control_len);
+            store_i32(locals_count_ptr, saved_locals_count);
             return -1;
         };
         current_offset = stmt_offset;
@@ -2953,6 +2975,7 @@ fn parse_loop_expression(
     if break_depth < 0 {
         store_i32(instr_offset_ptr, saved_instr_offset);
         store_i32(control_stack_count_ptr, saved_control_len);
+        store_i32(locals_count_ptr, saved_locals_count);
         return -1;
     };
     let result_type: i32 = control_stack_type_at_depth(
@@ -2963,6 +2986,7 @@ fn parse_loop_expression(
     if result_type == control_type_none() {
         store_i32(instr_offset_ptr, saved_instr_offset);
         store_i32(control_stack_count_ptr, saved_control_len);
+        store_i32(locals_count_ptr, saved_locals_count);
         return -1;
     };
     set_expr_type(expr_type_ptr, result_type);
@@ -2971,16 +2995,20 @@ fn parse_loop_expression(
     if popped_continue != control_kind_loop_continue() {
         store_i32(instr_offset_ptr, saved_instr_offset);
         store_i32(control_stack_count_ptr, saved_control_len);
+        store_i32(locals_count_ptr, saved_locals_count);
         return -1;
     };
     let popped_break: i32 = control_stack_pop(control_stack_base, control_stack_count_ptr);
     if popped_break != control_kind_loop_break_value() {
         store_i32(instr_offset_ptr, saved_instr_offset);
         store_i32(control_stack_count_ptr, saved_control_len);
+        store_i32(locals_count_ptr, saved_locals_count);
         return -1;
     };
 
     let after_loop: i32 = skip_whitespace(base, len, current_offset);
+
+    store_i32(locals_count_ptr, saved_locals_count);
 
     after_loop
 }
@@ -3407,15 +3435,18 @@ fn parse_block_statements(
     functions_count_ptr: i32,
     expr_type_ptr: i32
 ) -> i32 {
+    let saved_locals: i32 = load_i32(locals_count_ptr);
     let mut idx: i32 = offset;
+    let mut result: i32 = -1;
     loop {
         idx = skip_whitespace(base, len, idx);
         if idx >= len {
-            break -1;
+            break;
         };
         let byte: i32 = peek_byte(base, len, idx);
         if byte == 125 {
-            break idx + 1;
+            result = idx + 1;
+            break;
         };
         let next_idx: i32 = parse_statement(
             base,
@@ -3432,10 +3463,12 @@ fn parse_block_statements(
             expr_type_ptr
             );
         if next_idx < 0 {
-            break -1;
+            break;
         };
         idx = next_idx;
-    }
+    };
+    store_i32(locals_count_ptr, saved_locals);
+    result
 }
 
 fn parse_block_expression(
@@ -3452,16 +3485,17 @@ fn parse_block_expression(
     functions_count_ptr: i32,
     expr_type_ptr: i32
 ) -> i32 {
+    let saved_locals: i32 = load_i32(locals_count_ptr);
     let mut current_offset: i32 = offset;
     let mut result_offset: i32 = -1;
     loop {
         current_offset = skip_whitespace(base, len, current_offset);
         if current_offset >= len {
-            return -1;
+            break;
         };
         let current_byte: i32 = peek_byte(base, len, current_offset);
         if current_byte == 125 {
-            return -1;
+            break;
         };
         let prev_instr_offset: i32 = load_i32(instr_offset_ptr);
         let stmt_offset: i32 = parse_statement(
@@ -3483,7 +3517,7 @@ fn parse_block_expression(
             continue;
         };
         if stmt_offset != -1 {
-            return -1;
+            break;
         };
         store_i32(instr_offset_ptr, prev_instr_offset);
         let expr_offset: i32 = parse_expression(
@@ -3501,17 +3535,17 @@ fn parse_block_expression(
             expr_type_ptr
             );
         if expr_offset < 0 {
-            return -1;
+            break;
         };
         let mut after_expr: i32 = skip_whitespace(base, len, expr_offset);
         after_expr = expect_char(base, len, after_expr, 125);
         if after_expr < 0 {
-            return -1;
+            break;
         };
         result_offset = after_expr;
         break;
-    }
-
+    };
+    store_i32(locals_count_ptr, saved_locals);
     result_offset
 }
 
@@ -4484,6 +4518,8 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
     let instr_base: i32 = out_ptr + 8192;
     let expr_type_ptr: i32 = out_ptr + 4092;
     store_i32(expr_type_ptr, -1);
+    let locals_max_ptr: i32 = out_ptr + 12276;
+    store_i32(locals_max_ptr, 0);
     let locals_count_ptr: i32 = out_ptr + 12280;
     let locals_base: i32 = out_ptr + 12288;
     let control_stack_count_ptr: i32 = out_ptr + 16384;
@@ -4569,6 +4605,7 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
         let is_main: bool = compiled_index == main_index;
 
         store_i32(locals_count_ptr, 0);
+        store_i32(locals_max_ptr, 0);
 
         offset = skip_whitespace(input_ptr, input_len, offset);
         offset = expect_char(input_ptr, input_len, offset, 40);
@@ -4860,7 +4897,7 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
         store_i32(entry + 12, start_instr);
         store_i32(entry + 16, code_len);
 
-        let total_locals: i32 = load_i32(locals_count_ptr);
+        let total_locals: i32 = load_i32(locals_max_ptr);
         if total_locals < param_count {
             return -1;
         };
