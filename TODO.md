@@ -8,16 +8,14 @@
   The concept specifies that string constants should become local byte arrays, but stage1 currently lacks any parsing for quoted literals. Teaching the tokenizer and expression lowering to recognize strings and materialize them as `u8` arrays would align the implementation with the design.
   *Reference:* String constant rule【F:concept.md†L31-L31】, absence of string literal handling in stage1 (no quoted literal parsing)【258989†L1-L2】
 
-- [x] **Parse and register `type` definitions in stage1**
-  Treating types as constant values requires a place to declare them, but the stage1 compiler presently scans only `fn` items. Allowing `type` aliases (e.g., `type Bytes = Array<u8, N>;`) to be recorded before function compilation would start building the infrastructure for type-level programming without affecting existing codegen.
-  *Reference:* Type-as-constant goal【F:concept.md†L10-L13】, function-only parser loop【F:compiler/stage1.bp†L4580-L4619】
-  *Status:* Stage1 now scans `type` aliases before functions, records their source spans in a dedicated table, and verifies the metadata while compiling function bodies.
-
 - [ ] **Factor stage1 parsing into reusable helpers**
   The parser in stage1 inlines keyword matching, delimiter handling, and whitespace skipping at every call site, making the 5k+ line file hard to follow and extend. Extracting reusable helpers for repeated loops (parameter lists, return types, block scanning) would shrink the `compile` pipeline and clarify control flow.
   *Reference:* Repeated ad-hoc parsing logic inside `compile`【F:compiler/stage1.bp†L4560-L4662】
 
-- [x] **Centralize stage1 memory layout constants**
-  The `compile` routine hand-computes offsets like `out_ptr + 4096` and `instr_base + instr_capacity - 12` each time, obscuring the intent of the scratch buffer layout. Introducing named constants or a small struct to manage these regions would make the code self-documenting and reduce arithmetic mistakes when the layout changes.
-  *Reference:* Hard-coded scratch buffer offsets in `compile`【F:compiler/stage1.bp†L4665-L4679】
-  *Status:* Introduced helper functions encapsulating scratch buffer offsets and capacities so `compile` no longer performs manual offset arithmetic.
+- [ ] **Introduce `SourceCursor` helpers for stage1 parser**
+  Stage1 threads the `base`, `len`, and index triplet through nearly every parsing function, reapplying whitespace skipping and byte peeks manually. Creating a lightweight cursor struct with methods for advancing, peeking, and matching delimiters would reduce parameter lists and make control flow clearer.
+  *Reference:* Parsing functions repeatedly pass `base`, `len`, and `idx` while chaining `skip_whitespace` and `expect_char` calls【F:compiler/stage1.bp†L4520-L4547】
+
+- [ ] **Centralize keyword recognition logic**
+  Detecting `type` and other keywords currently performs ad-hoc byte comparisons for each character before dispatching, leading to verbose and error-prone control flow. Providing a shared helper that validates reserved words and their boundaries would simplify loops that scan items during registration.
+  *Reference:* Manual `type` keyword detection compares individual bytes before calling `expect_keyword_type`【F:compiler/stage1.bp†L4564-L4598】
