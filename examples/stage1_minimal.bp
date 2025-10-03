@@ -59,6 +59,10 @@ fn emit_ne(base: i32, offset: i32) -> i32 {
     write_byte(base, offset, 71)
 }
 
+fn emit_drop(base: i32, offset: i32) -> i32 {
+    write_byte(base, offset, 26)
+}
+
 fn emit_lt(base: i32, offset: i32) -> i32 {
     write_byte(base, offset, 72)
 }
@@ -143,9 +147,35 @@ fn emit_store_i32(base: i32, offset: i32) -> i32 {
     out
 }
 
-fn control_stack_push(base: i32, len_ptr: i32, kind: i32) {
+fn control_kind_if() -> i32 {
+    1
+}
+
+fn control_kind_loop_continue() -> i32 {
+    2
+}
+
+fn control_kind_loop_break() -> i32 {
+    3
+}
+
+fn control_kind_loop_break_value() -> i32 {
+    4
+}
+
+fn control_type_none() -> i32 {
+    -1
+}
+
+fn control_stack_entry_offset(base: i32, index: i32) -> i32 {
+    base + index * 8
+}
+
+fn control_stack_push(base: i32, len_ptr: i32, kind: i32, value_type: i32) {
     let len: i32 = load_i32(len_ptr);
-    store_i32(base + len * 4, kind);
+    let entry: i32 = control_stack_entry_offset(base, len);
+    store_i32(entry, kind);
+    store_i32(entry + 4, value_type);
     store_i32(len_ptr, len + 1);
 }
 
@@ -156,7 +186,8 @@ fn control_stack_pop(base: i32, len_ptr: i32) -> i32 {
     };
     let new_len: i32 = len - 1;
     store_i32(len_ptr, new_len);
-    load_i32(base + new_len * 4)
+    let entry: i32 = control_stack_entry_offset(base, new_len);
+    load_i32(entry)
 }
 
 fn control_stack_find_depth(base: i32, len_ptr: i32, kind: i32) -> i32 {
@@ -169,8 +200,9 @@ fn control_stack_find_depth(base: i32, len_ptr: i32, kind: i32) -> i32 {
         if idx < 0 {
             break;
         };
-        let entry: i32 = load_i32(base + idx * 4);
-        if entry == kind {
+        let entry: i32 = control_stack_entry_offset(base, idx);
+        let entry_kind: i32 = load_i32(entry);
+        if entry_kind == kind {
             return len - 1 - idx;
         };
         idx = idx - 1;
@@ -178,16 +210,30 @@ fn control_stack_find_depth(base: i32, len_ptr: i32, kind: i32) -> i32 {
     -1
 }
 
-fn control_kind_if() -> i32 {
-    1
+fn control_stack_type_at_depth(base: i32, len_ptr: i32, depth: i32) -> i32 {
+    let len: i32 = load_i32(len_ptr);
+    if depth < 0 {
+        return -1;
+    };
+    let index: i32 = len - 1 - depth;
+    if index < 0 {
+        return -1;
+    };
+    let entry: i32 = control_stack_entry_offset(base, index);
+    load_i32(entry + 4)
 }
 
-fn control_kind_loop_continue() -> i32 {
-    2
-}
-
-fn control_kind_loop_break() -> i32 {
-    3
+fn control_stack_set_type_at_depth(base: i32, len_ptr: i32, depth: i32, ty: i32) {
+    let len: i32 = load_i32(len_ptr);
+    if depth < 0 {
+        return;
+    };
+    let index: i32 = len - 1 - depth;
+    if index < 0 {
+        return;
+    };
+    let entry: i32 = control_stack_entry_offset(base, index);
+    store_i32(entry + 4, ty);
 }
 
 fn intrinsic_kind_none() -> i32 {
@@ -1848,6 +1894,36 @@ fn parse_primary(
         };
     };
 
+    if head_byte == 108 {
+        if idx + 3 >= len {
+            return -1;
+        };
+        let second: i32 = peek_byte(base, len, idx + 1);
+        if second == 111 {
+            let third: i32 = peek_byte(base, len, idx + 2);
+            let fourth: i32 = peek_byte(base, len, idx + 3);
+            if third == 111 && fourth == 112 {
+                let after_keyword: i32 = idx + 4;
+                if after_keyword == len || !is_identifier_continue(peek_byte(base, len, after_keyword)) {
+                    return parse_loop_expression(
+                        base,
+                        len,
+                        idx,
+                        instr_base,
+                        instr_offset_ptr,
+                        locals_base,
+                        locals_count_ptr,
+                        control_stack_base,
+                        control_stack_count_ptr,
+                        functions_base,
+                        functions_count_ptr,
+                        expr_type_ptr
+                        );
+                };
+            };
+        };
+    };
+
     if head_byte == 40 {
         idx = idx + 1;
         let inner_idx: i32 = parse_expression(
@@ -2314,14 +2390,16 @@ fn parse_loop_statement(
     control_stack_push(
         control_stack_base,
         control_stack_count_ptr,
-        control_kind_loop_break()
+        control_kind_loop_break(),
+        control_type_none()
     );
     instr_offset = emit_loop_header(instr_base, instr_offset, 64);
     store_i32(instr_offset_ptr, instr_offset);
     control_stack_push(
         control_stack_base,
         control_stack_count_ptr,
-        control_kind_loop_continue()
+        control_kind_loop_continue(),
+        control_type_none()
     );
 
     let mut current_offset: i32 = idx;
@@ -2389,6 +2467,138 @@ fn parse_loop_statement(
     after_loop
 }
 
+fn parse_loop_expression(
+    base: i32,
+    len: i32,
+    offset: i32,
+    instr_base: i32,
+    instr_offset_ptr: i32,
+    locals_base: i32,
+    locals_count_ptr: i32,
+    control_stack_base: i32,
+    control_stack_count_ptr: i32,
+    functions_base: i32,
+    functions_count_ptr: i32,
+    expr_type_ptr: i32
+) -> i32 {
+    let mut idx: i32 = expect_keyword_loop(base, len, offset);
+    if idx < 0 {
+        return -1;
+    };
+    if idx < len {
+        let after_byte: i32 = peek_byte(base, len, idx);
+        if after_byte != 123 && !is_whitespace(after_byte) {
+            return -1;
+        };
+    };
+    idx = skip_whitespace(base, len, idx);
+    idx = expect_char(base, len, idx, 123);
+    if idx < 0 {
+        return -1;
+    };
+
+    let saved_instr_offset: i32 = load_i32(instr_offset_ptr);
+    let saved_control_len: i32 = load_i32(control_stack_count_ptr);
+
+    let mut instr_offset: i32 = saved_instr_offset;
+    instr_offset = emit_block(instr_base, instr_offset, 127);
+    store_i32(instr_offset_ptr, instr_offset);
+    control_stack_push(
+        control_stack_base,
+        control_stack_count_ptr,
+        control_kind_loop_break_value(),
+        control_type_none()
+    );
+    instr_offset = emit_loop_header(instr_base, instr_offset, 64);
+    store_i32(instr_offset_ptr, instr_offset);
+    control_stack_push(
+        control_stack_base,
+        control_stack_count_ptr,
+        control_kind_loop_continue(),
+        control_type_none()
+    );
+
+    let mut current_offset: i32 = idx;
+    loop {
+        current_offset = skip_whitespace(base, len, current_offset);
+        if current_offset >= len {
+            store_i32(instr_offset_ptr, saved_instr_offset);
+            store_i32(control_stack_count_ptr, saved_control_len);
+            return -1;
+        };
+        let current_byte: i32 = peek_byte(base, len, current_offset);
+        if current_byte == 125 {
+            current_offset = current_offset + 1;
+            break;
+        };
+        let stmt_offset: i32 = parse_statement(
+            base,
+            len,
+            current_offset,
+            instr_base,
+            instr_offset_ptr,
+            locals_base,
+            locals_count_ptr,
+            control_stack_base,
+            control_stack_count_ptr,
+            functions_base,
+            functions_count_ptr,
+            expr_type_ptr
+            );
+        if stmt_offset < 0 {
+            store_i32(instr_offset_ptr, saved_instr_offset);
+            store_i32(control_stack_count_ptr, saved_control_len);
+            return -1;
+        };
+        current_offset = stmt_offset;
+    };
+
+    let mut instr_offset_finish: i32 = load_i32(instr_offset_ptr);
+    instr_offset_finish = emit_br(instr_base, instr_offset_finish, 0);
+    instr_offset_finish = emit_end(instr_base, instr_offset_finish);
+    instr_offset_finish = emit_end(instr_base, instr_offset_finish);
+    store_i32(instr_offset_ptr, instr_offset_finish);
+
+    let break_depth: i32 = control_stack_find_depth(
+        control_stack_base,
+        control_stack_count_ptr,
+        control_kind_loop_break_value()
+    );
+    if break_depth < 0 {
+        store_i32(instr_offset_ptr, saved_instr_offset);
+        store_i32(control_stack_count_ptr, saved_control_len);
+        return -1;
+    };
+    let result_type: i32 = control_stack_type_at_depth(
+        control_stack_base,
+        control_stack_count_ptr,
+        break_depth
+    );
+    if result_type == control_type_none() {
+        store_i32(instr_offset_ptr, saved_instr_offset);
+        store_i32(control_stack_count_ptr, saved_control_len);
+        return -1;
+    };
+    set_expr_type(expr_type_ptr, result_type);
+
+    let popped_continue: i32 = control_stack_pop(control_stack_base, control_stack_count_ptr);
+    if popped_continue != control_kind_loop_continue() {
+        store_i32(instr_offset_ptr, saved_instr_offset);
+        store_i32(control_stack_count_ptr, saved_control_len);
+        return -1;
+    };
+    let popped_break: i32 = control_stack_pop(control_stack_base, control_stack_count_ptr);
+    if popped_break != control_kind_loop_break_value() {
+        store_i32(instr_offset_ptr, saved_instr_offset);
+        store_i32(control_stack_count_ptr, saved_control_len);
+        return -1;
+    };
+
+    let after_loop: i32 = skip_whitespace(base, len, current_offset);
+
+    after_loop
+}
+
 fn parse_break_statement(
     base: i32,
     len: i32,
@@ -2415,22 +2625,101 @@ fn parse_break_statement(
     };
     idx = skip_whitespace(base, len, idx);
 
-    let depth: i32 = control_stack_find_depth(
+    if idx >= len {
+        return -1;
+    };
+    let next_byte: i32 = peek_byte(base, len, idx);
+    if next_byte == 59 {
+        let depth: i32 = control_stack_find_depth(
+            control_stack_base,
+            control_stack_count_ptr,
+            control_kind_loop_break()
+        );
+        if depth < 0 {
+            return -1;
+        };
+        idx = expect_char(base, len, idx, 59);
+        if idx < 0 {
+            return -1;
+        };
+        let mut instr_offset: i32 = load_i32(instr_offset_ptr);
+        instr_offset = emit_br(instr_base, instr_offset, depth);
+        store_i32(instr_offset_ptr, instr_offset);
+        return idx;
+    };
+
+    let mut depth_value: i32 = control_stack_find_depth(
         control_stack_base,
         control_stack_count_ptr,
-        control_kind_loop_break()
+        control_kind_loop_break_value()
     );
-    if depth < 0 {
+    let mut should_record_type: bool = true;
+    let mut should_drop_value: bool = false;
+    if depth_value < 0 {
+        depth_value = control_stack_find_depth(
+            control_stack_base,
+            control_stack_count_ptr,
+            control_kind_loop_break()
+        );
+        if depth_value < 0 {
+            return -1;
+        };
+        should_record_type = false;
+        should_drop_value = true;
+    };
+
+    let saved_instr_offset: i32 = load_i32(instr_offset_ptr);
+    let expr_end: i32 = parse_expression(
+        base,
+        len,
+        idx,
+        instr_base,
+        instr_offset_ptr,
+        locals_base,
+        locals_count_ptr,
+        control_stack_base,
+        control_stack_count_ptr,
+        functions_base,
+        functions_count_ptr,
+        expr_type_ptr
+        );
+    if expr_end < 0 {
+        store_i32(instr_offset_ptr, saved_instr_offset);
         return -1;
     };
 
+    if should_record_type {
+        let value_type: i32 = get_expr_type(expr_type_ptr);
+        let stored_type: i32 = control_stack_type_at_depth(
+            control_stack_base,
+            control_stack_count_ptr,
+            depth_value
+        );
+        if stored_type == control_type_none() {
+            control_stack_set_type_at_depth(
+                control_stack_base,
+                control_stack_count_ptr,
+                depth_value,
+                value_type
+            );
+        } else if stored_type != value_type {
+            store_i32(instr_offset_ptr, saved_instr_offset);
+            return -1;
+        };
+    };
+
+    idx = skip_whitespace(base, len, expr_end);
     idx = expect_char(base, len, idx, 59);
     if idx < 0 {
+        store_i32(instr_offset_ptr, saved_instr_offset);
         return -1;
     };
 
     let mut instr_offset: i32 = load_i32(instr_offset_ptr);
-    instr_offset = emit_br(instr_base, instr_offset, depth);
+    if should_drop_value {
+        instr_offset = emit_drop(instr_base, instr_offset);
+    };
+    instr_offset = emit_br(instr_base, instr_offset, depth_value);
     store_i32(instr_offset_ptr, instr_offset);
 
     idx
@@ -2901,7 +3190,8 @@ fn parse_if_statement(
     control_stack_push(
         control_stack_base,
         control_stack_count_ptr,
-        control_kind_if()
+        control_kind_if(),
+        control_type_none()
     );
 
     let mut after_block: i32 = parse_block_statements(
@@ -3095,7 +3385,8 @@ fn parse_if_expression(
     control_stack_push(
         control_stack_base,
         control_stack_count_ptr,
-        control_kind_if()
+        control_kind_if(),
+        control_type_none()
     );
 
     let mut after_block: i32 = parse_block_expression(

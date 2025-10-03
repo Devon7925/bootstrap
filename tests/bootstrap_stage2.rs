@@ -54,7 +54,7 @@ fn stage1_compiler_identifies_forward_reference_blocker() {
 }
 
 #[test]
-fn stage1_compiler_rejects_break_with_value_statements() {
+fn stage1_compiler_accepts_break_with_value_statements() {
     let (mut stage1, _) = prepare_stage1_compiler();
 
     let source = r#"
@@ -72,22 +72,13 @@ fn main() -> i32 {
 
     compile(source).expect("host compiler should accept break-with-value");
 
-    let result = stage1.compile_at(0, 131072, source);
-    match result {
-        Ok(_) => panic!("stage1 unexpectedly accepted break-with-value"),
-        Err(CompileFailure {
-            produced_len,
-            functions,
-            ..
-        }) => {
-            assert_eq!(produced_len, -1);
-            assert_eq!(functions, 1, "expected failure while compiling main");
-        }
-    }
+    stage1
+        .compile_at(0, 131072, source)
+        .expect("stage1 should accept break-with-value");
 }
 
 #[test]
-fn stage1_compiler_rejects_loop_expression_results() {
+fn stage1_compiler_accepts_loop_expression_results() {
     let (mut stage1, _) = prepare_stage1_compiler();
 
     let source = r#"
@@ -100,16 +91,7 @@ fn main() -> i32 {
 
     compile(source).expect("host compiler should accept loop expressions with values");
 
-    let result = stage1.compile_at(0, 131072, source);
-    match result {
-        Ok(_) => panic!("stage1 unexpectedly accepted loop expression result"),
-        Err(CompileFailure {
-            produced_len,
-            functions,
-            ..
-        }) => {
-            assert_eq!(produced_len, -1);
-            assert_eq!(functions, 1, "expected failure while compiling main");
-        }
-    }
+    stage1
+        .compile_at(0, 131072, source)
+        .expect("stage1 should accept loop expression result");
 }
