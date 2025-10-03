@@ -399,6 +399,61 @@ fn main() -> i32 {
 }
 
 #[test]
+#[ignore = "stage1 fails because it does not clear loop-scoped locals yet"]
+fn stage1_compiler_rejects_loop_local_redeclaration() {
+    let (mut stage1, _) = prepare_stage1_compiler();
+
+    let source = r#"
+fn functions_entry(base: i32, index: i32) -> i32 {
+    base + index
+}
+
+fn write_type_section(func_count: i32) -> i32 {
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= func_count {
+            break;
+        };
+        let entry: i32 = functions_entry(0, idx);
+        if entry == 99 {
+            return 1;
+        };
+        idx = idx + 1;
+    };
+
+    let mut write_idx: i32 = 0;
+    loop {
+        if write_idx >= func_count {
+            break;
+        };
+        let entry: i32 = functions_entry(0, write_idx);
+        if entry == -1 {
+            return 2;
+        };
+        write_idx = write_idx + 1;
+    };
+
+    0
+}
+
+fn main() -> i32 {
+    write_type_section(2)
+}
+"#;
+
+    compile(source).expect("host compiler should accept debug program");
+
+    let failure = stage1
+        .compile_at(0, 131072, source)
+        .expect_err("stage1 should still reject loop-local redeclarations");
+
+    assert_eq!(failure.compiled_functions, 1);
+    let locals_count_ptr = 131072 + 12280;
+    let registered_locals = stage1.read_i32(locals_count_ptr);
+    assert!(registered_locals > 0);
+}
+
+#[test]
 fn stage1_compiler_accepts_if_expression_blocks_with_values() {
     let (mut stage1, _) = prepare_stage1_compiler();
 
