@@ -22,20 +22,23 @@ fn prepare_stage1_compiler() -> (CompilerInstance, String) {
 }
 
 #[test]
-fn stage1_compiler_identifies_forward_reference_blocker() {
+fn stage1_compiler_identifies_remaining_bootstrap_blocker() {
     let (mut stage1, stage1_source) = prepare_stage1_compiler();
 
     // Compile the stage1 source with the stage1 compiler itself to produce stage2.
     let result = stage1.compile_at(0, 131072, &stage1_source);
     match result {
-        Ok(_) => panic!("stage1 unexpectedly compiled itself without resolving forward references"),
+        Ok(_) => panic!("stage1 unexpectedly compiled itself without encountering bootstrap blockers"),
         Err(CompileFailure {
             produced_len,
             functions,
             instr_offset,
         }) => {
             assert_eq!(produced_len, -1);
-            assert_eq!(instr_offset, 0);
+            assert!(
+                instr_offset > 0,
+                "stage1 should advance code generation before failing"
+            );
 
             let tokens = Lexer::new(&stage1_source)
                 .collect::<Result<Vec<_>, _>>()
@@ -113,4 +116,91 @@ fn main() -> i32 {
     stage1
         .compile_at(0, 131072, source)
         .expect("stage1 should accept implicit unit return");
+}
+
+#[test]
+fn stage1_compiler_accepts_line_comments() {
+    let (mut stage1, _) = prepare_stage1_compiler();
+
+    let source = r#"
+fn main() -> i32 {
+    // ensure comment handling survives stage2
+    let value: i32 = 5;
+    if value == 5 {
+        0
+    } else {
+        1
+    }
+}
+"#;
+
+    compile(source).expect("host compiler should accept line comments");
+
+    stage1
+        .compile_at(0, 131072, source)
+        .expect("stage1 should accept line comments");
+}
+
+#[test]
+fn stage1_compiler_accepts_not_equal_comparisons() {
+    let (mut stage1, _) = prepare_stage1_compiler();
+
+    let source = r#"
+fn main() -> i32 {
+    let mut result: i32 = 0;
+    if 3 != 4 {
+        result = result + 1;
+    };
+    result
+}
+"#;
+
+    compile(source).expect("host compiler should accept not-equal comparisons");
+
+    stage1
+        .compile_at(0, 131072, source)
+        .expect("stage1 should accept not-equal comparisons");
+}
+
+#[test]
+fn stage1_compiler_accepts_greater_equal_comparisons() {
+    let (mut stage1, _) = prepare_stage1_compiler();
+
+    let source = r#"
+fn main() -> i32 {
+    let threshold: i32 = 7;
+    if threshold >= 7 {
+        1
+    } else {
+        0
+    }
+}
+"#;
+
+    compile(source).expect("host compiler should accept greater-equal comparisons");
+
+    stage1
+        .compile_at(0, 131072, source)
+        .expect("stage1 should accept greater-equal comparisons");
+}
+
+#[test]
+fn stage1_compiler_accepts_bitwise_and_or_operations() {
+    let (mut stage1, _) = prepare_stage1_compiler();
+
+    let source = r#"
+fn mask(value: i32) -> i32 {
+    (value & 255) | 8
+}
+
+fn main() -> i32 {
+    mask(260)
+}
+"#;
+
+    compile(source).expect("host compiler should accept bitwise and/or");
+
+    stage1
+        .compile_at(0, 131072, source)
+        .expect("stage1 should accept bitwise and/or");
 }
