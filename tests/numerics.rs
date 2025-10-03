@@ -1,4 +1,7 @@
-use bootstrap::compile;
+#[path = "stage1_helpers.rs"]
+mod stage1_helpers;
+
+use stage1_helpers::{compile_with_stage1, try_compile_with_stage1};
 use wasmi::{Engine, Linker, Module, Store, TypedFunc};
 
 #[test]
@@ -19,8 +22,7 @@ fn main() -> i32 {
 }
 "#;
 
-    let compilation = compile(source).expect("failed to compile source");
-    let wasm = compilation.to_wasm().expect("failed to encode wasm");
+    let wasm = compile_with_stage1(source);
 
     let engine = Engine::default();
     let mut wasm_reader = wasm.as_slice();
@@ -71,14 +73,7 @@ fn main() -> i32 {
 }
 "#;
 
-    let error = match compile(source) {
-        Ok(_) => panic!("expected float remainder to be rejected"),
-        Err(err) => err,
-    };
-
-    assert!(
-        error.message.contains("stage2 compilation failed"),
-        "unexpected error message: {}",
-        error.message
-    );
+    let error = try_compile_with_stage1(source)
+        .expect_err("expected float remainder to be rejected");
+    assert!(error.produced_len <= 0);
 }

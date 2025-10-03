@@ -1,7 +1,14 @@
+#![allow(dead_code)]
+
 use std::fs;
 use std::sync::OnceLock;
 
 use bootstrap::compile;
+
+#[path = "wasm_harness.rs"]
+mod wasm_harness;
+
+use wasm_harness::{CompileFailure, CompilerInstance};
 
 const STAGE1_SOURCE_PATH: &str = "compiler/stage1.bp";
 
@@ -25,4 +32,16 @@ pub fn stage1_wasm() -> &'static [u8] {
                 .unwrap_or_else(|err| panic!("failed to compile stage1 source: {err}"))
         })
         .as_slice()
+}
+
+pub fn try_compile_with_stage1(source: &str) -> Result<Vec<u8>, CompileFailure> {
+    let mut compiler = CompilerInstance::new(stage1_wasm());
+    let mut input_cursor = 0usize;
+    let mut output_cursor = 1024i32;
+    compiler.compile_with_layout(&mut input_cursor, &mut output_cursor, source)
+}
+
+pub fn compile_with_stage1(source: &str) -> Vec<u8> {
+    try_compile_with_stage1(source)
+        .unwrap_or_else(|err| panic!("stage1 failed to compile source: {err:?}"))
 }

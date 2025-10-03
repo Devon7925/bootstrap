@@ -1,15 +1,8 @@
-use bootstrap::compile;
-use wasmi::{Engine, Linker, Module, Store, TypedFunc};
-
-#[path = "wasm_harness.rs"]
-mod wasm_harness;
-
-use wasm_harness::{CompilerInstance, run_wasm_main};
-
 #[path = "stage1_helpers.rs"]
 mod stage1_helpers;
 
-use stage1_helpers::stage1_wasm;
+use stage1_helpers::compile_with_stage1;
+use wasmi::{Engine, Linker, Module, Store, TypedFunc};
 
 #[test]
 fn trailing_commas_in_params_and_calls_are_accepted() {
@@ -26,8 +19,7 @@ fn main() -> i32 {
 }
 "#;
 
-    let compilation = compile(source).expect("failed to compile source");
-    let wasm = compilation.to_wasm().expect("failed to encode wasm");
+    let wasm = compile_with_stage1(source);
 
     let engine = Engine::default();
     let mut wasm_reader = wasm.as_slice();
@@ -49,31 +41,3 @@ fn main() -> i32 {
     assert_eq!(result, 3);
 }
 
-#[test]
-fn stage1_compiler_accepts_trailing_commas() {
-    let mut compiler = CompilerInstance::new(stage1_wasm());
-
-    let mut input_cursor = 0usize;
-    let mut output_cursor = 1024i32;
-
-    let program = r#"
-fn add(
-    a: i32,
-    b: i32,
-) -> i32 {
-    a + b
-}
-
-fn main() -> i32 {
-    add(1, 2,)
-}
-"#;
-
-    let output = compiler
-        .compile_with_layout(&mut input_cursor, &mut output_cursor, program)
-        .expect("stage1 should compile trailing comma program");
-
-    let result = run_wasm_main(compiler.engine(), &output);
-
-    assert_eq!(result, 3);
-}

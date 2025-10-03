@@ -1,4 +1,7 @@
-use bootstrap::compile;
+#[path = "stage1_helpers.rs"]
+mod stage1_helpers;
+
+use stage1_helpers::{compile_with_stage1, try_compile_with_stage1};
 use wasmi::{Engine, Linker, Module, Store, TypedFunc};
 
 #[test]
@@ -9,15 +12,8 @@ fn helper() -> i32 {
 }
 "#;
 
-    let error = match compile(source) {
-        Ok(_) => panic!("expected missing main error"),
-        Err(err) => err,
-    };
-    assert!(
-        error.message.contains("stage2 compilation failed"),
-        "unexpected error message: {}",
-        error.message
-    );
+    let error = try_compile_with_stage1(source).expect_err("expected missing main error");
+    assert!(error.produced_len <= 0);
 }
 
 #[test]
@@ -28,8 +24,7 @@ fn main(value: i32) -> i32 {
 }
 "#;
 
-    let compilation = compile(source).expect("failed to compile program with parameters");
-    let wasm = compilation.to_wasm().expect("failed to encode wasm");
+    let wasm = compile_with_stage1(source);
 
     let engine = Engine::default();
     let mut wasm_reader = wasm.as_slice();
@@ -58,13 +53,6 @@ fn main() -> bool {
 }
 "#;
 
-    let error = match compile(source) {
-        Ok(_) => panic!("expected main return type error"),
-        Err(err) => err,
-    };
-    assert!(
-        error.message.contains("stage2 compilation failed"),
-        "unexpected error message: {}",
-        error.message
-    );
+    let error = try_compile_with_stage1(source).expect_err("expected main return type error");
+    assert!(error.produced_len <= 0);
 }
