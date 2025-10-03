@@ -5,7 +5,7 @@ use bootstrap::compile;
 #[path = "wasm_harness.rs"]
 mod wasm_harness;
 
-use wasm_harness::{run_wasm_main, CompilerInstance};
+use wasm_harness::{CompilerInstance, run_wasm_main};
 
 fn prepare_stage1_compiler() -> (CompilerInstance, usize, i32) {
     let source =
@@ -294,7 +294,10 @@ fn main() -> i32 {
 
     let result = compiler.compile_with_layout(&mut input_cursor, &mut output_cursor, program);
 
-    assert!(result.is_err(), "stage1 should reject break outside of loops");
+    assert!(
+        result.is_err(),
+        "stage1 should reject break outside of loops"
+    );
 }
 
 #[test]
@@ -310,7 +313,10 @@ fn main() -> i32 {
 
     let result = compiler.compile_with_layout(&mut input_cursor, &mut output_cursor, program);
 
-    assert!(result.is_err(), "stage1 should reject continue outside of loops");
+    assert!(
+        result.is_err(),
+        "stage1 should reject continue outside of loops"
+    );
 }
 
 #[test]
@@ -347,7 +353,10 @@ fn main() -> i32 {
 
     let result = compiler.compile_with_layout(&mut input_cursor, &mut output_cursor, program);
 
-    assert!(result.is_err(), "stage1 should reject duplicate local names");
+    assert!(
+        result.is_err(),
+        "stage1 should reject duplicate local names"
+    );
 }
 
 #[test]
@@ -387,7 +396,10 @@ fn main() -> i32 {
 
     let result = compiler.compile_with_layout(&mut input_cursor, &mut output_cursor, program);
 
-    assert!(result.is_err(), "stage1 should reject calls with wrong arity");
+    assert!(
+        result.is_err(),
+        "stage1 should reject calls with wrong arity"
+    );
 }
 
 #[test]
@@ -525,4 +537,64 @@ fn main() -> i32 {
         result.is_err(),
         "stage1 should reject let bindings whose initializer type does not match"
     );
+}
+
+#[test]
+#[ignore = "bug: stage1 compiler does not support forward references between functions"]
+fn stage1_compiler_supports_forward_function_references() {
+    let (mut compiler, mut input_cursor, mut output_cursor) = prepare_stage1_compiler();
+
+    let program = r#"
+fn launch() -> i32 {
+    helper()
+}
+
+fn helper() -> i32 {
+    42
+}
+
+fn main() -> i32 {
+    launch()
+}
+"#;
+
+    compiler
+        .compile_with_layout(&mut input_cursor, &mut output_cursor, program)
+        .expect("stage1 should compile calls to functions declared later in the file");
+}
+
+#[test]
+#[ignore = "bug: stage1 compiler cannot compile mutually recursive functions"]
+fn stage1_compiler_supports_mutually_recursive_functions() {
+    let (mut compiler, mut input_cursor, mut output_cursor) = prepare_stage1_compiler();
+
+    let program = r#"
+fn is_even(value: i32) -> bool {
+    if value == 0 {
+        true
+    } else {
+        is_odd(value - 1)
+    }
+}
+
+fn is_odd(value: i32) -> bool {
+    if value == 0 {
+        false
+    } else {
+        is_even(value - 1)
+    }
+}
+
+fn main() -> i32 {
+    if is_even(4) {
+        1
+    } else {
+        0
+    }
+}
+"#;
+
+    compiler
+        .compile_with_layout(&mut input_cursor, &mut output_cursor, program)
+        .expect("stage1 should compile mutually recursive functions");
 }
