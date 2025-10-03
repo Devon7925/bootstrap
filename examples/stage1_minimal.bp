@@ -115,6 +115,34 @@ fn emit_br(base: i32, offset: i32, depth: i32) -> i32 {
     out
 }
 
+fn emit_load_u8(base: i32, offset: i32) -> i32 {
+    let mut out: i32 = write_byte(base, offset, 45);
+    out = write_u32_leb(base, out, 0);
+    out = write_u32_leb(base, out, 0);
+    out
+}
+
+fn emit_store_u8(base: i32, offset: i32) -> i32 {
+    let mut out: i32 = write_byte(base, offset, 58);
+    out = write_u32_leb(base, out, 0);
+    out = write_u32_leb(base, out, 0);
+    out
+}
+
+fn emit_load_i32(base: i32, offset: i32) -> i32 {
+    let mut out: i32 = write_byte(base, offset, 40);
+    out = write_u32_leb(base, out, 2);
+    out = write_u32_leb(base, out, 0);
+    out
+}
+
+fn emit_store_i32(base: i32, offset: i32) -> i32 {
+    let mut out: i32 = write_byte(base, offset, 54);
+    out = write_u32_leb(base, out, 2);
+    out = write_u32_leb(base, out, 0);
+    out
+}
+
 fn control_stack_push(base: i32, len_ptr: i32, kind: i32) {
     let len: i32 = load_i32(len_ptr);
     store_i32(base + len * 4, kind);
@@ -160,6 +188,178 @@ fn control_kind_loop_continue() -> i32 {
 
 fn control_kind_loop_break() -> i32 {
     3
+}
+
+fn intrinsic_kind_none() -> i32 {
+    -1
+}
+
+fn intrinsic_kind_load_u8() -> i32 {
+    0
+}
+
+fn intrinsic_kind_store_u8() -> i32 {
+    1
+}
+
+fn intrinsic_kind_load_i32() -> i32 {
+    2
+}
+
+fn intrinsic_kind_store_i32() -> i32 {
+    3
+}
+
+fn is_identifier_load_u8(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
+    if ident_len != 7 {
+        return false;
+    };
+    if start < 0 || start + ident_len > len {
+        return false;
+    };
+    if load_u8(base + start) != 108 {
+        return false;
+    };
+    if load_u8(base + start + 1) != 111 {
+        return false;
+    };
+    if load_u8(base + start + 2) != 97 {
+        return false;
+    };
+    if load_u8(base + start + 3) != 100 {
+        return false;
+    };
+    if load_u8(base + start + 4) != 95 {
+        return false;
+    };
+    if load_u8(base + start + 5) != 117 {
+        return false;
+    };
+    if load_u8(base + start + 6) != 56 {
+        return false;
+    };
+    true
+}
+
+fn is_identifier_store_u8(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
+    if ident_len != 8 {
+        return false;
+    };
+    if start < 0 || start + ident_len > len {
+        return false;
+    };
+    if load_u8(base + start) != 115 {
+        return false;
+    };
+    if load_u8(base + start + 1) != 116 {
+        return false;
+    };
+    if load_u8(base + start + 2) != 111 {
+        return false;
+    };
+    if load_u8(base + start + 3) != 114 {
+        return false;
+    };
+    if load_u8(base + start + 4) != 101 {
+        return false;
+    };
+    if load_u8(base + start + 5) != 95 {
+        return false;
+    };
+    if load_u8(base + start + 6) != 117 {
+        return false;
+    };
+    if load_u8(base + start + 7) != 56 {
+        return false;
+    };
+    true
+}
+
+fn is_identifier_load_i32(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
+    if ident_len != 8 {
+        return false;
+    };
+    if start < 0 || start + ident_len > len {
+        return false;
+    };
+    if load_u8(base + start) != 108 {
+        return false;
+    };
+    if load_u8(base + start + 1) != 111 {
+        return false;
+    };
+    if load_u8(base + start + 2) != 97 {
+        return false;
+    };
+    if load_u8(base + start + 3) != 100 {
+        return false;
+    };
+    if load_u8(base + start + 4) != 95 {
+        return false;
+    };
+    if load_u8(base + start + 5) != 105 {
+        return false;
+    };
+    if load_u8(base + start + 6) != 51 {
+        return false;
+    };
+    if load_u8(base + start + 7) != 50 {
+        return false;
+    };
+    true
+}
+
+fn is_identifier_store_i32(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
+    if ident_len != 9 {
+        return false;
+    };
+    if start < 0 || start + ident_len > len {
+        return false;
+    };
+    if load_u8(base + start) != 115 {
+        return false;
+    };
+    if load_u8(base + start + 1) != 116 {
+        return false;
+    };
+    if load_u8(base + start + 2) != 111 {
+        return false;
+    };
+    if load_u8(base + start + 3) != 114 {
+        return false;
+    };
+    if load_u8(base + start + 4) != 101 {
+        return false;
+    };
+    if load_u8(base + start + 5) != 95 {
+        return false;
+    };
+    if load_u8(base + start + 6) != 105 {
+        return false;
+    };
+    if load_u8(base + start + 7) != 51 {
+        return false;
+    };
+    if load_u8(base + start + 8) != 50 {
+        return false;
+    };
+    true
+}
+
+fn identify_intrinsic(base: i32, len: i32, start: i32, ident_len: i32) -> i32 {
+    if is_identifier_load_u8(base, len, start, ident_len) {
+        return intrinsic_kind_load_u8();
+    };
+    if is_identifier_store_u8(base, len, start, ident_len) {
+        return intrinsic_kind_store_u8();
+    };
+    if is_identifier_load_i32(base, len, start, ident_len) {
+        return intrinsic_kind_load_i32();
+    };
+    if is_identifier_store_i32(base, len, start, ident_len) {
+        return intrinsic_kind_store_i32();
+    };
+    intrinsic_kind_none()
 }
 
 fn is_identifier_start(byte: i32) -> bool {
@@ -1751,19 +1951,39 @@ fn parse_primary(
             if next_non_ws < len {
                 let next_char: i32 = peek_byte(base, len, next_non_ws);
                 if next_char == 40 {
-                    let func_index: i32 = functions_find(
-                        base,
-                        len,
-                        functions_base,
-                        functions_count_ptr,
-                        ident_start,
-                        ident_len
-                    );
-                    if func_index < 0 {
-                        return -1;
+                    let intrinsic_kind: i32 =
+                        identify_intrinsic(base, len, ident_start, ident_len);
+                    let mut expected_params: i32 = 0;
+                    let mut return_type: i32 = type_code_i32();
+                    let mut func_index: i32 = -1;
+                    let mut func_entry: i32 = 0;
+                    let is_intrinsic: bool = intrinsic_kind != intrinsic_kind_none();
+                    if is_intrinsic {
+                        if intrinsic_kind == intrinsic_kind_load_u8()
+                            || intrinsic_kind == intrinsic_kind_load_i32()
+                        {
+                            expected_params = 1;
+                            return_type = type_code_i32();
+                        } else {
+                            expected_params = 2;
+                            return_type = -1;
+                        };
+                    } else {
+                        func_index = functions_find(
+                            base,
+                            len,
+                            functions_base,
+                            functions_count_ptr,
+                            ident_start,
+                            ident_len
+                        );
+                        if func_index < 0 {
+                            return -1;
+                        };
+                        func_entry = functions_entry(functions_base, func_index);
+                        expected_params = load_i32(func_entry + 8);
+                        return_type = load_i32(func_entry + 24);
                     };
-                    let func_entry: i32 = functions_entry(functions_base, func_index);
-                    let param_count: i32 = load_i32(func_entry + 8);
                     let saved_instr_offset: i32 = load_i32(instr_offset_ptr);
                     let mut call_idx: i32 = next_non_ws + 1;
                     let mut arg_count: i32 = 0;
@@ -1779,7 +1999,7 @@ fn parse_primary(
                             call_idx = call_idx + 1;
                             break;
                         };
-                        if arg_count >= param_count {
+                        if arg_count >= expected_params {
                             parse_error = true;
                             break;
                         };
@@ -1801,6 +2021,29 @@ fn parse_primary(
                             parse_error = true;
                             break;
                         };
+                        let arg_type: i32 = get_expr_type(expr_type_ptr);
+                        if is_intrinsic {
+                            if intrinsic_kind == intrinsic_kind_load_u8()
+                                || intrinsic_kind == intrinsic_kind_load_i32()
+                            {
+                                if arg_type != type_code_i32() {
+                                    parse_error = true;
+                                    break;
+                                };
+                            } else if intrinsic_kind == intrinsic_kind_store_u8()
+                                || intrinsic_kind == intrinsic_kind_store_i32()
+                            {
+                                if arg_count == 0 {
+                                    if arg_type != type_code_i32() {
+                                        parse_error = true;
+                                        break;
+                                    };
+                                } else if arg_type != type_code_i32() {
+                                    parse_error = true;
+                                    break;
+                                };
+                            };
+                        };
                         arg_count = arg_count + 1;
                         call_idx = skip_whitespace(base, len, expr_idx);
                         if call_idx >= len {
@@ -1819,14 +2062,27 @@ fn parse_primary(
                         parse_error = true;
                         break;
                     };
-                    if parse_error || arg_count != param_count {
+                    if parse_error || arg_count != expected_params {
                         store_i32(instr_offset_ptr, saved_instr_offset);
                         return -1;
                     };
                     let mut instr_offset: i32 = load_i32(instr_offset_ptr);
+                    if is_intrinsic {
+                        if intrinsic_kind == intrinsic_kind_load_u8() {
+                            instr_offset = emit_load_u8(instr_base, instr_offset);
+                        } else if intrinsic_kind == intrinsic_kind_store_u8() {
+                            instr_offset = emit_store_u8(instr_base, instr_offset);
+                        } else if intrinsic_kind == intrinsic_kind_load_i32() {
+                            instr_offset = emit_load_i32(instr_base, instr_offset);
+                        } else if intrinsic_kind == intrinsic_kind_store_i32() {
+                            instr_offset = emit_store_i32(instr_base, instr_offset);
+                        };
+                        store_i32(instr_offset_ptr, instr_offset);
+                        set_expr_type(expr_type_ptr, return_type);
+                        return call_idx;
+                    };
                     instr_offset = emit_call(instr_base, instr_offset, func_index);
                     store_i32(instr_offset_ptr, instr_offset);
-                    let return_type: i32 = load_i32(func_entry + 24);
                     set_expr_type(expr_type_ptr, return_type);
                     return call_idx;
                 };

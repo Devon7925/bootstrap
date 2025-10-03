@@ -154,6 +154,15 @@ fn stage1_constant_compiler_emits_wasm() {
         )
         .expect("stage1 should compile multi-function program");
     assert_eq!(run_wasm_main(compiler.engine(), &output_fourteen), 8);
+
+    let output_fifteen = compiler
+        .compile_with_layout(
+            &mut input_cursor,
+            &mut output_cursor,
+            "fn main() -> i32 {\n    let byte_ptr: i32 = 8192;\n    store_u8(byte_ptr, 42);\n    let read_byte: i32 = load_u8(byte_ptr);\n\n    let word_ptr: i32 = 16384;\n    store_i32(word_ptr, 424242);\n    let read_word: i32 = load_i32(word_ptr);\n\n    if read_word == 424242 {\n        read_byte\n    } else {\n        -1\n    }\n}\n",
+        )
+        .expect("stage1 should compile memory intrinsic usage");
+    assert_eq!(run_wasm_main(compiler.engine(), &output_fifteen), 42);
 }
 
 #[test]
@@ -399,6 +408,26 @@ fn main() -> i32 {
     assert!(
         result.is_err(),
         "stage1 should reject calls with wrong arity"
+    );
+}
+
+#[test]
+fn stage1_compiler_rejects_intrinsic_calls_with_wrong_types() {
+    let (mut compiler, mut input_cursor, mut output_cursor) = prepare_stage1_compiler();
+
+    let program = r#"
+fn main() -> i32 {
+    let flag: bool = true;
+    store_u8(flag, 1);
+    0
+}
+"#;
+
+    let result = compiler.compile_with_layout(&mut input_cursor, &mut output_cursor, program);
+
+    assert!(
+        result.is_err(),
+        "stage1 should reject intrinsic invocations when the argument types do not match"
     );
 }
 
