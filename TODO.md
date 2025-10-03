@@ -13,9 +13,10 @@
   *Reference:* Type-as-constant goal【F:concept.md†L10-L13】, function-only parser loop【F:compiler/stage1.bp†L4580-L4619】
   *Status:* Stage1 now scans `type` aliases before functions, records their source spans in a dedicated table, and verifies the metadata while compiling function bodies.
 
-- [ ] **Factor stage1 parsing into reusable helpers**
+- [x] **Factor stage1 parsing into reusable helpers**
   The parser in stage1 inlines keyword matching, delimiter handling, and whitespace skipping at every call site, making the 5k+ line file hard to follow and extend. Extracting reusable helpers for repeated loops (parameter lists, return types, block scanning) would shrink the `compile` pipeline and clarify control flow.
   *Reference:* Repeated ad-hoc parsing logic inside `compile`【F:compiler/stage1.bp†L4560-L4662】
+  *Status:* Added dedicated helpers for parameter lists and optional return types so both signature registration and body compilation share the same parsing routines, removing duplicated loops and keyword handling.
 
 - [x] **Centralize stage1 memory layout constants**
   The `compile` routine hand-computes offsets like `out_ptr + 4096` and `instr_base + instr_capacity - 12` each time, obscuring the intent of the scratch buffer layout. Introducing named constants or a small struct to manage these regions would make the code self-documenting and reduce arithmetic mistakes when the layout changes.
