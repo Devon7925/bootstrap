@@ -1,7 +1,28 @@
 pub mod error;
 
+use std::fmt;
+
 use crate::error::CompileError;
 use wasmi::{Engine, Linker, Memory, Module, Store, TypedFunc};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Target {
+    Wasm,
+    Wgsl,
+}
+
+impl Target {
+    pub const DEFAULT: Target = Target::Wasm;
+}
+
+impl fmt::Display for Target {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Target::Wasm => f.write_str("wasm"),
+            Target::Wgsl => f.write_str("wgsl"),
+        }
+    }
+}
 
 const STAGE2_WASM: &[u8] = include_bytes!("../stage2.wasm");
 const INSTR_OFFSET_PTR_OFFSET: usize = 4_096;
@@ -11,26 +32,50 @@ const FUNCTION_ENTRY_SIZE: usize = 32;
 const STAGE1_MAX_FUNCTIONS: usize = 512;
 
 pub struct Compilation {
+    target: Target,
     wasm: Vec<u8>,
 }
 
 impl Compilation {
+    pub fn target(&self) -> Target {
+        self.target
+    }
+
     pub fn wasm(&self) -> &[u8] {
         &self.wasm
     }
 
     pub fn to_wasm(&self) -> Result<Vec<u8>, CompileError> {
+        if self.target != Target::Wasm {
+            return Err(CompileError::new(format!(
+                "target '{}' cannot be emitted as Wasm",
+                self.target
+            )));
+        }
         Ok(self.wasm.clone())
     }
 
     pub fn into_wasm(self) -> Result<Vec<u8>, CompileError> {
+        if self.target != Target::Wasm {
+            return Err(CompileError::new(format!(
+                "target '{}' cannot be emitted as Wasm",
+                self.target
+            )));
+        }
         Ok(self.wasm)
     }
 }
 
-pub fn compile(source: &str) -> Result<Compilation, CompileError> {
+pub fn compile(source: &str, target: Target) -> Result<Compilation, CompileError> {
     if source.is_empty() {
         return Err(CompileError::new("source must not be empty"));
+    }
+
+    if target != Target::Wasm {
+        return Err(CompileError::new(format!(
+            "target '{}' is not supported yet",
+            target
+        )));
     }
 
     let engine = Engine::default();
@@ -93,7 +138,7 @@ pub fn compile(source: &str) -> Result<Compilation, CompileError> {
         .read(&store, output_ptr as usize, &mut wasm)
         .map_err(|err| CompileError::new(format!("failed to read stage2 output: {err}")))?;
 
-    Ok(Compilation { wasm })
+    Ok(Compilation { target, wasm })
 }
 
 fn read_stage2_failure(
@@ -144,5 +189,5 @@ fn read_stage2_failure(
 }
 
 pub fn compile_to_wasm(source: &str) -> Result<Vec<u8>, CompileError> {
-    compile(source)?.into_wasm()
+    compile(source, Target::Wasm)?.into_wasm()
 }

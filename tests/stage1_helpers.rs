@@ -3,7 +3,7 @@
 use std::fs;
 use std::sync::OnceLock;
 
-use bootstrap::compile;
+use bootstrap::{Target, compile};
 
 #[path = "wasm_harness.rs"]
 mod wasm_harness;
@@ -27,7 +27,7 @@ pub fn stage1_source() -> &'static str {
 pub fn stage1_wasm() -> &'static [u8] {
     STAGE1_WASM
         .get_or_init(|| {
-            compile(stage1_source())
+            compile(stage1_source(), Target::Wasm)
                 .and_then(|compilation| compilation.into_wasm())
                 .unwrap_or_else(|err| panic!("failed to compile stage1 source: {err}"))
         })
