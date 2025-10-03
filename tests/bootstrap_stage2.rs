@@ -9,8 +9,7 @@ mod wasm_harness;
 
 use wasm_harness::{CompileFailure, CompilerInstance};
 
-#[test]
-fn stage1_compiler_identifies_forward_reference_blocker() {
+fn prepare_stage1_compiler() -> (CompilerInstance, String) {
     let stage1_source =
         fs::read_to_string("examples/stage1_minimal.bp").expect("failed to load stage1 source");
 
@@ -19,7 +18,12 @@ fn stage1_compiler_identifies_forward_reference_blocker() {
         .to_wasm()
         .expect("failed to encode stage1 wasm");
 
-    let mut stage1 = CompilerInstance::new(stage1_wasm.as_slice());
+    (CompilerInstance::new(stage1_wasm.as_slice()), stage1_source)
+}
+
+#[test]
+fn stage1_compiler_identifies_forward_reference_blocker() {
+    let (mut stage1, stage1_source) = prepare_stage1_compiler();
 
     // Compile the stage1 source with the stage1 compiler itself to produce stage2.
     let result = stage1.compile_at(0, 131072, &stage1_source);
@@ -45,6 +49,67 @@ fn stage1_compiler_identifies_forward_reference_blocker() {
                 functions < total_functions,
                 "expected failure before all functions were processed"
             );
+        }
+    }
+}
+
+#[test]
+fn stage1_compiler_rejects_break_with_value_statements() {
+    let (mut stage1, _) = prepare_stage1_compiler();
+
+    let source = r#"
+fn main() -> i32 {
+    let mut counter: i32 = 0;
+    loop {
+        if counter > 3 {
+            break counter;
+        };
+        counter = counter + 1;
+    };
+    0
+}
+"#;
+
+    compile(source).expect("host compiler should accept break-with-value");
+
+    let result = stage1.compile_at(0, 131072, source);
+    match result {
+        Ok(_) => panic!("stage1 unexpectedly accepted break-with-value"),
+        Err(CompileFailure {
+            produced_len,
+            functions,
+            ..
+        }) => {
+            assert_eq!(produced_len, -1);
+            assert_eq!(functions, 1, "expected failure while compiling main");
+        }
+    }
+}
+
+#[test]
+fn stage1_compiler_rejects_loop_expression_results() {
+    let (mut stage1, _) = prepare_stage1_compiler();
+
+    let source = r#"
+fn main() -> i32 {
+    loop {
+        break 7;
+    }
+}
+"#;
+
+    compile(source).expect("host compiler should accept loop expressions with values");
+
+    let result = stage1.compile_at(0, 131072, source);
+    match result {
+        Ok(_) => panic!("stage1 unexpectedly accepted loop expression result"),
+        Err(CompileFailure {
+            produced_len,
+            functions,
+            ..
+        }) => {
+            assert_eq!(produced_len, -1);
+            assert_eq!(functions, 1, "expected failure while compiling main");
         }
     }
 }
