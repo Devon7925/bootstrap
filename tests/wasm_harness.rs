@@ -152,6 +152,15 @@ impl CompilerInstance {
             source,
         )
     }
+
+    pub fn read_i32(&self, ptr: i32) -> i32 {
+        let mut buf = [0u8; 4];
+        let _ = self
+            .memory
+            .read(&self.store, ptr as usize, &mut buf)
+            .expect("read_i32 should succeed");
+        i32::from_le_bytes(buf)
+    }
 }
 
 pub fn run_wasm_main(engine: &Engine, wasm: &[u8]) -> i32 {
