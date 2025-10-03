@@ -18,9 +18,7 @@ fn build_stage2_wasm() -> Result<(), String> {
     let source = fs::read_to_string(STAGE1_SOURCE_PATH)
         .map_err(|err| format!("failed to read '{STAGE1_SOURCE_PATH}': {err}"))?;
     let compilation = compile(&source).map_err(|err| err.to_string())?;
-    let stage1_wasm = compilation
-        .to_wasm()
-        .map_err(|err| err.to_string())?;
+    let stage1_wasm = compilation.to_wasm().map_err(|err| err.to_string())?;
 
     let engine = Engine::default();
     let module = Module::new(&engine, stage1_wasm.as_slice())
@@ -35,14 +33,16 @@ fn build_stage2_wasm() -> Result<(), String> {
     let memory: Memory = instance
         .get_memory(&mut store, "memory")
         .ok_or_else(|| "stage1 module does not export memory".to_string())?;
-    let compile: TypedFunc<(i32, i32, i32), i32> = instance
-        .get_typed_func(&mut store, "compile")
-        .map_err(|err| format!("failed to find stage1 compile function: {err}"))?;
+    let compile: TypedFunc<(i32, i32, i32), i32> =
+        instance
+            .get_typed_func(&mut store, "compile")
+            .map_err(|err| format!("failed to find stage1 compile function: {err}"))?;
 
     let memory_size = memory
         .current_pages(&store)
         .to_bytes()
-        .ok_or_else(|| "failed to compute stage1 memory size".to_string())? as usize;
+        .ok_or_else(|| "failed to compute stage1 memory size".to_string())?
+        as usize;
     let reserved = STAGE1_FUNCTIONS_BASE_OFFSET + STAGE1_MAX_FUNCTIONS * STAGE1_FUNCTION_ENTRY_SIZE;
     if memory_size <= reserved {
         return Err("stage1 memory is smaller than reserved layout".into());
@@ -85,15 +85,9 @@ fn build_stage2_wasm() -> Result<(), String> {
 fn print_usage(program: &str) {
     eprintln!("Usage: {program} <input.bp> [options]");
     eprintln!("Options:");
-    eprintln!("    -o <path>           Write output to file (.wat or .wasm)");
-    eprintln!("    --emit <wat|wasm>   Choose output format for stdout (default: wat)");
+    eprintln!("    -o <path>           Write output to file (.wasm)");
+    eprintln!("    --emit wasm         Write wasm binary to stdout (default when no -o)");
     eprintln!("    --run               Execute the compiled module with Node.js");
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum EmitKind {
-    Wat,
-    Wasm,
 }
 
 fn run_with_node(wasm: &[u8]) -> Result<(), String> {
@@ -161,7 +155,7 @@ fn main() {
 
     let input_path = args.remove(0);
     let mut output_path: Option<String> = None;
-    let mut emit_flag: Option<EmitKind> = None;
+    let mut emit_flag: Option<bool> = None;
     let mut run = false;
 
     let mut iter = args.iter();
@@ -177,15 +171,17 @@ fn main() {
         } else if arg == "--emit" {
             match iter.next() {
                 Some(value) => {
-                    let kind = match value.as_str() {
-                        "wat" => EmitKind::Wat,
-                        "wasm" => EmitKind::Wasm,
+                    match value.as_str() {
+                        "wasm" => emit_flag = Some(true),
+                        "wat" => {
+                            eprintln!("error: WAT output is no longer supported");
+                            process::exit(1);
+                        }
                         other => {
                             eprintln!("error: unsupported emit target '{other}'");
                             process::exit(1);
                         }
                     };
-                    emit_flag = Some(kind);
                 }
                 None => {
                     eprintln!("error: expected format after --emit");
@@ -217,72 +213,53 @@ fn main() {
         }
     };
 
-    let emit_from_ext = output_path.as_ref().and_then(|path| {
-        Path::new(path)
+    if let Some(path) = output_path.as_ref() {
+        if let Some(ext) = Path::new(path)
             .extension()
             .and_then(|ext| ext.to_str())
             .map(|ext| ext.to_ascii_lowercase())
-            .and_then(|ext| match ext.as_str() {
-                "wat" => Some(EmitKind::Wat),
-                "wasm" => Some(EmitKind::Wasm),
-                _ => None,
-            })
-    });
-
-    if let (Some(cli_emit), Some(ext_emit)) = (emit_flag, emit_from_ext) {
-        if cli_emit != ext_emit {
-            eprintln!("error: emit format flag does not match output extension");
-            process::exit(1);
-        }
-    }
-
-    let emit_kind = emit_flag.or(emit_from_ext).unwrap_or(EmitKind::Wat);
-
-    let wasm_bytes = if run || matches!(emit_kind, EmitKind::Wasm) {
-        match compilation.to_wasm() {
-            Ok(bytes) => Some(bytes),
-            Err(err) => {
-                eprintln!("{err}");
-                process::exit(1);
-            }
-        }
-    } else {
-        None
-    };
-
-    if let Some(path) = output_path.as_ref() {
-        let result = match emit_kind {
-            EmitKind::Wat => fs::write(Path::new(path), compilation.wat()),
-            EmitKind::Wasm => wasm_bytes
-                .as_ref()
-                .map(|bytes| fs::write(Path::new(path), bytes))
-                .unwrap_or_else(|| Err(io::Error::new(io::ErrorKind::Other, "missing wasm bytes"))),
-        };
-
-        if let Err(err) = result {
-            eprintln!("error: failed to write '{path}': {err}");
-            process::exit(1);
-        }
-    } else {
-        match emit_kind {
-            EmitKind::Wat => println!("{}", compilation.wat()),
-            EmitKind::Wasm => {
-                if let Some(bytes) = wasm_bytes.as_ref() {
-                    if let Err(err) = io::stdout().write_all(bytes) {
-                        eprintln!("error: failed to write wasm to stdout: {err}");
-                        process::exit(1);
-                    }
+        {
+            match ext.as_str() {
+                "wasm" => {}
+                "wat" => {
+                    eprintln!("error: WAT output is no longer supported");
+                    process::exit(1);
+                }
+                other => {
+                    eprintln!("error: unsupported output extension '.{other}'");
+                    process::exit(1);
                 }
             }
         }
     }
 
-    if run {
-        if let Some(bytes) = wasm_bytes.as_ref() {
-            if let Err(err) = run_with_node(bytes) {
-                eprintln!("error while running module with node: {err}");
+    let wasm_bytes = match compilation.to_wasm() {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            eprintln!("{err}");
+            process::exit(1);
+        }
+    };
+
+    if let Some(path) = output_path.as_ref() {
+        if let Err(err) = fs::write(Path::new(path), &wasm_bytes) {
+            eprintln!("error: failed to write '{path}': {err}");
+            process::exit(1);
+        }
+    } else {
+        let emit_to_stdout = emit_flag.unwrap_or(true);
+        if emit_to_stdout {
+            if let Err(err) = io::stdout().write_all(&wasm_bytes) {
+                eprintln!("error: failed to write wasm to stdout: {err}");
                 process::exit(1);
             }
+        }
+    }
+
+    if run {
+        if let Err(err) = run_with_node(&wasm_bytes) {
+            eprintln!("error while running module with node: {err}");
+            process::exit(1);
         }
     }
 }

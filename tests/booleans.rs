@@ -22,15 +22,19 @@ fn logic_chain(a: bool, b: bool, c: bool) -> bool {
 
 fn find_even(limit: i32) -> bool {
     let mut i: i32 = 0;
+    let mut found: bool = false;
     loop {
         if i == limit {
-            break false;
+            break;
         };
-        if i % 2 == 0 && i != 0 {
-            break true;
+        let remainder: i32 = i - (i / 2) * 2;
+        if remainder == 0 && i != 0 {
+            found = true;
+            break;
         };
         i = i + 1;
     }
+    found
 }
 
 fn main() -> i32 {

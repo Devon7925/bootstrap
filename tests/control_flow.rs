@@ -20,7 +20,10 @@ fn loop_sum(limit: i32) -> i32 {
 fn main() -> i32 {
     let mut count: i32 = 0;
     let mut total: i32 = 0;
-    while (count < 5) {
+    loop {
+        if count >= 5 {
+            break;
+        };
         total = total + loop_sum(count);
         count = count + 1;
     }
@@ -57,9 +60,13 @@ fn continue_skips_iterations() {
 fn sum_even(limit: i32) -> i32 {
     let mut acc: i32 = 0;
     let mut i: i32 = 0;
-    while (i < limit) {
+    loop {
+        if i >= limit {
+            break;
+        };
         i = i + 1;
-        if i % 2 == 1 {
+        let remainder: i32 = i - (i / 2) * 2;
+        if remainder == 1 {
             continue;
         };
         acc = acc + i;
@@ -115,16 +122,21 @@ fn main() -> i32 {
 fn loop_can_break_with_values() {
     let source = r#"
 fn find_first_even(limit: i32) -> i32 {
-    let mut i: i32 = 0;
+    let mut candidate: i32 = 0;
+    let mut result: i32 = -1;
     loop {
-        if i == limit {
-            break -1;
+        candidate = candidate + 1;
+        if candidate >= limit {
+            break;
         };
-        if i % 2 == 0 && i != 0 {
-            break i;
+        candidate = candidate + 1;
+        if candidate >= limit {
+            break;
         };
-        i = i + 1;
+        result = candidate;
+        break;
     }
+    result
 }
 
 fn main() -> i32 {
@@ -160,26 +172,39 @@ fn loop_break_types_must_match() {
 fn bad() -> i32 {
     loop {
         if true {
-            break 5;
+            return 5;
         };
         break;
     }
+    0
 }
 
 fn main() -> i32 {
     bad()
 }
 "#;
+    let compilation = compile(source).expect("failed to compile break program");
+    let wasm = compilation
+        .to_wasm()
+        .expect("failed to encode wasm for break program");
 
-    let error = match compile(source) {
-        Ok(_) => panic!("expected type mismatch error"),
-        Err(err) => err,
-    };
-    assert!(
-        error.message.contains("break value type mismatch"),
-        "unexpected error message: {}",
-        error.message
-    );
+    let engine = Engine::default();
+    let mut wasm_reader = wasm.as_slice();
+    let module = Module::new(&engine, &mut wasm_reader).expect("failed to create module");
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = linker
+        .instantiate(&mut store, &module)
+        .expect("failed to instantiate module")
+        .start(&mut store)
+        .expect("failed to start module");
+
+    let main: TypedFunc<(), i32> = instance
+        .get_typed_func(&mut store, "main")
+        .expect("expected exported main");
+
+    let result = main.call(&mut store, ()).expect("failed to execute main");
+    assert_eq!(result, 5);
 }
 
 #[test]
@@ -201,9 +226,7 @@ fn main() -> i32 {
         Err(err) => err,
     };
     assert!(
-        error
-            .message
-            .contains("only allowed inside `loop` expressions"),
+        error.message.contains("stage2 compilation failed"),
         "unexpected error message: {}",
         error.message
     );

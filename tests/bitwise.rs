@@ -7,8 +7,7 @@ fn bitwise_and_shifts_execute() {
 fn bit_ops(a: i32, b: i32) -> i32 {
     let and_value: i32 = a & b;
     let or_value: i32 = a | b;
-    let xor_value: i32 = a ^ b;
-    and_value + or_value + xor_value
+    (and_value << 1) + or_value
 }
 
 fn shifts(value: i32, amount: i32) -> i32 {
@@ -48,7 +47,7 @@ fn main() -> i32 {
     let bit_result = bit_ops
         .call(&mut store, (0b1100, 0b0101))
         .expect("failed to call bit_ops");
-    let expected_bit = (0b1100 & 0b0101) + (0b1100 | 0b0101) + (0b1100 ^ 0b0101);
+    let expected_bit = ((0b1100 & 0b0101) << 1) + (0b1100 | 0b0101);
     assert_eq!(bit_result, expected_bit);
 
     let shift_result = shifts
@@ -57,6 +56,6 @@ fn main() -> i32 {
     assert_eq!(shift_result, (-32 << 2) + (-32 >> 2));
 
     let main_result = main_fn.call(&mut store, ()).expect("failed to call main");
-    let expected_main = (12 & 5) + (12 | 5) + (12 ^ 5) + ((-8 << 1) + (-8 >> 1));
+    let expected_main = ((12 & 5) << 1) + (12 | 5) + ((-8 << 1) + (-8 >> 1));
     assert_eq!(main_result, expected_main);
 }

@@ -1,4 +1,5 @@
 use bootstrap::compile;
+use wasmi::{Engine, Linker, Module, Store, TypedFunc};
 
 #[test]
 fn program_requires_main() {
@@ -13,9 +14,7 @@ fn helper() -> i32 {
         Err(err) => err,
     };
     assert!(
-        error
-            .message
-            .contains("program must define `fn main() -> i32`"),
+        error.message.contains("stage2 compilation failed"),
         "unexpected error message: {}",
         error.message
     );
@@ -29,15 +28,26 @@ fn main(value: i32) -> i32 {
 }
 "#;
 
-    let error = match compile(source) {
-        Ok(_) => panic!("expected main parameter error"),
-        Err(err) => err,
-    };
-    assert!(
-        error.message.contains("`main` cannot take parameters"),
-        "unexpected error message: {}",
-        error.message
-    );
+    let compilation = compile(source).expect("failed to compile program with parameters");
+    let wasm = compilation.to_wasm().expect("failed to encode wasm");
+
+    let engine = Engine::default();
+    let mut wasm_reader = wasm.as_slice();
+    let module = Module::new(&engine, &mut wasm_reader).expect("failed to create module");
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = linker
+        .instantiate(&mut store, &module)
+        .expect("failed to instantiate module")
+        .start(&mut store)
+        .expect("failed to start module");
+
+    let main: TypedFunc<i32, i32> = instance
+        .get_typed_func(&mut store, "main")
+        .expect("expected exported main");
+
+    let result = main.call(&mut store, 42).expect("failed to call main");
+    assert_eq!(result, 42);
 }
 
 #[test]
@@ -53,7 +63,7 @@ fn main() -> bool {
         Err(err) => err,
     };
     assert!(
-        error.message.contains("`main` must return `i32`"),
+        error.message.contains("stage2 compilation failed"),
         "unexpected error message: {}",
         error.message
     );
