@@ -399,8 +399,7 @@ fn main() -> i32 {
 }
 
 #[test]
-#[ignore = "stage1 fails because it does not clear loop-scoped locals yet"]
-fn stage1_compiler_rejects_loop_local_redeclaration() {
+fn stage1_compiler_accepts_loop_local_redeclaration() {
     let (mut stage1, _) = prepare_stage1_compiler();
 
     let source = r#"
@@ -443,14 +442,9 @@ fn main() -> i32 {
 
     compile(source).expect("host compiler should accept debug program");
 
-    let failure = stage1
+    stage1
         .compile_at(0, 131072, source)
-        .expect_err("stage1 should still reject loop-local redeclarations");
-
-    assert_eq!(failure.compiled_functions, 1);
-    let locals_count_ptr = 131072 + 12280;
-    let registered_locals = stage1.read_i32(locals_count_ptr);
-    assert!(registered_locals > 0);
+        .expect("stage1 should accept loop-local redeclarations");
 }
 
 #[test]
