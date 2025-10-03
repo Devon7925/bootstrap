@@ -119,6 +119,98 @@ fn main() -> i32 {
 }
 
 #[test]
+fn stage1_compiler_accepts_else_if_chains() {
+    let (mut stage1, _) = prepare_stage1_compiler();
+
+    let source = r#"
+fn main() -> i32 {
+    let mut value: i32 = 3;
+    if value == 3 {
+        value = 1;
+    } else if value == 4 {
+        value = 2;
+    };
+    value
+}
+"#;
+
+    compile(source).expect("host compiler should accept else-if chains");
+
+    stage1
+        .compile_at(0, 131072, source)
+        .expect("stage1 should accept else-if chains");
+}
+
+#[test]
+fn stage1_compiler_accepts_else_if_inside_loops() {
+    let (mut stage1, _) = prepare_stage1_compiler();
+
+    let source = r#"
+fn main() -> i32 {
+    let mut total: i32 = 0;
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= 3 {
+            break;
+        };
+        if idx == 0 {
+            total = total + 1;
+        } else if idx == 1 {
+            total = total + 2;
+        };
+        idx = idx + 1;
+    };
+    total
+}
+"#;
+
+    compile(source).expect("host compiler should accept else-if chains inside loops");
+
+    stage1
+        .compile_at(0, 131072, source)
+        .expect("stage1 should accept else-if chains inside loops");
+}
+
+#[test]
+fn stage1_compiler_accepts_else_if_with_followup_else() {
+    let (mut stage1, _) = prepare_stage1_compiler();
+
+    let source = r#"
+fn main() -> i32 {
+    let func_count: i32 = 2;
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= func_count {
+            break;
+        };
+        let return_type: i32 = idx;
+        let mut wasm_return: i32 = 127;
+        if return_type == 1 {
+            wasm_return = 127;
+        } else if return_type == 2 {
+            wasm_return = 127;
+        };
+        if return_type == 0 {
+            wasm_return = wasm_return + 1;
+        } else {
+            wasm_return = wasm_return + 2;
+            wasm_return = wasm_return + 3;
+        };
+        idx = idx + 1;
+    };
+    idx
+}
+"#;
+
+    compile(source)
+        .expect("host compiler should accept else-if chains followed by else statements");
+
+    stage1
+        .compile_at(0, 131072, source)
+        .expect("stage1 should accept else-if chains followed by else statements");
+}
+
+#[test]
 fn stage1_compiler_accepts_unit_returns() {
     let (mut stage1, _) = prepare_stage1_compiler();
 
@@ -228,6 +320,39 @@ fn main() -> i32 {
 }
 
 #[test]
+fn stage1_compiler_accepts_nested_loops() {
+    let (mut stage1, _) = prepare_stage1_compiler();
+
+    let source = r#"
+fn main() -> i32 {
+    let mut outer: i32 = 0;
+    let mut inner_sum: i32 = 0;
+    loop {
+        if outer >= 2 {
+            break;
+        };
+        let mut inner: i32 = 0;
+        loop {
+            if inner >= 3 {
+                break;
+            };
+            inner_sum = inner_sum + inner;
+            inner = inner + 1;
+        };
+        outer = outer + 1;
+    };
+    inner_sum
+}
+"#;
+
+    compile(source).expect("host compiler should accept nested loops");
+
+    stage1
+        .compile_at(0, 131072, source)
+        .expect("stage1 should accept nested loops");
+}
+
+#[test]
 fn stage1_compiler_accepts_return_without_value() {
     let (mut stage1, _) = prepare_stage1_compiler();
 
@@ -249,6 +374,84 @@ fn main() -> i32 {
     stage1
         .compile_at(0, 131072, source)
         .expect("stage1 should accept explicit `return;` statements");
+}
+
+#[test]
+fn stage1_compiler_accepts_if_expression_results() {
+    let (mut stage1, _) = prepare_stage1_compiler();
+
+    let source = r#"
+fn select(flag: bool) -> i32 {
+    let value: i32 = if flag { 1 } else { 2 };
+    value
+}
+
+fn main() -> i32 {
+    select(true)
+}
+"#;
+
+    compile(source).expect("host compiler should accept if expressions with values");
+
+    stage1
+        .compile_at(0, 131072, source)
+        .expect("stage1 should accept if expressions with values");
+}
+
+#[test]
+fn stage1_compiler_accepts_if_expression_blocks_with_values() {
+    let (mut stage1, _) = prepare_stage1_compiler();
+
+    let source = r#"
+fn choose(flag: bool) -> i32 {
+    let result: i32 = if flag {
+        5
+    } else {
+        let base: i32 = 2;
+        base + 3
+    };
+    result
+}
+
+fn main() -> i32 {
+    choose(false)
+}
+"#;
+
+    compile(source)
+        .expect("host compiler should accept if expression blocks with tail values");
+
+    stage1
+        .compile_at(0, 131072, source)
+        .expect("stage1 should accept if expression blocks with tail values");
+}
+
+#[test]
+fn stage1_compiler_accepts_mutable_bool_locals() {
+    let (mut stage1, _) = prepare_stage1_compiler();
+
+    let source = r#"
+fn main() -> i32 {
+    let mut matched: bool = false;
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= 4 {
+            break;
+        };
+        if idx == 2 {
+            matched = true;
+        };
+        idx = idx + 1;
+    };
+    if matched { 1 } else { 0 }
+}
+"#;
+
+    compile(source).expect("host compiler should accept mutable bool locals");
+
+    stage1
+        .compile_at(0, 131072, source)
+        .expect("stage1 should accept mutable bool locals");
 }
 
 #[test]
