@@ -540,7 +540,6 @@ fn main() -> i32 {
 }
 
 #[test]
-#[ignore = "bug: stage1 compiler does not support forward references between functions"]
 fn stage1_compiler_supports_forward_function_references() {
     let (mut compiler, mut input_cursor, mut output_cursor) = prepare_stage1_compiler();
 
@@ -564,7 +563,6 @@ fn main() -> i32 {
 }
 
 #[test]
-#[ignore = "bug: stage1 compiler cannot compile mutually recursive functions"]
 fn stage1_compiler_supports_mutually_recursive_functions() {
     let (mut compiler, mut input_cursor, mut output_cursor) = prepare_stage1_compiler();
 
