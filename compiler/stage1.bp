@@ -1001,6 +1001,69 @@ fn expect_char(base: i32, len: i32, offset: i32, expected: i32) -> i32 {
     offset + 1
 }
 
+fn keyword_matches(
+    base: i32,
+    len: i32,
+    offset: i32,
+    keyword_len: i32,
+    keyword0: i32,
+    keyword1: i32,
+    keyword2: i32,
+    keyword3: i32,
+    keyword4: i32,
+    keyword5: i32,
+    keyword6: i32,
+    keyword7: i32,
+) -> bool {
+    if offset < 0 || offset >= len {
+        return false;
+    };
+    if offset + keyword_len > len {
+        return false;
+    };
+
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= keyword_len {
+            break;
+        };
+
+        let expected: i32 = if idx == 0 {
+            keyword0
+        } else if idx == 1 {
+            keyword1
+        } else if idx == 2 {
+            keyword2
+        } else if idx == 3 {
+            keyword3
+        } else if idx == 4 {
+            keyword4
+        } else if idx == 5 {
+            keyword5
+        } else if idx == 6 {
+            keyword6
+        } else {
+            keyword7
+        };
+
+        let actual: i32 = peek_byte(base, len, offset + idx);
+        if actual != expected {
+            return false;
+        };
+
+        idx = idx + 1;
+    };
+
+    if offset + keyword_len < len {
+        let next_byte: i32 = peek_byte(base, len, offset + keyword_len);
+        if is_identifier_continue(next_byte) {
+            return false;
+        };
+    };
+
+    true
+}
+
 fn expect_keyword_fn(base: i32, len: i32, offset: i32) -> i32 {
     let mut idx: i32 = expect_char(base, len, offset, 102);
     if idx < 0 {
@@ -4567,24 +4630,20 @@ fn register_function_signatures(
             break;
         };
 
-        let mut handled_type: bool = false;
-        if offset + 4 <= input_len {
-            let first_char: i32 = peek_byte(input_ptr, input_len, offset);
-            if first_char == 116 {
-                let second_char: i32 = peek_byte(input_ptr, input_len, offset + 1);
-                let third_char: i32 = peek_byte(input_ptr, input_len, offset + 2);
-                let fourth_char: i32 = peek_byte(input_ptr, input_len, offset + 3);
-                if second_char == 121 && third_char == 112 && fourth_char == 101 {
-                    let after_type: i32 = offset + 4;
-                    if after_type == input_len
-                        || !is_identifier_continue(peek_byte(input_ptr, input_len, after_type))
-                    {
-                        handled_type = true;
-                    };
-                };
-            };
-        };
-        if handled_type {
+        if keyword_matches(
+            input_ptr,
+            input_len,
+            offset,
+            4,
+            116,
+            121,
+            112,
+            101,
+            0,
+            0,
+            0,
+            0,
+        ) {
             offset = expect_keyword_type(input_ptr, input_len, offset);
             if offset < 0 {
                 return -1;
@@ -5008,24 +5067,20 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
             break;
         };
 
-        let mut handled_type: bool = false;
-        if offset + 4 <= input_len {
-            let first_char: i32 = peek_byte(input_ptr, input_len, offset);
-            if first_char == 116 {
-                let second_char: i32 = peek_byte(input_ptr, input_len, offset + 1);
-                let third_char: i32 = peek_byte(input_ptr, input_len, offset + 2);
-                let fourth_char: i32 = peek_byte(input_ptr, input_len, offset + 3);
-                if second_char == 121 && third_char == 112 && fourth_char == 101 {
-                    let after_type: i32 = offset + 4;
-                    if after_type == input_len
-                        || !is_identifier_continue(peek_byte(input_ptr, input_len, after_type))
-                    {
-                        handled_type = true;
-                    };
-                };
-            };
-        };
-        if handled_type {
+        if keyword_matches(
+            input_ptr,
+            input_len,
+            offset,
+            4,
+            116,
+            121,
+            112,
+            101,
+            0,
+            0,
+            0,
+            0,
+        ) {
             if compiled_type_index >= types_total {
                 return -1;
             };
