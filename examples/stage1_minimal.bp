@@ -2512,28 +2512,46 @@ fn parse_return_statement(
         };
     };
     idx = skip_whitespace(base, len, idx);
-    let saved_condition_instr: i32 = load_i32(instr_offset_ptr);
-    idx = parse_expression(
-        base,
-        len,
-        idx,
-        instr_base,
-        instr_offset_ptr,
-        locals_base,
-        locals_count_ptr,
-        control_stack_base,
-        control_stack_count_ptr,
-        functions_base,
-        functions_count_ptr,
-        expr_type_ptr
-        );
-    if idx < 0 {
+    if idx >= len {
         return -1;
     };
-    idx = skip_whitespace(base, len, idx);
-    idx = expect_char(base, len, idx, 59);
-    if idx < 0 {
-        return -1;
+    let expected_return: i32 = load_i32(functions_base - 4);
+    let next_byte: i32 = peek_byte(base, len, idx);
+    if next_byte == 59 {
+        if expected_return != type_code_unit() {
+            return -1;
+        };
+        idx = idx + 1;
+    } else {
+        let saved_instr_offset: i32 = load_i32(instr_offset_ptr);
+        idx = parse_expression(
+            base,
+            len,
+            idx,
+            instr_base,
+            instr_offset_ptr,
+            locals_base,
+            locals_count_ptr,
+            control_stack_base,
+            control_stack_count_ptr,
+            functions_base,
+            functions_count_ptr,
+            expr_type_ptr
+            );
+        if idx < 0 {
+            store_i32(instr_offset_ptr, saved_instr_offset);
+            return -1;
+        };
+        if get_expr_type(expr_type_ptr) != expected_return {
+            store_i32(instr_offset_ptr, saved_instr_offset);
+            return -1;
+        };
+        idx = skip_whitespace(base, len, idx);
+        idx = expect_char(base, len, idx, 59);
+        if idx < 0 {
+            store_i32(instr_offset_ptr, saved_instr_offset);
+            return -1;
+        };
     };
 
     let mut instr_offset: i32 = load_i32(instr_offset_ptr);
@@ -4335,6 +4353,8 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
     let control_stack_base: i32 = out_ptr + 16388;
     let functions_count_ptr: i32 = out_ptr + 40952;
     let functions_base: i32 = out_ptr + 40960;
+    let current_return_type_ptr: i32 = functions_base - 4;
+    store_i32(current_return_type_ptr, type_code_unit());
     store_i32(functions_count_ptr, 0);
 
     let main_index: i32 = register_function_signatures(
@@ -4608,6 +4628,8 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
                 return -1;
             };
         };
+
+        store_i32(current_return_type_ptr, expected_return);
 
         if offset < input_len {
             let after_type: i32 = peek_byte(input_ptr, input_len, offset);
