@@ -259,6 +259,89 @@ fn main() -> i32 {
 }
 
 #[test]
+fn stage1_compiler_accepts_function_calls_in_equality_conditions() {
+    let (mut stage1, _) = prepare_stage1_compiler();
+    let output_ptr = stage1_output_ptr(&stage1);
+
+    let source = r#"
+fn type_code_i32() -> i32 { 1 }
+
+fn type_code_bool() -> i32 { 2 }
+
+fn get_type(flag: bool) -> i32 {
+    if flag { 1 } else { 2 }
+}
+
+fn main() -> i32 {
+    let mut result: i32 = 0;
+    if get_type(true) == type_code_i32() {
+        result = result + 10;
+    } else if get_type(false) == type_code_bool() {
+        result = result + 20;
+    };
+    result
+}
+"#;
+
+    compile(source).expect("host compiler should accept function calls in equality conditions");
+
+    stage1
+        .compile_at(0, output_ptr, source)
+        .expect("stage1 should accept function calls in equality conditions");
+}
+
+#[test]
+fn stage1_compiler_accepts_function_calls_in_inequality_conditions() {
+    let (mut stage1, _) = prepare_stage1_compiler();
+    let output_ptr = stage1_output_ptr(&stage1);
+
+    let source = r#"
+fn type_code_unit() -> i32 { 0 }
+
+fn type_code_i32() -> i32 { 1 }
+
+fn main() -> i32 {
+    let mut payload: i32 = 4;
+    if type_code_i32() != type_code_unit() {
+        payload = payload + 1;
+    };
+    payload
+}
+"#;
+
+    compile(source)
+        .expect("host compiler should accept function calls in inequality conditions");
+
+    stage1
+        .compile_at(0, output_ptr, source)
+        .expect("stage1 should accept function calls in inequality conditions");
+}
+
+#[test]
+fn stage1_compiler_accepts_expression_arguments_in_function_calls() {
+    let (mut stage1, _) = prepare_stage1_compiler();
+    let output_ptr = stage1_output_ptr(&stage1);
+
+    let source = r#"
+fn read(offset: i32) -> i32 {
+    offset
+}
+
+fn main() -> i32 {
+    let base: i32 = 8;
+    read(base + 4)
+}
+"#;
+
+    compile(source)
+        .expect("host compiler should accept expression arguments in function calls");
+
+    stage1
+        .compile_at(0, output_ptr, source)
+        .expect("stage1 should accept expression arguments in function calls");
+}
+
+#[test]
 fn stage1_compiler_accepts_line_comments() {
     let (mut stage1, _) = prepare_stage1_compiler();
     let output_ptr = stage1_output_ptr(&stage1);
