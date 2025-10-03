@@ -741,14 +741,12 @@ fn main() -> i32 {
 }
 
 #[test]
-#[ignore]
 fn stage1_shadowed_name_len_repro() {
     let (mut stage1, _) = prepare_stage1_compiler();
     let output_ptr = stage1_output_ptr(&stage1);
 
-    // Stage1 rejects this program because it confuses the inner `name_len` binding with
-    // the outer one. When the loop exits the bootstrapped compiler tries to restore the
-    // outer `name_len`'s value, so it fails to compile even though the code is valid.
+    // Stage1 previously rejected this program because it confused the inner `name_len`
+    // binding with the outer one. This regression test ensures the bug remains fixed.
     let source = r#"
 fn main() -> i32 {
     let mut name_len: i32 = 0;
@@ -766,6 +764,6 @@ fn main() -> i32 {
 
     stage1
         .compile_at(0, output_ptr, source)
-        .expect_err("stage1 should fail when compiling name_len shadowing repro");
+        .expect("stage1 should accept name_len shadowing repro");
 }
 
