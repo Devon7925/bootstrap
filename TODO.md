@@ -16,6 +16,7 @@
   The parser in stage1 inlines keyword matching, delimiter handling, and whitespace skipping at every call site, making the 5k+ line file hard to follow and extend. Extracting reusable helpers for repeated loops (parameter lists, return types, block scanning) would shrink the `compile` pipeline and clarify control flow.
   *Reference:* Repeated ad-hoc parsing logic inside `compile`【F:compiler/stage1.bp†L4560-L4662】
 
-- [ ] **Centralize stage1 memory layout constants**
+- [x] **Centralize stage1 memory layout constants**
   The `compile` routine hand-computes offsets like `out_ptr + 4096` and `instr_base + instr_capacity - 12` each time, obscuring the intent of the scratch buffer layout. Introducing named constants or a small struct to manage these regions would make the code self-documenting and reduce arithmetic mistakes when the layout changes.
   *Reference:* Hard-coded scratch buffer offsets in `compile`【F:compiler/stage1.bp†L4665-L4679】
+  *Status:* Introduced helper functions encapsulating scratch buffer offsets and capacities so `compile` no longer performs manual offset arithmetic.

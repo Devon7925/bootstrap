@@ -41,6 +41,86 @@ fn emit_local_set(base: i32, offset: i32, index: i32) -> i32 {
     out
 }
 
+fn word_size() -> i32 {
+    4
+}
+
+fn scratch_instr_offset() -> i32 {
+    4096
+}
+
+fn scratch_expr_type_offset() -> i32 {
+    4092
+}
+
+fn scratch_instr_base_offset() -> i32 {
+    8192
+}
+
+fn scratch_instr_capacity() -> i32 {
+    65536
+}
+
+fn scratch_locals_capacity() -> i32 {
+    4096
+}
+
+fn scratch_locals_metadata_size() -> i32 {
+    12
+}
+
+fn scratch_functions_count_offset() -> i32 {
+    851960
+}
+
+fn scratch_functions_base_offset() -> i32 {
+    851968
+}
+
+fn scratch_instr_offset_ptr(out_ptr: i32) -> i32 {
+    out_ptr + scratch_instr_offset()
+}
+
+fn scratch_expr_type_ptr(out_ptr: i32) -> i32 {
+    out_ptr + scratch_expr_type_offset()
+}
+
+fn scratch_instr_base(out_ptr: i32) -> i32 {
+    out_ptr + scratch_instr_base_offset()
+}
+
+fn scratch_locals_max_ptr(instr_base: i32) -> i32 {
+    instr_base + scratch_instr_capacity() - scratch_locals_metadata_size()
+}
+
+fn scratch_locals_count_ptr(instr_base: i32) -> i32 {
+    scratch_locals_max_ptr(instr_base) + word_size()
+}
+
+fn scratch_locals_base(instr_base: i32) -> i32 {
+    instr_base + scratch_instr_capacity()
+}
+
+fn scratch_control_stack_count_ptr(instr_base: i32) -> i32 {
+    scratch_locals_base(instr_base) + scratch_locals_capacity()
+}
+
+fn scratch_control_stack_base(instr_base: i32) -> i32 {
+    scratch_control_stack_count_ptr(instr_base) + word_size()
+}
+
+fn scratch_functions_count_ptr(out_ptr: i32) -> i32 {
+    out_ptr + scratch_functions_count_offset()
+}
+
+fn scratch_functions_base(out_ptr: i32) -> i32 {
+    out_ptr + scratch_functions_base_offset()
+}
+
+fn scratch_current_return_type_ptr(out_ptr: i32) -> i32 {
+    scratch_functions_base(out_ptr) - word_size()
+}
+
 fn emit_call(base: i32, offset: i32, index: i32) -> i32 {
     let mut out: i32 = write_byte(base, offset, 16);
     out = write_u32_leb(base, out, index);
@@ -4666,22 +4746,22 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
         return -1;
     };
 
-    let instr_offset_ptr: i32 = out_ptr + 4096;
+    let instr_offset_ptr: i32 = scratch_instr_offset_ptr(out_ptr);
     store_i32(instr_offset_ptr, 0);
-    let instr_base: i32 = out_ptr + 8192;
-    let expr_type_ptr: i32 = out_ptr + 4092;
+    let instr_base: i32 = scratch_instr_base(out_ptr);
+    let expr_type_ptr: i32 = scratch_expr_type_ptr(out_ptr);
     store_i32(expr_type_ptr, -1);
-    let instr_capacity: i32 = 65536;
-    let locals_capacity: i32 = 4096;
-    let locals_max_ptr: i32 = instr_base + instr_capacity - 12;
+    let instr_capacity: i32 = scratch_instr_capacity();
+    let locals_capacity: i32 = scratch_locals_capacity();
+    let locals_max_ptr: i32 = scratch_locals_max_ptr(instr_base);
     store_i32(locals_max_ptr, 0);
-    let locals_count_ptr: i32 = instr_base + instr_capacity - 8;
-    let locals_base: i32 = instr_base + instr_capacity;
-    let control_stack_count_ptr: i32 = locals_base + locals_capacity;
-    let control_stack_base: i32 = control_stack_count_ptr + 4;
-    let functions_count_ptr: i32 = out_ptr + 851960;
-    let functions_base: i32 = out_ptr + 851968;
-    let current_return_type_ptr: i32 = functions_base - 4;
+    let locals_count_ptr: i32 = scratch_locals_count_ptr(instr_base);
+    let locals_base: i32 = scratch_locals_base(instr_base);
+    let control_stack_count_ptr: i32 = scratch_control_stack_count_ptr(instr_base);
+    let control_stack_base: i32 = scratch_control_stack_base(instr_base);
+    let functions_count_ptr: i32 = scratch_functions_count_ptr(out_ptr);
+    let functions_base: i32 = scratch_functions_base(out_ptr);
+    let current_return_type_ptr: i32 = scratch_current_return_type_ptr(out_ptr);
     store_i32(current_return_type_ptr, type_code_unit());
     store_i32(functions_count_ptr, 0);
 
