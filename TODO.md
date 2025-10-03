@@ -8,9 +8,10 @@
   The concept specifies that string constants should become local byte arrays, but stage1 currently lacks any parsing for quoted literals. Teaching the tokenizer and expression lowering to recognize strings and materialize them as `u8` arrays would align the implementation with the design.
   *Reference:* String constant rule【F:concept.md†L31-L31】, absence of string literal handling in stage1 (no quoted literal parsing)【258989†L1-L2】
 
-- [ ] **Parse and register `type` definitions in stage1**
+- [x] **Parse and register `type` definitions in stage1**
   Treating types as constant values requires a place to declare them, but the stage1 compiler presently scans only `fn` items. Allowing `type` aliases (e.g., `type Bytes = Array<u8, N>;`) to be recorded before function compilation would start building the infrastructure for type-level programming without affecting existing codegen.
   *Reference:* Type-as-constant goal【F:concept.md†L10-L13】, function-only parser loop【F:compiler/stage1.bp†L4580-L4619】
+  *Status:* Stage1 now scans `type` aliases before functions, records their source spans in a dedicated table, and verifies the metadata while compiling function bodies.
 
 - [ ] **Factor stage1 parsing into reusable helpers**
   The parser in stage1 inlines keyword matching, delimiter handling, and whitespace skipping at every call site, making the 5k+ line file hard to follow and extend. Extracting reusable helpers for repeated loops (parameter lists, return types, block scanning) would shrink the `compile` pipeline and clarify control flow.
