@@ -66,8 +66,8 @@ fn stage1_compiler_identifies_remaining_bootstrap_blocker() {
                 "stage1 should advance code generation before failing"
             );
             assert_eq!(
-                compiled_functions, 84,
-                "stage1 currently stops compiling at function index 84"
+                compiled_functions, 117,
+                "stage1 currently stops compiling at function index 117"
             );
 
             let tokens = Lexer::new(&stage1_source)
@@ -85,8 +85,8 @@ fn stage1_compiler_identifies_remaining_bootstrap_blocker() {
 
             let failing_function = &program.functions[compiled_functions as usize];
             assert_eq!(
-                failing_function.name, "write_type_section",
-                "stage1 now fails while compiling write_type_section (first function containing an else-if chain)"
+                failing_function.name, "register_function_signatures",
+                "stage1 now fails while compiling register_function_signatures (function responsible for collecting all function signatures)"
             );
         }
     }
@@ -661,3 +661,82 @@ fn main() -> i32 {
         .compile_at(0, output_ptr, source)
         .expect("stage1 should accept shift operators");
 }
+
+#[test]
+fn stage1_compiler_accepts_less_equal_comparisons() {
+    let (mut stage1, _) = prepare_stage1_compiler();
+    let output_ptr = stage1_output_ptr(&stage1);
+
+    let source = r#"
+fn within_bounds(index: i32, len: i32) -> i32 {
+    if index + 4 <= len {
+        1
+    } else {
+        0
+    }
+}
+
+fn main() -> i32 {
+    within_bounds(3, 10)
+}
+"#;
+
+    compile(source).expect("host compiler should accept less-equal comparisons");
+
+    stage1
+        .compile_at(0, output_ptr, source)
+        .expect("stage1 should accept less-equal comparisons");
+}
+
+#[test]
+fn stage1_compiler_accepts_logical_and_chains() {
+    let (mut stage1, _) = prepare_stage1_compiler();
+    let output_ptr = stage1_output_ptr(&stage1);
+
+    let source = r#"
+fn matches_sequence(a: i32, b: i32, c: i32) -> i32 {
+    if a == 1 && b == 2 && c == 3 {
+        1
+    } else {
+        0
+    }
+}
+
+fn main() -> i32 {
+    matches_sequence(1, 2, 4)
+}
+"#;
+
+    compile(source).expect("host compiler should accept logical and chains");
+
+    stage1
+        .compile_at(0, output_ptr, source)
+        .expect("stage1 should accept logical and chains");
+}
+
+#[test]
+fn stage1_compiler_accepts_logical_or_with_negation() {
+    let (mut stage1, _) = prepare_stage1_compiler();
+    let output_ptr = stage1_output_ptr(&stage1);
+
+    let source = r#"
+fn is_boundary(idx: i32, len: i32) -> bool {
+    idx == 0 || idx == len
+}
+
+fn main() -> i32 {
+    if is_boundary(0, 8) || !is_boundary(4, 8) {
+        1
+    } else {
+        0
+    }
+}
+"#;
+
+    compile(source).expect("host compiler should accept logical or expressions");
+
+    stage1
+        .compile_at(0, output_ptr, source)
+        .expect("stage1 should accept logical or expressions");
+}
+
