@@ -243,7 +243,7 @@ fn main() -> i32 {
 }
 
 #[test]
-fn stage1_compiler_rejects_bit_shifts() {
+fn stage1_compiler_accepts_bit_shifts() {
     let (mut stage1, _) = prepare_stage1_compiler();
 
     let source = r#"
@@ -255,8 +255,7 @@ fn main() -> i32 {
 
     compile(source).expect("host compiler should accept shift operators");
 
-    assert!(
-        stage1.compile_at(0, 131072, source).is_err(),
-        "stage1 still rejects shift operators"
-    );
+    stage1
+        .compile_at(0, 131072, source)
+        .expect("stage1 should accept shift operators");
 }
