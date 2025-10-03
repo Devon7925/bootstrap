@@ -17,6 +17,6 @@
   Stage1 threads the `base`, `len`, and index triplet through nearly every parsing function, reapplying whitespace skipping and byte peeks manually. Creating a lightweight cursor struct with methods for advancing, peeking, and matching delimiters would reduce parameter lists and make control flow clearer.
   *Reference:* Parsing functions repeatedly pass `base`, `len`, and `idx` while chaining `skip_whitespace` and `expect_char` calls【F:compiler/stage1.bp†L4520-L4547】
 
-- [ ] **Centralize keyword recognition logic**
+- [x] **Centralize keyword recognition logic**
   Detecting `type` and other keywords currently performs ad-hoc byte comparisons for each character before dispatching, leading to verbose and error-prone control flow. Providing a shared helper that validates reserved words and their boundaries would simplify loops that scan items during registration.
   *Reference:* Manual `type` keyword detection compares individual bytes before calling `expect_keyword_type`【F:compiler/stage1.bp†L4564-L4598】
