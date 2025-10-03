@@ -13,7 +13,7 @@
   The concept specifies that string constants should become local byte arrays, but stage1 currently lacks any parsing for quoted literals. Teaching the tokenizer and expression lowering to recognize strings and materialize them as `u8` arrays would align the implementation with the design.
   *Reference:* String constant rule【F:concept.md†L31-L31】, absence of string literal handling in stage1 (no quoted literal parsing)【258989†L1-L2】
 
-- [ ] **Implement `load_u16`/`store_u16` intrinsics**
+- [x] **Implement `load_u16`/`store_u16` intrinsics**
   Unsigned 16-bit integers are part of the language plan, yet the intrinsic table only exposes byte and 32-bit loads/stores. Adding 16-bit variants plus Wasm codegen would make it easier to model packed memory layouts.
   *Reference:* Numeric type requirements【F:concept.md†L22-L24】, current intrinsic coverage【F:compiler/stage1.bp†L247-L330】
 
