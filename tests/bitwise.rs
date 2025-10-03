@@ -1,4 +1,7 @@
-use bootstrap::compile;
+#[path = "stage1_helpers.rs"]
+mod stage1_helpers;
+
+use stage1_helpers::compile_with_stage1;
 use wasmi::{Engine, Linker, Module, Store, TypedFunc};
 
 #[test]
@@ -19,10 +22,7 @@ fn main() -> i32 {
 }
 "#;
 
-    let compilation = compile(source).expect("failed to compile bitwise program");
-    let wasm = compilation
-        .to_wasm()
-        .expect("failed to encode wasm for bitwise program");
+    let wasm = compile_with_stage1(source);
 
     let engine = Engine::default();
     let module = Module::new(&engine, wasm.as_slice()).expect("failed to create module");
