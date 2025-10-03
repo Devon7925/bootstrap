@@ -7,7 +7,7 @@ use std::process::{self, Command, Stdio};
 use bootstrap::compile;
 use wasmi::{Engine, Linker, Memory, Module, Store, TypedFunc};
 
-const STAGE1_SOURCE_PATH: &str = "examples/stage1_minimal.bp";
+const STAGE1_SOURCE_PATH: &str = "compiler/stage1.bp";
 const STAGE2_OUTPUT_PATH: &str = "stage2.wasm";
 const STAGE1_INPUT_PTR: usize = 0;
 const STAGE1_FUNCTION_ENTRY_SIZE: usize = 32;

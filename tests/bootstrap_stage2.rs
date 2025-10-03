@@ -1,22 +1,15 @@
-use std::fs;
-
-use bootstrap::compile;
-
 #[path = "wasm_harness.rs"]
 mod wasm_harness;
 
 use wasm_harness::{CompilerInstance, run_wasm_main};
 
-fn prepare_stage1_compiler() -> (CompilerInstance, String) {
-    let stage1_source =
-        fs::read_to_string("examples/stage1_minimal.bp").expect("failed to load stage1 source");
+#[path = "stage1_helpers.rs"]
+mod stage1_helpers;
 
-    let stage1_compilation = compile(&stage1_source).expect("failed to compile stage1 source");
-    let stage1_wasm = stage1_compilation
-        .to_wasm()
-        .expect("failed to encode stage1 wasm");
+use stage1_helpers::{stage1_source, stage1_wasm};
 
-    (CompilerInstance::new(stage1_wasm.as_slice()), stage1_source)
+fn prepare_stage1_compiler() -> (CompilerInstance, &'static str) {
+    (CompilerInstance::new(stage1_wasm()), stage1_source())
 }
 
 const STAGE1_FUNCTION_ENTRY_SIZE: usize = 32;
@@ -114,7 +107,6 @@ fn main() -> i32 {
 }
 "#;
 
-    compile(source).expect("host compiler should accept break-with-value");
 
     stage1
         .compile_at(0, output_ptr, source)
@@ -134,7 +126,6 @@ fn main() -> i32 {
 }
 "#;
 
-    compile(source).expect("host compiler should accept loop expressions with values");
 
     stage1
         .compile_at(0, output_ptr, source)
@@ -158,7 +149,6 @@ fn main() -> i32 {
 }
 "#;
 
-    compile(source).expect("host compiler should accept else-if chains");
 
     stage1
         .compile_at(0, output_ptr, source)
@@ -189,7 +179,6 @@ fn main() -> i32 {
 }
 "#;
 
-    compile(source).expect("host compiler should accept else-if chains inside loops");
 
     stage1
         .compile_at(0, output_ptr, source)
@@ -228,8 +217,6 @@ fn main() -> i32 {
 }
 "#;
 
-    compile(source)
-        .expect("host compiler should accept else-if chains followed by else statements");
 
     stage1
         .compile_at(0, output_ptr, source)
@@ -252,7 +239,6 @@ fn main() -> i32 {
 }
 "#;
 
-    compile(source).expect("host compiler should accept implicit unit return");
 
     stage1
         .compile_at(0, output_ptr, source)
@@ -284,7 +270,6 @@ fn main() -> i32 {
 }
 "#;
 
-    compile(source).expect("host compiler should accept function calls in equality conditions");
 
     stage1
         .compile_at(0, output_ptr, source)
@@ -310,7 +295,6 @@ fn main() -> i32 {
 }
 "#;
 
-    compile(source).expect("host compiler should accept function calls in inequality conditions");
 
     stage1
         .compile_at(0, output_ptr, source)
@@ -333,7 +317,6 @@ fn main() -> i32 {
 }
 "#;
 
-    compile(source).expect("host compiler should accept expression arguments in function calls");
 
     stage1
         .compile_at(0, output_ptr, source)
@@ -357,7 +340,6 @@ fn main() -> i32 {
 }
 "#;
 
-    compile(source).expect("host compiler should accept line comments");
 
     stage1
         .compile_at(0, output_ptr, source)
@@ -379,7 +361,6 @@ fn main() -> i32 {
 }
 "#;
 
-    compile(source).expect("host compiler should accept not-equal comparisons");
 
     stage1
         .compile_at(0, output_ptr, source)
@@ -402,7 +383,6 @@ fn main() -> i32 {
 }
 "#;
 
-    compile(source).expect("host compiler should accept greater-equal comparisons");
 
     stage1
         .compile_at(0, output_ptr, source)
@@ -424,7 +404,6 @@ fn main() -> i32 {
 }
 "#;
 
-    compile(source).expect("host compiler should accept bitwise and/or");
 
     stage1
         .compile_at(0, output_ptr, source)
@@ -458,7 +437,6 @@ fn main() -> i32 {
 }
 "#;
 
-    compile(source).expect("host compiler should accept nested loops");
 
     stage1
         .compile_at(0, output_ptr, source)
@@ -483,7 +461,6 @@ fn main() -> i32 {
 }
 "#;
 
-    compile(source).expect("host compiler should accept explicit unit returns");
 
     stage1
         .compile_at(0, output_ptr, source)
@@ -506,7 +483,6 @@ fn main() -> i32 {
 }
 "#;
 
-    compile(source).expect("host compiler should accept if expressions with values");
 
     stage1
         .compile_at(0, output_ptr, source)
@@ -556,7 +532,6 @@ fn main() -> i32 {
 }
 "#;
 
-    compile(source).expect("host compiler should accept debug program");
 
     stage1
         .compile_at(0, output_ptr, source)
@@ -584,7 +559,6 @@ fn main() -> i32 {
 }
 "#;
 
-    compile(source).expect("host compiler should accept if expression blocks with tail values");
 
     stage1
         .compile_at(0, output_ptr, source)
@@ -613,7 +587,6 @@ fn main() -> i32 {
 }
 "#;
 
-    compile(source).expect("host compiler should accept mutable bool locals");
 
     stage1
         .compile_at(0, output_ptr, source)
@@ -634,7 +607,6 @@ fn stage1_compiler_minimal_write_type_section_repro() {
     }
     source.push_str("    value\n}\n");
 
-    compile(&source).expect("host compiler should accept large function bodies");
 
     stage1.compile_at(0, output_ptr, &source).expect(
         "stage1 should compile large function bodies without exhausting its instruction buffer",
@@ -653,7 +625,6 @@ fn main() -> i32 {
 }
 "#;
 
-    compile(source).expect("host compiler should accept shift operators");
 
     stage1
         .compile_at(0, output_ptr, source)
@@ -679,7 +650,6 @@ fn main() -> i32 {
 }
 "#;
 
-    compile(source).expect("host compiler should accept less-equal comparisons");
 
     stage1
         .compile_at(0, output_ptr, source)
@@ -705,7 +675,6 @@ fn main() -> i32 {
 }
 "#;
 
-    compile(source).expect("host compiler should accept logical and chains");
 
     stage1
         .compile_at(0, output_ptr, source)
@@ -731,7 +700,6 @@ fn main() -> i32 {
 }
 "#;
 
-    compile(source).expect("host compiler should accept logical or expressions");
 
     stage1
         .compile_at(0, output_ptr, source)
@@ -758,7 +726,6 @@ fn main() -> i32 {
 }
 "#;
 
-    compile(source).expect("host compiler should accept name_len shadowing repro");
 
     stage1
         .compile_at(0, output_ptr, source)
