@@ -623,6 +623,35 @@ fn main() -> i32 {
 }
 
 #[test]
+#[ignore = "stage1 runs out of instruction space while emitting large functions"]
+fn stage1_compiler_minimal_write_type_section_repro() {
+    let (mut stage1, _) = prepare_stage1_compiler();
+    let output_ptr = stage1_output_ptr(&stage1);
+
+    // stage1 reserves only 4 KiB for the instruction buffer (see `compile` in stage1).
+    // A sufficiently large function body exhausts this capacity and causes a trap.
+    let iteration_count = 3000;
+    let mut source = String::from("fn main() -> i32 {\n    let mut value: i32 = 0;\n");
+    for _ in 0..iteration_count {
+        source.push_str("    value = value + 1;\n");
+    }
+    source.push_str("    value\n}\n");
+
+    compile(&source).expect("host compiler should accept large function bodies");
+
+    let failure = stage1
+        .compile_at(0, output_ptr, &source)
+        .expect_err("stage1 currently overflows its instruction buffer");
+
+    assert_eq!(failure.produced_len, -1, "stage1 reports buffer overflow via -1 output length");
+    assert!(
+        failure.instr_offset >= 4096,
+        "stage1 should exhaust the 4KB instruction buffer (got offset={})",
+        failure.instr_offset
+    );
+}
+
+#[test]
 fn stage1_compiler_accepts_bit_shifts() {
     let (mut stage1, _) = prepare_stage1_compiler();
     let output_ptr = stage1_output_ptr(&stage1);
