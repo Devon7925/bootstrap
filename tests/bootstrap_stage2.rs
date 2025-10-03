@@ -95,3 +95,32 @@ fn main() -> i32 {
         .compile_at(0, 131072, source)
         .expect("stage1 should accept loop expression result");
 }
+
+#[test]
+fn stage1_compiler_identifies_unit_return_blocker() {
+    let (mut stage1, _) = prepare_stage1_compiler();
+
+    let source = r#"
+fn helper() {
+    store_i32(0, 1);
+}
+
+fn main() -> i32 {
+    helper();
+    0
+}
+"#;
+
+    compile(source).expect("host compiler should accept implicit unit return");
+
+    let result = stage1.compile_at(0, 131072, source);
+    match result {
+        Ok(_) => panic!("stage1 unexpectedly compiled implicit unit return"),
+        Err(CompileFailure { produced_len, .. }) => {
+            assert!(
+                produced_len <= 0,
+                "stage1 failure should surface through compile error sentinel"
+            );
+        }
+    }
+}
