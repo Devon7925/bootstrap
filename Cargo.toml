@@ -5,6 +5,3 @@ edition = "2024"
 
 [dependencies]
 wasmi = "0.31"
-
-[dev-dependencies]
-wasmparser = "0.239"
