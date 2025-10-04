@@ -319,7 +319,7 @@ fn ast_max_functions() -> i32 {
 }
 
 fn ast_function_entry_size() -> i32 {
-    20
+    24
 }
 
 fn ast_names_capacity() -> i32 {
@@ -372,13 +372,22 @@ fn ast_store_name(ast_base: i32, source_base: i32, start: i32, len: i32) -> i32 
     name_ptr
 }
 
-fn ast_write_function_entry(ast_base: i32, index: i32, name_ptr: i32, name_len: i32, literal_value: i32) {
+fn ast_write_function_entry(
+    ast_base: i32,
+    index: i32,
+    name_ptr: i32,
+    name_len: i32,
+    body_kind: i32,
+    body_data0: i32,
+    body_data1: i32,
+) {
     let entry_ptr: i32 = ast_function_entry_ptr(ast_base, index);
     store_i32(entry_ptr, name_ptr);
     store_i32(entry_ptr + 4, name_len);
-    store_i32(entry_ptr + 8, 0);
-    store_i32(entry_ptr + 12, 0);
-    store_i32(entry_ptr + 16, literal_value);
+    store_i32(entry_ptr + 8, body_kind);
+    store_i32(entry_ptr + 12, body_data0);
+    store_i32(entry_ptr + 16, body_data1);
+    store_i32(entry_ptr + 20, 0);
 }
 
 fn ast_extra_base(ast_base: i32) -> i32 {
@@ -437,9 +446,52 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     cursor = skip_whitespace(base, len, cursor);
 
     let literal_ptr: i32 = temp_base + 8;
-    cursor = parse_i32_literal(base, len, cursor, literal_ptr);
-    if cursor < 0 {
+    let call_start_ptr: i32 = temp_base + 12;
+    let call_len_ptr: i32 = temp_base + 16;
+    let mut body_kind: i32 = -1;
+    let mut body_data0: i32 = 0;
+    let mut body_data1: i32 = 0;
+
+    if cursor >= len {
         return -1;
+    };
+    let first_body_byte: i32 = load_u8(base + cursor);
+    if first_body_byte == 45 || is_digit(first_body_byte) {
+        cursor = parse_i32_literal(base, len, cursor, literal_ptr);
+        if cursor < 0 {
+            return -1;
+        };
+        body_kind = 0;
+        body_data0 = load_i32(literal_ptr);
+        body_data1 = 0;
+    } else {
+        if !is_identifier_start(first_body_byte) {
+            return -1;
+        };
+        cursor = parse_identifier(base, len, cursor, call_start_ptr, call_len_ptr);
+        if cursor < 0 {
+            return -1;
+        };
+        cursor = skip_whitespace(base, len, cursor);
+        cursor = expect_char(base, len, cursor, 40);
+        if cursor < 0 {
+            return -1;
+        };
+        cursor = skip_whitespace(base, len, cursor);
+        cursor = expect_char(base, len, cursor, 41);
+        if cursor < 0 {
+            return -1;
+        };
+        body_kind = 1;
+        let call_start: i32 = load_i32(call_start_ptr);
+        let call_len: i32 = load_i32(call_len_ptr);
+        let call_name_ptr: i32 = ast_store_name(ast_base, base, call_start, call_len);
+        if call_name_ptr < 0 {
+            return -1;
+        };
+        body_data0 = call_name_ptr;
+        body_data1 = call_len;
+        cursor = skip_whitespace(base, len, cursor);
     };
 
     cursor = skip_whitespace(base, len, cursor);
@@ -459,8 +511,18 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     if name_ptr < 0 {
         return -1;
     };
-    let literal_value: i32 = load_i32(literal_ptr);
-    ast_write_function_entry(ast_base, func_index, name_ptr, name_len, literal_value);
+    if body_kind < 0 {
+        return -1;
+    };
+    ast_write_function_entry(
+        ast_base,
+        func_index,
+        name_ptr,
+        name_len,
+        body_kind,
+        body_data0,
+        body_data1,
+    );
     cursor
 }
 
@@ -522,6 +584,7 @@ fn validate_program(ast_base: i32, func_count: i32) -> i32 {
         let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
         let name_ptr: i32 = load_i32(entry_ptr);
         let name_len: i32 = load_i32(entry_ptr + 4);
+        let body_kind: i32 = load_i32(entry_ptr + 8);
         if name_len == 4 {
             if identifiers_match(name_ptr, name_len, main_name_ptr, 4) {
                 main_count = main_count + 1;
@@ -541,6 +604,38 @@ fn validate_program(ast_base: i32, func_count: i32) -> i32 {
                 };
             };
             other_idx = other_idx + 1;
+        };
+
+        if body_kind == 1 {
+            let call_name_ptr: i32 = load_i32(entry_ptr + 12);
+            let call_name_len: i32 = load_i32(entry_ptr + 16);
+            let mut target_idx: i32 = 0;
+            let mut found: bool = false;
+            loop {
+                if target_idx >= func_count {
+                    break;
+                };
+                let target_entry_ptr: i32 = ast_function_entry_ptr(ast_base, target_idx);
+                let target_name_ptr: i32 = load_i32(target_entry_ptr);
+                let target_name_len: i32 = load_i32(target_entry_ptr + 4);
+                if call_name_len == target_name_len {
+                    if identifiers_match(
+                        call_name_ptr,
+                        call_name_len,
+                        target_name_ptr,
+                        target_name_len,
+                    ) {
+                        found = true;
+                        break;
+                    };
+                };
+                target_idx = target_idx + 1;
+            };
+            if !found {
+                return -1;
+            };
+            store_i32(entry_ptr + 12, target_idx);
+            store_i32(entry_ptr + 16, 0);
         };
         idx = idx + 1;
     };
@@ -654,8 +749,15 @@ fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
             break;
         };
         let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
-        let literal_value: i32 = load_i32(entry_ptr + 16);
-        let body_size: i32 = 1 + 1 + leb_i32_len(literal_value) + 1;
+        let body_kind: i32 = load_i32(entry_ptr + 8);
+        let mut body_size: i32 = 0;
+        if body_kind == 0 {
+            let literal_value: i32 = load_i32(entry_ptr + 12);
+            body_size = 1 + 1 + leb_i32_len(literal_value) + 1;
+        } else {
+            let callee_index: i32 = load_i32(entry_ptr + 12);
+            body_size = 1 + 1 + leb_u32_len(callee_index) + 1;
+        };
         payload_size = payload_size + leb_u32_len(body_size) + body_size;
         idx = idx + 1;
     };
@@ -671,13 +773,25 @@ fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
             break;
         };
         let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
-        let literal_value: i32 = load_i32(entry_ptr + 16);
-        let body_size: i32 = 1 + 1 + leb_i32_len(literal_value) + 1;
-        out = write_u32_leb(base, out, body_size);
-        out = write_u32_leb(base, out, 0);
-        out = write_byte(base, out, 65);
-        out = write_i32_leb(base, out, literal_value);
-        out = write_byte(base, out, 11);
+        let body_kind: i32 = load_i32(entry_ptr + 8);
+        let mut body_size: i32 = 0;
+        if body_kind == 0 {
+            let literal_value: i32 = load_i32(entry_ptr + 12);
+            body_size = 1 + 1 + leb_i32_len(literal_value) + 1;
+            out = write_u32_leb(base, out, body_size);
+            out = write_u32_leb(base, out, 0);
+            out = write_byte(base, out, 65);
+            out = write_i32_leb(base, out, literal_value);
+            out = write_byte(base, out, 11);
+        } else {
+            let callee_index: i32 = load_i32(entry_ptr + 12);
+            body_size = 1 + 1 + leb_u32_len(callee_index) + 1;
+            out = write_u32_leb(base, out, body_size);
+            out = write_u32_leb(base, out, 0);
+            out = write_byte(base, out, 16);
+            out = write_u32_leb(base, out, callee_index);
+            out = write_byte(base, out, 11);
+        };
         idx = idx + 1;
     };
     out

@@ -76,3 +76,52 @@ fn main() -> i32 {
         .expect_err("ast compiler should reject programs with multiple mains");
     assert!(error.produced_len <= 0);
 }
+
+#[test]
+fn ast_compiler_compiles_function_calls() {
+    let source = r#"
+fn helper() -> i32 {
+    40
+}
+
+fn main() -> i32 {
+    helper()
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 40);
+}
+
+#[test]
+fn ast_compiler_supports_forward_function_calls() {
+    let source = r#"
+fn main() -> i32 {
+    helper()
+}
+
+fn helper() -> i32 {
+    42
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 42);
+}
+
+#[test]
+fn ast_compiler_rejects_unknown_function_call() {
+    let source = r#"
+fn main() -> i32 {
+    missing()
+}
+"#;
+
+    let error = try_compile_with_ast_compiler(source)
+        .expect_err("ast compiler should reject calls to missing functions");
+    assert!(error.produced_len <= 0);
+}
