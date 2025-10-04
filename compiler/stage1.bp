@@ -268,6 +268,14 @@ fn ast_kind_binary_bitwise_or() -> i32 {
     17
 }
 
+fn ast_kind_binary_logical_and() -> i32 {
+    18
+}
+
+fn ast_kind_binary_logical_or() -> i32 {
+    19
+}
+
 fn ast_reset(instr_base: i32) {
     let ast_offset_ptr: i32 = scratch_ast_offset_ptr_from_instr_base(instr_base);
     let ast_root_ptr: i32 = scratch_ast_root_ptr_from_instr_base(instr_base);
@@ -1154,6 +1162,186 @@ fn parse_simple_bitwise_and_ast(
     idx
 }
 
+fn parse_simple_logical_and_ast(
+    base: i32,
+    len: i32,
+    offset: i32,
+    locals_base: i32,
+    locals_count_ptr: i32,
+    ast_base: i32,
+    ast_offset_ptr: i32,
+    node_out_ptr: i32,
+) -> i32 {
+    let mut idx: i32 = parse_simple_bitwise_or_ast(
+        base,
+        len,
+        offset,
+        locals_base,
+        locals_count_ptr,
+        ast_base,
+        ast_offset_ptr,
+        node_out_ptr,
+    );
+    if idx < 0 {
+        return idx;
+    };
+
+    let mut current_node: i32 = load_i32(node_out_ptr);
+
+    loop {
+        idx = skip_whitespace(base, len, idx);
+        if idx >= len {
+            break;
+        };
+
+        if idx + 1 >= len {
+            break;
+        };
+
+        let first: i32 = peek_byte(base, len, idx);
+        if first != 38 {
+            break;
+        };
+
+        let second: i32 = peek_byte(base, len, idx + 1);
+        if second != 38 {
+            break;
+        };
+
+        if ast_node_type(current_node) != type_code_bool() {
+            return -3;
+        };
+
+        idx = idx + 2;
+        idx = parse_simple_bitwise_or_ast(
+            base,
+            len,
+            idx,
+            locals_base,
+            locals_count_ptr,
+            ast_base,
+            ast_offset_ptr,
+            node_out_ptr,
+        );
+        if idx < 0 {
+            return idx;
+        };
+
+        let right_node: i32 = load_i32(node_out_ptr);
+        if ast_node_type(right_node) != type_code_bool() {
+            return -3;
+        };
+
+        let new_node: i32 = ast_make_binary(
+            ast_base,
+            ast_offset_ptr,
+            ast_kind_binary_logical_and(),
+            current_node,
+            right_node,
+            type_code_bool(),
+        );
+        if new_node < 0 {
+            return -3;
+        };
+
+        current_node = new_node;
+        store_i32(node_out_ptr, current_node);
+    };
+
+    store_i32(node_out_ptr, current_node);
+    idx
+}
+
+fn parse_simple_logical_or_ast(
+    base: i32,
+    len: i32,
+    offset: i32,
+    locals_base: i32,
+    locals_count_ptr: i32,
+    ast_base: i32,
+    ast_offset_ptr: i32,
+    node_out_ptr: i32,
+) -> i32 {
+    let mut idx: i32 = parse_simple_logical_and_ast(
+        base,
+        len,
+        offset,
+        locals_base,
+        locals_count_ptr,
+        ast_base,
+        ast_offset_ptr,
+        node_out_ptr,
+    );
+    if idx < 0 {
+        return idx;
+    };
+
+    let mut current_node: i32 = load_i32(node_out_ptr);
+
+    loop {
+        idx = skip_whitespace(base, len, idx);
+        if idx >= len {
+            break;
+        };
+
+        if idx + 1 >= len {
+            break;
+        };
+
+        let first: i32 = peek_byte(base, len, idx);
+        if first != 124 {
+            break;
+        };
+
+        let second: i32 = peek_byte(base, len, idx + 1);
+        if second != 124 {
+            break;
+        };
+
+        if ast_node_type(current_node) != type_code_bool() {
+            return -3;
+        };
+
+        idx = idx + 2;
+        idx = parse_simple_logical_and_ast(
+            base,
+            len,
+            idx,
+            locals_base,
+            locals_count_ptr,
+            ast_base,
+            ast_offset_ptr,
+            node_out_ptr,
+        );
+        if idx < 0 {
+            return idx;
+        };
+
+        let right_node: i32 = load_i32(node_out_ptr);
+        if ast_node_type(right_node) != type_code_bool() {
+            return -3;
+        };
+
+        let new_node: i32 = ast_make_binary(
+            ast_base,
+            ast_offset_ptr,
+            ast_kind_binary_logical_or(),
+            current_node,
+            right_node,
+            type_code_bool(),
+        );
+        if new_node < 0 {
+            return -3;
+        };
+
+        current_node = new_node;
+        store_i32(node_out_ptr, current_node);
+    };
+
+    store_i32(node_out_ptr, current_node);
+    idx
+}
+
 fn parse_simple_expression_ast(
     base: i32,
     len: i32,
@@ -1164,7 +1352,7 @@ fn parse_simple_expression_ast(
     ast_offset_ptr: i32,
     node_out_ptr: i32,
 ) -> i32 {
-    parse_simple_bitwise_or_ast(
+    parse_simple_logical_or_ast(
         base,
         len,
         offset,
@@ -1225,6 +1413,39 @@ fn lower_simple_ast_node(
             return emit_mul(instr_base, next_offset);
         };
         return emit_div(instr_base, next_offset);
+    };
+    if kind == ast_kind_binary_logical_or() {
+        let left: i32 = load_i32(node_ptr + 4);
+        let right: i32 = load_i32(node_ptr + 8);
+        let mut next_offset: i32 = lower_simple_ast_node(ast_base, left, instr_base, offset);
+        if next_offset < 0 {
+            return -1;
+        };
+        next_offset = emit_if(instr_base, next_offset, 127);
+        next_offset = emit_i32_const(instr_base, next_offset, 1);
+        next_offset = emit_else(instr_base, next_offset);
+        next_offset = lower_simple_ast_node(ast_base, right, instr_base, next_offset);
+        if next_offset < 0 {
+            return -1;
+        };
+        return emit_end(instr_base, next_offset);
+    };
+    if kind == ast_kind_binary_logical_and() {
+        let left: i32 = load_i32(node_ptr + 4);
+        let right: i32 = load_i32(node_ptr + 8);
+        let mut next_offset: i32 = lower_simple_ast_node(ast_base, left, instr_base, offset);
+        if next_offset < 0 {
+            return -1;
+        };
+        next_offset = emit_if(instr_base, next_offset, 127);
+        next_offset = lower_simple_ast_node(ast_base, right, instr_base, next_offset);
+        if next_offset < 0 {
+            return -1;
+        };
+        next_offset = emit_else(instr_base, next_offset);
+        next_offset = emit_i32_const(instr_base, next_offset, 0);
+        next_offset = emit_end(instr_base, next_offset);
+        return next_offset;
     };
     if kind == ast_kind_binary_bitwise_and() || kind == ast_kind_binary_bitwise_or() {
         let left: i32 = load_i32(node_ptr + 4);
