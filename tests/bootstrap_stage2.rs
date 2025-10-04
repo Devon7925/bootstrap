@@ -14,7 +14,7 @@ fn prepare_stage1_compiler() -> (CompilerInstance, &'static str) {
 
 const STAGE1_FUNCTION_ENTRY_SIZE: usize = 32;
 const STAGE1_FUNCTIONS_BASE_OFFSET: usize = 851_968;
-const STAGE1_MAX_FUNCTIONS: usize = 320;
+const STAGE1_MAX_FUNCTIONS: usize = 512;
 
 fn stage1_output_ptr(compiler: &CompilerInstance) -> i32 {
     let memory_size = compiler.memory_size_bytes();
