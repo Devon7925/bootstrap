@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bootstrap Compiler Playground</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <h1>Bootstrap Compiler Playground</h1>
+      <p class="tagline">
+        Compile Bootstrap programs straight in your browser using the stage2 WebAssembly compiler.
+      </p>
+    </header>
+
+    <main class="layout">
+      <section class="editor-panel">
+        <label class="editor-label" for="source">Program source</label>
+        <textarea id="source" class="editor" spellcheck="false"></textarea>
+        <div class="actions">
+          <button id="compile">Compile &amp; run</button>
+          <span id="status" role="status"></span>
+        </div>
+      </section>
+
+      <section class="results-panel">
+        <h2>Results</h2>
+        <div class="result" id="compile-result">
+          <h3>Compilation</h3>
+          <pre id="compile-output" class="output"></pre>
+        </div>
+        <div class="result" id="execution-result">
+          <h3>Execution</h3>
+          <pre id="execution-output" class="output"></pre>
+        </div>
+        <div class="result" id="download-result">
+          <h3>Download</h3>
+          <a id="download-link" class="download-link" href="#" download="program.wasm" hidden>Download compiled Wasm</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="page-footer">
+      <p>
+        The playground reuses the same <code>stage2.wasm</code> compiler that powers the CLI.
+        Visit the repository for documentation and source code.
+      </p>
+    </footer>
+
+    <script type="module" src="main.js"></script>
+  </body>
+</html>
