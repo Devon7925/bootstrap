@@ -45,10 +45,6 @@ fn word_size() -> i32 {
     4
 }
 
-fn stage1_memory_pages() -> i32 {
-    256
-}
-
 fn scratch_instr_offset() -> i32 {
     4096
 }
@@ -155,1675 +151,6 @@ fn scratch_source_cursor_offset() -> i32 {
 
 fn scratch_source_cursor_ptr(out_ptr: i32) -> i32 {
     out_ptr + scratch_source_cursor_offset()
-}
-
-fn scratch_ast_root_offset() -> i32 {
-    scratch_source_cursor_offset() - word_size()
-}
-
-fn scratch_ast_offset_offset() -> i32 {
-    scratch_ast_root_offset() - word_size()
-}
-
-fn scratch_ast_capacity() -> i32 {
-    2048
-}
-
-fn scratch_ast_base_offset() -> i32 {
-    scratch_ast_offset_offset() - scratch_ast_capacity()
-}
-
-fn scratch_out_ptr_from_instr_base(instr_base: i32) -> i32 {
-    instr_base - scratch_instr_base_offset()
-}
-
-fn scratch_ast_root_ptr_from_instr_base(instr_base: i32) -> i32 {
-    let out_ptr: i32 = scratch_out_ptr_from_instr_base(instr_base);
-    out_ptr + scratch_ast_root_offset()
-}
-
-fn scratch_ast_offset_ptr_from_instr_base(instr_base: i32) -> i32 {
-    let out_ptr: i32 = scratch_out_ptr_from_instr_base(instr_base);
-    out_ptr + scratch_ast_offset_offset()
-}
-
-fn scratch_ast_base(instr_base: i32) -> i32 {
-    let out_ptr: i32 = scratch_out_ptr_from_instr_base(instr_base);
-    out_ptr + scratch_ast_base_offset()
-}
-
-fn ast_node_size() -> i32 {
-    16
-}
-
-fn ast_kind_invalid() -> i32 {
-    0
-}
-
-fn ast_kind_i32_const() -> i32 {
-    1
-}
-
-fn ast_kind_local_get() -> i32 {
-    2
-}
-
-fn ast_kind_binary_add() -> i32 {
-    3
-}
-
-fn ast_kind_binary_sub() -> i32 {
-    4
-}
-
-fn ast_kind_binary_mul() -> i32 {
-    5
-}
-
-fn ast_kind_binary_div() -> i32 {
-    6
-}
-
-fn ast_kind_unary_neg() -> i32 {
-    7
-}
-
-fn ast_kind_binary_eq() -> i32 {
-    8
-}
-
-fn ast_kind_binary_ne() -> i32 {
-    9
-}
-
-fn ast_kind_binary_lt() -> i32 {
-    10
-}
-
-fn ast_kind_binary_gt() -> i32 {
-    11
-}
-
-fn ast_kind_binary_le() -> i32 {
-    12
-}
-
-fn ast_kind_binary_ge() -> i32 {
-    13
-}
-
-fn ast_kind_binary_shl() -> i32 {
-    14
-}
-
-fn ast_kind_binary_shr() -> i32 {
-    15
-}
-
-fn ast_kind_binary_bitwise_and() -> i32 {
-    16
-}
-
-fn ast_kind_binary_bitwise_or() -> i32 {
-    17
-}
-
-fn ast_kind_binary_logical_and() -> i32 {
-    18
-}
-
-fn ast_kind_binary_logical_or() -> i32 {
-    19
-}
-
-fn ast_kind_bool_const() -> i32 {
-    20
-}
-
-fn ast_kind_unary_not() -> i32 {
-    21
-}
-
-fn ast_kind_memory_load_u8() -> i32 {
-    22
-}
-
-fn ast_kind_memory_store_u8() -> i32 {
-    23
-}
-
-fn ast_kind_memory_load_u16() -> i32 {
-    24
-}
-
-fn ast_kind_memory_store_u16() -> i32 {
-    25
-}
-
-fn ast_kind_memory_load_i32() -> i32 {
-    26
-}
-
-fn ast_kind_memory_store_i32() -> i32 {
-    27
-}
-
-fn ast_reset(instr_base: i32) {
-    let ast_offset_ptr: i32 = scratch_ast_offset_ptr_from_instr_base(instr_base);
-    let ast_root_ptr: i32 = scratch_ast_root_ptr_from_instr_base(instr_base);
-    store_i32(ast_offset_ptr, 0);
-    store_i32(ast_root_ptr, -1);
-}
-
-fn ast_allocate_node(ast_base: i32, ast_offset_ptr: i32, kind: i32) -> i32 {
-    let offset: i32 = load_i32(ast_offset_ptr);
-    if offset + ast_node_size() > scratch_ast_capacity() {
-        return -1;
-    };
-    let node_ptr: i32 = ast_base + offset;
-    store_i32(ast_offset_ptr, offset + ast_node_size());
-    store_i32(node_ptr, kind);
-    store_i32(node_ptr + 4, 0);
-    store_i32(node_ptr + 8, 0);
-    store_i32(node_ptr + 12, -1);
-    node_ptr
-}
-
-fn ast_node_set_type(node_ptr: i32, ty: i32) {
-    store_i32(node_ptr + 12, ty);
-}
-
-fn ast_node_type(node_ptr: i32) -> i32 {
-    load_i32(node_ptr + 12)
-}
-
-fn ast_make_i32_const(ast_base: i32, ast_offset_ptr: i32, value: i32) -> i32 {
-    let node_ptr: i32 = ast_allocate_node(ast_base, ast_offset_ptr, ast_kind_i32_const());
-    if node_ptr < 0 {
-        return -1;
-    };
-    store_i32(node_ptr + 4, value);
-    ast_node_set_type(node_ptr, type_code_i32());
-    node_ptr
-}
-
-fn ast_make_local_get(
-    ast_base: i32,
-    ast_offset_ptr: i32,
-    wasm_index: i32,
-    result_type: i32,
-) -> i32 {
-    let node_ptr: i32 = ast_allocate_node(ast_base, ast_offset_ptr, ast_kind_local_get());
-    if node_ptr < 0 {
-        return -1;
-    };
-    store_i32(node_ptr + 4, wasm_index);
-    ast_node_set_type(node_ptr, result_type);
-    node_ptr
-}
-
-fn ast_make_bool_const(ast_base: i32, ast_offset_ptr: i32, value: bool) -> i32 {
-    let node_ptr: i32 = ast_allocate_node(ast_base, ast_offset_ptr, ast_kind_bool_const());
-    if node_ptr < 0 {
-        return -1;
-    };
-    let mut stored: i32 = 0;
-    if value {
-        stored = 1;
-    };
-    store_i32(node_ptr + 4, stored);
-    ast_node_set_type(node_ptr, type_code_bool());
-    node_ptr
-}
-
-fn ast_make_binary(
-    ast_base: i32,
-    ast_offset_ptr: i32,
-    kind: i32,
-    left: i32,
-    right: i32,
-    result_type: i32,
-) -> i32 {
-    let node_ptr: i32 = ast_allocate_node(ast_base, ast_offset_ptr, kind);
-    if node_ptr < 0 {
-        return -1;
-    };
-    store_i32(node_ptr + 4, left);
-    store_i32(node_ptr + 8, right);
-    ast_node_set_type(node_ptr, result_type);
-    node_ptr
-}
-
-fn ast_make_unary(
-    ast_base: i32,
-    ast_offset_ptr: i32,
-    kind: i32,
-    operand: i32,
-    result_type: i32,
-) -> i32 {
-    let node_ptr: i32 = ast_allocate_node(ast_base, ast_offset_ptr, kind);
-    if node_ptr < 0 {
-        return -1;
-    };
-    store_i32(node_ptr + 4, operand);
-    ast_node_set_type(node_ptr, result_type);
-    node_ptr
-}
-
-fn parse_simple_primary_ast(
-    base: i32,
-    len: i32,
-    offset: i32,
-    locals_base: i32,
-    locals_count_ptr: i32,
-    ast_base: i32,
-    ast_offset_ptr: i32,
-    node_out_ptr: i32,
-) -> i32 {
-    let mut idx: i32 = skip_whitespace(base, len, offset);
-    if idx >= len {
-        return -3;
-    };
-
-    let head_byte: i32 = peek_byte(base, len, idx);
-    if head_byte == 40 {
-        idx = idx + 1;
-        idx = parse_simple_expression_ast(
-            base,
-            len,
-            idx,
-            locals_base,
-            locals_count_ptr,
-            ast_base,
-            ast_offset_ptr,
-            node_out_ptr,
-        );
-        if idx < 0 {
-            return idx;
-        };
-        idx = skip_whitespace(base, len, idx);
-        idx = expect_char(base, len, idx, 41);
-        if idx < 0 {
-            return -3;
-        };
-        return idx;
-    };
-
-    if head_byte >= 48 && head_byte <= 57 {
-        let mut value: i32 = 0;
-        let mut has_digit: bool = false;
-        loop {
-            if idx >= len {
-                break;
-            };
-            let digit_byte: i32 = peek_byte(base, len, idx);
-            if digit_byte < 48 || digit_byte > 57 {
-                break;
-            };
-            let digit: i32 = digit_byte - 48;
-            value = value * 10 + digit;
-            has_digit = true;
-            idx = idx + 1;
-        };
-        if !has_digit {
-            return -3;
-        };
-        let node_ptr: i32 = ast_make_i32_const(ast_base, ast_offset_ptr, value);
-        if node_ptr < 0 {
-            return -3;
-        };
-        store_i32(node_out_ptr, node_ptr);
-        return idx;
-    };
-
-    if idx + 4 <= len {
-        let t: i32 = load_u8(base + idx);
-        let r: i32 = load_u8(base + idx + 1);
-        let u: i32 = load_u8(base + idx + 2);
-        let e: i32 = load_u8(base + idx + 3);
-        if t == 116 && r == 114 && u == 117 && e == 101 {
-            let after: i32 = idx + 4;
-            let mut valid_literal: bool = false;
-            if after == len {
-                valid_literal = true;
-            } else if after < len {
-                let next_byte: i32 = peek_byte(base, len, after);
-                if !is_identifier_continue(next_byte) {
-                    valid_literal = true;
-                };
-            };
-            if valid_literal {
-                let node_ptr: i32 = ast_make_bool_const(ast_base, ast_offset_ptr, true);
-                if node_ptr < 0 {
-                    return -3;
-                };
-                store_i32(node_out_ptr, node_ptr);
-                return after;
-            };
-        };
-    };
-
-    if idx + 5 <= len {
-        let f: i32 = load_u8(base + idx);
-        let a: i32 = load_u8(base + idx + 1);
-        let l: i32 = load_u8(base + idx + 2);
-        let s: i32 = load_u8(base + idx + 3);
-        let e: i32 = load_u8(base + idx + 4);
-        if f == 102 && a == 97 && l == 108 && s == 115 && e == 101 {
-            let after: i32 = idx + 5;
-            let mut valid_literal: bool = false;
-            if after == len {
-                valid_literal = true;
-            } else if after < len {
-                let next_byte: i32 = peek_byte(base, len, after);
-                if !is_identifier_continue(next_byte) {
-                    valid_literal = true;
-                };
-            };
-            if valid_literal {
-                let node_ptr: i32 = ast_make_bool_const(ast_base, ast_offset_ptr, false);
-                if node_ptr < 0 {
-                    return -3;
-                };
-                store_i32(node_out_ptr, node_ptr);
-                return after;
-            };
-        };
-    };
-
-    if !is_identifier_start(head_byte) {
-        return -3;
-    };
-
-    let ident_start: i32 = idx;
-    let mut ident_len: i32 = 0;
-    loop {
-        if idx >= len {
-            break;
-        };
-        let ch: i32 = peek_byte(base, len, idx);
-        if ident_len == 0 {
-            if !is_identifier_start(ch) {
-                break;
-            };
-        } else if !is_identifier_continue(ch) {
-            break;
-        };
-        ident_len = ident_len + 1;
-        idx = idx + 1;
-    };
-    if ident_len == 0 {
-        return -3;
-    };
-
-    let after_ident: i32 = skip_whitespace(base, len, idx);
-    if after_ident < len {
-        let next_byte: i32 = peek_byte(base, len, after_ident);
-        if next_byte == 40 {
-            let intrinsic_kind: i32 = identify_intrinsic(base, len, ident_start, ident_len);
-            if intrinsic_kind == intrinsic_kind_none() {
-                return -3;
-            };
-            let mut call_idx: i32 = after_ident + 1;
-            call_idx = skip_whitespace(base, len, call_idx);
-            if call_idx >= len {
-                return -3;
-            };
-            call_idx = parse_simple_expression_ast(
-                base,
-                len,
-                call_idx,
-                locals_base,
-                locals_count_ptr,
-                ast_base,
-                ast_offset_ptr,
-                node_out_ptr,
-            );
-            if call_idx < 0 {
-                return -3;
-            };
-            let first_arg: i32 = load_i32(node_out_ptr);
-            if first_arg < 0 {
-                return -3;
-            };
-            if ast_node_type(first_arg) != type_code_i32() {
-                return -3;
-            };
-            call_idx = skip_whitespace(base, len, call_idx);
-            if call_idx >= len {
-                return -3;
-            };
-            let next_after_first: i32 = peek_byte(base, len, call_idx);
-            let is_load: bool =
-                intrinsic_kind == intrinsic_kind_load_u8()
-                    || intrinsic_kind == intrinsic_kind_load_u16()
-                    || intrinsic_kind == intrinsic_kind_load_i32();
-            if is_load {
-                if next_after_first != 41 {
-                    return -3;
-                };
-                call_idx = call_idx + 1;
-                let node_kind: i32 = if intrinsic_kind == intrinsic_kind_load_u8() {
-                    ast_kind_memory_load_u8()
-                } else if intrinsic_kind == intrinsic_kind_load_u16() {
-                    ast_kind_memory_load_u16()
-                } else {
-                    ast_kind_memory_load_i32()
-                };
-                let node_ptr: i32 = ast_make_unary(
-                    ast_base,
-                    ast_offset_ptr,
-                    node_kind,
-                    first_arg,
-                    type_code_i32(),
-                );
-                if node_ptr < 0 {
-                    return -3;
-                };
-                store_i32(node_out_ptr, node_ptr);
-                return call_idx;
-            };
-            if next_after_first != 44 {
-                return -3;
-            };
-            call_idx = skip_whitespace(base, len, call_idx + 1);
-            if call_idx >= len {
-                return -3;
-            };
-            call_idx = parse_simple_expression_ast(
-                base,
-                len,
-                call_idx,
-                locals_base,
-                locals_count_ptr,
-                ast_base,
-                ast_offset_ptr,
-                node_out_ptr,
-            );
-            if call_idx < 0 {
-                return -3;
-            };
-            let second_arg: i32 = load_i32(node_out_ptr);
-            if second_arg < 0 {
-                return -3;
-            };
-            if ast_node_type(second_arg) != type_code_i32() {
-                return -3;
-            };
-            call_idx = skip_whitespace(base, len, call_idx);
-            if call_idx >= len {
-                return -3;
-            };
-            let closing: i32 = peek_byte(base, len, call_idx);
-            if closing != 41 {
-                return -3;
-            };
-            call_idx = call_idx + 1;
-            let node_kind: i32 = if intrinsic_kind == intrinsic_kind_store_u8() {
-                ast_kind_memory_store_u8()
-            } else if intrinsic_kind == intrinsic_kind_store_u16() {
-                ast_kind_memory_store_u16()
-            } else {
-                ast_kind_memory_store_i32()
-            };
-            let node_ptr: i32 = ast_make_binary(
-                ast_base,
-                ast_offset_ptr,
-                node_kind,
-                first_arg,
-                second_arg,
-                type_code_unit(),
-            );
-            if node_ptr < 0 {
-                return -3;
-            };
-            store_i32(node_out_ptr, node_ptr);
-            return call_idx;
-        };
-    };
-
-    let entry_index: i32 = locals_find(
-        base,
-        len,
-        locals_base,
-        locals_count_ptr,
-        ident_start,
-        ident_len,
-    );
-    if entry_index < 0 {
-        return -3;
-    };
-    let var_type: i32 = locals_entry_type(locals_base, entry_index);
-    if var_type != type_code_i32() && var_type != type_code_bool() {
-        return -3;
-    };
-    let wasm_index: i32 = locals_entry_wasm_index(locals_base, entry_index);
-    let node_ptr: i32 = ast_make_local_get(ast_base, ast_offset_ptr, wasm_index, var_type);
-    if node_ptr < 0 {
-        return -3;
-    };
-    store_i32(node_out_ptr, node_ptr);
-    idx
-}
-
-fn parse_simple_unary_ast(
-    base: i32,
-    len: i32,
-    offset: i32,
-    locals_base: i32,
-    locals_count_ptr: i32,
-    ast_base: i32,
-    ast_offset_ptr: i32,
-    node_out_ptr: i32,
-) -> i32 {
-    let mut idx: i32 = skip_whitespace(base, len, offset);
-    let mut negate_count: i32 = 0;
-    let mut not_count: i32 = 0;
-    loop {
-        if idx >= len {
-            break;
-        };
-        let ch: i32 = peek_byte(base, len, idx);
-        if ch == 45 {
-            negate_count = negate_count + 1;
-            idx = idx + 1;
-            continue;
-        };
-        if ch == 43 {
-            idx = idx + 1;
-            continue;
-        };
-        if ch == 33 {
-            not_count = not_count + 1;
-            idx = idx + 1;
-            continue;
-        };
-        break;
-    };
-
-    idx = parse_simple_primary_ast(
-        base,
-        len,
-        idx,
-        locals_base,
-        locals_count_ptr,
-        ast_base,
-        ast_offset_ptr,
-        node_out_ptr,
-    );
-    if idx < 0 {
-        return idx;
-    };
-
-    if (negate_count & 1) != 0 {
-        let operand: i32 = load_i32(node_out_ptr);
-        let operand_type: i32 = ast_node_type(operand);
-        if operand_type != type_code_i32() {
-            return -3;
-        };
-        let node_ptr: i32 = ast_make_unary(
-            ast_base,
-            ast_offset_ptr,
-            ast_kind_unary_neg(),
-            operand,
-            type_code_i32(),
-        );
-        if node_ptr < 0 {
-            return -3;
-        };
-        store_i32(node_out_ptr, node_ptr);
-    };
-
-    if (not_count & 1) != 0 {
-        let operand: i32 = load_i32(node_out_ptr);
-        let operand_type: i32 = ast_node_type(operand);
-        if operand_type != type_code_bool() {
-            return -3;
-        };
-        let node_ptr: i32 = ast_make_unary(
-            ast_base,
-            ast_offset_ptr,
-            ast_kind_unary_not(),
-            operand,
-            type_code_bool(),
-        );
-        if node_ptr < 0 {
-            return -3;
-        };
-        store_i32(node_out_ptr, node_ptr);
-    };
-
-    idx
-}
-
-fn parse_simple_multiplication_ast(
-    base: i32,
-    len: i32,
-    offset: i32,
-    locals_base: i32,
-    locals_count_ptr: i32,
-    ast_base: i32,
-    ast_offset_ptr: i32,
-    node_out_ptr: i32,
-) -> i32 {
-    let mut idx: i32 = parse_simple_unary_ast(
-        base,
-        len,
-        offset,
-        locals_base,
-        locals_count_ptr,
-        ast_base,
-        ast_offset_ptr,
-        node_out_ptr,
-    );
-    if idx < 0 {
-        return idx;
-    };
-
-    let mut current_node: i32 = load_i32(node_out_ptr);
-
-    loop {
-        idx = skip_whitespace(base, len, idx);
-        if idx >= len {
-            break;
-        };
-        let op_byte: i32 = peek_byte(base, len, idx);
-        if op_byte != 42 && op_byte != 47 {
-            break;
-        };
-        let left_type: i32 = ast_node_type(current_node);
-        if left_type != type_code_i32() {
-            return -3;
-        };
-        idx = idx + 1;
-        idx = parse_simple_unary_ast(
-            base,
-            len,
-            idx,
-            locals_base,
-            locals_count_ptr,
-            ast_base,
-            ast_offset_ptr,
-            node_out_ptr,
-        );
-        if idx < 0 {
-            return idx;
-        };
-        let right_node: i32 = load_i32(node_out_ptr);
-        let right_type: i32 = ast_node_type(right_node);
-        if right_type != type_code_i32() {
-            return -3;
-        };
-        let node_kind: i32 = if op_byte == 42 { ast_kind_binary_mul() } else { ast_kind_binary_div() };
-        let new_node: i32 = ast_make_binary(
-            ast_base,
-            ast_offset_ptr,
-            node_kind,
-            current_node,
-            right_node,
-            type_code_i32(),
-        );
-        if new_node < 0 {
-            return -3;
-        };
-        current_node = new_node;
-        store_i32(node_out_ptr, current_node);
-    };
-
-    store_i32(node_out_ptr, current_node);
-    idx
-}
-
-fn parse_simple_addition_ast(
-    base: i32,
-    len: i32,
-    offset: i32,
-    locals_base: i32,
-    locals_count_ptr: i32,
-    ast_base: i32,
-    ast_offset_ptr: i32,
-    node_out_ptr: i32,
-) -> i32 {
-    let mut idx: i32 = parse_simple_multiplication_ast(
-        base,
-        len,
-        offset,
-        locals_base,
-        locals_count_ptr,
-        ast_base,
-        ast_offset_ptr,
-        node_out_ptr,
-    );
-    if idx < 0 {
-        return idx;
-    };
-
-    let mut current_node: i32 = load_i32(node_out_ptr);
-
-    loop {
-        idx = skip_whitespace(base, len, idx);
-        if idx >= len {
-            break;
-        };
-        let op_byte: i32 = peek_byte(base, len, idx);
-        if op_byte != 43 && op_byte != 45 {
-            break;
-        };
-        let left_type: i32 = ast_node_type(current_node);
-        if left_type != type_code_i32() {
-            return -3;
-        };
-        idx = idx + 1;
-        idx = parse_simple_multiplication_ast(
-            base,
-            len,
-            idx,
-            locals_base,
-            locals_count_ptr,
-            ast_base,
-            ast_offset_ptr,
-            node_out_ptr,
-        );
-        if idx < 0 {
-            return idx;
-        };
-        let right_node: i32 = load_i32(node_out_ptr);
-        let right_type: i32 = ast_node_type(right_node);
-        if right_type != type_code_i32() {
-            return -3;
-        };
-        let node_kind: i32 = if op_byte == 43 { ast_kind_binary_add() } else { ast_kind_binary_sub() };
-        let new_node: i32 = ast_make_binary(
-            ast_base,
-            ast_offset_ptr,
-            node_kind,
-            current_node,
-            right_node,
-            type_code_i32(),
-        );
-        if new_node < 0 {
-            return -3;
-        };
-        current_node = new_node;
-        store_i32(node_out_ptr, current_node);
-    };
-
-    store_i32(node_out_ptr, current_node);
-    idx
-}
-
-fn parse_simple_comparison_ast(
-    base: i32,
-    len: i32,
-    offset: i32,
-    locals_base: i32,
-    locals_count_ptr: i32,
-    ast_base: i32,
-    ast_offset_ptr: i32,
-    node_out_ptr: i32,
-) -> i32 {
-    let mut idx: i32 = parse_simple_addition_ast(
-        base,
-        len,
-        offset,
-        locals_base,
-        locals_count_ptr,
-        ast_base,
-        ast_offset_ptr,
-        node_out_ptr,
-    );
-    if idx < 0 {
-        return idx;
-    };
-
-    let mut current_node: i32 = load_i32(node_out_ptr);
-
-    loop {
-        idx = skip_whitespace(base, len, idx);
-        if idx >= len {
-            break;
-        };
-        if idx + 1 >= len {
-            break;
-        };
-        let first: i32 = peek_byte(base, len, idx);
-        let second: i32 = peek_byte(base, len, idx + 1);
-        let mut op_kind: i32 = -1;
-        if first == 60 && second == 60 {
-            op_kind = 0;
-        } else if first == 62 && second == 62 {
-            op_kind = 1;
-        } else {
-            break;
-        };
-
-        if ast_node_type(current_node) != type_code_i32() {
-            return -3;
-        };
-
-        idx = idx + 2;
-        idx = parse_simple_addition_ast(
-            base,
-            len,
-            idx,
-            locals_base,
-            locals_count_ptr,
-            ast_base,
-            ast_offset_ptr,
-            node_out_ptr,
-        );
-        if idx < 0 {
-            return idx;
-        };
-        let right_node: i32 = load_i32(node_out_ptr);
-        if ast_node_type(right_node) != type_code_i32() {
-            return -3;
-        };
-
-        let node_kind: i32 = if op_kind == 0 {
-            ast_kind_binary_shl()
-        } else {
-            ast_kind_binary_shr()
-        };
-        let new_node: i32 = ast_make_binary(
-            ast_base,
-            ast_offset_ptr,
-            node_kind,
-            current_node,
-            right_node,
-            type_code_i32(),
-        );
-        if new_node < 0 {
-            return -3;
-        };
-
-        current_node = new_node;
-        store_i32(node_out_ptr, current_node);
-    };
-
-    let mut current_type: i32 = ast_node_type(current_node);
-
-    loop {
-        idx = skip_whitespace(base, len, idx);
-        if idx >= len {
-            break;
-        };
-
-        let op_byte: i32 = peek_byte(base, len, idx);
-        let mut consumed: i32 = 0;
-        let mut node_kind: i32 = -1;
-
-        if op_byte == 60 {
-            if idx + 1 < len {
-                let next: i32 = peek_byte(base, len, idx + 1);
-                if next == 60 {
-                    return -3;
-                };
-                if next == 61 {
-                    consumed = 2;
-                    node_kind = ast_kind_binary_le();
-                } else {
-                    consumed = 1;
-                    node_kind = ast_kind_binary_lt();
-                };
-            } else {
-                consumed = 1;
-                node_kind = ast_kind_binary_lt();
-            };
-        } else if op_byte == 62 {
-            if idx + 1 < len {
-                let next: i32 = peek_byte(base, len, idx + 1);
-                if next == 62 {
-                    return -3;
-                };
-                if next == 61 {
-                    consumed = 2;
-                    node_kind = ast_kind_binary_ge();
-                } else {
-                    consumed = 1;
-                    node_kind = ast_kind_binary_gt();
-                };
-            } else {
-                consumed = 1;
-                node_kind = ast_kind_binary_gt();
-            };
-        } else {
-            break;
-        };
-
-        if node_kind < 0 {
-            break;
-        };
-
-        if current_type != type_code_i32() {
-            return -3;
-        };
-
-        let left_node: i32 = current_node;
-        idx = idx + consumed;
-        idx = parse_simple_addition_ast(
-            base,
-            len,
-            idx,
-            locals_base,
-            locals_count_ptr,
-            ast_base,
-            ast_offset_ptr,
-            node_out_ptr,
-        );
-        if idx < 0 {
-            return idx;
-        };
-        let right_node: i32 = load_i32(node_out_ptr);
-        let right_type: i32 = ast_node_type(right_node);
-        if right_type != type_code_i32() {
-            return -3;
-        };
-
-        let new_node: i32 = ast_make_binary(
-            ast_base,
-            ast_offset_ptr,
-            node_kind,
-            left_node,
-            right_node,
-            type_code_bool(),
-        );
-        if new_node < 0 {
-            return -3;
-        };
-
-        current_node = new_node;
-        current_type = type_code_bool();
-        store_i32(node_out_ptr, current_node);
-    };
-
-    store_i32(node_out_ptr, current_node);
-    idx
-}
-
-fn parse_simple_equality_ast(
-    base: i32,
-    len: i32,
-    offset: i32,
-    locals_base: i32,
-    locals_count_ptr: i32,
-    ast_base: i32,
-    ast_offset_ptr: i32,
-    node_out_ptr: i32,
-) -> i32 {
-    let mut idx: i32 = parse_simple_comparison_ast(
-        base,
-        len,
-        offset,
-        locals_base,
-        locals_count_ptr,
-        ast_base,
-        ast_offset_ptr,
-        node_out_ptr,
-    );
-    if idx < 0 {
-        return idx;
-    };
-
-    let mut current_node: i32 = load_i32(node_out_ptr);
-    let mut current_type: i32 = ast_node_type(current_node);
-
-    loop {
-        idx = skip_whitespace(base, len, idx);
-        if idx >= len {
-            break;
-        };
-        if idx + 1 >= len {
-            break;
-        };
-
-        let first: i32 = peek_byte(base, len, idx);
-        let second: i32 = peek_byte(base, len, idx + 1);
-        let mut node_kind: i32 = -1;
-
-        if first == 61 && second == 61 {
-            node_kind = ast_kind_binary_eq();
-        } else if first == 33 && second == 61 {
-            node_kind = ast_kind_binary_ne();
-        } else {
-            break;
-        };
-
-        let left_node: i32 = current_node;
-        let left_type: i32 = current_type;
-        if left_type < 0 {
-            return -3;
-        };
-
-        idx = idx + 2;
-        idx = parse_simple_comparison_ast(
-            base,
-            len,
-            idx,
-            locals_base,
-            locals_count_ptr,
-            ast_base,
-            ast_offset_ptr,
-            node_out_ptr,
-        );
-        if idx < 0 {
-            return idx;
-        };
-
-        let right_node: i32 = load_i32(node_out_ptr);
-        let right_type: i32 = ast_node_type(right_node);
-        if right_type != left_type {
-            return -3;
-        };
-
-        let new_node: i32 = ast_make_binary(
-            ast_base,
-            ast_offset_ptr,
-            node_kind,
-            left_node,
-            right_node,
-            type_code_bool(),
-        );
-        if new_node < 0 {
-            return -3;
-        };
-
-        current_node = new_node;
-        current_type = type_code_bool();
-        store_i32(node_out_ptr, current_node);
-    };
-
-    store_i32(node_out_ptr, current_node);
-    idx
-}
-
-fn parse_simple_bitwise_or_ast(
-    base: i32,
-    len: i32,
-    offset: i32,
-    locals_base: i32,
-    locals_count_ptr: i32,
-    ast_base: i32,
-    ast_offset_ptr: i32,
-    node_out_ptr: i32,
-) -> i32 {
-    let mut idx: i32 = parse_simple_bitwise_and_ast(
-        base,
-        len,
-        offset,
-        locals_base,
-        locals_count_ptr,
-        ast_base,
-        ast_offset_ptr,
-        node_out_ptr,
-    );
-    if idx < 0 {
-        return idx;
-    };
-
-    let mut current_node: i32 = load_i32(node_out_ptr);
-
-    loop {
-        idx = skip_whitespace(base, len, idx);
-        if idx >= len {
-            break;
-        };
-
-        let op_byte: i32 = peek_byte(base, len, idx);
-        if op_byte != 124 {
-            break;
-        };
-        if idx + 1 < len {
-            let next: i32 = peek_byte(base, len, idx + 1);
-            if next == 124 {
-                break;
-            };
-        };
-
-        if ast_node_type(current_node) != type_code_i32() {
-            return -3;
-        };
-
-        idx = idx + 1;
-        idx = parse_simple_bitwise_and_ast(
-            base,
-            len,
-            idx,
-            locals_base,
-            locals_count_ptr,
-            ast_base,
-            ast_offset_ptr,
-            node_out_ptr,
-        );
-        if idx < 0 {
-            return idx;
-        };
-
-        let right_node: i32 = load_i32(node_out_ptr);
-        if ast_node_type(right_node) != type_code_i32() {
-            return -3;
-        };
-
-        let new_node: i32 = ast_make_binary(
-            ast_base,
-            ast_offset_ptr,
-            ast_kind_binary_bitwise_or(),
-            current_node,
-            right_node,
-            type_code_i32(),
-        );
-        if new_node < 0 {
-            return -3;
-        };
-
-        current_node = new_node;
-        store_i32(node_out_ptr, current_node);
-    };
-
-    store_i32(node_out_ptr, current_node);
-    idx
-}
-
-fn parse_simple_bitwise_and_ast(
-    base: i32,
-    len: i32,
-    offset: i32,
-    locals_base: i32,
-    locals_count_ptr: i32,
-    ast_base: i32,
-    ast_offset_ptr: i32,
-    node_out_ptr: i32,
-) -> i32 {
-    let mut idx: i32 = parse_simple_equality_ast(
-        base,
-        len,
-        offset,
-        locals_base,
-        locals_count_ptr,
-        ast_base,
-        ast_offset_ptr,
-        node_out_ptr,
-    );
-    if idx < 0 {
-        return idx;
-    };
-
-    let mut current_node: i32 = load_i32(node_out_ptr);
-
-    loop {
-        idx = skip_whitespace(base, len, idx);
-        if idx >= len {
-            break;
-        };
-
-        let op_byte: i32 = peek_byte(base, len, idx);
-        if op_byte != 38 {
-            break;
-        };
-        if idx + 1 < len {
-            let next: i32 = peek_byte(base, len, idx + 1);
-            if next == 38 {
-                break;
-            };
-        };
-
-        if ast_node_type(current_node) != type_code_i32() {
-            return -3;
-        };
-
-        idx = idx + 1;
-        idx = parse_simple_equality_ast(
-            base,
-            len,
-            idx,
-            locals_base,
-            locals_count_ptr,
-            ast_base,
-            ast_offset_ptr,
-            node_out_ptr,
-        );
-        if idx < 0 {
-            return idx;
-        };
-
-        let right_node: i32 = load_i32(node_out_ptr);
-        if ast_node_type(right_node) != type_code_i32() {
-            return -3;
-        };
-
-        let new_node: i32 = ast_make_binary(
-            ast_base,
-            ast_offset_ptr,
-            ast_kind_binary_bitwise_and(),
-            current_node,
-            right_node,
-            type_code_i32(),
-        );
-        if new_node < 0 {
-            return -3;
-        };
-
-        current_node = new_node;
-        store_i32(node_out_ptr, current_node);
-    };
-
-    store_i32(node_out_ptr, current_node);
-    idx
-}
-
-fn parse_simple_logical_and_ast(
-    base: i32,
-    len: i32,
-    offset: i32,
-    locals_base: i32,
-    locals_count_ptr: i32,
-    ast_base: i32,
-    ast_offset_ptr: i32,
-    node_out_ptr: i32,
-) -> i32 {
-    let mut idx: i32 = parse_simple_bitwise_or_ast(
-        base,
-        len,
-        offset,
-        locals_base,
-        locals_count_ptr,
-        ast_base,
-        ast_offset_ptr,
-        node_out_ptr,
-    );
-    if idx < 0 {
-        return idx;
-    };
-
-    let mut current_node: i32 = load_i32(node_out_ptr);
-
-    loop {
-        idx = skip_whitespace(base, len, idx);
-        if idx >= len {
-            break;
-        };
-
-        if idx + 1 >= len {
-            break;
-        };
-
-        let first: i32 = peek_byte(base, len, idx);
-        if first != 38 {
-            break;
-        };
-
-        let second: i32 = peek_byte(base, len, idx + 1);
-        if second != 38 {
-            break;
-        };
-
-        if ast_node_type(current_node) != type_code_bool() {
-            return -3;
-        };
-
-        idx = idx + 2;
-        idx = parse_simple_bitwise_or_ast(
-            base,
-            len,
-            idx,
-            locals_base,
-            locals_count_ptr,
-            ast_base,
-            ast_offset_ptr,
-            node_out_ptr,
-        );
-        if idx < 0 {
-            return idx;
-        };
-
-        let right_node: i32 = load_i32(node_out_ptr);
-        if ast_node_type(right_node) != type_code_bool() {
-            return -3;
-        };
-
-        let new_node: i32 = ast_make_binary(
-            ast_base,
-            ast_offset_ptr,
-            ast_kind_binary_logical_and(),
-            current_node,
-            right_node,
-            type_code_bool(),
-        );
-        if new_node < 0 {
-            return -3;
-        };
-
-        current_node = new_node;
-        store_i32(node_out_ptr, current_node);
-    };
-
-    store_i32(node_out_ptr, current_node);
-    idx
-}
-
-fn parse_simple_logical_or_ast(
-    base: i32,
-    len: i32,
-    offset: i32,
-    locals_base: i32,
-    locals_count_ptr: i32,
-    ast_base: i32,
-    ast_offset_ptr: i32,
-    node_out_ptr: i32,
-) -> i32 {
-    let mut idx: i32 = parse_simple_logical_and_ast(
-        base,
-        len,
-        offset,
-        locals_base,
-        locals_count_ptr,
-        ast_base,
-        ast_offset_ptr,
-        node_out_ptr,
-    );
-    if idx < 0 {
-        return idx;
-    };
-
-    let mut current_node: i32 = load_i32(node_out_ptr);
-
-    loop {
-        idx = skip_whitespace(base, len, idx);
-        if idx >= len {
-            break;
-        };
-
-        if idx + 1 >= len {
-            break;
-        };
-
-        let first: i32 = peek_byte(base, len, idx);
-        if first != 124 {
-            break;
-        };
-
-        let second: i32 = peek_byte(base, len, idx + 1);
-        if second != 124 {
-            break;
-        };
-
-        if ast_node_type(current_node) != type_code_bool() {
-            return -3;
-        };
-
-        idx = idx + 2;
-        idx = parse_simple_logical_and_ast(
-            base,
-            len,
-            idx,
-            locals_base,
-            locals_count_ptr,
-            ast_base,
-            ast_offset_ptr,
-            node_out_ptr,
-        );
-        if idx < 0 {
-            return idx;
-        };
-
-        let right_node: i32 = load_i32(node_out_ptr);
-        if ast_node_type(right_node) != type_code_bool() {
-            return -3;
-        };
-
-        let new_node: i32 = ast_make_binary(
-            ast_base,
-            ast_offset_ptr,
-            ast_kind_binary_logical_or(),
-            current_node,
-            right_node,
-            type_code_bool(),
-        );
-        if new_node < 0 {
-            return -3;
-        };
-
-        current_node = new_node;
-        store_i32(node_out_ptr, current_node);
-    };
-
-    store_i32(node_out_ptr, current_node);
-    idx
-}
-
-fn parse_simple_expression_ast(
-    base: i32,
-    len: i32,
-    offset: i32,
-    locals_base: i32,
-    locals_count_ptr: i32,
-    ast_base: i32,
-    ast_offset_ptr: i32,
-    node_out_ptr: i32,
-) -> i32 {
-    parse_simple_logical_or_ast(
-        base,
-        len,
-        offset,
-        locals_base,
-        locals_count_ptr,
-        ast_base,
-        ast_offset_ptr,
-        node_out_ptr,
-    )
-}
-
-fn lower_simple_ast_node(
-    ast_base: i32,
-    node_ptr: i32,
-    instr_base: i32,
-    offset: i32,
-) -> i32 {
-    if node_ptr < 0 {
-        return -1;
-    };
-    let kind: i32 = load_i32(node_ptr);
-    if kind == ast_kind_i32_const() {
-        let value: i32 = load_i32(node_ptr + 4);
-        return emit_i32_const(instr_base, offset, value);
-    };
-    if kind == ast_kind_bool_const() {
-        let value: i32 = load_i32(node_ptr + 4);
-        return emit_i32_const(instr_base, offset, value);
-    };
-    if kind == ast_kind_local_get() {
-        let wasm_index: i32 = load_i32(node_ptr + 4);
-        return emit_local_get(instr_base, offset, wasm_index);
-    };
-    if kind == ast_kind_unary_neg() {
-        let operand: i32 = load_i32(node_ptr + 4);
-        let mut next_offset: i32 = emit_i32_const(instr_base, offset, 0);
-        next_offset = lower_simple_ast_node(ast_base, operand, instr_base, next_offset);
-        if next_offset < 0 {
-            return -1;
-        };
-        next_offset = emit_sub(instr_base, next_offset);
-        return next_offset;
-    };
-    if kind == ast_kind_unary_not() {
-        let operand: i32 = load_i32(node_ptr + 4);
-        let mut next_offset: i32 = lower_simple_ast_node(ast_base, operand, instr_base, offset);
-        if next_offset < 0 {
-            return -1;
-        };
-        return emit_eqz(instr_base, next_offset);
-    };
-    if kind == ast_kind_binary_add() || kind == ast_kind_binary_sub() || kind == ast_kind_binary_mul() || kind == ast_kind_binary_div() {
-        let left: i32 = load_i32(node_ptr + 4);
-        let right: i32 = load_i32(node_ptr + 8);
-        let mut next_offset: i32 = lower_simple_ast_node(ast_base, left, instr_base, offset);
-        if next_offset < 0 {
-            return -1;
-        };
-        next_offset = lower_simple_ast_node(ast_base, right, instr_base, next_offset);
-        if next_offset < 0 {
-            return -1;
-        };
-        if kind == ast_kind_binary_add() {
-            return emit_add(instr_base, next_offset);
-        };
-        if kind == ast_kind_binary_sub() {
-            return emit_sub(instr_base, next_offset);
-        };
-        if kind == ast_kind_binary_mul() {
-            return emit_mul(instr_base, next_offset);
-        };
-        return emit_div(instr_base, next_offset);
-    };
-    if kind == ast_kind_binary_logical_or() {
-        let left: i32 = load_i32(node_ptr + 4);
-        let right: i32 = load_i32(node_ptr + 8);
-        let mut next_offset: i32 = lower_simple_ast_node(ast_base, left, instr_base, offset);
-        if next_offset < 0 {
-            return -1;
-        };
-        next_offset = emit_if(instr_base, next_offset, 127);
-        next_offset = emit_i32_const(instr_base, next_offset, 1);
-        next_offset = emit_else(instr_base, next_offset);
-        next_offset = lower_simple_ast_node(ast_base, right, instr_base, next_offset);
-        if next_offset < 0 {
-            return -1;
-        };
-        return emit_end(instr_base, next_offset);
-    };
-    if kind == ast_kind_binary_logical_and() {
-        let left: i32 = load_i32(node_ptr + 4);
-        let right: i32 = load_i32(node_ptr + 8);
-        let mut next_offset: i32 = lower_simple_ast_node(ast_base, left, instr_base, offset);
-        if next_offset < 0 {
-            return -1;
-        };
-        next_offset = emit_if(instr_base, next_offset, 127);
-        next_offset = lower_simple_ast_node(ast_base, right, instr_base, next_offset);
-        if next_offset < 0 {
-            return -1;
-        };
-        next_offset = emit_else(instr_base, next_offset);
-        next_offset = emit_i32_const(instr_base, next_offset, 0);
-        next_offset = emit_end(instr_base, next_offset);
-        return next_offset;
-    };
-    if kind == ast_kind_binary_bitwise_and() || kind == ast_kind_binary_bitwise_or() {
-        let left: i32 = load_i32(node_ptr + 4);
-        let right: i32 = load_i32(node_ptr + 8);
-        let mut next_offset: i32 = lower_simple_ast_node(ast_base, left, instr_base, offset);
-        if next_offset < 0 {
-            return -1;
-        };
-        next_offset = lower_simple_ast_node(ast_base, right, instr_base, next_offset);
-        if next_offset < 0 {
-            return -1;
-        };
-        if kind == ast_kind_binary_bitwise_and() {
-            return emit_and(instr_base, next_offset);
-        };
-        return emit_or(instr_base, next_offset);
-    };
-    if kind == ast_kind_binary_shl() || kind == ast_kind_binary_shr() {
-        let left: i32 = load_i32(node_ptr + 4);
-        let right: i32 = load_i32(node_ptr + 8);
-        let mut next_offset: i32 = lower_simple_ast_node(ast_base, left, instr_base, offset);
-        if next_offset < 0 {
-            return -1;
-        };
-        next_offset = lower_simple_ast_node(ast_base, right, instr_base, next_offset);
-        if next_offset < 0 {
-            return -1;
-        };
-        if kind == ast_kind_binary_shl() {
-            return emit_shl(instr_base, next_offset);
-        };
-        return emit_shr_s(instr_base, next_offset);
-    };
-    if kind == ast_kind_binary_eq()
-        || kind == ast_kind_binary_ne()
-        || kind == ast_kind_binary_lt()
-        || kind == ast_kind_binary_gt()
-        || kind == ast_kind_binary_le()
-        || kind == ast_kind_binary_ge()
-    {
-        let left: i32 = load_i32(node_ptr + 4);
-        let right: i32 = load_i32(node_ptr + 8);
-        let mut next_offset: i32 = lower_simple_ast_node(ast_base, left, instr_base, offset);
-        if next_offset < 0 {
-            return -1;
-        };
-        next_offset = lower_simple_ast_node(ast_base, right, instr_base, next_offset);
-        if next_offset < 0 {
-            return -1;
-        };
-        if kind == ast_kind_binary_eq() {
-            return emit_eq(instr_base, next_offset);
-        };
-        if kind == ast_kind_binary_ne() {
-            return emit_ne(instr_base, next_offset);
-        };
-        if kind == ast_kind_binary_lt() {
-            return emit_lt(instr_base, next_offset);
-        };
-        if kind == ast_kind_binary_gt() {
-            return emit_gt(instr_base, next_offset);
-        };
-        if kind == ast_kind_binary_le() {
-            return emit_le(instr_base, next_offset);
-        };
-        return emit_ge(instr_base, next_offset);
-    };
-    if kind == ast_kind_memory_load_u8()
-        || kind == ast_kind_memory_load_u16()
-        || kind == ast_kind_memory_load_i32()
-    {
-        let operand: i32 = load_i32(node_ptr + 4);
-        let mut next_offset: i32 = lower_simple_ast_node(ast_base, operand, instr_base, offset);
-        if next_offset < 0 {
-            return -1;
-        };
-        if kind == ast_kind_memory_load_u8() {
-            return emit_load_u8(instr_base, next_offset);
-        };
-        if kind == ast_kind_memory_load_u16() {
-            return emit_load_u16(instr_base, next_offset);
-        };
-        return emit_load_i32(instr_base, next_offset);
-    };
-    if kind == ast_kind_memory_store_u8()
-        || kind == ast_kind_memory_store_u16()
-        || kind == ast_kind_memory_store_i32()
-    {
-        let address: i32 = load_i32(node_ptr + 4);
-        let value: i32 = load_i32(node_ptr + 8);
-        let mut next_offset: i32 = lower_simple_ast_node(ast_base, address, instr_base, offset);
-        if next_offset < 0 {
-            return -1;
-        };
-        next_offset = lower_simple_ast_node(ast_base, value, instr_base, next_offset);
-        if next_offset < 0 {
-            return -1;
-        };
-        if kind == ast_kind_memory_store_u8() {
-            return emit_store_u8(instr_base, next_offset);
-        };
-        if kind == ast_kind_memory_store_u16() {
-            return emit_store_u16(instr_base, next_offset);
-        };
-        return emit_store_i32(instr_base, next_offset);
-    };
-    -1
-}
-
-fn lower_simple_ast(ast_base: i32, root: i32, instr_base: i32, instr_offset_ptr: i32) -> i32 {
-    let offset: i32 = load_i32(instr_offset_ptr);
-    let final_offset: i32 = lower_simple_ast_node(ast_base, root, instr_base, offset);
-    if final_offset < 0 {
-        return -1;
-    };
-    store_i32(instr_offset_ptr, final_offset);
-    0
 }
 
 fn source_cursor_init(cursor_ptr: i32, base: i32, len: i32, offset: i32) {
@@ -3155,14 +1482,11 @@ fn write_function_section(base: i32, offset: i32, func_count: i32) -> i32 {
 
 fn write_memory_section(base: i32, offset: i32) -> i32 {
     let mut out: i32 = offset;
-    let mut payload_len: i32 = leb_u32_len(1);
-    payload_len = payload_len + leb_u32_len(0);
-    payload_len = payload_len + leb_u32_len(stage1_memory_pages());
     out = write_byte(base, out, 5);
-    out = write_u32_leb(base, out, payload_len);
+    out = write_u32_leb(base, out, 3);
     out = write_u32_leb(base, out, 1);
     out = write_u32_leb(base, out, 0);
-    out = write_u32_leb(base, out, stage1_memory_pages());
+    out = write_u32_leb(base, out, 16);
     out
 }
 
@@ -3324,87 +1648,7 @@ fn parse_expression(
     functions_count_ptr: i32,
     expr_type_ptr: i32
 ) -> i32 {
-    let saved_instr_offset: i32 = load_i32(instr_offset_ptr);
-    let ast_offset_ptr: i32 = scratch_ast_offset_ptr_from_instr_base(instr_base);
-    let ast_root_ptr: i32 = scratch_ast_root_ptr_from_instr_base(instr_base);
-    let ast_base: i32 = scratch_ast_base(instr_base);
-    let saved_ast_offset: i32 = load_i32(ast_offset_ptr);
-    let saved_root: i32 = load_i32(ast_root_ptr);
-
-    ast_reset(instr_base);
-
-    let parsed_idx: i32 = parse_simple_expression_ast(
-        base,
-        len,
-        offset,
-        locals_base,
-        locals_count_ptr,
-        ast_base,
-        ast_offset_ptr,
-        ast_root_ptr,
-    );
-
-    if parsed_idx >= 0 {
-        let root: i32 = load_i32(ast_root_ptr);
-        if root >= 0 {
-            let root_type: i32 = ast_node_type(root);
-            if root_type >= 0 {
-            let mut valid_trailing: bool = false;
-            let trimmed: i32 = skip_whitespace(base, len, parsed_idx);
-            if trimmed >= len {
-                valid_trailing = true;
-            } else {
-                let next_byte: i32 = peek_byte(base, len, trimmed);
-                if next_byte == 41 || next_byte == 44 || next_byte == 59 || next_byte == 125 || next_byte == 93 {
-                    valid_trailing = true;
-                };
-            };
-            if valid_trailing {
-                set_expr_type(expr_type_ptr, root_type);
-                if lower_simple_ast(ast_base, root, instr_base, instr_offset_ptr) >= 0 {
-                    ast_reset(instr_base);
-                    return parsed_idx;
-                };
-            };
-            };
-        };
-    };
-
-    store_i32(ast_offset_ptr, saved_ast_offset);
-    store_i32(ast_root_ptr, saved_root);
-    store_i32(instr_offset_ptr, saved_instr_offset);
-
-    parse_expression_lowering(
-        base,
-        len,
-        offset,
-        instr_base,
-        instr_offset_ptr,
-        locals_base,
-        locals_count_ptr,
-        control_stack_base,
-        control_stack_count_ptr,
-        functions_base,
-        functions_count_ptr,
-        expr_type_ptr,
-    )
-}
-
-fn parse_expression_lowering(
-    base: i32,
-    len: i32,
-    offset: i32,
-    instr_base: i32,
-    instr_offset_ptr: i32,
-    locals_base: i32,
-    locals_count_ptr: i32,
-    control_stack_base: i32,
-    control_stack_count_ptr: i32,
-    functions_base: i32,
-    functions_count_ptr: i32,
-    expr_type_ptr: i32
-) -> i32 {
-    parse_or_lowering(
+    parse_or(
         base,
         len,
         offset,
@@ -3420,7 +1664,7 @@ fn parse_expression_lowering(
         )
 }
 
-fn parse_or_lowering(
+fn parse_or(
     base: i32,
     len: i32,
     offset: i32,
@@ -3434,7 +1678,7 @@ fn parse_or_lowering(
     functions_count_ptr: i32,
     expr_type_ptr: i32
 ) -> i32 {
-    let mut idx: i32 = parse_and_lowering(
+    let mut idx: i32 = parse_and(
         base,
         len,
         offset,
@@ -3486,7 +1730,7 @@ fn parse_or_lowering(
             store_i32(instr_offset_ptr, saved_instr_offset);
             return -1;
         };
-        let next_idx: i32 = parse_and_lowering(
+        let next_idx: i32 = parse_and(
             base,
             len,
             idx,
@@ -3520,7 +1764,7 @@ fn parse_or_lowering(
     set_expr_type(expr_type_ptr, current_type);
     idx
 }
-fn parse_and_lowering(
+fn parse_and(
     base: i32,
     len: i32,
     offset: i32,
@@ -3534,7 +1778,7 @@ fn parse_and_lowering(
     functions_count_ptr: i32,
     expr_type_ptr: i32
 ) -> i32 {
-    let mut idx: i32 = parse_bitwise_or_lowering(
+    let mut idx: i32 = parse_bitwise_or(
         base,
         len,
         offset,
@@ -3583,7 +1827,7 @@ fn parse_and_lowering(
             store_i32(instr_offset_ptr, saved_instr_offset);
             return -1;
         };
-        let next_idx: i32 = parse_bitwise_or_lowering(
+        let next_idx: i32 = parse_bitwise_or(
             base,
             len,
             idx,
@@ -3622,7 +1866,7 @@ fn parse_and_lowering(
     idx
 }
 
-fn parse_bitwise_or_lowering(
+fn parse_bitwise_or(
     base: i32,
     len: i32,
     offset: i32,
@@ -3636,7 +1880,7 @@ fn parse_bitwise_or_lowering(
     functions_count_ptr: i32,
     expr_type_ptr: i32
 ) -> i32 {
-    let mut idx: i32 = parse_bitwise_and_lowering(
+    let mut idx: i32 = parse_bitwise_and(
         base,
         len,
         offset,
@@ -3682,7 +1926,7 @@ fn parse_bitwise_or_lowering(
         };
 
         idx = idx + 1;
-        let next_idx: i32 = parse_bitwise_and_lowering(
+        let next_idx: i32 = parse_bitwise_and(
             base,
             len,
             idx,
@@ -3722,7 +1966,7 @@ fn parse_bitwise_or_lowering(
     idx
 }
 
-fn parse_bitwise_and_lowering(
+fn parse_bitwise_and(
     base: i32,
     len: i32,
     offset: i32,
@@ -3736,7 +1980,7 @@ fn parse_bitwise_and_lowering(
     functions_count_ptr: i32,
     expr_type_ptr: i32
 ) -> i32 {
-    let mut idx: i32 = parse_equality_lowering(
+    let mut idx: i32 = parse_equality(
         base,
         len,
         offset,
@@ -3782,7 +2026,7 @@ fn parse_bitwise_and_lowering(
         };
 
         idx = idx + 1;
-        let next_idx: i32 = parse_equality_lowering(
+        let next_idx: i32 = parse_equality(
             base,
             len,
             idx,
@@ -3821,7 +2065,7 @@ fn parse_bitwise_and_lowering(
 
     idx
 }
-fn parse_equality_lowering(
+fn parse_equality(
     base: i32,
     len: i32,
     offset: i32,
@@ -3835,7 +2079,7 @@ fn parse_equality_lowering(
     functions_count_ptr: i32,
     expr_type_ptr: i32
 ) -> i32 {
-    let mut idx: i32 = parse_comparison_lowering(
+    let mut idx: i32 = parse_comparison(
         base,
         len,
         offset,
@@ -3869,7 +2113,7 @@ fn parse_equality_lowering(
         if first == 61 && second == 61 {
             idx = idx + 2;
             let left_type: i32 = current_type;
-            let next_idx: i32 = parse_comparison_lowering(
+            let next_idx: i32 = parse_comparison(
                 base,
                 len,
                 idx,
@@ -3902,7 +2146,7 @@ fn parse_equality_lowering(
         if first == 33 && second == 61 {
             idx = idx + 2;
             let left_type: i32 = current_type;
-            let next_idx: i32 = parse_comparison_lowering(
+            let next_idx: i32 = parse_comparison(
                 base,
                 len,
                 idx,
@@ -3945,7 +2189,7 @@ fn parse_equality_lowering(
 
     idx
 }
-fn parse_comparison_lowering(
+fn parse_comparison(
     base: i32,
     len: i32,
     offset: i32,
@@ -3959,7 +2203,7 @@ fn parse_comparison_lowering(
     functions_count_ptr: i32,
     expr_type_ptr: i32
 ) -> i32 {
-    let mut idx: i32 = parse_shift_lowering(
+    let mut idx: i32 = parse_shift(
         base,
         len,
         offset,
@@ -4039,7 +2283,7 @@ fn parse_comparison_lowering(
         };
 
         idx = idx + consumed;
-        let next_idx: i32 = parse_shift_lowering(
+        let next_idx: i32 = parse_shift(
             base,
             len,
             idx,
@@ -4087,7 +2331,7 @@ fn parse_comparison_lowering(
     idx
 }
 
-fn parse_shift_lowering(
+fn parse_shift(
     base: i32,
     len: i32,
     offset: i32,
@@ -4101,7 +2345,7 @@ fn parse_shift_lowering(
     functions_count_ptr: i32,
     expr_type_ptr: i32
 ) -> i32 {
-    let mut idx: i32 = parse_addition_lowering(
+    let mut idx: i32 = parse_addition(
         base,
         len,
         offset,
@@ -4155,7 +2399,7 @@ fn parse_shift_lowering(
         };
 
         idx = idx + 2;
-        let next_idx: i32 = parse_addition_lowering(
+        let next_idx: i32 = parse_addition(
             base,
             len,
             idx,
@@ -4197,7 +2441,7 @@ fn parse_shift_lowering(
 
     idx
 }
-fn parse_addition_lowering(
+fn parse_addition(
     base: i32,
     len: i32,
     offset: i32,
@@ -4211,7 +2455,7 @@ fn parse_addition_lowering(
     functions_count_ptr: i32,
     expr_type_ptr: i32
 ) -> i32 {
-    let mut idx: i32 = parse_multiplication_lowering(
+    let mut idx: i32 = parse_multiplication(
         base,
         len,
         offset,
@@ -4244,7 +2488,7 @@ fn parse_addition_lowering(
                 return -1;
             };
             idx = idx + 1;
-            let next_idx: i32 = parse_multiplication_lowering(
+            let next_idx: i32 = parse_multiplication(
                 base,
                 len,
                 idx,
@@ -4293,7 +2537,7 @@ fn parse_addition_lowering(
 
     idx
 }
-fn parse_multiplication_lowering(
+fn parse_multiplication(
     base: i32,
     len: i32,
     offset: i32,
@@ -4307,7 +2551,7 @@ fn parse_multiplication_lowering(
     functions_count_ptr: i32,
     expr_type_ptr: i32
 ) -> i32 {
-    let mut idx: i32 = parse_unary_lowering(
+    let mut idx: i32 = parse_unary(
         base,
         len,
         offset,
@@ -4340,7 +2584,7 @@ fn parse_multiplication_lowering(
                 return -1;
             };
             idx = idx + 1;
-            let next_idx: i32 = parse_unary_lowering(
+            let next_idx: i32 = parse_unary(
                 base,
                 len,
                 idx,
@@ -4389,7 +2633,7 @@ fn parse_multiplication_lowering(
 
     idx
 }
-fn parse_unary_lowering(
+fn parse_unary(
     base: i32,
     len: i32,
     offset: i32,
@@ -4437,7 +2681,7 @@ fn parse_unary_lowering(
         store_i32(instr_offset_ptr, instr_offset);
     };
 
-    let mut next_idx: i32 = parse_primary_lowering(
+    let mut next_idx: i32 = parse_primary(
         base,
         len,
         idx,
@@ -4477,7 +2721,7 @@ fn parse_unary_lowering(
 
     next_idx
 }
-fn parse_primary_lowering(
+fn parse_primary(
     base: i32,
     len: i32,
     offset: i32,
@@ -4534,7 +2778,7 @@ fn parse_primary_lowering(
             if third == 111 && fourth == 112 {
                 let after_keyword: i32 = idx + 4;
                 if after_keyword == len || !is_identifier_continue(peek_byte(base, len, after_keyword)) {
-                    return parse_loop_expression_lowering(
+                    return parse_loop_expression(
                         base,
                         len,
                         idx,
@@ -5330,7 +3574,7 @@ fn parse_loop_statement(
     after_loop
 }
 
-fn parse_loop_expression_lowering(
+fn parse_loop_expression(
     base: i32,
     len: i32,
     offset: i32,
@@ -5936,7 +4180,7 @@ fn parse_block_statements(
     result
 }
 
-fn parse_block_expression_lowering(
+fn parse_block_expression(
     base: i32,
     len: i32,
     offset: i32,
@@ -6275,7 +4519,7 @@ fn parse_if_expression(
         control_type_none()
     );
 
-    let mut after_block: i32 = parse_block_expression_lowering(
+    let mut after_block: i32 = parse_block_expression(
         base,
         len,
         idx,
@@ -6333,7 +4577,7 @@ fn parse_if_expression(
     let next_byte: i32 = peek_byte(base, len, idx);
     if next_byte == 123 {
         idx = expect_char(base, len, idx, 123);
-        idx = parse_block_expression_lowering(
+        idx = parse_block_expression(
                     base,
                     len,
                     idx,

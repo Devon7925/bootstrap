@@ -12,7 +12,7 @@ const STAGE2_OUTPUT_PATH: &str = "stage2.wasm";
 const STAGE1_INPUT_PTR: usize = 0;
 const STAGE1_FUNCTION_ENTRY_SIZE: usize = 32;
 const STAGE1_FUNCTIONS_BASE_OFFSET: usize = 851_968;
-const STAGE1_MAX_FUNCTIONS: usize = 320;
+const STAGE1_MAX_FUNCTIONS: usize = 512;
 
 fn build_stage2_wasm() -> Result<(), String> {
     let source = fs::read_to_string(STAGE1_SOURCE_PATH)
