@@ -29,7 +29,7 @@ const INSTR_OFFSET_PTR_OFFSET: usize = 4_096;
 const FUNCTIONS_COUNT_PTR_OFFSET: usize = 851_960;
 const FUNCTIONS_BASE_OFFSET: usize = 851_968;
 const FUNCTION_ENTRY_SIZE: usize = 32;
-const STAGE1_MAX_FUNCTIONS: usize = 512;
+const STAGE1_MAX_FUNCTIONS: usize = 320;
 
 pub struct Compilation {
     target: Target,
