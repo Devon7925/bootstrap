@@ -3,7 +3,7 @@ const INSTR_OFFSET_PTR_OFFSET = 4_096;
 const FUNCTIONS_COUNT_PTR_OFFSET = 851_960;
 const FUNCTIONS_BASE_OFFSET = 851_968;
 const FUNCTION_ENTRY_SIZE = 32;
-const STAGE1_MAX_FUNCTIONS = 512;
+const STAGE1_MAX_FUNCTIONS = 320;
 
 const DEFAULT_PROGRAM = `// Compute the 10th Fibonacci number.
 fn fib(n: i32) -> i32 {
