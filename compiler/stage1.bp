@@ -145,6 +145,138 @@ fn scratch_current_return_type_ptr(out_ptr: i32) -> i32 {
     scratch_functions_base(out_ptr) - word_size()
 }
 
+fn scratch_source_cursor_offset() -> i32 {
+    scratch_expr_type_offset() - 12
+}
+
+fn scratch_source_cursor_ptr(out_ptr: i32) -> i32 {
+    out_ptr + scratch_source_cursor_offset()
+}
+
+fn source_cursor_init(cursor_ptr: i32, base: i32, len: i32, offset: i32) {
+    store_i32(cursor_ptr, base);
+    store_i32(cursor_ptr + 4, len);
+    store_i32(cursor_ptr + 8, offset);
+}
+
+fn source_cursor_base(cursor_ptr: i32) -> i32 {
+    load_i32(cursor_ptr)
+}
+
+fn source_cursor_len(cursor_ptr: i32) -> i32 {
+    load_i32(cursor_ptr + 4)
+}
+
+fn source_cursor_offset(cursor_ptr: i32) -> i32 {
+    load_i32(cursor_ptr + 8)
+}
+
+fn source_cursor_set_offset(cursor_ptr: i32, offset: i32) {
+    store_i32(cursor_ptr + 8, offset);
+}
+
+fn source_cursor_skip_whitespace(cursor_ptr: i32) -> i32 {
+    let base: i32 = source_cursor_base(cursor_ptr);
+    let len: i32 = source_cursor_len(cursor_ptr);
+    let offset: i32 = source_cursor_offset(cursor_ptr);
+    let new_offset: i32 = skip_whitespace(base, len, offset);
+    source_cursor_set_offset(cursor_ptr, new_offset);
+    new_offset
+}
+
+fn source_cursor_expect_char(cursor_ptr: i32, ch: i32) -> i32 {
+    let base: i32 = source_cursor_base(cursor_ptr);
+    let len: i32 = source_cursor_len(cursor_ptr);
+    let offset: i32 = source_cursor_offset(cursor_ptr);
+    let new_offset: i32 = expect_char(base, len, offset, ch);
+    if new_offset < 0 {
+        return -1;
+    };
+    source_cursor_set_offset(cursor_ptr, new_offset);
+    new_offset
+}
+
+fn source_cursor_expect_keyword_fn(cursor_ptr: i32) -> i32 {
+    let base: i32 = source_cursor_base(cursor_ptr);
+    let len: i32 = source_cursor_len(cursor_ptr);
+    let offset: i32 = source_cursor_offset(cursor_ptr);
+    let new_offset: i32 = expect_keyword_fn(base, len, offset);
+    if new_offset < 0 {
+        return -1;
+    };
+    source_cursor_set_offset(cursor_ptr, new_offset);
+    new_offset
+}
+
+fn source_cursor_expect_keyword_type(cursor_ptr: i32) -> i32 {
+    let base: i32 = source_cursor_base(cursor_ptr);
+    let len: i32 = source_cursor_len(cursor_ptr);
+    let offset: i32 = source_cursor_offset(cursor_ptr);
+    let new_offset: i32 = expect_keyword_type(base, len, offset);
+    if new_offset < 0 {
+        return -1;
+    };
+    source_cursor_set_offset(cursor_ptr, new_offset);
+    new_offset
+}
+
+fn source_cursor_peek(cursor_ptr: i32) -> i32 {
+    let base: i32 = source_cursor_base(cursor_ptr);
+    let len: i32 = source_cursor_len(cursor_ptr);
+    let offset: i32 = source_cursor_offset(cursor_ptr);
+    if offset >= len {
+        return -1;
+    };
+    peek_byte(base, len, offset)
+}
+
+fn source_cursor_peek_relative(cursor_ptr: i32, relative: i32) -> i32 {
+    let base: i32 = source_cursor_base(cursor_ptr);
+    let len: i32 = source_cursor_len(cursor_ptr);
+    let offset: i32 = source_cursor_offset(cursor_ptr) + relative;
+    if offset < 0 || offset >= len {
+        return -1;
+    };
+    peek_byte(base, len, offset)
+}
+
+fn source_cursor_keyword_matches(
+    cursor_ptr: i32,
+    length: i32,
+    a0: i32,
+    a1: i32,
+    a2: i32,
+    a3: i32,
+    a4: i32,
+    a5: i32,
+    a6: i32,
+    a7: i32,
+) -> bool {
+    let base: i32 = source_cursor_base(cursor_ptr);
+    let len: i32 = source_cursor_len(cursor_ptr);
+    let offset: i32 = source_cursor_offset(cursor_ptr);
+    keyword_matches(
+        base,
+        len,
+        offset,
+        length,
+        a0,
+        a1,
+        a2,
+        a3,
+        a4,
+        a5,
+        a6,
+        a7,
+    )
+}
+
+fn source_cursor_advance(cursor_ptr: i32, amount: i32) -> i32 {
+    let offset: i32 = source_cursor_offset(cursor_ptr) + amount;
+    source_cursor_set_offset(cursor_ptr, offset);
+    offset
+}
+
 fn emit_call(base: i32, offset: i32, index: i32) -> i32 {
     let mut out: i32 = write_byte(base, offset, 16);
     out = write_u32_leb(base, out, index);
@@ -4816,22 +4948,23 @@ fn register_function_signatures(
     functions_count_ptr: i32,
     types_base: i32,
     types_count_ptr: i32,
+    cursor_ptr: i32,
 ) -> i32 {
     store_i32(functions_count_ptr, 0);
     store_i32(types_count_ptr, 0);
-    let mut offset: i32 = 0;
+    source_cursor_init(cursor_ptr, input_ptr, input_len, 0);
+    let base: i32 = input_ptr;
+    let len: i32 = input_len;
     let mut main_index: i32 = -1;
 
     loop {
-        offset = skip_whitespace(input_ptr, input_len, offset);
-        if offset >= input_len {
+        let offset: i32 = source_cursor_skip_whitespace(cursor_ptr);
+        if offset >= len {
             break;
         };
 
-        if keyword_matches(
-            input_ptr,
-            input_len,
-            offset,
+        if source_cursor_keyword_matches(
+            cursor_ptr,
             4,
             116,
             121,
@@ -4842,30 +4975,26 @@ fn register_function_signatures(
             0,
             0,
         ) {
-            offset = expect_keyword_type(input_ptr, input_len, offset);
-            if offset < 0 {
+            if source_cursor_expect_keyword_type(cursor_ptr) < 0 {
                 return -1;
             };
 
-            if offset >= input_len {
-                return -1;
-            };
-            let after_type_byte: i32 = peek_byte(input_ptr, input_len, offset);
+            let after_type_byte: i32 = source_cursor_peek(cursor_ptr);
             if after_type_byte < 0 || !is_whitespace(after_type_byte) {
                 return -1;
             };
-            offset = skip_whitespace(input_ptr, input_len, offset);
-            if offset >= input_len {
+            if source_cursor_skip_whitespace(cursor_ptr) >= len {
                 return -1;
             };
 
-            let name_start: i32 = offset;
+            let name_start: i32 = source_cursor_offset(cursor_ptr);
             let mut name_len: i32 = 0;
             loop {
-                if offset >= input_len {
+                let current_offset: i32 = source_cursor_offset(cursor_ptr);
+                if current_offset >= len {
                     break;
                 };
-                let ch: i32 = peek_byte(input_ptr, input_len, offset);
+                let ch: i32 = source_cursor_peek(cursor_ptr);
                 if name_len == 0 {
                     if !is_identifier_start(ch) {
                         break;
@@ -4873,43 +5002,41 @@ fn register_function_signatures(
                 } else if !is_identifier_continue(ch) {
                     break;
                 };
+                source_cursor_advance(cursor_ptr, 1);
                 name_len = name_len + 1;
-                offset = offset + 1;
             };
             if name_len == 0 {
                 return -1;
             };
 
             if types_find(
-                input_ptr,
-                input_len,
+                base,
+                len,
                 types_base,
                 types_count_ptr,
                 name_start,
                 name_len,
-            ) >= 0
-            {
+            ) >= 0 {
                 return -1;
             };
 
-            offset = skip_whitespace(input_ptr, input_len, offset);
-            offset = expect_char(input_ptr, input_len, offset, 61);
-            if offset < 0 {
+            if source_cursor_skip_whitespace(cursor_ptr) >= len {
+                return -1;
+            };
+            if source_cursor_expect_char(cursor_ptr, 61) < 0 {
+                return -1;
+            };
+            if source_cursor_skip_whitespace(cursor_ptr) >= len {
                 return -1;
             };
 
-            offset = skip_whitespace(input_ptr, input_len, offset);
-            if offset >= input_len {
-                return -1;
-            };
-
-            let value_start: i32 = offset;
+            let value_start: i32 = source_cursor_offset(cursor_ptr);
             let mut value_end: i32 = value_start;
             loop {
-                if value_end >= input_len {
+                if value_end >= len {
                     return -1;
                 };
-                let value_byte: i32 = peek_byte(input_ptr, input_len, value_end);
+                let value_byte: i32 = peek_byte(base, len, value_end);
                 if value_byte == 59 {
                     break;
                 };
@@ -4921,7 +5048,7 @@ fn register_function_signatures(
                 if trimmed_end <= value_start {
                     break;
                 };
-                let last_byte: i32 = peek_byte(input_ptr, input_len, trimmed_end - 1);
+                let last_byte: i32 = peek_byte(base, len, trimmed_end - 1);
                 if last_byte < 0 {
                     return -1;
                 };
@@ -4944,34 +5071,30 @@ fn register_function_signatures(
             store_i32(entry + 12, value_len);
             store_i32(types_count_ptr, type_index + 1);
 
-            offset = value_end + 1;
+            source_cursor_set_offset(cursor_ptr, value_end + 1);
             continue;
         };
 
-        offset = expect_keyword_fn(input_ptr, input_len, offset);
-        if offset < 0 {
+        if source_cursor_expect_keyword_fn(cursor_ptr) < 0 {
             return -1;
         };
 
-        if offset >= input_len {
-            return -1;
-        };
-        let after_fn_byte: i32 = peek_byte(input_ptr, input_len, offset);
+        let after_fn_byte: i32 = source_cursor_peek(cursor_ptr);
         if after_fn_byte < 0 || !is_whitespace(after_fn_byte) {
             return -1;
         };
-        offset = skip_whitespace(input_ptr, input_len, offset);
-        if offset >= input_len {
+        if source_cursor_skip_whitespace(cursor_ptr) >= len {
             return -1;
         };
 
-        let name_start: i32 = offset;
+        let name_start: i32 = source_cursor_offset(cursor_ptr);
         let mut name_len: i32 = 0;
         loop {
-            if offset >= input_len {
+            let current_offset: i32 = source_cursor_offset(cursor_ptr);
+            if current_offset >= len {
                 break;
             };
-            let ch: i32 = peek_byte(input_ptr, input_len, offset);
+            let ch: i32 = source_cursor_peek(cursor_ptr);
             if name_len == 0 {
                 if !is_identifier_start(ch) {
                     break;
@@ -4979,16 +5102,16 @@ fn register_function_signatures(
             } else if !is_identifier_continue(ch) {
                 break;
             };
+            source_cursor_advance(cursor_ptr, 1);
             name_len = name_len + 1;
-            offset = offset + 1;
         };
         if name_len == 0 {
             return -1;
         };
 
         if functions_find(
-            input_ptr,
-            input_len,
+            base,
+            len,
             functions_base,
             functions_count_ptr,
             name_start,
@@ -5011,10 +5134,10 @@ fn register_function_signatures(
 
         let mut is_main: bool = false;
         if name_len == 4 {
-            let m: i32 = load_u8(input_ptr + name_start);
-            let a: i32 = load_u8(input_ptr + name_start + 1);
-            let i_char: i32 = load_u8(input_ptr + name_start + 2);
-            let n_char: i32 = load_u8(input_ptr + name_start + 3);
+            let m: i32 = load_u8(base + name_start);
+            let a: i32 = load_u8(base + name_start + 1);
+            let i_char: i32 = load_u8(base + name_start + 2);
+            let n_char: i32 = load_u8(base + name_start + 3);
             if m == 109 && a == 97 && i_char == 105 && n_char == 110 {
                 is_main = true;
             };
@@ -5026,34 +5149,37 @@ fn register_function_signatures(
             main_index = func_index;
         };
 
-        offset = skip_whitespace(input_ptr, input_len, offset);
-        offset = expect_char(input_ptr, input_len, offset, 40);
-        if offset < 0 {
+        if source_cursor_skip_whitespace(cursor_ptr) >= len {
+            return -1;
+        };
+        if source_cursor_expect_char(cursor_ptr, 40) < 0 {
             return -1;
         };
 
-        let parsed_params: i32 = parse_parameter_list(
-            input_ptr,
-            input_len,
-            offset,
+        let params_offset: i32 = parse_parameter_list(
+            base,
+            len,
+            source_cursor_offset(cursor_ptr),
             0,
             0,
             false,
             0,
             entry + 8,
         );
-        if parsed_params < 0 {
+        if params_offset < 0 {
             return -1;
         };
-        offset = parsed_params;
+        source_cursor_set_offset(cursor_ptr, params_offset);
 
-        offset = skip_whitespace(input_ptr, input_len, offset);
+        if source_cursor_skip_whitespace(cursor_ptr) >= len {
+            return -1;
+        };
 
-        let before_return: i32 = offset;
+        let before_return: i32 = source_cursor_offset(cursor_ptr);
         let after_return: i32 = parse_optional_return_type(
-            input_ptr,
-            input_len,
-            offset,
+            base,
+            len,
+            before_return,
             entry + 24,
             type_code_unit(),
         );
@@ -5061,7 +5187,7 @@ fn register_function_signatures(
             return -1;
         };
         let has_arrow: bool = after_return != before_return;
-        offset = after_return;
+        source_cursor_set_offset(cursor_ptr, after_return);
         if !has_arrow {
             store_i32(entry + 24, type_code_unit());
         };
@@ -5072,20 +5198,22 @@ fn register_function_signatures(
             };
         };
 
-        offset = skip_whitespace(input_ptr, input_len, offset);
-        offset = expect_char(input_ptr, input_len, offset, 123);
-        if offset < 0 {
+        if source_cursor_skip_whitespace(cursor_ptr) >= len {
             return -1;
         };
-        store_i32(entry + 28, offset);
+        if source_cursor_expect_char(cursor_ptr, 123) < 0 {
+            return -1;
+        };
+        let body_start: i32 = source_cursor_offset(cursor_ptr);
+        store_i32(entry + 28, body_start);
 
         let mut depth: i32 = 1;
-        let mut scan_offset: i32 = offset;
+        let mut scan_offset: i32 = body_start;
         loop {
-            if scan_offset >= input_len {
+            if scan_offset >= len {
                 return -1;
             };
-            let ch: i32 = peek_byte(input_ptr, input_len, scan_offset);
+            let ch: i32 = peek_byte(base, len, scan_offset);
             scan_offset = scan_offset + 1;
             if ch == 123 {
                 depth = depth + 1;
@@ -5099,7 +5227,7 @@ fn register_function_signatures(
                 continue;
             };
         };
-        offset = scan_offset;
+        source_cursor_set_offset(cursor_ptr, scan_offset);
     };
 
     main_index
@@ -5131,6 +5259,8 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
     store_i32(current_return_type_ptr, type_code_unit());
     store_i32(functions_count_ptr, 0);
 
+    let cursor_ptr: i32 = scratch_source_cursor_ptr(out_ptr);
+
     let main_index: i32 = register_function_signatures(
         input_ptr,
         input_len,
@@ -5138,6 +5268,7 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
         functions_count_ptr,
         types_base,
         types_count_ptr,
+        cursor_ptr,
     );
     if main_index < 0 {
         return -1;

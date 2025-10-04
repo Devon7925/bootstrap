@@ -13,9 +13,10 @@
   *Reference:* Repeated ad-hoc parsing logic inside `compile`【F:compiler/stage1.bp†L4560-L4662】
   *Status:* Added dedicated helpers for parameter lists and optional return types so both signature registration and body compilation share the same parsing routines, removing duplicated loops and keyword handling.
 
-- [ ] **Introduce `SourceCursor` helpers for stage1 parser**
+- [x] **Introduce `SourceCursor` helpers for stage1 parser**
   Stage1 threads the `base`, `len`, and index triplet through nearly every parsing function, reapplying whitespace skipping and byte peeks manually. Creating a lightweight cursor struct with methods for advancing, peeking, and matching delimiters would reduce parameter lists and make control flow clearer.
   *Reference:* Parsing functions repeatedly pass `base`, `len`, and `idx` while chaining `skip_whitespace` and `expect_char` calls【F:compiler/stage1.bp†L4520-L4547】
+  *Status:* Added reusable cursor storage in scratch memory with helpers for skipping, peeking, and keyword matching, then rewrote signature registration and the top-level compiler loop to drive parsing via that cursor instead of raw `base`/`len`/`idx` triples.【F:compiler/stage1.bp†L126-L238】【F:compiler/stage1.bp†L481-L707】【F:compiler/stage1.bp†L5256-L5545】
 
 - [x] **Centralize keyword recognition logic**
   Detecting `type` and other keywords currently performs ad-hoc byte comparisons for each character before dispatching, leading to verbose and error-prone control flow. Providing a shared helper that validates reserved words and their boundaries would simplify loops that scan items during registration.
