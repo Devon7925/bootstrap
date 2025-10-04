@@ -560,7 +560,9 @@ fn ast_fold_constants(ast_base: i32, ast_offset_ptr: i32, node_ptr: i32) -> i32 
                 return new_node;
             };
         } else if left_type == type_code_bool() {
-            if ast_is_bool_const(folded_left) && ast_is_bool_const(folded_right) {
+            let left_is_const: bool = ast_is_bool_const(folded_left);
+            let right_is_const: bool = ast_is_bool_const(folded_right);
+            if left_is_const && right_is_const {
                 let left_value: bool = ast_bool_const_value(folded_left);
                 let right_value: bool = ast_bool_const_value(folded_right);
                 let mut matches: bool = false;
@@ -574,6 +576,70 @@ fn ast_fold_constants(ast_base: i32, ast_offset_ptr: i32, node_ptr: i32) -> i32 
                     return -1;
                 };
                 return new_node;
+            } else if left_is_const {
+                let left_value: bool = ast_bool_const_value(folded_left);
+                if kind == ast_kind_binary_eq() {
+                    if left_value {
+                        return folded_right;
+                    };
+                    let new_node: i32 = ast_make_unary(
+                        ast_base,
+                        ast_offset_ptr,
+                        ast_kind_unary_not(),
+                        folded_right,
+                        type_code_bool(),
+                    );
+                    if new_node < 0 {
+                        return -1;
+                    };
+                    return new_node;
+                };
+                if left_value {
+                    let new_node: i32 = ast_make_unary(
+                        ast_base,
+                        ast_offset_ptr,
+                        ast_kind_unary_not(),
+                        folded_right,
+                        type_code_bool(),
+                    );
+                    if new_node < 0 {
+                        return -1;
+                    };
+                    return new_node;
+                };
+                return folded_right;
+            } else if right_is_const {
+                let right_value: bool = ast_bool_const_value(folded_right);
+                if kind == ast_kind_binary_eq() {
+                    if right_value {
+                        return folded_left;
+                    };
+                    let new_node: i32 = ast_make_unary(
+                        ast_base,
+                        ast_offset_ptr,
+                        ast_kind_unary_not(),
+                        folded_left,
+                        type_code_bool(),
+                    );
+                    if new_node < 0 {
+                        return -1;
+                    };
+                    return new_node;
+                };
+                if right_value {
+                    let new_node: i32 = ast_make_unary(
+                        ast_base,
+                        ast_offset_ptr,
+                        ast_kind_unary_not(),
+                        folded_left,
+                        type_code_bool(),
+                    );
+                    if new_node < 0 {
+                        return -1;
+                    };
+                    return new_node;
+                };
+                return folded_left;
             };
         };
         return node_ptr;
@@ -613,6 +679,12 @@ fn ast_fold_constants(ast_base: i32, ast_offset_ptr: i32, node_ptr: i32) -> i32 
             };
             return folded_right;
         };
+        if ast_is_bool_const(folded_right) {
+            if !ast_bool_const_value(folded_right) {
+                return folded_right;
+            };
+            return folded_left;
+        };
         return node_ptr;
     };
 
@@ -622,6 +694,12 @@ fn ast_fold_constants(ast_base: i32, ast_offset_ptr: i32, node_ptr: i32) -> i32 
                 return folded_left;
             };
             return folded_right;
+        };
+        if ast_is_bool_const(folded_right) {
+            if ast_bool_const_value(folded_right) {
+                return folded_right;
+            };
+            return folded_left;
         };
         return node_ptr;
     };
@@ -3420,7 +3498,13 @@ fn parse_expression(
                         valid_trailing = true;
                     } else {
                         let next_byte: i32 = peek_byte(base, len, trimmed);
-                        if next_byte == 41 || next_byte == 44 || next_byte == 59 || next_byte == 125 || next_byte == 93 {
+                        if next_byte == 41
+                            || next_byte == 44
+                            || next_byte == 59
+                            || next_byte == 123
+                            || next_byte == 125
+                            || next_byte == 93
+                        {
                             valid_trailing = true;
                         };
                     };
