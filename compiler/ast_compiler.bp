@@ -471,11 +471,35 @@ fn parse_basic_expression(
     out_kind_ptr: i32,
     out_data0_ptr: i32,
     out_data1_ptr: i32,
+    nested_temp_base: i32,
 ) -> i32 {
     if cursor >= len {
         return -1;
     };
     let first_byte: i32 = load_u8(base + cursor);
+    if first_byte == 40 {
+        let mut next_cursor: i32 = cursor + 1;
+        next_cursor = skip_whitespace(base, len, next_cursor);
+        next_cursor = parse_expression(
+            base,
+            len,
+            next_cursor,
+            ast_base,
+            nested_temp_base,
+            out_kind_ptr,
+            out_data0_ptr,
+            out_data1_ptr,
+        );
+        if next_cursor < 0 {
+            return -1;
+        };
+        next_cursor = skip_whitespace(base, len, next_cursor);
+        next_cursor = expect_char(base, len, next_cursor, 41);
+        if next_cursor < 0 {
+            return -1;
+        };
+        return skip_whitespace(base, len, next_cursor);
+    };
     if first_byte == 45 || is_digit(first_byte) {
         let next_cursor: i32 = parse_i32_literal(base, len, cursor, literal_ptr);
         if next_cursor < 0 {
@@ -532,6 +556,7 @@ fn parse_expression(
     let next_kind_ptr: i32 = temp_base + 12;
     let next_data0_ptr: i32 = temp_base + 16;
     let next_data1_ptr: i32 = temp_base + 20;
+    let nested_temp_base: i32 = temp_base + 32;
 
     let mut current_cursor: i32 = parse_basic_expression(
         base,
@@ -544,6 +569,7 @@ fn parse_expression(
         out_kind_ptr,
         out_data0_ptr,
         out_data1_ptr,
+        nested_temp_base,
     );
     if current_cursor < 0 {
         return -1;
@@ -570,6 +596,7 @@ fn parse_expression(
             next_kind_ptr,
             next_data0_ptr,
             next_data1_ptr,
+            nested_temp_base,
         );
         if current_cursor < 0 {
             return -1;

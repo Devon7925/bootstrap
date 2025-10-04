@@ -170,3 +170,35 @@ fn main() -> i32 {
         .expect_err("ast compiler should reject unknown calls in addition expressions");
     assert!(error.produced_len <= 0);
 }
+
+#[test]
+fn ast_compiler_compiles_parenthesized_literal() {
+    let source = r#"
+fn main() -> i32 {
+    (42)
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 42);
+}
+
+#[test]
+fn ast_compiler_compiles_nested_parentheses_in_addition() {
+    let source = r#"
+fn helper() -> i32 {
+    10
+}
+
+fn main() -> i32 {
+    (helper()) + (1 + (2 + 3))
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 16);
+}
