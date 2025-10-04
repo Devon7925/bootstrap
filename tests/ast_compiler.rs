@@ -34,3 +34,45 @@ fn helper() -> i32 {
         .expect_err("ast compiler should reject programs without main");
     assert!(error.produced_len <= 0);
 }
+
+#[test]
+fn ast_compiler_rejects_duplicate_function_names() {
+    let source = r#"
+fn helper() -> i32 {
+    1
+}
+
+fn helper() -> i32 {
+    2
+}
+
+fn main() -> i32 {
+    3
+}
+"#;
+
+    let error = try_compile_with_ast_compiler(source)
+        .expect_err("ast compiler should reject duplicate function names");
+    assert!(error.produced_len <= 0);
+}
+
+#[test]
+fn ast_compiler_rejects_multiple_main_functions() {
+    let source = r#"
+fn main() -> i32 {
+    1
+}
+
+fn helper() -> i32 {
+    2
+}
+
+fn main() -> i32 {
+    3
+}
+"#;
+
+    let error = try_compile_with_ast_compiler(source)
+        .expect_err("ast compiler should reject programs with multiple mains");
+    assert!(error.produced_len <= 0);
+}
