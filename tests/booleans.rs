@@ -107,3 +107,59 @@ fn main() -> i32 {
     let main_result = main.call(&mut store, ()).expect("failed to execute main");
     assert_eq!(main_result, 12);
 }
+
+#[test]
+fn boolean_ast_pass_handles_literals_locals_and_not() {
+    let source = r#"
+fn bool_ops(a: bool, b: bool) -> bool {
+    let mut toggled: bool = !a;
+    if toggled && (b || false) {
+        true
+    } else {
+        toggled && true
+    }
+}
+
+fn main() -> i32 {
+    if bool_ops(true, false) {
+        1
+    } else {
+        0
+    }
+}
+"#;
+
+    let wasm = compile_with_stage1(source);
+
+    let engine = Engine::default();
+    let mut wasm_reader = wasm.as_slice();
+    let module = Module::new(&engine, &mut wasm_reader).expect("failed to create module");
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = linker
+        .instantiate(&mut store, &module)
+        .expect("failed to instantiate module")
+        .start(&mut store)
+        .expect("failed to start module");
+
+    let bool_ops: TypedFunc<(i32, i32), i32> = instance
+        .get_typed_func(&mut store, "bool_ops")
+        .expect("expected exported bool_ops");
+
+    let both_false = bool_ops
+        .call(&mut store, (1, 0))
+        .expect("failed to call bool_ops");
+    assert_eq!(both_false, 0);
+    let left_false = bool_ops
+        .call(&mut store, (0, 0))
+        .expect("failed to call bool_ops");
+    assert_eq!(left_false, 1);
+    let all_true = bool_ops
+        .call(&mut store, (0, 1))
+        .expect("failed to call bool_ops");
+    assert_eq!(all_true, 1);
+    let right_true = bool_ops
+        .call(&mut store, (1, 1))
+        .expect("failed to call bool_ops");
+    assert_eq!(right_true, 0);
+}
