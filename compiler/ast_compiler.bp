@@ -1,0 +1,719 @@
+fn write_byte(base: i32, offset: i32, value: i32) -> i32 {
+    store_u8(base + offset, value & 255);
+    offset + 1
+}
+
+fn write_u32_leb(base: i32, offset: i32, value: i32) -> i32 {
+    let mut remaining: i32 = value;
+    let mut out: i32 = offset;
+    loop {
+        let mut byte: i32 = remaining & 127;
+        remaining = remaining >> 7;
+        if remaining != 0 {
+            byte = byte | 128;
+        };
+        out = write_byte(base, out, byte);
+        if remaining == 0 {
+            break;
+        };
+    };
+    out
+}
+
+fn write_i32_leb(base: i32, offset: i32, value: i32) -> i32 {
+    let mut remaining: i32 = value;
+    let mut out: i32 = offset;
+    loop {
+        let byte: i32 = remaining & 127;
+        remaining = remaining >> 7;
+        let sign_bit: i32 = byte & 64;
+        let done: bool = (remaining == 0 && sign_bit == 0) || (remaining == -1 && sign_bit != 0);
+        let mut out_byte: i32 = byte;
+        if !done {
+            out_byte = out_byte | 128;
+        };
+        out = write_byte(base, out, out_byte);
+        if done {
+            break;
+        };
+    };
+    out
+}
+
+fn leb_u32_len(value: i32) -> i32 {
+    let mut remaining: i32 = value;
+    let mut count: i32 = 0;
+    loop {
+        count = count + 1;
+        remaining = remaining >> 7;
+        if remaining == 0 {
+            break;
+        };
+    };
+    count
+}
+
+fn leb_i32_len(value: i32) -> i32 {
+    let mut remaining: i32 = value;
+    let mut count: i32 = 0;
+    loop {
+        let byte: i32 = remaining & 127;
+        remaining = remaining >> 7;
+        let sign_bit: i32 = byte & 64;
+        let done: bool = (remaining == 0 && sign_bit == 0) || (remaining == -1 && sign_bit != 0);
+        count = count + 1;
+        if done {
+            break;
+        };
+    };
+    count
+}
+
+fn write_magic(base: i32, offset: i32) -> i32 {
+    let mut out: i32 = offset;
+    out = write_byte(base, out, 0);
+    out = write_byte(base, out, 97);
+    out = write_byte(base, out, 115);
+    out = write_byte(base, out, 109);
+    out = write_byte(base, out, 1);
+    out = write_byte(base, out, 0);
+    out = write_byte(base, out, 0);
+    out = write_byte(base, out, 0);
+    out
+}
+
+fn is_whitespace(byte: i32) -> bool {
+    byte == 32 || byte == 9 || byte == 10 || byte == 13
+}
+
+fn skip_whitespace(base: i32, len: i32, offset: i32) -> i32 {
+    let mut idx: i32 = offset;
+    loop {
+        if idx >= len {
+            break;
+        };
+        let byte: i32 = load_u8(base + idx);
+        if byte == 47 {
+            if idx + 1 < len {
+                let next: i32 = load_u8(base + idx + 1);
+                if next == 47 {
+                    idx = idx + 2;
+                    loop {
+                        if idx >= len {
+                            break;
+                        };
+                        let comment_byte: i32 = load_u8(base + idx);
+                        if comment_byte == 10 {
+                            idx = idx + 1;
+                            break;
+                        };
+                        idx = idx + 1;
+                    };
+                    continue;
+                };
+            };
+        };
+        if !is_whitespace(byte) {
+            break;
+        };
+        idx = idx + 1;
+    };
+    idx
+}
+
+fn expect_char(base: i32, len: i32, offset: i32, expected: i32) -> i32 {
+    if offset >= len {
+        return -1;
+    };
+    let byte: i32 = load_u8(base + offset);
+    if byte != expected {
+        return -1;
+    };
+    offset + 1
+}
+
+fn is_identifier_start(byte: i32) -> bool {
+    (byte >= 65 && byte <= 90) || (byte >= 97 && byte <= 122) || byte == 95
+}
+
+fn is_digit(byte: i32) -> bool {
+    byte >= 48 && byte <= 57
+}
+
+fn is_identifier_continue(byte: i32) -> bool {
+    is_identifier_start(byte) || is_digit(byte)
+}
+
+fn expect_keyword_fn(base: i32, len: i32, offset: i32) -> i32 {
+    if offset + 1 >= len {
+        return -1;
+    };
+    let first: i32 = load_u8(base + offset);
+    let second: i32 = load_u8(base + offset + 1);
+    if first != 102 || second != 110 {
+        return -1;
+    };
+    let next: i32 = offset + 2;
+    if next < len {
+        let after: i32 = load_u8(base + next);
+        if is_identifier_continue(after) {
+            return -1;
+        };
+    };
+    next
+}
+
+fn parse_identifier(base: i32, len: i32, offset: i32, out_start_ptr: i32, out_len_ptr: i32) -> i32 {
+    if offset >= len {
+        return -1;
+    };
+    let first: i32 = load_u8(base + offset);
+    if !is_identifier_start(first) {
+        return -1;
+    };
+    let mut idx: i32 = offset + 1;
+    loop {
+        if idx >= len {
+            break;
+        };
+        let byte: i32 = load_u8(base + idx);
+        if !is_identifier_continue(byte) {
+            break;
+        };
+        idx = idx + 1;
+    };
+    store_i32(out_start_ptr, offset);
+    store_i32(out_len_ptr, idx - offset);
+    idx
+}
+
+fn parse_i32_type(base: i32, len: i32, offset: i32) -> i32 {
+    if offset + 3 > len {
+        return -1;
+    };
+    let byte0: i32 = load_u8(base + offset);
+    let byte1: i32 = load_u8(base + offset + 1);
+    let byte2: i32 = load_u8(base + offset + 2);
+    if byte0 != 105 || byte1 != 51 || byte2 != 50 {
+        return -1;
+    };
+    let next: i32 = offset + 3;
+    if next < len {
+        let after: i32 = load_u8(base + next);
+        if is_identifier_continue(after) {
+            return -1;
+        };
+    };
+    next
+}
+
+fn parse_i32_literal(base: i32, len: i32, offset: i32, out_value_ptr: i32) -> i32 {
+    if offset >= len {
+        return -1;
+    };
+    let mut idx: i32 = offset;
+    let mut sign: i32 = 1;
+    let first: i32 = load_u8(base + idx);
+    if first == 45 {
+        sign = -1;
+        idx = idx + 1;
+        if idx >= len {
+            return -1;
+        };
+    };
+    let mut digits: i32 = 0;
+    let mut value: i32 = 0;
+    loop {
+        if idx >= len {
+            break;
+        };
+        let byte: i32 = load_u8(base + idx);
+        if !is_digit(byte) {
+            break;
+        };
+        value = value * 10 + (byte - 48);
+        idx = idx + 1;
+        digits = digits + 1;
+    };
+    if digits == 0 {
+        return -1;
+    };
+    store_i32(out_value_ptr, value * sign);
+    idx
+}
+
+fn word_size() -> i32 {
+    4
+}
+
+fn scratch_instr_offset() -> i32 {
+    4096
+}
+
+fn scratch_expr_type_offset() -> i32 {
+    4092
+}
+
+fn scratch_instr_base_offset() -> i32 {
+    8192
+}
+
+fn scratch_instr_capacity() -> i32 {
+    65536
+}
+
+fn scratch_functions_count_offset() -> i32 {
+    851960
+}
+
+fn scratch_functions_base_offset() -> i32 {
+    851968
+}
+
+fn type_entry_size() -> i32 {
+    16
+}
+
+fn scratch_types_capacity() -> i32 {
+    2048
+}
+
+fn scratch_types_base_offset() -> i32 {
+    scratch_functions_base_offset() - scratch_types_capacity() * type_entry_size()
+}
+
+fn scratch_types_count_offset() -> i32 {
+    scratch_types_base_offset() - word_size()
+}
+
+fn scratch_instr_offset_ptr(out_ptr: i32) -> i32 {
+    out_ptr + scratch_instr_offset()
+}
+
+fn scratch_expr_type_ptr(out_ptr: i32) -> i32 {
+    out_ptr + scratch_expr_type_offset()
+}
+
+fn scratch_instr_base(out_ptr: i32) -> i32 {
+    out_ptr + scratch_instr_base_offset()
+}
+
+fn scratch_functions_count_ptr(out_ptr: i32) -> i32 {
+    out_ptr + scratch_functions_count_offset()
+}
+
+fn scratch_functions_base(out_ptr: i32) -> i32 {
+    out_ptr + scratch_functions_base_offset()
+}
+
+fn scratch_types_count_ptr(out_ptr: i32) -> i32 {
+    out_ptr + scratch_types_count_offset()
+}
+
+fn scratch_types_base(out_ptr: i32) -> i32 {
+    out_ptr + scratch_types_base_offset()
+}
+
+fn ast_max_functions() -> i32 {
+    16
+}
+
+fn ast_function_entry_size() -> i32 {
+    20
+}
+
+fn ast_names_capacity() -> i32 {
+    512
+}
+
+fn ast_program_base(out_ptr: i32) -> i32 {
+    scratch_instr_base(out_ptr)
+}
+
+fn ast_functions_count_ptr(ast_base: i32) -> i32 {
+    ast_base
+}
+
+fn ast_function_entry_ptr(ast_base: i32, index: i32) -> i32 {
+    ast_base + word_size() + index * ast_function_entry_size()
+}
+
+fn ast_names_len_ptr(ast_base: i32) -> i32 {
+    ast_base + word_size() + ast_max_functions() * ast_function_entry_size()
+}
+
+fn ast_names_base(ast_base: i32) -> i32 {
+    ast_names_len_ptr(ast_base) + word_size()
+}
+
+fn ast_reset(ast_base: i32) {
+    store_i32(ast_functions_count_ptr(ast_base), 0);
+    store_i32(ast_names_len_ptr(ast_base), 0);
+}
+
+fn ast_store_name(ast_base: i32, source_base: i32, start: i32, len: i32) -> i32 {
+    let name_len_ptr: i32 = ast_names_len_ptr(ast_base);
+    let mut used: i32 = load_i32(name_len_ptr);
+    if used + len > ast_names_capacity() {
+        return -1;
+    };
+    let name_ptr: i32 = ast_names_base(ast_base) + used;
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= len {
+            break;
+        };
+        let byte: i32 = load_u8(source_base + start + idx);
+        store_u8(name_ptr + idx, byte);
+        idx = idx + 1;
+    };
+    used = used + len;
+    store_i32(name_len_ptr, used);
+    name_ptr
+}
+
+fn ast_write_function_entry(ast_base: i32, index: i32, name_ptr: i32, name_len: i32, literal_value: i32) {
+    let entry_ptr: i32 = ast_function_entry_ptr(ast_base, index);
+    store_i32(entry_ptr, name_ptr);
+    store_i32(entry_ptr + 4, name_len);
+    store_i32(entry_ptr + 8, 0);
+    store_i32(entry_ptr + 12, 0);
+    store_i32(entry_ptr + 16, literal_value);
+}
+
+fn ast_extra_base(ast_base: i32) -> i32 {
+    ast_names_base(ast_base) + ast_names_capacity() + 32
+}
+
+fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i32) -> i32 {
+    let mut cursor: i32 = skip_whitespace(base, len, offset);
+    cursor = expect_keyword_fn(base, len, cursor);
+    if cursor < 0 {
+        return -1;
+    };
+    cursor = skip_whitespace(base, len, cursor);
+
+    let temp_base: i32 = ast_extra_base(ast_base);
+    let name_start_ptr: i32 = temp_base;
+    let name_len_ptr: i32 = temp_base + 4;
+    cursor = parse_identifier(base, len, cursor, name_start_ptr, name_len_ptr);
+    if cursor < 0 {
+        return -1;
+    };
+    let name_start: i32 = load_i32(name_start_ptr);
+    let name_len: i32 = load_i32(name_len_ptr);
+
+    cursor = skip_whitespace(base, len, cursor);
+    cursor = expect_char(base, len, cursor, 40);
+    if cursor < 0 {
+        return -1;
+    };
+    cursor = skip_whitespace(base, len, cursor);
+    cursor = expect_char(base, len, cursor, 41);
+    if cursor < 0 {
+        return -1;
+    };
+    cursor = skip_whitespace(base, len, cursor);
+
+    cursor = expect_char(base, len, cursor, 45);
+    if cursor < 0 {
+        return -1;
+    };
+    cursor = expect_char(base, len, cursor, 62);
+    if cursor < 0 {
+        return -1;
+    };
+    cursor = skip_whitespace(base, len, cursor);
+    cursor = parse_i32_type(base, len, cursor);
+    if cursor < 0 {
+        return -1;
+    };
+
+    cursor = skip_whitespace(base, len, cursor);
+    cursor = expect_char(base, len, cursor, 123);
+    if cursor < 0 {
+        return -1;
+    };
+    cursor = skip_whitespace(base, len, cursor);
+
+    let literal_ptr: i32 = temp_base + 8;
+    cursor = parse_i32_literal(base, len, cursor, literal_ptr);
+    if cursor < 0 {
+        return -1;
+    };
+
+    cursor = skip_whitespace(base, len, cursor);
+    if cursor < len {
+        let next: i32 = load_u8(base + cursor);
+        if next == 59 {
+            cursor = cursor + 1;
+            cursor = skip_whitespace(base, len, cursor);
+        };
+    };
+    cursor = expect_char(base, len, cursor, 125);
+    if cursor < 0 {
+        return -1;
+    };
+
+    let name_ptr: i32 = ast_store_name(ast_base, base, name_start, name_len);
+    if name_ptr < 0 {
+        return -1;
+    };
+    let literal_value: i32 = load_i32(literal_ptr);
+    ast_write_function_entry(ast_base, func_index, name_ptr, name_len, literal_value);
+    cursor
+}
+
+fn parse_program(base: i32, len: i32, ast_base: i32) -> i32 {
+    let mut cursor: i32 = skip_whitespace(base, len, 0);
+    let mut count: i32 = 0;
+    loop {
+        if cursor >= len {
+            break;
+        };
+        if count >= ast_max_functions() {
+            return -1;
+        };
+        cursor = parse_function(base, len, cursor, ast_base, count);
+        if cursor < 0 {
+            return -1;
+        };
+        count = count + 1;
+        cursor = skip_whitespace(base, len, cursor);
+    };
+    store_i32(ast_functions_count_ptr(ast_base), count);
+    count
+}
+
+fn identifiers_match(ptr_a: i32, len_a: i32, ptr_b: i32, len_b: i32) -> bool {
+    if len_a != len_b {
+        return false;
+    };
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= len_a {
+            break;
+        };
+        let a_byte: i32 = load_u8(ptr_a + idx);
+        let b_byte: i32 = load_u8(ptr_b + idx);
+        if a_byte != b_byte {
+            return false;
+        };
+        idx = idx + 1;
+    };
+    true
+}
+
+fn validate_program(ast_base: i32, func_count: i32) -> i32 {
+    if func_count <= 0 {
+        return -1;
+    };
+    let mut main_found: bool = false;
+    let main_name_ptr: i32 = ast_extra_base(ast_base);
+    store_u8(main_name_ptr + 0, 109);
+    store_u8(main_name_ptr + 1, 97);
+    store_u8(main_name_ptr + 2, 105);
+    store_u8(main_name_ptr + 3, 110);
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= func_count {
+            break;
+        };
+        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
+        let name_ptr: i32 = load_i32(entry_ptr);
+        let name_len: i32 = load_i32(entry_ptr + 4);
+        if name_len == 4 {
+            if identifiers_match(name_ptr, name_len, main_name_ptr, 4) {
+                main_found = true;
+            };
+        };
+        idx = idx + 1;
+    };
+    if !main_found {
+        return -1;
+    };
+    0
+}
+
+fn emit_type_section(base: i32, offset: i32) -> i32 {
+    let mut out: i32 = offset;
+    out = write_byte(base, out, 1);
+    let payload_size: i32 = leb_u32_len(1) + 1 + leb_u32_len(0) + leb_u32_len(1) + 1;
+    out = write_u32_leb(base, out, payload_size);
+    out = write_u32_leb(base, out, 1);
+    out = write_byte(base, out, 96);
+    out = write_u32_leb(base, out, 0);
+    out = write_u32_leb(base, out, 1);
+    out = write_byte(base, out, 127);
+    out
+}
+
+fn emit_function_section(base: i32, offset: i32, func_count: i32) -> i32 {
+    let mut out: i32 = offset;
+    out = write_byte(base, out, 3);
+    let payload_size: i32 = leb_u32_len(func_count) + func_count;
+    out = write_u32_leb(base, out, payload_size);
+    out = write_u32_leb(base, out, func_count);
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= func_count {
+            break;
+        };
+        out = write_u32_leb(base, out, 0);
+        idx = idx + 1;
+    };
+    out
+}
+
+fn emit_memory_section(base: i32, offset: i32) -> i32 {
+    let mut out: i32 = offset;
+    out = write_byte(base, out, 5);
+    let payload_size: i32 = leb_u32_len(1) + 1 + leb_u32_len(16) + leb_u32_len(16);
+    out = write_u32_leb(base, out, payload_size);
+    out = write_u32_leb(base, out, 1);
+    out = write_byte(base, out, 1);
+    out = write_u32_leb(base, out, 16);
+    out = write_u32_leb(base, out, 16);
+    out
+}
+
+fn emit_export_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> i32 {
+    let mut payload_size: i32 = leb_u32_len(func_count + 1);
+    payload_size = payload_size + leb_u32_len(6) + 6 + 1 + leb_u32_len(0);
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= func_count {
+            break;
+        };
+        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
+        let name_len: i32 = load_i32(entry_ptr + 4);
+        payload_size = payload_size + leb_u32_len(name_len) + name_len + 1 + leb_u32_len(idx);
+        idx = idx + 1;
+    };
+
+    let mut out: i32 = offset;
+    out = write_byte(base, out, 7);
+    out = write_u32_leb(base, out, payload_size);
+    out = write_u32_leb(base, out, func_count + 1);
+
+    out = write_u32_leb(base, out, 6);
+    out = write_byte(base, out, 109);
+    out = write_byte(base, out, 101);
+    out = write_byte(base, out, 109);
+    out = write_byte(base, out, 111);
+    out = write_byte(base, out, 114);
+    out = write_byte(base, out, 121);
+    out = write_byte(base, out, 2);
+    out = write_u32_leb(base, out, 0);
+
+    idx = 0;
+    loop {
+        if idx >= func_count {
+            break;
+        };
+        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
+        let name_ptr: i32 = load_i32(entry_ptr);
+        let name_len: i32 = load_i32(entry_ptr + 4);
+        out = write_u32_leb(base, out, name_len);
+        let mut byte_idx: i32 = 0;
+        loop {
+            if byte_idx >= name_len {
+                break;
+            };
+            let byte: i32 = load_u8(name_ptr + byte_idx);
+            out = write_byte(base, out, byte);
+            byte_idx = byte_idx + 1;
+        };
+        out = write_byte(base, out, 0);
+        out = write_u32_leb(base, out, idx);
+        idx = idx + 1;
+    };
+    out
+}
+
+fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> i32 {
+    let mut payload_size: i32 = leb_u32_len(func_count);
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= func_count {
+            break;
+        };
+        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
+        let literal_value: i32 = load_i32(entry_ptr + 16);
+        let body_size: i32 = 1 + 1 + leb_i32_len(literal_value) + 1;
+        payload_size = payload_size + leb_u32_len(body_size) + body_size;
+        idx = idx + 1;
+    };
+
+    let mut out: i32 = offset;
+    out = write_byte(base, out, 10);
+    out = write_u32_leb(base, out, payload_size);
+    out = write_u32_leb(base, out, func_count);
+
+    idx = 0;
+    loop {
+        if idx >= func_count {
+            break;
+        };
+        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
+        let literal_value: i32 = load_i32(entry_ptr + 16);
+        let body_size: i32 = 1 + 1 + leb_i32_len(literal_value) + 1;
+        out = write_u32_leb(base, out, body_size);
+        out = write_u32_leb(base, out, 0);
+        out = write_byte(base, out, 65);
+        out = write_i32_leb(base, out, literal_value);
+        out = write_byte(base, out, 11);
+        idx = idx + 1;
+    };
+    out
+}
+
+fn emit_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
+    let mut offset: i32 = 0;
+    offset = write_magic(out_ptr, offset);
+    offset = emit_type_section(out_ptr, offset);
+    offset = emit_function_section(out_ptr, offset, func_count);
+    offset = emit_memory_section(out_ptr, offset);
+    offset = emit_export_section(out_ptr, offset, ast_base, func_count);
+    offset = emit_code_section(out_ptr, offset, ast_base, func_count);
+    offset
+}
+
+fn initialize_layout(out_ptr: i32) {
+    store_i32(scratch_instr_offset_ptr(out_ptr), 0);
+    store_i32(scratch_expr_type_ptr(out_ptr), -1);
+    store_i32(scratch_functions_count_ptr(out_ptr), 0);
+    store_i32(scratch_types_count_ptr(out_ptr), 0);
+}
+
+fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
+    if input_len <= 0 {
+        return -1;
+    };
+
+    initialize_layout(out_ptr);
+
+    let ast_base: i32 = ast_program_base(out_ptr);
+    ast_reset(ast_base);
+
+    let func_count: i32 = parse_program(input_ptr, input_len, ast_base);
+    if func_count <= 0 {
+        return -1;
+    };
+
+    if validate_program(ast_base, func_count) < 0 {
+        return -1;
+    };
+
+    store_i32(scratch_functions_count_ptr(out_ptr), func_count);
+
+    let produced_len: i32 = emit_program(out_ptr, ast_base, func_count);
+    if produced_len <= 0 {
+        return -1;
+    };
+    produced_len
+}
+
+fn main() -> i32 {
+    0
+}
