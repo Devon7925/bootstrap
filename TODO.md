@@ -8,9 +8,10 @@
   The concept specifies that string constants should become local byte arrays, but stage1 currently lacks any parsing for quoted literals. Teaching the tokenizer and expression lowering to recognize strings and materialize them as `u8` arrays would align the implementation with the design.
   *Reference:* String constant rule【F:concept.md†L31-L31】, absence of string literal handling in stage1 (no quoted literal parsing)【258989†L1-L2】
 
-- [ ] **Introduce `SourceCursor` helpers for stage1 parser**
+- [x] **Introduce `SourceCursor` helpers for stage1 parser**
   Stage1 threads the `base`, `len`, and index triplet through nearly every parsing function, reapplying whitespace skipping and byte peeks manually. Creating a lightweight cursor struct with methods for advancing, peeking, and matching delimiters would reduce parameter lists and make control flow clearer.
   *Reference:* Parsing functions repeatedly pass `base`, `len`, and `idx` while chaining `skip_whitespace` and `expect_char` calls【F:compiler/stage1.bp†L4520-L4547】
+  *Status:* Added reusable cursor storage in scratch memory with helpers for skipping, peeking, and keyword matching, then rewrote signature registration and the top-level compiler loop to drive parsing via that cursor instead of raw `base`/`len`/`idx` triples.【F:compiler/stage1.bp†L126-L238】【F:compiler/stage1.bp†L481-L707】【F:compiler/stage1.bp†L5256-L5545】
 
 - [ ] **Adopt `ParserContext` to bundle mutable parser state**
   Most stage1 routines pass `scope`, `arena`, and diagnostic sinks separately, cluttering signatures and increasing the chance of mismatched lifetimes. Wrapping these in a lightweight context struct with scoped accessors would clarify ownership and improve testability.
