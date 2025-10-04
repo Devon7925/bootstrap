@@ -499,6 +499,96 @@ fn ast_fold_constants(ast_base: i32, ast_offset_ptr: i32, node_ptr: i32) -> i32 
             };
             return new_node;
         };
+
+        if kind == ast_kind_binary_add() {
+            if ast_is_i32_const(folded_left) {
+                let left_value: i32 = ast_i32_const_value(folded_left);
+                if left_value == 0 {
+                    return folded_right;
+                };
+            };
+            if ast_is_i32_const(folded_right) {
+                let right_value: i32 = ast_i32_const_value(folded_right);
+                if right_value == 0 {
+                    return folded_left;
+                };
+            };
+        } else if kind == ast_kind_binary_sub() {
+            if ast_is_i32_const(folded_right) {
+                let right_value: i32 = ast_i32_const_value(folded_right);
+                if right_value == 0 {
+                    return folded_left;
+                };
+            };
+            if ast_is_i32_const(folded_left) {
+                let left_value: i32 = ast_i32_const_value(folded_left);
+                if left_value == 0 {
+                    let new_node: i32 = ast_make_unary(
+                        ast_base,
+                        ast_offset_ptr,
+                        ast_kind_unary_neg(),
+                        folded_right,
+                        type_code_i32(),
+                    );
+                    if new_node < 0 {
+                        return -1;
+                    };
+                    return new_node;
+                };
+            };
+        } else if kind == ast_kind_binary_mul() {
+            if ast_is_i32_const(folded_left) {
+                let left_value: i32 = ast_i32_const_value(folded_left);
+                if left_value == 0 {
+                    return folded_left;
+                };
+                if left_value == 1 {
+                    return folded_right;
+                };
+                if left_value == -1 {
+                    let new_node: i32 = ast_make_unary(
+                        ast_base,
+                        ast_offset_ptr,
+                        ast_kind_unary_neg(),
+                        folded_right,
+                        type_code_i32(),
+                    );
+                    if new_node < 0 {
+                        return -1;
+                    };
+                    return new_node;
+                };
+            };
+            if ast_is_i32_const(folded_right) {
+                let right_value: i32 = ast_i32_const_value(folded_right);
+                if right_value == 0 {
+                    return folded_right;
+                };
+                if right_value == 1 {
+                    return folded_left;
+                };
+                if right_value == -1 {
+                    let new_node: i32 = ast_make_unary(
+                        ast_base,
+                        ast_offset_ptr,
+                        ast_kind_unary_neg(),
+                        folded_left,
+                        type_code_i32(),
+                    );
+                    if new_node < 0 {
+                        return -1;
+                    };
+                    return new_node;
+                };
+            };
+        } else {
+            if ast_is_i32_const(folded_right) {
+                let right_value: i32 = ast_i32_const_value(folded_right);
+                if right_value == 1 {
+                    return folded_left;
+                };
+            };
+        };
         return node_ptr;
     };
 
@@ -517,6 +607,45 @@ fn ast_fold_constants(ast_base: i32, ast_offset_ptr: i32, node_ptr: i32) -> i32 
                 return -1;
             };
             return new_node;
+        };
+        if kind == ast_kind_binary_bitwise_and() {
+            if ast_is_i32_const(folded_left) {
+                let left_value: i32 = ast_i32_const_value(folded_left);
+                if left_value == 0 {
+                    return folded_left;
+                };
+                if left_value == -1 {
+                    return folded_right;
+                };
+            };
+            if ast_is_i32_const(folded_right) {
+                let right_value: i32 = ast_i32_const_value(folded_right);
+                if right_value == 0 {
+                    return folded_right;
+                };
+                if right_value == -1 {
+                    return folded_left;
+                };
+            };
+        } else {
+            if ast_is_i32_const(folded_left) {
+                let left_value: i32 = ast_i32_const_value(folded_left);
+                if left_value == 0 {
+                    return folded_right;
+                };
+                if left_value == -1 {
+                    return folded_left;
+                };
+            };
+            if ast_is_i32_const(folded_right) {
+                let right_value: i32 = ast_i32_const_value(folded_right);
+                if right_value == 0 {
+                    return folded_left;
+                };
+                if right_value == -1 {
+                    return folded_right;
+                };
+            };
         };
         return node_ptr;
     };
@@ -537,6 +666,24 @@ fn ast_fold_constants(ast_base: i32, ast_offset_ptr: i32, node_ptr: i32) -> i32 
                 return -1;
             };
             return new_node;
+        };
+        if ast_is_i32_const(folded_left) {
+            let left_value: i32 = ast_i32_const_value(folded_left);
+            if left_value == 0 {
+                return folded_left;
+            };
+            if kind == ast_kind_binary_shr() {
+                if left_value == -1 {
+                    return folded_left;
+                };
+            };
+        };
+        if ast_is_i32_const(folded_right) {
+            let mut shift_amount: i32 = ast_i32_const_value(folded_right);
+            shift_amount = shift_amount & 31;
+            if shift_amount == 0 {
+                return folded_left;
+            };
         };
         return node_ptr;
     };
