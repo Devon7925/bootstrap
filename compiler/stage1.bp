@@ -45,6 +45,10 @@ fn word_size() -> i32 {
     4
 }
 
+fn stage1_memory_pages() -> i32 {
+    256
+}
+
 fn scratch_instr_offset() -> i32 {
     4096
 }
@@ -2432,11 +2436,14 @@ fn write_function_section(base: i32, offset: i32, func_count: i32) -> i32 {
 
 fn write_memory_section(base: i32, offset: i32) -> i32 {
     let mut out: i32 = offset;
+    let mut payload_len: i32 = leb_u32_len(1);
+    payload_len = payload_len + leb_u32_len(0);
+    payload_len = payload_len + leb_u32_len(stage1_memory_pages());
     out = write_byte(base, out, 5);
-    out = write_u32_leb(base, out, 3);
+    out = write_u32_leb(base, out, payload_len);
     out = write_u32_leb(base, out, 1);
     out = write_u32_leb(base, out, 0);
-    out = write_u32_leb(base, out, 16);
+    out = write_u32_leb(base, out, stage1_memory_pages());
     out
 }
 
