@@ -412,6 +412,67 @@ fn ast_make_unary(
     node_ptr
 }
 
+fn ast_nodes_equal(left: i32, right: i32) -> bool {
+    if left == right {
+        return true;
+    };
+    if left < 0 || right < 0 {
+        return false;
+    };
+    let left_kind: i32 = ast_node_kind(left);
+    let right_kind: i32 = ast_node_kind(right);
+    if left_kind != right_kind {
+        return false;
+    };
+    let left_type: i32 = ast_node_type(left);
+    let right_type: i32 = ast_node_type(right);
+    if left_type != right_type {
+        return false;
+    };
+    if left_kind == ast_kind_i32_const() || left_kind == ast_kind_bool_const() {
+        let left_value: i32 = load_i32(left + 4);
+        let right_value: i32 = load_i32(right + 4);
+        return left_value == right_value;
+    };
+    if left_kind == ast_kind_local_get() {
+        let left_index: i32 = load_i32(left + 4);
+        let right_index: i32 = load_i32(right + 4);
+        return left_index == right_index;
+    };
+    if left_kind == ast_kind_unary_neg() || left_kind == ast_kind_unary_not() {
+        let left_operand: i32 = load_i32(left + 4);
+        let right_operand: i32 = load_i32(right + 4);
+        return ast_nodes_equal(left_operand, right_operand);
+    };
+    if left_kind == ast_kind_binary_add()
+        || left_kind == ast_kind_binary_sub()
+        || left_kind == ast_kind_binary_mul()
+        || left_kind == ast_kind_binary_div()
+        || left_kind == ast_kind_binary_eq()
+        || left_kind == ast_kind_binary_ne()
+        || left_kind == ast_kind_binary_lt()
+        || left_kind == ast_kind_binary_gt()
+        || left_kind == ast_kind_binary_le()
+        || left_kind == ast_kind_binary_ge()
+        || left_kind == ast_kind_binary_shl()
+        || left_kind == ast_kind_binary_shr()
+        || left_kind == ast_kind_binary_bitwise_and()
+        || left_kind == ast_kind_binary_bitwise_or()
+        || left_kind == ast_kind_binary_logical_and()
+        || left_kind == ast_kind_binary_logical_or()
+    {
+        let left_left: i32 = load_i32(left + 4);
+        let left_right: i32 = load_i32(left + 8);
+        let right_left: i32 = load_i32(right + 4);
+        let right_right: i32 = load_i32(right + 8);
+        if !ast_nodes_equal(left_left, right_left) {
+            return false;
+        };
+        return ast_nodes_equal(left_right, right_right);
+    };
+    false
+}
+
 fn ast_fold_constants(ast_base: i32, ast_offset_ptr: i32, node_ptr: i32) -> i32 {
     if node_ptr < 0 {
         return -1;
@@ -498,6 +559,16 @@ fn ast_fold_constants(ast_base: i32, ast_offset_ptr: i32, node_ptr: i32) -> i32 
                 return -1;
             };
             return new_node;
+        };
+
+        if kind == ast_kind_binary_sub() {
+            if ast_nodes_equal(folded_left, folded_right) {
+                let new_node: i32 = ast_make_i32_const(ast_base, ast_offset_ptr, 0);
+                if new_node < 0 {
+                    return -1;
+                };
+                return new_node;
+            };
         };
 
         if kind == ast_kind_binary_add() {
@@ -608,6 +679,9 @@ fn ast_fold_constants(ast_base: i32, ast_offset_ptr: i32, node_ptr: i32) -> i32 
             };
             return new_node;
         };
+        if ast_nodes_equal(folded_left, folded_right) {
+            return folded_left;
+        };
         if kind == ast_kind_binary_bitwise_and() {
             if ast_is_i32_const(folded_left) {
                 let left_value: i32 = ast_i32_const_value(folded_left);
@@ -690,6 +764,17 @@ fn ast_fold_constants(ast_base: i32, ast_offset_ptr: i32, node_ptr: i32) -> i32 
 
     if kind == ast_kind_binary_eq() || kind == ast_kind_binary_ne() {
         let left_type: i32 = ast_node_type(folded_left);
+        if ast_nodes_equal(folded_left, folded_right) {
+            let mut matches: bool = false;
+            if kind == ast_kind_binary_eq() {
+                matches = true;
+            };
+            let new_node: i32 = ast_make_bool_const(ast_base, ast_offset_ptr, matches);
+            if new_node < 0 {
+                return -1;
+            };
+            return new_node;
+        };
         if left_type == type_code_i32() {
             if ast_is_i32_const(folded_left) && ast_is_i32_const(folded_right) {
                 let left_value: i32 = ast_i32_const_value(folded_left);
@@ -797,6 +882,17 @@ fn ast_fold_constants(ast_base: i32, ast_offset_ptr: i32, node_ptr: i32) -> i32 
         || kind == ast_kind_binary_le()
         || kind == ast_kind_binary_ge()
     {
+        if ast_nodes_equal(folded_left, folded_right) {
+            let mut result: bool = false;
+            if kind == ast_kind_binary_le() || kind == ast_kind_binary_ge() {
+                result = true;
+            };
+            let new_node: i32 = ast_make_bool_const(ast_base, ast_offset_ptr, result);
+            if new_node < 0 {
+                return -1;
+            };
+            return new_node;
+        };
         if ast_is_i32_const(folded_left) && ast_is_i32_const(folded_right) {
             let left_value: i32 = ast_i32_const_value(folded_left);
             let right_value: i32 = ast_i32_const_value(folded_right);
@@ -820,6 +916,9 @@ fn ast_fold_constants(ast_base: i32, ast_offset_ptr: i32, node_ptr: i32) -> i32 
     };
 
     if kind == ast_kind_binary_logical_and() {
+        if ast_nodes_equal(folded_left, folded_right) {
+            return folded_left;
+        };
         if ast_is_bool_const(folded_left) {
             if !ast_bool_const_value(folded_left) {
                 return folded_left;
@@ -836,6 +935,9 @@ fn ast_fold_constants(ast_base: i32, ast_offset_ptr: i32, node_ptr: i32) -> i32 
     };
 
     if kind == ast_kind_binary_logical_or() {
+        if ast_nodes_equal(folded_left, folded_right) {
+            return folded_left;
+        };
         if ast_is_bool_const(folded_left) {
             if ast_bool_const_value(folded_left) {
                 return folded_left;
