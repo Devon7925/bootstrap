@@ -125,3 +125,48 @@ fn main() -> i32 {
         .expect_err("ast compiler should reject calls to missing functions");
     assert!(error.produced_len <= 0);
 }
+
+#[test]
+fn ast_compiler_compiles_literal_addition() {
+    let source = r#"
+fn main() -> i32 {
+    1 + 2 + 3
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 6);
+}
+
+#[test]
+fn ast_compiler_compiles_addition_with_function_call() {
+    let source = r#"
+fn helper() -> i32 {
+    5
+}
+
+fn main() -> i32 {
+    helper() + 7
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 12);
+}
+
+#[test]
+fn ast_compiler_rejects_unknown_function_in_addition() {
+    let source = r#"
+fn main() -> i32 {
+    missing() + 1
+}
+"#;
+
+    let error = try_compile_with_ast_compiler(source)
+        .expect_err("ast compiler should reject unknown calls in addition expressions");
+    assert!(error.produced_len <= 0);
+}
