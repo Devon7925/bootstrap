@@ -228,7 +228,7 @@ pub fn run_wasm_main(engine: &Engine, wasm: &[u8]) -> i32 {
             .current_pages(&store)
             .to_bytes()
             .expect("memory pages to bytes"),
-        1048576
+        16777216
     );
 
     let main_fn: TypedFunc<(), i32> = instance
