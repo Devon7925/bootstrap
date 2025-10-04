@@ -284,6 +284,30 @@ fn ast_kind_unary_not() -> i32 {
     21
 }
 
+fn ast_kind_memory_load_u8() -> i32 {
+    22
+}
+
+fn ast_kind_memory_store_u8() -> i32 {
+    23
+}
+
+fn ast_kind_memory_load_u16() -> i32 {
+    24
+}
+
+fn ast_kind_memory_store_u16() -> i32 {
+    25
+}
+
+fn ast_kind_memory_load_i32() -> i32 {
+    26
+}
+
+fn ast_kind_memory_store_i32() -> i32 {
+    27
+}
+
 fn ast_reset(instr_base: i32) {
     let ast_offset_ptr: i32 = scratch_ast_offset_ptr_from_instr_base(instr_base);
     let ast_root_ptr: i32 = scratch_ast_root_ptr_from_instr_base(instr_base);
@@ -536,7 +560,125 @@ fn parse_simple_primary_ast(
     if after_ident < len {
         let next_byte: i32 = peek_byte(base, len, after_ident);
         if next_byte == 40 {
-            return -3;
+            let intrinsic_kind: i32 = identify_intrinsic(base, len, ident_start, ident_len);
+            if intrinsic_kind == intrinsic_kind_none() {
+                return -3;
+            };
+            let mut call_idx: i32 = after_ident + 1;
+            call_idx = skip_whitespace(base, len, call_idx);
+            if call_idx >= len {
+                return -3;
+            };
+            call_idx = parse_simple_expression_ast(
+                base,
+                len,
+                call_idx,
+                locals_base,
+                locals_count_ptr,
+                ast_base,
+                ast_offset_ptr,
+                node_out_ptr,
+            );
+            if call_idx < 0 {
+                return -3;
+            };
+            let first_arg: i32 = load_i32(node_out_ptr);
+            if first_arg < 0 {
+                return -3;
+            };
+            if ast_node_type(first_arg) != type_code_i32() {
+                return -3;
+            };
+            call_idx = skip_whitespace(base, len, call_idx);
+            if call_idx >= len {
+                return -3;
+            };
+            let next_after_first: i32 = peek_byte(base, len, call_idx);
+            let is_load: bool =
+                intrinsic_kind == intrinsic_kind_load_u8()
+                    || intrinsic_kind == intrinsic_kind_load_u16()
+                    || intrinsic_kind == intrinsic_kind_load_i32();
+            if is_load {
+                if next_after_first != 41 {
+                    return -3;
+                };
+                call_idx = call_idx + 1;
+                let node_kind: i32 = if intrinsic_kind == intrinsic_kind_load_u8() {
+                    ast_kind_memory_load_u8()
+                } else if intrinsic_kind == intrinsic_kind_load_u16() {
+                    ast_kind_memory_load_u16()
+                } else {
+                    ast_kind_memory_load_i32()
+                };
+                let node_ptr: i32 = ast_make_unary(
+                    ast_base,
+                    ast_offset_ptr,
+                    node_kind,
+                    first_arg,
+                    type_code_i32(),
+                );
+                if node_ptr < 0 {
+                    return -3;
+                };
+                store_i32(node_out_ptr, node_ptr);
+                return call_idx;
+            };
+            if next_after_first != 44 {
+                return -3;
+            };
+            call_idx = skip_whitespace(base, len, call_idx + 1);
+            if call_idx >= len {
+                return -3;
+            };
+            call_idx = parse_simple_expression_ast(
+                base,
+                len,
+                call_idx,
+                locals_base,
+                locals_count_ptr,
+                ast_base,
+                ast_offset_ptr,
+                node_out_ptr,
+            );
+            if call_idx < 0 {
+                return -3;
+            };
+            let second_arg: i32 = load_i32(node_out_ptr);
+            if second_arg < 0 {
+                return -3;
+            };
+            if ast_node_type(second_arg) != type_code_i32() {
+                return -3;
+            };
+            call_idx = skip_whitespace(base, len, call_idx);
+            if call_idx >= len {
+                return -3;
+            };
+            let closing: i32 = peek_byte(base, len, call_idx);
+            if closing != 41 {
+                return -3;
+            };
+            call_idx = call_idx + 1;
+            let node_kind: i32 = if intrinsic_kind == intrinsic_kind_store_u8() {
+                ast_kind_memory_store_u8()
+            } else if intrinsic_kind == intrinsic_kind_store_u16() {
+                ast_kind_memory_store_u16()
+            } else {
+                ast_kind_memory_store_i32()
+            };
+            let node_ptr: i32 = ast_make_binary(
+                ast_base,
+                ast_offset_ptr,
+                node_kind,
+                first_arg,
+                second_arg,
+                type_code_unit(),
+            );
+            if node_ptr < 0 {
+                return -3;
+            };
+            store_i32(node_out_ptr, node_ptr);
+            return call_idx;
         };
     };
 
@@ -1631,6 +1773,45 @@ fn lower_simple_ast_node(
             return emit_le(instr_base, next_offset);
         };
         return emit_ge(instr_base, next_offset);
+    };
+    if kind == ast_kind_memory_load_u8()
+        || kind == ast_kind_memory_load_u16()
+        || kind == ast_kind_memory_load_i32()
+    {
+        let operand: i32 = load_i32(node_ptr + 4);
+        let mut next_offset: i32 = lower_simple_ast_node(ast_base, operand, instr_base, offset);
+        if next_offset < 0 {
+            return -1;
+        };
+        if kind == ast_kind_memory_load_u8() {
+            return emit_load_u8(instr_base, next_offset);
+        };
+        if kind == ast_kind_memory_load_u16() {
+            return emit_load_u16(instr_base, next_offset);
+        };
+        return emit_load_i32(instr_base, next_offset);
+    };
+    if kind == ast_kind_memory_store_u8()
+        || kind == ast_kind_memory_store_u16()
+        || kind == ast_kind_memory_store_i32()
+    {
+        let address: i32 = load_i32(node_ptr + 4);
+        let value: i32 = load_i32(node_ptr + 8);
+        let mut next_offset: i32 = lower_simple_ast_node(ast_base, address, instr_base, offset);
+        if next_offset < 0 {
+            return -1;
+        };
+        next_offset = lower_simple_ast_node(ast_base, value, instr_base, next_offset);
+        if next_offset < 0 {
+            return -1;
+        };
+        if kind == ast_kind_memory_store_u8() {
+            return emit_store_u8(instr_base, next_offset);
+        };
+        if kind == ast_kind_memory_store_u16() {
+            return emit_store_u16(instr_base, next_offset);
+        };
+        return emit_store_i32(instr_base, next_offset);
     };
     -1
 }
