@@ -36,6 +36,19 @@ fn helper() -> i32 {
 }
 
 #[test]
+fn ast_compiler_rejects_main_with_parameters() {
+    let source = r#"
+fn main(value: i32) -> i32 {
+    value
+}
+"#;
+
+    let error = try_compile_with_ast_compiler(source)
+        .expect_err("ast compiler should reject main functions with parameters");
+    assert!(error.produced_len <= 0);
+}
+
+#[test]
 fn ast_compiler_rejects_duplicate_function_names() {
     let source = r#"
 fn helper() -> i32 {
@@ -96,6 +109,24 @@ fn main() -> i32 {
 }
 
 #[test]
+fn ast_compiler_compiles_functions_with_parameters() {
+    let source = r#"
+fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+fn main() -> i32 {
+    add(40, 2)
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 42);
+}
+
+#[test]
 fn ast_compiler_supports_forward_function_calls() {
     let source = r#"
 fn main() -> i32 {
@@ -123,6 +154,23 @@ fn main() -> i32 {
 
     let error = try_compile_with_ast_compiler(source)
         .expect_err("ast compiler should reject calls to missing functions");
+    assert!(error.produced_len <= 0);
+}
+
+#[test]
+fn ast_compiler_rejects_call_with_wrong_argument_count() {
+    let source = r#"
+fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+fn main() -> i32 {
+    add(1)
+}
+"#;
+
+    let error = try_compile_with_ast_compiler(source)
+        .expect_err("ast compiler should reject calls with incorrect arity");
     assert!(error.produced_len <= 0);
 }
 
