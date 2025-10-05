@@ -40,4 +40,3 @@ fn main() -> i32 {
 
     assert_eq!(result, 3);
 }
-

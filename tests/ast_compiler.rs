@@ -743,8 +743,8 @@ fn main() -> i32 {
 }
 "#;
 
-    let error = try_compile_with_ast_compiler(source)
-        .expect_err("break outside loop should be rejected");
+    let error =
+        try_compile_with_ast_compiler(source).expect_err("break outside loop should be rejected");
     assert!(error.produced_len <= 0);
 }
 

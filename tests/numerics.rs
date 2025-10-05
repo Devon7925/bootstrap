@@ -73,7 +73,7 @@ fn main() -> i32 {
 }
 "#;
 
-    let error = try_compile_with_ast_compiler(source)
-        .expect_err("expected float remainder to be rejected");
+    let error =
+        try_compile_with_ast_compiler(source).expect_err("expected float remainder to be rejected");
     assert!(error.produced_len <= 0);
 }

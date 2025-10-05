@@ -9,7 +9,10 @@ mod ast_compiler_helpers;
 use ast_compiler_helpers::{ast_compiler_source, ast_compiler_wasm};
 
 fn prepare_ast_compiler_compiler() -> (CompilerInstance, &'static str) {
-    (CompilerInstance::new(ast_compiler_wasm()), ast_compiler_source())
+    (
+        CompilerInstance::new(ast_compiler_wasm()),
+        ast_compiler_source(),
+    )
 }
 
 const AST_COMPILER_FUNCTION_ENTRY_SIZE: usize = 32;
@@ -18,7 +21,8 @@ const AST_COMPILER_MAX_FUNCTIONS: usize = 512;
 
 fn ast_compiler_output_ptr(compiler: &CompilerInstance) -> i32 {
     let memory_size = compiler.memory_size_bytes();
-    let reserved = AST_COMPILER_FUNCTIONS_BASE_OFFSET + AST_COMPILER_MAX_FUNCTIONS * AST_COMPILER_FUNCTION_ENTRY_SIZE;
+    let reserved = AST_COMPILER_FUNCTIONS_BASE_OFFSET
+        + AST_COMPILER_MAX_FUNCTIONS * AST_COMPILER_FUNCTION_ENTRY_SIZE;
     assert!(
         memory_size > reserved,
         "ast_compiler memory must exceed reserved layout"

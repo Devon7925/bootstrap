@@ -3,7 +3,7 @@
 use std::fs;
 use std::sync::OnceLock;
 
-use bootstrap::{compile, Target};
+use bootstrap::{Target, compile};
 
 #[path = "wasm_harness.rs"]
 mod wasm_harness;
