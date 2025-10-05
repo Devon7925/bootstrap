@@ -182,6 +182,49 @@ fn expect_keyword_if(base: i32, len: i32, offset: i32) -> i32 {
     next
 }
 
+fn expect_keyword_true(base: i32, len: i32, offset: i32) -> i32 {
+    if offset + 4 > len {
+        return -1;
+    };
+    let t: i32 = load_u8(base + offset);
+    let r: i32 = load_u8(base + offset + 1);
+    let u: i32 = load_u8(base + offset + 2);
+    let e: i32 = load_u8(base + offset + 3);
+    if t != 116 || r != 114 || u != 117 || e != 101 {
+        return -1;
+    };
+    let next: i32 = offset + 4;
+    if next < len {
+        let after: i32 = load_u8(base + next);
+        if is_identifier_continue(after) {
+            return -1;
+        };
+    };
+    next
+}
+
+fn expect_keyword_false(base: i32, len: i32, offset: i32) -> i32 {
+    if offset + 5 > len {
+        return -1;
+    };
+    let f: i32 = load_u8(base + offset);
+    let a: i32 = load_u8(base + offset + 1);
+    let l: i32 = load_u8(base + offset + 2);
+    let s: i32 = load_u8(base + offset + 3);
+    let e: i32 = load_u8(base + offset + 4);
+    if f != 102 || a != 97 || l != 108 || s != 115 || e != 101 {
+        return -1;
+    };
+    let next: i32 = offset + 5;
+    if next < len {
+        let after: i32 = load_u8(base + next);
+        if is_identifier_continue(after) {
+            return -1;
+        };
+    };
+    next
+}
+
 fn expect_keyword_else(base: i32, len: i32, offset: i32) -> i32 {
     if offset + 3 >= len {
         return -1;
@@ -564,7 +607,7 @@ fn parse_block_expression_body(
                 return -1;
             };
             idx = skip_whitespace(base, len, idx);
-            idx = parse_i32_type(base, len, idx);
+            idx = parse_type(base, len, idx, -1);
             if idx < 0 {
                 store_i32(locals_stack_count_ptr, saved_stack_count);
                 store_i32(locals_next_index_ptr, saved_next_index);
@@ -1052,24 +1095,48 @@ fn parse_block_expression_body(
     idx
 }
 
-fn parse_i32_type(base: i32, len: i32, offset: i32) -> i32 {
-    if offset + 3 > len {
+fn parse_type(base: i32, len: i32, offset: i32, out_type_ptr: i32) -> i32 {
+    if offset >= len {
         return -1;
     };
-    let byte0: i32 = load_u8(base + offset);
-    let byte1: i32 = load_u8(base + offset + 1);
-    let byte2: i32 = load_u8(base + offset + 2);
-    if byte0 != 105 || byte1 != 51 || byte2 != 50 {
-        return -1;
-    };
-    let next: i32 = offset + 3;
-    if next < len {
-        let after: i32 = load_u8(base + next);
-        if is_identifier_continue(after) {
-            return -1;
+    if offset + 3 <= len {
+        let byte0: i32 = load_u8(base + offset);
+        let byte1: i32 = load_u8(base + offset + 1);
+        let byte2: i32 = load_u8(base + offset + 2);
+        if byte0 == 105 && byte1 == 51 && byte2 == 50 {
+            let next: i32 = offset + 3;
+            if next < len {
+                let after: i32 = load_u8(base + next);
+                if is_identifier_continue(after) {
+                    return -1;
+                };
+            };
+            if out_type_ptr >= 0 {
+                store_i32(out_type_ptr, 0);
+            };
+            return next;
         };
     };
-    next
+    if offset + 4 <= len {
+        let b: i32 = load_u8(base + offset);
+        let o: i32 = load_u8(base + offset + 1);
+        let o2: i32 = load_u8(base + offset + 2);
+        let l: i32 = load_u8(base + offset + 3);
+        if b == 98 && o == 111 && o2 == 111 && l == 108 {
+            let next: i32 = offset + 4;
+            if next < len {
+                let after: i32 = load_u8(base + next);
+                if is_identifier_continue(after) {
+                    return -1;
+                };
+            };
+            if out_type_ptr >= 0 {
+                store_i32(out_type_ptr, 1);
+            };
+            return next;
+        };
+    };
+    -1
 }
 
 fn parse_i32_literal(base: i32, len: i32, offset: i32, out_value_ptr: i32) -> i32 {
@@ -1651,6 +1718,24 @@ fn parse_basic_expression(
         store_i32(out_data1_ptr, 0);
         return skip_whitespace(base, len, next_cursor);
     };
+    if first_byte == 116 {
+        let next_cursor: i32 = expect_keyword_true(base, len, cursor);
+        if next_cursor >= 0 {
+            store_i32(out_kind_ptr, 0);
+            store_i32(out_data0_ptr, 1);
+            store_i32(out_data1_ptr, 0);
+            return skip_whitespace(base, len, next_cursor);
+        };
+    };
+    if first_byte == 102 {
+        let next_cursor: i32 = expect_keyword_false(base, len, cursor);
+        if next_cursor >= 0 {
+            store_i32(out_kind_ptr, 0);
+            store_i32(out_data0_ptr, 0);
+            store_i32(out_data1_ptr, 0);
+            return skip_whitespace(base, len, next_cursor);
+        };
+    };
     if !is_identifier_start(first_byte) {
         return -1;
     };
@@ -2087,7 +2172,7 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
             return -1;
         };
         cursor = skip_whitespace(base, len, cursor);
-        cursor = parse_i32_type(base, len, cursor);
+        cursor = parse_type(base, len, cursor, -1);
         if cursor < 0 {
             return -1;
         };
@@ -2131,7 +2216,7 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
         return -1;
     };
     cursor = skip_whitespace(base, len, cursor);
-    cursor = parse_i32_type(base, len, cursor);
+    cursor = parse_type(base, len, cursor, -1);
     if cursor < 0 {
         return -1;
     };
