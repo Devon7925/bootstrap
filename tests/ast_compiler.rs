@@ -380,6 +380,65 @@ fn main() -> i32 {
 }
 
 #[test]
+fn ast_compiler_supports_continue_statements() {
+    let source = r#"
+fn sum_even(limit: i32) -> i32 {
+    let mut acc: i32 = 0;
+    let mut i: i32 = 0;
+    loop {
+        if i >= limit {
+            break;
+            0
+        } else {
+            0
+        };
+        i = i + 1;
+        let remainder: i32 = i - (i / 2) * 2;
+        if remainder == 1 {
+            continue;
+            0
+        } else {
+            0
+        };
+        acc = acc + i;
+    }
+    acc
+}
+
+fn loop_skip() -> i32 {
+    let mut total: i32 = 0;
+    let mut i: i32 = 0;
+    loop {
+        i = i + 1;
+        if i > 5 {
+            break;
+            0
+        } else {
+            0
+        };
+        if i == 3 {
+            continue;
+            0
+        } else {
+            0
+        };
+        total = total + i;
+    }
+    total
+}
+
+fn main() -> i32 {
+    sum_even(6) + loop_skip()
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 24);
+}
+
+#[test]
 fn ast_compiler_loop_break_value_returns() {
     let source = r#"
 fn choose() -> i32 {
@@ -397,6 +456,20 @@ fn main() -> i32 {
     let engine = wasmi::Engine::default();
     let result = run_wasm_main(&engine, &wasm);
     assert_eq!(result, 42);
+}
+
+#[test]
+fn ast_compiler_rejects_continue_outside_loop() {
+    let source = r#"
+fn main() -> i32 {
+    continue;
+    0
+}
+"#;
+
+    let error = try_compile_with_ast_compiler(source)
+        .expect_err("ast compiler should reject continue outside loops");
+    assert!(error.produced_len <= 0);
 }
 
 #[test]
