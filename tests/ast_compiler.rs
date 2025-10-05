@@ -410,6 +410,35 @@ fn main() -> i32 {
 }
 
 #[test]
+fn ast_compiler_handles_predicate_calls_in_loops() {
+    let source = r#"
+fn predicate(value: i32) -> bool {
+    if value >= 3 {
+        true
+    } else {
+        false
+    }
+}
+
+fn main() -> i32 {
+    let mut value: i32 = 0;
+    loop {
+        if predicate(value) {
+            break;
+        };
+        value = value + 1;
+    }
+    value
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 3);
+}
+
+#[test]
 fn ast_compiler_supports_functions_without_return_type() {
     let source = r#"
 fn helper() {

@@ -4364,9 +4364,11 @@ fn resolve_expression(ast_base: i32, expr_index: i32, func_count: i32) -> i32 {
     let control_stack_base: i32 = temp_base + 8;
     let control_capacity: i32 = resolve_control_stack_capacity();
     let loop_stack_base: i32 = control_stack_base + control_capacity * 4;
+    let saved_control_count: i32 = load_i32(control_count_ptr);
+    let saved_loop_count: i32 = load_i32(loop_count_ptr);
     store_i32(control_count_ptr, 0);
     store_i32(loop_count_ptr, 0);
-    resolve_expression_internal(
+    let result: i32 = resolve_expression_internal(
         ast_base,
         expr_index,
         func_count,
@@ -4374,7 +4376,10 @@ fn resolve_expression(ast_base: i32, expr_index: i32, func_count: i32) -> i32 {
         control_count_ptr,
         loop_stack_base,
         loop_count_ptr,
-    )
+    );
+    store_i32(control_count_ptr, saved_control_count);
+    store_i32(loop_count_ptr, saved_loop_count);
+    result
 }
 
 fn expression_code_size(ast_base: i32, expr_index: i32) -> i32 {
