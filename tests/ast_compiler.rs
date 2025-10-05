@@ -713,6 +713,28 @@ fn main() -> i32 {
 }
 
 #[test]
+fn ast_compiler_allows_diverging_if_tail_statements() {
+    let source = r#"
+fn branch(flag: bool) -> i32 {
+    if flag {
+        return 10;
+    } else {
+        return 20;
+    };
+}
+
+fn main() -> i32 {
+    branch(true)
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 10);
+}
+
+#[test]
 fn ast_compiler_rejects_break_outside_loop() {
     let source = r#"
 fn main() -> i32 {

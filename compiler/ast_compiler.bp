@@ -780,6 +780,46 @@ fn locals_entry_is_mut(entry_ptr: i32) -> bool {
     load_i32(entry_ptr + 12) != 0
 }
 
+fn expression_guaranteed_diverges(ast_base: i32, expr_index: i32) -> bool {
+    if expr_index < 0 {
+        return false;
+    };
+    if expr_index >= ast_expr_count(ast_base) {
+        return false;
+    };
+    let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+    let kind: i32 = load_i32(entry_ptr);
+    if kind == 13 {
+        return true;
+    };
+    if kind == 24 {
+        return true;
+    };
+    if kind == 23 {
+        return true;
+    };
+    if kind == 11 {
+        let then_index: i32 = load_i32(entry_ptr + 8);
+        return expression_guaranteed_diverges(ast_base, then_index);
+    };
+    if kind == 9 {
+        let body_index: i32 = load_i32(entry_ptr + 12);
+        return expression_guaranteed_diverges(ast_base, body_index);
+    };
+    if kind == 7 {
+        let then_index: i32 = load_i32(entry_ptr + 8);
+        let else_index: i32 = load_i32(entry_ptr + 12);
+        if !expression_guaranteed_diverges(ast_base, then_index) {
+            return false;
+        };
+        if !expression_guaranteed_diverges(ast_base, else_index) {
+            return false;
+        };
+        return true;
+    };
+    false
+}
+
 fn block_statement_entry_size() -> i32 {
     12
 }
@@ -856,13 +896,8 @@ fn parse_block_expression_body(
                         let last_kind: i32 = load_i32(last_ptr);
                         if last_kind == 1 {
                             let last_expr_index: i32 = load_i32(last_ptr + 4);
-                            if last_expr_index >= 0 {
-                                let expr_entry: i32 =
-                                    ast_expr_entry_ptr(ast_base, last_expr_index);
-                                let expr_kind: i32 = load_i32(expr_entry);
-                                if expr_kind == 13 || expr_kind == 24 || expr_kind == 23 {
-                                    diverges = true;
-                                };
+                            if expression_guaranteed_diverges(ast_base, last_expr_index) {
+                                diverges = true;
                             };
                         };
                     };
