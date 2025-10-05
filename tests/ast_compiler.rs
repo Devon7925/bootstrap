@@ -202,3 +202,62 @@ fn main() -> i32 {
     let result = run_wasm_main(&engine, &wasm);
     assert_eq!(result, 16);
 }
+
+#[test]
+fn ast_compiler_compiles_literal_subtraction() {
+    let source = r#"
+fn main() -> i32 {
+    50 - 8
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 42);
+}
+
+#[test]
+fn ast_compiler_compiles_subtraction_with_function_call() {
+    let source = r#"
+fn helper() -> i32 {
+    20
+}
+
+fn main() -> i32 {
+    helper() - 7
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 13);
+}
+
+#[test]
+fn ast_compiler_rejects_unknown_function_in_subtraction() {
+    let source = r#"
+fn main() -> i32 {
+    5 - missing()
+}
+"#;
+
+    let error = try_compile_with_ast_compiler(source)
+        .expect_err("ast compiler should reject unknown calls in subtraction expressions");
+    assert!(error.produced_len <= 0);
+}
+
+#[test]
+fn ast_compiler_compiles_mixed_addition_and_subtraction() {
+    let source = r#"
+fn main() -> i32 {
+    10 + 5 - 3 + 2 - 4
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 10);
+}

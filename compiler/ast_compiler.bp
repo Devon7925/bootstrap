@@ -450,6 +450,10 @@ fn ast_expr_alloc_add(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
     ast_expr_alloc(ast_base, 2, left_index, right_index, 0)
 }
 
+fn ast_expr_alloc_sub(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
+    ast_expr_alloc(ast_base, 3, left_index, right_index, 0)
+}
+
 fn expression_node_from_parts(ast_base: i32, kind: i32, data0: i32, data1: i32) -> i32 {
     if kind == 0 {
         return ast_expr_alloc_literal(ast_base, data0);
@@ -580,9 +584,10 @@ fn parse_expression(
             break;
         };
         let next_byte: i32 = load_u8(base + current_cursor);
-        if next_byte != 43 {
+        if next_byte != 43 && next_byte != 45 {
             break;
         };
+        let operator: i32 = next_byte;
         current_cursor = current_cursor + 1;
         current_cursor = skip_whitespace(base, len, current_cursor);
         current_cursor = parse_basic_expression(
@@ -618,13 +623,17 @@ fn parse_expression(
             return -1;
         };
 
-        let add_index: i32 = ast_expr_alloc_add(ast_base, left_index, right_index);
-        if add_index < 0 {
+        let new_index: i32 = if operator == 43 {
+            ast_expr_alloc_add(ast_base, left_index, right_index)
+        } else {
+            ast_expr_alloc_sub(ast_base, left_index, right_index)
+        };
+        if new_index < 0 {
             return -1;
         };
 
         store_i32(out_kind_ptr, 2);
-        store_i32(out_data0_ptr, add_index);
+        store_i32(out_data0_ptr, new_index);
         store_i32(out_data1_ptr, 0);
     };
 
@@ -899,7 +908,7 @@ fn resolve_expression(ast_base: i32, expr_index: i32, func_count: i32) -> i32 {
         store_i32(entry_ptr + 12, target_idx);
         return 0;
     };
-    if kind == 2 {
+    if kind == 2 || kind == 3 {
         let left_index: i32 = load_i32(entry_ptr + 4);
         let right_index: i32 = load_i32(entry_ptr + 8);
         if resolve_expression(ast_base, left_index, func_count) < 0 {
@@ -933,7 +942,7 @@ fn expression_code_size(ast_base: i32, expr_index: i32) -> i32 {
         };
         return 1 + leb_u32_len(callee_index);
     };
-    if kind == 2 {
+    if kind == 2 || kind == 3 {
         let left_index: i32 = load_i32(entry_ptr + 4);
         let right_index: i32 = load_i32(entry_ptr + 8);
         let left_size: i32 = expression_code_size(ast_base, left_index);
@@ -975,7 +984,7 @@ fn emit_expression(base: i32, offset: i32, ast_base: i32, expr_index: i32) -> i3
         out = write_u32_leb(base, out, callee_index);
         return out;
     };
-    if kind == 2 {
+    if kind == 2 || kind == 3 {
         let left_index: i32 = load_i32(entry_ptr + 4);
         let right_index: i32 = load_i32(entry_ptr + 8);
         let mut out: i32 = emit_expression(base, offset, ast_base, left_index);
@@ -986,7 +995,8 @@ fn emit_expression(base: i32, offset: i32, ast_base: i32, expr_index: i32) -> i3
         if out < 0 {
             return -1;
         };
-        out = write_byte(base, out, 106);
+        let opcode: i32 = if kind == 2 { 106 } else { 107 };
+        out = write_byte(base, out, opcode);
         return out;
     };
     -1
