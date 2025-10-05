@@ -279,6 +279,554 @@ fn find_parameter_index(
     -1
 }
 
+fn expect_keyword_let(base: i32, len: i32, offset: i32) -> i32 {
+    if offset + 2 >= len {
+        return -1;
+    };
+    let l: i32 = load_u8(base + offset);
+    let e: i32 = load_u8(base + offset + 1);
+    let t: i32 = load_u8(base + offset + 2);
+    if l != 108 || e != 101 || t != 116 {
+        return -1;
+    };
+    let next: i32 = offset + 3;
+    if next < len {
+        let after: i32 = load_u8(base + next);
+        if is_identifier_continue(after) {
+            return -1;
+        };
+    };
+    next
+}
+
+fn max_locals() -> i32 {
+    64
+}
+
+fn locals_entry_size() -> i32 {
+    16
+}
+
+fn locals_entry_ptr(locals_table_ptr: i32, index: i32) -> i32 {
+    locals_table_ptr + index * locals_entry_size()
+}
+
+fn find_local_entry_index(
+    base: i32,
+    locals_table_ptr: i32,
+    locals_stack_count: i32,
+    ident_start: i32,
+    ident_len: i32,
+) -> i32 {
+    if locals_stack_count <= 0 {
+        return -1;
+    };
+    let mut idx: i32 = locals_stack_count - 1;
+    loop {
+        if idx < 0 {
+            break;
+        };
+        let entry_ptr: i32 = locals_entry_ptr(locals_table_ptr, idx);
+        let local_start: i32 = load_i32(entry_ptr);
+        let local_len: i32 = load_i32(entry_ptr + 4);
+        if identifiers_match_source(base, local_start, local_len, ident_start, ident_len) {
+            return idx;
+        };
+        idx = idx - 1;
+    };
+    -1
+}
+
+fn find_local_entry_index_in_scope(
+    base: i32,
+    locals_table_ptr: i32,
+    scope_start: i32,
+    locals_stack_count: i32,
+    ident_start: i32,
+    ident_len: i32,
+) -> i32 {
+    if locals_stack_count <= scope_start {
+        return -1;
+    };
+    let mut idx: i32 = locals_stack_count - 1;
+    loop {
+        if idx < scope_start {
+            break;
+        };
+        let entry_ptr: i32 = locals_entry_ptr(locals_table_ptr, idx);
+        let local_start: i32 = load_i32(entry_ptr);
+        let local_len: i32 = load_i32(entry_ptr + 4);
+        if identifiers_match_source(base, local_start, local_len, ident_start, ident_len) {
+            return idx;
+        };
+        idx = idx - 1;
+    };
+    -1
+}
+
+fn locals_entry_local_index(entry_ptr: i32) -> i32 {
+    load_i32(entry_ptr + 8)
+}
+
+fn locals_entry_is_mut(entry_ptr: i32) -> bool {
+    load_i32(entry_ptr + 12) != 0
+}
+
+fn block_statement_entry_size() -> i32 {
+    12
+}
+
+fn block_statements_capacity() -> i32 {
+    128
+}
+
+fn parse_block_expression_body(
+    base: i32,
+    len: i32,
+    cursor: i32,
+    ast_base: i32,
+    params_table_ptr: i32,
+    params_count: i32,
+    locals_table_ptr: i32,
+    locals_stack_count_ptr: i32,
+    locals_next_index_ptr: i32,
+    literal_ptr: i32,
+    ident_start_ptr: i32,
+    ident_len_ptr: i32,
+    temp_base: i32,
+    out_kind_ptr: i32,
+    out_data0_ptr: i32,
+    out_data1_ptr: i32,
+) -> i32 {
+    let saved_stack_count: i32 = load_i32(locals_stack_count_ptr);
+    let saved_next_index: i32 = load_i32(locals_next_index_ptr);
+    let mut idx: i32 = skip_whitespace(base, len, cursor);
+
+    let statement_count_ptr: i32 = temp_base;
+    store_i32(statement_count_ptr, 0);
+    let statements_base: i32 = statement_count_ptr + 4;
+    let statements_capacity: i32 = block_statements_capacity();
+    let statement_entry_size: i32 = block_statement_entry_size();
+    let statements_end: i32 = statements_base + statements_capacity * statement_entry_size;
+    let stmt_expr_kind_ptr: i32 = statements_end;
+    let stmt_expr_data0_ptr: i32 = stmt_expr_kind_ptr + 4;
+    let stmt_expr_data1_ptr: i32 = stmt_expr_kind_ptr + 8;
+    let stmt_nested_temp_base: i32 = stmt_expr_kind_ptr + 32;
+
+    let mut have_value_expr: bool = false;
+    let mut final_kind: i32 = -1;
+    let mut final_data0: i32 = 0;
+    let mut final_data1: i32 = 0;
+
+    loop {
+        idx = skip_whitespace(base, len, idx);
+        if idx >= len {
+            store_i32(locals_stack_count_ptr, saved_stack_count);
+            store_i32(locals_next_index_ptr, saved_next_index);
+            return -1;
+        };
+        let next_byte: i32 = load_u8(base + idx);
+        if next_byte == 125 {
+            if !have_value_expr {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            idx = idx + 1;
+            idx = skip_whitespace(base, len, idx);
+            break;
+        };
+        if have_value_expr {
+            store_i32(locals_stack_count_ptr, saved_stack_count);
+            store_i32(locals_next_index_ptr, saved_next_index);
+            return -1;
+        };
+
+        let mut handled_statement: bool = false;
+        let mut let_cursor: i32 = expect_keyword_let(base, len, idx);
+        if let_cursor >= 0 {
+            if let_cursor >= len {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            let after_keyword: i32 = load_u8(base + let_cursor);
+            if !is_whitespace(after_keyword) {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            idx = skip_whitespace(base, len, let_cursor);
+            let mut is_mut: bool = false;
+            if idx + 3 <= len {
+                let m: i32 = load_u8(base + idx);
+                if m == 109 {
+                    let u: i32 = load_u8(base + idx + 1);
+                    let t: i32 = load_u8(base + idx + 2);
+                    if u == 117 && t == 116 {
+                        let after_mut: i32 = idx + 3;
+                        if after_mut >= len {
+                            store_i32(locals_stack_count_ptr, saved_stack_count);
+                            store_i32(locals_next_index_ptr, saved_next_index);
+                            return -1;
+                        };
+                        let after_mut_byte: i32 = load_u8(base + after_mut);
+                        if is_whitespace(after_mut_byte) {
+                            is_mut = true;
+                            idx = skip_whitespace(base, len, after_mut);
+                        };
+                    };
+                };
+            };
+
+            idx = parse_identifier(base, len, idx, ident_start_ptr, ident_len_ptr);
+            if idx < 0 {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            let name_start: i32 = load_i32(ident_start_ptr);
+            let name_len: i32 = load_i32(ident_len_ptr);
+
+            let current_stack: i32 = load_i32(locals_stack_count_ptr);
+            let existing: i32 = find_local_entry_index_in_scope(
+                base,
+                locals_table_ptr,
+                saved_stack_count,
+                current_stack,
+                name_start,
+                name_len,
+            );
+            if existing >= 0 {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+
+            idx = skip_whitespace(base, len, idx);
+            idx = expect_char(base, len, idx, 58);
+            if idx < 0 {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            idx = skip_whitespace(base, len, idx);
+            idx = parse_i32_type(base, len, idx);
+            if idx < 0 {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            idx = skip_whitespace(base, len, idx);
+            idx = expect_char(base, len, idx, 61);
+            if idx < 0 {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            idx = skip_whitespace(base, len, idx);
+            idx = parse_expression(
+                base,
+                len,
+                idx,
+                ast_base,
+                params_table_ptr,
+                params_count,
+                locals_table_ptr,
+                locals_stack_count_ptr,
+                locals_next_index_ptr,
+                stmt_nested_temp_base,
+                stmt_expr_kind_ptr,
+                stmt_expr_data0_ptr,
+                stmt_expr_data1_ptr,
+            );
+            if idx < 0 {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            let init_kind: i32 = load_i32(stmt_expr_kind_ptr);
+            let init_data0: i32 = load_i32(stmt_expr_data0_ptr);
+            let init_data1: i32 = load_i32(stmt_expr_data1_ptr);
+            let init_index: i32 =
+                expression_node_from_parts(ast_base, init_kind, init_data0, init_data1);
+            if init_index < 0 {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            idx = skip_whitespace(base, len, idx);
+            idx = expect_char(base, len, idx, 59);
+            if idx < 0 {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+
+            let stack_count: i32 = load_i32(locals_stack_count_ptr);
+            if stack_count >= max_locals() {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            let next_local_offset: i32 = load_i32(locals_next_index_ptr);
+            if next_local_offset >= max_locals() {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            let local_index: i32 = params_count + next_local_offset;
+            let entry_ptr: i32 = locals_entry_ptr(locals_table_ptr, stack_count);
+            store_i32(entry_ptr, name_start);
+            store_i32(entry_ptr + 4, name_len);
+            store_i32(entry_ptr + 8, local_index);
+            store_i32(entry_ptr + 12, if is_mut { 1 } else { 0 });
+            store_i32(locals_stack_count_ptr, stack_count + 1);
+            store_i32(locals_next_index_ptr, next_local_offset + 1);
+
+            let stmt_count: i32 = load_i32(statement_count_ptr);
+            if stmt_count >= statements_capacity {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            let stmt_ptr: i32 = statements_base + stmt_count * statement_entry_size;
+            store_i32(stmt_ptr, 0);
+            store_i32(stmt_ptr + 4, local_index);
+            store_i32(stmt_ptr + 8, init_index);
+            store_i32(statement_count_ptr, stmt_count + 1);
+            handled_statement = true;
+        };
+
+        if handled_statement {
+            continue;
+        };
+
+        let statement_start: i32 = idx;
+        let mut assignment_identified: bool = false;
+        let mut assignment_local_index: i32 = -1;
+        let mut assignment_cursor: i32 = idx;
+        if is_identifier_start(next_byte) {
+            assignment_cursor = parse_identifier(
+                base,
+                len,
+                idx,
+                ident_start_ptr,
+                ident_len_ptr,
+            );
+            if assignment_cursor >= 0 {
+                let name_start: i32 = load_i32(ident_start_ptr);
+                let name_len: i32 = load_i32(ident_len_ptr);
+                let mut after_ident: i32 = skip_whitespace(base, len, assignment_cursor);
+                if after_ident < len {
+                    let assign_byte: i32 = load_u8(base + after_ident);
+                    if assign_byte == 61 {
+                        let mut after_equal: i32 = after_ident + 1;
+                        if after_equal >= len {
+                            store_i32(locals_stack_count_ptr, saved_stack_count);
+                            store_i32(locals_next_index_ptr, saved_next_index);
+                            return -1;
+                        };
+                        let maybe_second_equal: i32 = load_u8(base + after_equal);
+                        if maybe_second_equal != 61 {
+                            let current_stack: i32 = load_i32(locals_stack_count_ptr);
+                            let entry_index: i32 = find_local_entry_index(
+                                base,
+                                locals_table_ptr,
+                                current_stack,
+                                name_start,
+                                name_len,
+                            );
+                            if entry_index < 0 {
+                                store_i32(locals_stack_count_ptr, saved_stack_count);
+                                store_i32(locals_next_index_ptr, saved_next_index);
+                                return -1;
+                            };
+                            let entry_ptr: i32 = locals_entry_ptr(locals_table_ptr, entry_index);
+                            if !locals_entry_is_mut(entry_ptr) {
+                                store_i32(locals_stack_count_ptr, saved_stack_count);
+                                store_i32(locals_next_index_ptr, saved_next_index);
+                                return -1;
+                            };
+                            assignment_local_index = locals_entry_local_index(entry_ptr);
+                            assignment_identified = true;
+                            assignment_cursor = skip_whitespace(base, len, after_equal);
+                        };
+                    };
+                };
+            };
+        };
+
+        idx = statement_start;
+        if assignment_identified {
+            idx = parse_expression(
+                base,
+                len,
+                assignment_cursor,
+                ast_base,
+                params_table_ptr,
+                params_count,
+                locals_table_ptr,
+                locals_stack_count_ptr,
+                locals_next_index_ptr,
+                stmt_nested_temp_base,
+                stmt_expr_kind_ptr,
+                stmt_expr_data0_ptr,
+                stmt_expr_data1_ptr,
+            );
+            if idx < 0 {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            let value_kind: i32 = load_i32(stmt_expr_kind_ptr);
+            let value_data0: i32 = load_i32(stmt_expr_data0_ptr);
+            let value_data1: i32 = load_i32(stmt_expr_data1_ptr);
+            let value_index: i32 =
+                expression_node_from_parts(ast_base, value_kind, value_data0, value_data1);
+            if value_index < 0 {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            idx = skip_whitespace(base, len, idx);
+            idx = expect_char(base, len, idx, 59);
+            if idx < 0 {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            let assign_expr_index: i32 = ast_expr_alloc_set_local(ast_base, assignment_local_index, value_index);
+            if assign_expr_index < 0 {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            let stmt_count: i32 = load_i32(statement_count_ptr);
+            if stmt_count >= statements_capacity {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            let stmt_ptr: i32 = statements_base + stmt_count * statement_entry_size;
+            store_i32(stmt_ptr, 1);
+            store_i32(stmt_ptr + 4, assign_expr_index);
+            store_i32(stmt_ptr + 8, 0);
+            store_i32(statement_count_ptr, stmt_count + 1);
+            continue;
+        };
+
+        idx = parse_expression(
+            base,
+            len,
+            idx,
+            ast_base,
+            params_table_ptr,
+            params_count,
+            locals_table_ptr,
+            locals_stack_count_ptr,
+            locals_next_index_ptr,
+            stmt_nested_temp_base,
+            stmt_expr_kind_ptr,
+            stmt_expr_data0_ptr,
+            stmt_expr_data1_ptr,
+        );
+        if idx < 0 {
+            store_i32(locals_stack_count_ptr, saved_stack_count);
+            store_i32(locals_next_index_ptr, saved_next_index);
+            return -1;
+        };
+        let expr_kind: i32 = load_i32(stmt_expr_kind_ptr);
+        let expr_data0: i32 = load_i32(stmt_expr_data0_ptr);
+        let expr_data1: i32 = load_i32(stmt_expr_data1_ptr);
+        let mut next_cursor: i32 = skip_whitespace(base, len, idx);
+        let mut treat_as_statement: bool = false;
+        if next_cursor < len {
+            let delimiter: i32 = load_u8(base + next_cursor);
+            if delimiter == 59 {
+                let after_semicolon: i32 = skip_whitespace(base, len, next_cursor + 1);
+                if after_semicolon < len {
+                    let after_byte: i32 = load_u8(base + after_semicolon);
+                    if after_byte == 125 && !have_value_expr {
+                        next_cursor = after_semicolon;
+                    } else {
+                        treat_as_statement = true;
+                        next_cursor = after_semicolon;
+                    };
+                } else {
+                    treat_as_statement = true;
+                    next_cursor = after_semicolon;
+                };
+            };
+        };
+        if treat_as_statement {
+            let expr_index: i32 = expression_node_from_parts(ast_base, expr_kind, expr_data0, expr_data1);
+            if expr_index < 0 {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            let stmt_count: i32 = load_i32(statement_count_ptr);
+            if stmt_count >= statements_capacity {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            let stmt_ptr: i32 = statements_base + stmt_count * statement_entry_size;
+            store_i32(stmt_ptr, 1);
+            store_i32(stmt_ptr + 4, expr_index);
+            store_i32(stmt_ptr + 8, 0);
+            store_i32(statement_count_ptr, stmt_count + 1);
+            idx = next_cursor;
+            continue;
+        };
+
+        have_value_expr = true;
+        final_kind = expr_kind;
+        final_data0 = expr_data0;
+        final_data1 = expr_data1;
+        idx = next_cursor;
+    };
+
+    store_i32(locals_stack_count_ptr, saved_stack_count);
+
+    let mut final_index: i32 =
+        expression_node_from_parts(ast_base, final_kind, final_data0, final_data1);
+    if final_index < 0 {
+        store_i32(locals_next_index_ptr, saved_next_index);
+        return -1;
+    };
+    let stmt_count: i32 = load_i32(statement_count_ptr);
+    if stmt_count > 0 {
+        let mut stmt_idx: i32 = stmt_count - 1;
+        loop {
+            if stmt_idx < 0 {
+                break;
+            };
+            let stmt_ptr: i32 = statements_base + stmt_idx * statement_entry_size;
+            let stmt_kind: i32 = load_i32(stmt_ptr);
+            if stmt_kind == 0 {
+                let local_index: i32 = load_i32(stmt_ptr + 4);
+                let init_index: i32 = load_i32(stmt_ptr + 8);
+                final_index = ast_expr_alloc_let(ast_base, local_index, init_index, final_index);
+            } else {
+                let first_index: i32 = load_i32(stmt_ptr + 4);
+                final_index = ast_expr_alloc_sequence(ast_base, first_index, final_index);
+            };
+            if final_index < 0 {
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            stmt_idx = stmt_idx - 1;
+        };
+    };
+
+    store_i32(out_kind_ptr, 2);
+    store_i32(out_data0_ptr, final_index);
+    store_i32(out_data1_ptr, 0);
+    idx
+}
+
 fn parse_i32_type(base: i32, len: i32, offset: i32) -> i32 {
     if offset + 3 > len {
         return -1;
@@ -615,6 +1163,27 @@ fn ast_expr_alloc_if(
     ast_expr_alloc(ast_base, 7, condition_index, then_index, else_index)
 }
 
+fn ast_expr_alloc_local(ast_base: i32, local_index: i32) -> i32 {
+    ast_expr_alloc(ast_base, 8, local_index, 0, 0)
+}
+
+fn ast_expr_alloc_let(
+    ast_base: i32,
+    local_index: i32,
+    init_index: i32,
+    body_index: i32,
+) -> i32 {
+    ast_expr_alloc(ast_base, 9, local_index, init_index, body_index)
+}
+
+fn ast_expr_alloc_set_local(ast_base: i32, local_index: i32, value_index: i32) -> i32 {
+    ast_expr_alloc(ast_base, 10, local_index, value_index, 0)
+}
+
+fn ast_expr_alloc_sequence(ast_base: i32, first_index: i32, then_index: i32) -> i32 {
+    ast_expr_alloc(ast_base, 11, first_index, then_index, 0)
+}
+
 fn expression_node_from_parts(ast_base: i32, kind: i32, data0: i32, data1: i32) -> i32 {
     if kind == 0 {
         return ast_expr_alloc_literal(ast_base, data0);
@@ -624,6 +1193,9 @@ fn expression_node_from_parts(ast_base: i32, kind: i32, data0: i32, data1: i32) 
     };
     if kind == 6 {
         return ast_expr_alloc_param(ast_base, data0);
+    };
+    if kind == 8 {
+        return ast_expr_alloc_local(ast_base, data0);
     };
     data0
 }
@@ -635,6 +1207,9 @@ fn parse_basic_expression(
     ast_base: i32,
     params_table_ptr: i32,
     params_count: i32,
+    locals_table_ptr: i32,
+    locals_stack_count_ptr: i32,
+    locals_next_index_ptr: i32,
     literal_ptr: i32,
     ident_start_ptr: i32,
     ident_len_ptr: i32,
@@ -648,15 +1223,19 @@ fn parse_basic_expression(
     };
     let first_byte: i32 = load_u8(base + cursor);
     if first_byte == 123 {
-        let mut block_cursor: i32 = cursor + 1;
-        block_cursor = skip_whitespace(base, len, block_cursor);
-        block_cursor = parse_expression(
+        let block_cursor: i32 = parse_block_expression_body(
             base,
             len,
-            block_cursor,
+            cursor + 1,
             ast_base,
             params_table_ptr,
             params_count,
+            locals_table_ptr,
+            locals_stack_count_ptr,
+            locals_next_index_ptr,
+            literal_ptr,
+            ident_start_ptr,
+            ident_len_ptr,
             nested_temp_base,
             out_kind_ptr,
             out_data0_ptr,
@@ -665,18 +1244,7 @@ fn parse_basic_expression(
         if block_cursor < 0 {
             return -1;
         };
-        block_cursor = skip_whitespace(base, len, block_cursor);
-        if block_cursor < len {
-            let maybe_semicolon: i32 = load_u8(base + block_cursor);
-            if maybe_semicolon == 59 {
-                block_cursor = skip_whitespace(base, len, block_cursor + 1);
-            };
-        };
-        block_cursor = expect_char(base, len, block_cursor, 125);
-        if block_cursor < 0 {
-            return -1;
-        };
-        return skip_whitespace(base, len, block_cursor);
+        return block_cursor;
     };
     if first_byte == 105 {
         let mut if_cursor: i32 = expect_keyword_if(base, len, cursor);
@@ -701,6 +1269,9 @@ fn parse_basic_expression(
                 ast_base,
                 params_table_ptr,
                 params_count,
+                locals_table_ptr,
+                locals_stack_count_ptr,
+                locals_next_index_ptr,
                 cond_nested_base,
                 cond_kind_ptr,
                 cond_data0_ptr,
@@ -714,14 +1285,19 @@ fn parse_basic_expression(
             if if_cursor < 0 {
                 return -1;
             };
-            if_cursor = skip_whitespace(base, len, if_cursor);
-            if_cursor = parse_expression(
+            if_cursor = parse_block_expression_body(
                 base,
                 len,
                 if_cursor,
                 ast_base,
                 params_table_ptr,
                 params_count,
+                locals_table_ptr,
+                locals_stack_count_ptr,
+                locals_next_index_ptr,
+                literal_ptr,
+                ident_start_ptr,
+                ident_len_ptr,
                 then_nested_base,
                 then_kind_ptr,
                 then_data0_ptr,
@@ -730,18 +1306,6 @@ fn parse_basic_expression(
             if if_cursor < 0 {
                 return -1;
             };
-            if_cursor = skip_whitespace(base, len, if_cursor);
-            if if_cursor < len {
-                let maybe_then_semicolon: i32 = load_u8(base + if_cursor);
-                if maybe_then_semicolon == 59 {
-                    if_cursor = skip_whitespace(base, len, if_cursor + 1);
-                };
-            };
-            if_cursor = expect_char(base, len, if_cursor, 125);
-            if if_cursor < 0 {
-                return -1;
-            };
-            if_cursor = skip_whitespace(base, len, if_cursor);
             if_cursor = expect_keyword_else(base, len, if_cursor);
             if if_cursor < 0 {
                 return -1;
@@ -751,14 +1315,19 @@ fn parse_basic_expression(
             if if_cursor < 0 {
                 return -1;
             };
-            if_cursor = skip_whitespace(base, len, if_cursor);
-            if_cursor = parse_expression(
+            if_cursor = parse_block_expression_body(
                 base,
                 len,
                 if_cursor,
                 ast_base,
                 params_table_ptr,
                 params_count,
+                locals_table_ptr,
+                locals_stack_count_ptr,
+                locals_next_index_ptr,
+                literal_ptr,
+                ident_start_ptr,
+                ident_len_ptr,
                 else_nested_base,
                 else_kind_ptr,
                 else_data0_ptr,
@@ -767,23 +1336,12 @@ fn parse_basic_expression(
             if if_cursor < 0 {
                 return -1;
             };
-            if_cursor = skip_whitespace(base, len, if_cursor);
-            if if_cursor < len {
-                let maybe_else_semicolon: i32 = load_u8(base + if_cursor);
-                if maybe_else_semicolon == 59 {
-                    if_cursor = skip_whitespace(base, len, if_cursor + 1);
-                };
-            };
-            if_cursor = expect_char(base, len, if_cursor, 125);
-            if if_cursor < 0 {
-                return -1;
-            };
             let cond_kind: i32 = load_i32(cond_kind_ptr);
             let cond_data0: i32 = load_i32(cond_data0_ptr);
             let cond_data1: i32 = load_i32(cond_data1_ptr);
-            let condition_index: i32 =
+            let cond_index: i32 =
                 expression_node_from_parts(ast_base, cond_kind, cond_data0, cond_data1);
-            if condition_index < 0 {
+            if cond_index < 0 {
                 return -1;
             };
             let then_kind: i32 = load_i32(then_kind_ptr);
@@ -802,12 +1360,7 @@ fn parse_basic_expression(
             if else_index < 0 {
                 return -1;
             };
-            let if_index: i32 = ast_expr_alloc_if(
-                ast_base,
-                condition_index,
-                then_index,
-                else_index,
-            );
+            let if_index: i32 = ast_expr_alloc_if(ast_base, cond_index, then_index, else_index);
             if if_index < 0 {
                 return -1;
             };
@@ -818,29 +1371,32 @@ fn parse_basic_expression(
         };
     };
     if first_byte == 40 {
-        let mut next_cursor: i32 = cursor + 1;
-        next_cursor = skip_whitespace(base, len, next_cursor);
-        next_cursor = parse_expression(
+        let mut paren_cursor: i32 = cursor + 1;
+        paren_cursor = skip_whitespace(base, len, paren_cursor);
+        paren_cursor = parse_expression(
             base,
             len,
-            next_cursor,
+            paren_cursor,
             ast_base,
             params_table_ptr,
             params_count,
+            locals_table_ptr,
+            locals_stack_count_ptr,
+            locals_next_index_ptr,
             nested_temp_base,
             out_kind_ptr,
             out_data0_ptr,
             out_data1_ptr,
         );
-        if next_cursor < 0 {
+        if paren_cursor < 0 {
             return -1;
         };
-        next_cursor = skip_whitespace(base, len, next_cursor);
-        next_cursor = expect_char(base, len, next_cursor, 41);
-        if next_cursor < 0 {
+        paren_cursor = skip_whitespace(base, len, paren_cursor);
+        paren_cursor = expect_char(base, len, paren_cursor, 41);
+        if paren_cursor < 0 {
             return -1;
         };
-        return skip_whitespace(base, len, next_cursor);
+        return skip_whitespace(base, len, paren_cursor);
     };
     if first_byte == 45 || is_digit(first_byte) {
         let next_cursor: i32 = parse_i32_literal(base, len, cursor, literal_ptr);
@@ -891,6 +1447,9 @@ fn parse_basic_expression(
                             ast_base,
                             params_table_ptr,
                             params_count,
+                            locals_table_ptr,
+                            locals_stack_count_ptr,
+                            locals_next_index_ptr,
                             arg_nested_base,
                             arg_kind_ptr,
                             arg_data0_ptr,
@@ -966,11 +1525,27 @@ fn parse_basic_expression(
     };
     let param_index: i32 =
         find_parameter_index(base, params_table_ptr, params_count, ident_start, ident_len);
-    if param_index < 0 {
+    if param_index >= 0 {
+        store_i32(out_kind_ptr, 6);
+        store_i32(out_data0_ptr, param_index);
+        store_i32(out_data1_ptr, 0);
+        return skip_whitespace(base, len, next_cursor);
+    };
+    let locals_stack: i32 = load_i32(locals_stack_count_ptr);
+    let local_entry_index: i32 = find_local_entry_index(
+        base,
+        locals_table_ptr,
+        locals_stack,
+        ident_start,
+        ident_len,
+    );
+    if local_entry_index < 0 {
         return -1;
     };
-    store_i32(out_kind_ptr, 6);
-    store_i32(out_data0_ptr, param_index);
+    let entry_ptr: i32 = locals_entry_ptr(locals_table_ptr, local_entry_index);
+    let local_index: i32 = locals_entry_local_index(entry_ptr);
+    store_i32(out_kind_ptr, 8);
+    store_i32(out_data0_ptr, local_index);
     store_i32(out_data1_ptr, 0);
     skip_whitespace(base, len, next_cursor)
 }
@@ -982,6 +1557,9 @@ fn parse_multiplicative_expression(
     ast_base: i32,
     params_table_ptr: i32,
     params_count: i32,
+    locals_table_ptr: i32,
+    locals_stack_count_ptr: i32,
+    locals_next_index_ptr: i32,
     temp_base: i32,
     out_kind_ptr: i32,
     out_data0_ptr: i32,
@@ -1002,6 +1580,9 @@ fn parse_multiplicative_expression(
         ast_base,
         params_table_ptr,
         params_count,
+        locals_table_ptr,
+        locals_stack_count_ptr,
+        locals_next_index_ptr,
         literal_ptr,
         ident_start_ptr,
         ident_len_ptr,
@@ -1032,6 +1613,9 @@ fn parse_multiplicative_expression(
             ast_base,
             params_table_ptr,
             params_count,
+            locals_table_ptr,
+            locals_stack_count_ptr,
+            locals_next_index_ptr,
             literal_ptr,
             ident_start_ptr,
             ident_len_ptr,
@@ -1084,16 +1668,14 @@ fn parse_expression(
     ast_base: i32,
     params_table_ptr: i32,
     params_count: i32,
+    locals_table_ptr: i32,
+    locals_stack_count_ptr: i32,
+    locals_next_index_ptr: i32,
     temp_base: i32,
     out_kind_ptr: i32,
     out_data0_ptr: i32,
     out_data1_ptr: i32,
 ) -> i32 {
-    let mult_temp_base: i32 = temp_base;
-    let next_kind_ptr: i32 = temp_base + 96;
-    let next_data0_ptr: i32 = temp_base + 100;
-    let next_data1_ptr: i32 = temp_base + 104;
-
     let mut current_cursor: i32 = parse_multiplicative_expression(
         base,
         len,
@@ -1101,7 +1683,10 @@ fn parse_expression(
         ast_base,
         params_table_ptr,
         params_count,
-        mult_temp_base,
+        locals_table_ptr,
+        locals_stack_count_ptr,
+        locals_next_index_ptr,
+        temp_base,
         out_kind_ptr,
         out_data0_ptr,
         out_data1_ptr,
@@ -1109,6 +1694,11 @@ fn parse_expression(
     if current_cursor < 0 {
         return -1;
     };
+
+    let next_kind_ptr: i32 = temp_base;
+    let next_data0_ptr: i32 = temp_base + 4;
+    let next_data1_ptr: i32 = temp_base + 8;
+    let nested_temp_base: i32 = temp_base + 32;
 
     loop {
         if current_cursor >= len {
@@ -1128,7 +1718,10 @@ fn parse_expression(
             ast_base,
             params_table_ptr,
             params_count,
-            mult_temp_base,
+            locals_table_ptr,
+            locals_stack_count_ptr,
+            locals_next_index_ptr,
+            nested_temp_base,
             next_kind_ptr,
             next_data0_ptr,
             next_data1_ptr,
@@ -1140,8 +1733,7 @@ fn parse_expression(
         let current_kind: i32 = load_i32(out_kind_ptr);
         let current_data0: i32 = load_i32(out_data0_ptr);
         let current_data1: i32 = load_i32(out_data1_ptr);
-        let left_index: i32 =
-            expression_node_from_parts(ast_base, current_kind, current_data0, current_data1);
+        let left_index: i32 = expression_node_from_parts(ast_base, current_kind, current_data0, current_data1);
         if left_index < 0 {
             return -1;
         };
@@ -1149,8 +1741,7 @@ fn parse_expression(
         let right_kind: i32 = load_i32(next_kind_ptr);
         let right_data0: i32 = load_i32(next_data0_ptr);
         let right_data1: i32 = load_i32(next_data1_ptr);
-        let right_index: i32 =
-            expression_node_from_parts(ast_base, right_kind, right_data0, right_data1);
+        let right_index: i32 = expression_node_from_parts(ast_base, right_kind, right_data0, right_data1);
         if right_index < 0 {
             return -1;
         };
@@ -1191,7 +1782,10 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     let expr_kind_ptr: i32 = param_name_len_ptr + 4;
     let expr_data0_ptr: i32 = expr_kind_ptr + 4;
     let expr_data1_ptr: i32 = expr_kind_ptr + 8;
-    let expr_temp_base: i32 = expr_kind_ptr + 32;
+    let locals_stack_count_ptr: i32 = expr_kind_ptr + 12;
+    let locals_table_ptr: i32 = locals_stack_count_ptr + 4;
+    let locals_next_index_ptr: i32 = locals_table_ptr + max_locals() * locals_entry_size();
+    let expr_temp_base: i32 = locals_next_index_ptr + 4;
     cursor = parse_identifier(base, len, cursor, name_start_ptr, name_len_ptr);
     if cursor < 0 {
         return -1;
@@ -1275,6 +1869,8 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
         return -1;
     };
     store_i32(params_count_ptr, param_count);
+    store_i32(locals_stack_count_ptr, 0);
+    store_i32(locals_next_index_ptr, 0);
     cursor = skip_whitespace(base, len, cursor);
 
     cursor = expect_char(base, len, cursor, 45);
@@ -1296,32 +1892,30 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     if cursor < 0 {
         return -1;
     };
-    cursor = skip_whitespace(base, len, cursor);
 
-    cursor = parse_expression(
+    let block_literal_ptr: i32 = expr_temp_base;
+    let block_ident_start_ptr: i32 = expr_temp_base + 4;
+    let block_ident_len_ptr: i32 = expr_temp_base + 8;
+    let block_temp_base: i32 = expr_temp_base + 32;
+
+    cursor = parse_block_expression_body(
         base,
         len,
         cursor,
         ast_base,
         params_table_ptr,
         param_count,
-        expr_temp_base,
+        locals_table_ptr,
+        locals_stack_count_ptr,
+        locals_next_index_ptr,
+        block_literal_ptr,
+        block_ident_start_ptr,
+        block_ident_len_ptr,
+        block_temp_base,
         expr_kind_ptr,
         expr_data0_ptr,
         expr_data1_ptr,
     );
-    if cursor < 0 {
-        return -1;
-    };
-
-    if cursor < len {
-        let next: i32 = load_u8(base + cursor);
-        if next == 59 {
-            cursor = cursor + 1;
-            cursor = skip_whitespace(base, len, cursor);
-        };
-    };
-    cursor = expect_char(base, len, cursor, 125);
     if cursor < 0 {
         return -1;
     };
@@ -1336,6 +1930,7 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     if body_kind < 0 {
         return -1;
     };
+    let locals_total: i32 = load_i32(locals_next_index_ptr);
     ast_write_function_entry(
         ast_base,
         func_index,
@@ -1344,7 +1939,7 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
         param_count,
         body_kind,
         body_data0,
-        body_data1,
+        locals_total,
     );
     cursor
 }
@@ -1486,15 +2081,13 @@ fn validate_program(ast_base: i32, func_count: i32) -> i32 {
             if resolve_call_metadata(ast_base, metadata_ptr, func_count) < 0 {
                 return -1;
             };
-            store_i32(entry_ptr + 20, 0);
         } else {
             if body_kind == 2 {
                 let expr_index: i32 = load_i32(entry_ptr + 16);
                 if resolve_expression(ast_base, expr_index, func_count) < 0 {
                     return -1;
                 };
-                store_i32(entry_ptr + 20, 0);
-            };
+                };
         };
         idx = idx + 1;
     };
@@ -1518,12 +2111,18 @@ fn resolve_expression(ast_base: i32, expr_index: i32, func_count: i32) -> i32 {
     };
     if kind == 1 {
         let metadata_ptr: i32 = load_i32(entry_ptr + 4);
+        if metadata_ptr < 0 {
+            return -1;
+        };
         if resolve_call_metadata(ast_base, metadata_ptr, func_count) < 0 {
             return -1;
         };
         return 0;
     };
     if kind == 6 {
+        return 0;
+    };
+    if kind == 8 {
         return 0;
     };
     if kind == 2 || kind == 3 || kind == 4 || kind == 5 {
@@ -1548,6 +2147,32 @@ fn resolve_expression(ast_base: i32, expr_index: i32, func_count: i32) -> i32 {
             return -1;
         };
         if resolve_expression(ast_base, else_index, func_count) < 0 {
+            return -1;
+        };
+        return 0;
+    };
+    if kind == 9 {
+        let init_index: i32 = load_i32(entry_ptr + 8);
+        let body_index: i32 = load_i32(entry_ptr + 12);
+        if resolve_expression(ast_base, init_index, func_count) < 0 {
+            return -1;
+        };
+        if resolve_expression(ast_base, body_index, func_count) < 0 {
+            return -1;
+        };
+        return 0;
+    };
+    if kind == 10 {
+        let value_index: i32 = load_i32(entry_ptr + 8);
+        return resolve_expression(ast_base, value_index, func_count);
+    };
+    if kind == 11 {
+        let first_index: i32 = load_i32(entry_ptr + 4);
+        let then_index: i32 = load_i32(entry_ptr + 8);
+        if resolve_expression(ast_base, first_index, func_count) < 0 {
+            return -1;
+        };
+        if resolve_expression(ast_base, then_index, func_count) < 0 {
             return -1;
         };
         return 0;
@@ -1602,6 +2227,13 @@ fn expression_code_size(ast_base: i32, expr_index: i32) -> i32 {
         };
         return 1 + leb_u32_len(param_index);
     };
+    if kind == 8 {
+        let local_index: i32 = load_i32(entry_ptr + 4);
+        if local_index < 0 {
+            return -1;
+        };
+        return 1 + leb_u32_len(local_index);
+    };
     if kind == 2 || kind == 3 || kind == 4 || kind == 5 {
         let left_index: i32 = load_i32(entry_ptr + 4);
         let right_index: i32 = load_i32(entry_ptr + 8);
@@ -1632,6 +2264,42 @@ fn expression_code_size(ast_base: i32, expr_index: i32) -> i32 {
             return -1;
         };
         return condition_size + then_size + else_size + 4;
+    };
+    if kind == 9 {
+        let local_index: i32 = load_i32(entry_ptr + 4);
+        let init_index: i32 = load_i32(entry_ptr + 8);
+        let body_index: i32 = load_i32(entry_ptr + 12);
+        let init_size: i32 = expression_code_size(ast_base, init_index);
+        if init_size < 0 {
+            return -1;
+        };
+        let body_size: i32 = expression_code_size(ast_base, body_index);
+        if body_size < 0 {
+            return -1;
+        };
+        return init_size + body_size + 1 + leb_u32_len(local_index);
+    };
+    if kind == 10 {
+        let local_index: i32 = load_i32(entry_ptr + 4);
+        let value_index: i32 = load_i32(entry_ptr + 8);
+        let value_size: i32 = expression_code_size(ast_base, value_index);
+        if value_size < 0 {
+            return -1;
+        };
+        return value_size + 1 + leb_u32_len(local_index);
+    };
+    if kind == 11 {
+        let first_index: i32 = load_i32(entry_ptr + 4);
+        let then_index: i32 = load_i32(entry_ptr + 8);
+        let first_size: i32 = expression_code_size(ast_base, first_index);
+        if first_size < 0 {
+            return -1;
+        };
+        let then_size: i32 = expression_code_size(ast_base, then_index);
+        if then_size < 0 {
+            return -1;
+        };
+        return first_size + then_size + 1;
     };
     -1
 }
@@ -1690,6 +2358,16 @@ fn emit_expression(base: i32, offset: i32, ast_base: i32, expr_index: i32) -> i3
         out = write_u32_leb(base, out, param_index);
         return out;
     };
+    if kind == 8 {
+        let local_index: i32 = load_i32(entry_ptr + 4);
+        if local_index < 0 {
+            return -1;
+        };
+        let mut out: i32 = offset;
+        out = write_byte(base, out, 32);
+        out = write_u32_leb(base, out, local_index);
+        return out;
+    };
     if kind == 2 || kind == 3 || kind == 4 || kind == 5 {
         let left_index: i32 = load_i32(entry_ptr + 4);
         let right_index: i32 = load_i32(entry_ptr + 8);
@@ -1737,6 +2415,47 @@ fn emit_expression(base: i32, offset: i32, ast_base: i32, expr_index: i32) -> i3
             return -1;
         };
         out = write_byte(base, out, 11);
+        return out;
+    };
+    if kind == 9 {
+        let local_index: i32 = load_i32(entry_ptr + 4);
+        let init_index: i32 = load_i32(entry_ptr + 8);
+        let body_index: i32 = load_i32(entry_ptr + 12);
+        let mut out: i32 = emit_expression(base, offset, ast_base, init_index);
+        if out < 0 {
+            return -1;
+        };
+        out = write_byte(base, out, 33);
+        out = write_u32_leb(base, out, local_index);
+        out = emit_expression(base, out, ast_base, body_index);
+        if out < 0 {
+            return -1;
+        };
+        return out;
+    };
+    if kind == 10 {
+        let local_index: i32 = load_i32(entry_ptr + 4);
+        let value_index: i32 = load_i32(entry_ptr + 8);
+        let mut out: i32 = emit_expression(base, offset, ast_base, value_index);
+        if out < 0 {
+            return -1;
+        };
+        out = write_byte(base, out, 34);
+        out = write_u32_leb(base, out, local_index);
+        return out;
+    };
+    if kind == 11 {
+        let first_index: i32 = load_i32(entry_ptr + 4);
+        let then_index: i32 = load_i32(entry_ptr + 8);
+        let mut out: i32 = emit_expression(base, offset, ast_base, first_index);
+        if out < 0 {
+            return -1;
+        };
+        out = write_byte(base, out, 26);
+        out = emit_expression(base, out, ast_base, then_index);
+        if out < 0 {
+            return -1;
+        };
         return out;
     };
     -1
@@ -1880,10 +2599,16 @@ fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
         };
         let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
         let body_kind: i32 = load_i32(entry_ptr + 12);
+        let locals_count: i32 = load_i32(entry_ptr + 20);
+        let locals_decl_size: i32 = if locals_count > 0 {
+            leb_u32_len(1) + leb_u32_len(locals_count) + 1
+        } else {
+            leb_u32_len(0)
+        };
         let mut body_size: i32 = 0;
         if body_kind == 0 {
             let literal_value: i32 = load_i32(entry_ptr + 16);
-            body_size = 1 + 1 + leb_i32_len(literal_value) + 1;
+            body_size = locals_decl_size + 1 + leb_i32_len(literal_value) + 1;
         } else {
             if body_kind == 1 {
                 let metadata_ptr: i32 = load_i32(entry_ptr + 16);
@@ -1910,14 +2635,14 @@ fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
                     args_size = args_size + arg_size;
                     arg_idx = arg_idx + 1;
                 };
-                body_size = 1 + args_size + 1 + leb_u32_len(callee_index) + 1;
+                body_size = locals_decl_size + args_size + 1 + leb_u32_len(callee_index) + 1;
             } else {
                 let expr_index: i32 = load_i32(entry_ptr + 16);
                 let expr_size: i32 = expression_code_size(ast_base, expr_index);
                 if expr_size < 0 {
                     return -1;
                 };
-                body_size = 1 + expr_size + 1;
+                body_size = locals_decl_size + expr_size + 1;
             };
         };
         payload_size = payload_size + leb_u32_len(body_size) + body_size;
@@ -1936,12 +2661,24 @@ fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
         };
         let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
         let body_kind: i32 = load_i32(entry_ptr + 12);
+        let locals_count: i32 = load_i32(entry_ptr + 20);
+        let locals_decl_size: i32 = if locals_count > 0 {
+            leb_u32_len(1) + leb_u32_len(locals_count) + 1
+        } else {
+            leb_u32_len(0)
+        };
         let mut body_size: i32 = 0;
         if body_kind == 0 {
             let literal_value: i32 = load_i32(entry_ptr + 16);
-            body_size = 1 + 1 + leb_i32_len(literal_value) + 1;
+            body_size = locals_decl_size + 1 + leb_i32_len(literal_value) + 1;
             out = write_u32_leb(base, out, body_size);
-            out = write_u32_leb(base, out, 0);
+            if locals_count > 0 {
+                out = write_u32_leb(base, out, 1);
+                out = write_u32_leb(base, out, locals_count);
+                out = write_byte(base, out, 127);
+            } else {
+                out = write_u32_leb(base, out, 0);
+            };
             out = write_byte(base, out, 65);
             out = write_i32_leb(base, out, literal_value);
             out = write_byte(base, out, 11);
@@ -1971,9 +2708,15 @@ fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
                     args_size = args_size + arg_size;
                     arg_idx = arg_idx + 1;
                 };
-                body_size = 1 + args_size + 1 + leb_u32_len(callee_index) + 1;
+                body_size = locals_decl_size + args_size + 1 + leb_u32_len(callee_index) + 1;
                 out = write_u32_leb(base, out, body_size);
-                out = write_u32_leb(base, out, 0);
+                if locals_count > 0 {
+                    out = write_u32_leb(base, out, 1);
+                    out = write_u32_leb(base, out, locals_count);
+                    out = write_byte(base, out, 127);
+                } else {
+                    out = write_u32_leb(base, out, 0);
+                };
                 let mut emit_idx: i32 = 0;
                 loop {
                     if emit_idx >= arg_count {
@@ -1995,9 +2738,15 @@ fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
                 if expr_size < 0 {
                     return -1;
                 };
-                body_size = 1 + expr_size + 1;
+                body_size = locals_decl_size + expr_size + 1;
                 out = write_u32_leb(base, out, body_size);
-                out = write_u32_leb(base, out, 0);
+                if locals_count > 0 {
+                    out = write_u32_leb(base, out, 1);
+                    out = write_u32_leb(base, out, locals_count);
+                    out = write_byte(base, out, 127);
+                } else {
+                    out = write_u32_leb(base, out, 0);
+                };
                 out = emit_expression(base, out, ast_base, expr_index);
                 if out < 0 {
                     return -1;
