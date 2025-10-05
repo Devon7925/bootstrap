@@ -396,3 +396,73 @@ fn main() -> i32 {
     let result = run_wasm_main(&engine, &wasm);
     assert_eq!(result, 10);
 }
+
+#[test]
+fn ast_compiler_compiles_if_with_literal_condition() {
+    let source = r#"
+fn main() -> i32 {
+    if 1 {
+        42
+    } else {
+        0
+    }
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 42);
+}
+
+#[test]
+fn ast_compiler_compiles_if_else_with_parameter_condition() {
+    let source = r#"
+fn choose(flag: i32) -> i32 {
+    if flag {
+        10
+    } else {
+        20
+    }
+}
+
+fn main() -> i32 {
+    choose(0)
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 20);
+}
+
+#[test]
+fn ast_compiler_compiles_nested_if_expressions() {
+    let source = r#"
+fn pick(a: i32, b: i32) -> i32 {
+    if a {
+        if b {
+            1
+        } else {
+            2
+        }
+    } else {
+        if b {
+            3
+        } else {
+            4
+        }
+    }
+}
+
+fn main() -> i32 {
+    pick(0, 1) + pick(1, 0) * 10
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 23);
+}
