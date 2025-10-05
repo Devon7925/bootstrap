@@ -249,6 +249,93 @@ fn main() -> i32 {
 }
 
 #[test]
+fn ast_compiler_compiles_literal_multiplication() {
+    let source = r#"
+fn main() -> i32 {
+    6 * 7
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 42);
+}
+
+#[test]
+fn ast_compiler_compiles_multiplication_with_function_call() {
+    let source = r#"
+fn helper() -> i32 {
+    6
+}
+
+fn main() -> i32 {
+    helper() * 7
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 42);
+}
+
+#[test]
+fn ast_compiler_compiles_literal_division() {
+    let source = r#"
+fn main() -> i32 {
+    126 / 3
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 42);
+}
+
+#[test]
+fn ast_compiler_respects_multiplication_precedence() {
+    let source = r#"
+fn main() -> i32 {
+    2 + 3 * 4
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 14);
+}
+
+#[test]
+fn ast_compiler_rejects_unknown_function_in_multiplication() {
+    let source = r#"
+fn main() -> i32 {
+    3 * missing()
+}
+"#;
+
+    let error = try_compile_with_ast_compiler(source)
+        .expect_err("ast compiler should reject unknown calls in multiplication expressions");
+    assert!(error.produced_len <= 0);
+}
+
+#[test]
+fn ast_compiler_honors_parentheses_with_multiplication() {
+    let source = r#"
+fn main() -> i32 {
+    (2 + 3) * 4
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 20);
+}
+
+#[test]
 fn ast_compiler_compiles_mixed_addition_and_subtraction() {
     let source = r#"
 fn main() -> i32 {
