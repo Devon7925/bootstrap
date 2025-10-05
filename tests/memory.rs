@@ -1,7 +1,7 @@
-#[path = "stage1_helpers.rs"]
-mod stage1_helpers;
+#[path = "ast_compiler_helpers.rs"]
+mod ast_compiler_helpers;
 
-use stage1_helpers::compile_with_stage1;
+use ast_compiler_helpers::compile_with_ast_compiler;
 use wasmi::{Engine, Linker, Memory, Module, Store, TypedFunc};
 
 #[test]
@@ -16,7 +16,7 @@ fn main() -> i32 {
 }
 "#;
 
-    let wasm = compile_with_stage1(source);
+    let wasm = compile_with_ast_compiler(source);
 
     let engine = Engine::default();
     let module = Module::new(&engine, wasm.as_slice()).expect("failed to build module");
@@ -63,7 +63,7 @@ fn main() -> i32 {
 }
 "#;
 
-    let wasm = compile_with_stage1(source);
+    let wasm = compile_with_ast_compiler(source);
 
     let engine = Engine::default();
     let module = Module::new(&engine, wasm.as_slice()).expect("failed to build module");
@@ -108,7 +108,7 @@ fn main() -> i32 {
 }
 "#;
 
-    let wasm = compile_with_stage1(source);
+    let wasm = compile_with_ast_compiler(source);
 
     let engine = Engine::default();
     let module = Module::new(&engine, wasm.as_slice()).expect("failed to build module");
@@ -156,7 +156,7 @@ fn main() -> i32 {
 }
 "#;
 
-    let wasm = compile_with_stage1(source);
+    let wasm = compile_with_ast_compiler(source);
 
     let engine = Engine::default();
     let module = Module::new(&engine, wasm.as_slice()).expect("failed to build module");
@@ -190,7 +190,7 @@ fn main() -> i32 {
 }
 "#;
 
-    let wasm = compile_with_stage1(source);
+    let wasm = compile_with_ast_compiler(source);
 
     let engine = Engine::default();
     let module = Module::new(&engine, wasm.as_slice()).expect("failed to build module");

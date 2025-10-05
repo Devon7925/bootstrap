@@ -1,7 +1,7 @@
-#[path = "stage1_helpers.rs"]
-mod stage1_helpers;
+#[path = "ast_compiler_helpers.rs"]
+mod ast_compiler_helpers;
 
-use stage1_helpers::{compile_with_stage1, try_compile_with_stage1};
+use ast_compiler_helpers::{compile_with_ast_compiler, try_compile_with_ast_compiler};
 use wasmi::{Engine, Linker, Module, Store, TypedFunc};
 
 #[test]
@@ -22,7 +22,7 @@ fn main() -> i32 {
 }
 "#;
 
-    let wasm = compile_with_stage1(source);
+    let wasm = compile_with_ast_compiler(source);
 
     let engine = Engine::default();
     let mut wasm_reader = wasm.as_slice();
@@ -73,7 +73,7 @@ fn main() -> i32 {
 }
 "#;
 
-    let error = try_compile_with_stage1(source)
+    let error = try_compile_with_ast_compiler(source)
         .expect_err("expected float remainder to be rejected");
     assert!(error.produced_len <= 0);
 }
