@@ -1,0 +1,208 @@
+fn write_byte(base: i32, offset: i32, value: i32) -> i32 {
+    store_u8(base + offset, value & 255);
+    offset + 1
+}
+
+fn write_u32_leb(base: i32, offset: i32, value: i32) -> i32 {
+    let mut remaining: i32 = value;
+    let mut out: i32 = offset;
+    loop {
+        let mut byte: i32 = remaining & 127;
+        remaining = remaining >> 7;
+        if remaining != 0 {
+            byte = byte | 128;
+        };
+        out = write_byte(base, out, byte);
+        if remaining == 0 {
+            break;
+        };
+    };
+    out
+}
+
+fn write_i32_leb(base: i32, offset: i32, value: i32) -> i32 {
+    let mut remaining: i32 = value;
+    let mut out: i32 = offset;
+    loop {
+        let byte: i32 = remaining & 127;
+        remaining = remaining >> 7;
+        let sign_bit: i32 = byte & 64;
+        let done: bool = (remaining == 0 && sign_bit == 0) || (remaining == -1 && sign_bit != 0);
+        let mut out_byte: i32 = byte;
+        if !done {
+            out_byte = out_byte | 128;
+        };
+        out = write_byte(base, out, out_byte);
+        if done {
+            break;
+        };
+    };
+    out
+}
+
+fn leb_u32_len(value: i32) -> i32 {
+    let mut remaining: i32 = value;
+    let mut count: i32 = 0;
+    loop {
+        count = count + 1;
+        remaining = remaining >> 7;
+        if remaining == 0 {
+            break;
+        };
+    };
+    count
+}
+
+fn leb_i32_len(value: i32) -> i32 {
+    let mut remaining: i32 = value;
+    let mut count: i32 = 0;
+    loop {
+        let byte: i32 = remaining & 127;
+        remaining = remaining >> 7;
+        let sign_bit: i32 = byte & 64;
+        let done: bool = (remaining == 0 && sign_bit == 0) || (remaining == -1 && sign_bit != 0);
+        count = count + 1;
+        if done {
+            break;
+        };
+    };
+    count
+}
+
+fn write_magic(base: i32, offset: i32) -> i32 {
+    let mut out: i32 = offset;
+    out = write_byte(base, out, 0);
+    out = write_byte(base, out, 97);
+    out = write_byte(base, out, 115);
+    out = write_byte(base, out, 109);
+    out = write_byte(base, out, 1);
+    out = write_byte(base, out, 0);
+    out = write_byte(base, out, 0);
+    out = write_byte(base, out, 0);
+    out
+}
+
+fn is_whitespace(byte: i32) -> bool {
+    byte == 32 || byte == 9 || byte == 10 || byte == 13
+}
+
+fn skip_whitespace(base: i32, len: i32, offset: i32) -> i32 {
+    let mut idx: i32 = offset;
+    loop {
+        if idx >= len {
+            break;
+        };
+        let byte: i32 = load_u8(base + idx);
+        if byte == 47 {
+            if idx + 1 < len {
+                let next: i32 = load_u8(base + idx + 1);
+                if next == 47 {
+                    idx = idx + 2;
+                    loop {
+                        if idx >= len {
+                            break;
+                        };
+                        let comment_byte: i32 = load_u8(base + idx);
+                        if comment_byte == 10 {
+                            idx = idx + 1;
+                            break;
+                        };
+                        idx = idx + 1;
+                    };
+                    continue;
+                };
+            };
+        };
+        if !is_whitespace(byte) {
+            break;
+        };
+        idx = idx + 1;
+    };
+    idx
+}
+
+fn expect_char(base: i32, len: i32, offset: i32, expected: i32) -> i32 {
+    if offset >= len {
+        return -1;
+    };
+    let byte: i32 = load_u8(base + offset);
+    if byte != expected {
+        return -1;
+    };
+    offset + 1
+}
+
+fn is_identifier_start(byte: i32) -> bool {
+    (byte >= 65 && byte <= 90) || (byte >= 97 && byte <= 122) || byte == 95
+}
+
+fn is_digit(byte: i32) -> bool {
+    byte >= 48 && byte <= 57
+}
+
+fn is_identifier_continue(byte: i32) -> bool {
+    is_identifier_start(byte) || is_digit(byte)
+}
+
+fn expect_keyword_fn(base: i32, len: i32, offset: i32) -> i32 {
+    if offset + 1 >= len {
+        return -1;
+    };
+    let first: i32 = load_u8(base + offset);
+    let second: i32 = load_u8(base + offset + 1);
+    if first != 102 || second != 110 {
+        return -1;
+    };
+    let next: i32 = offset + 2;
+    if next < len {
+        let after: i32 = load_u8(base + next);
+        if is_identifier_continue(after) {
+            return -1;
+        };
+    };
+    next
+}
+
+fn expect_keyword_if(base: i32, len: i32, offset: i32) -> i32 {
+    if offset + 1 >= len {
+        return -1;
+    };
+    let first: i32 = load_u8(base + offset);
+    let second: i32 = load_u8(base + offset + 1);
+    if first != 105 || second != 102 {
+        return -1;
+    };
+    let next: i32 = offset + 2;
+    if next < len {
+        let after: i32 = load_u8(base + next);
+        if is_identifier_continue(after) {
+            return -1;
+        };
+    };
+    next
+}
+
+fn expect_keyword_true(base: i32, len: i32, offset: i32) -> i32 {
+    if offset + 4 > len {
+        return -1;
+    };
+    let t: i32 = load_u8(base + offset);
+    let r: i32 = load_u8(base + offset + 1);
+    let u: i32 = load_u8(base + offset + 2);
+    let e: i32 = load_u8(base + offset + 3);
+    if t != 116 || r != 114 || u != 117 || e != 101 {
+        return -1;
+    };
+    let next: i32 = offset + 4;
+    if next < len {
+        let after: i32 = load_u8(base + next);
+        if is_identifier_continue(after) {
+            return -1;
+        };
+    };
+    next
+}
+
+fn main() -> i32 {
+    0
+}
