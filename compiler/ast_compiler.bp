@@ -379,7 +379,7 @@ fn parse_identifier(base: i32, len: i32, offset: i32, out_start_ptr: i32, out_le
 }
 
 fn max_params() -> i32 {
-    16
+    64
 }
 
 fn intrinsic_kind_none() -> i32 {
@@ -708,7 +708,7 @@ fn expect_keyword_let(base: i32, len: i32, offset: i32) -> i32 {
 }
 
 fn max_locals() -> i32 {
-    64
+    512
 }
 
 fn locals_entry_size() -> i32 {
@@ -785,7 +785,7 @@ fn block_statement_entry_size() -> i32 {
 }
 
 fn block_statements_capacity() -> i32 {
-    128
+    512
 }
 
 fn parse_block_expression_body(
@@ -807,6 +807,7 @@ fn parse_block_expression_body(
     out_kind_ptr: i32,
     out_data0_ptr: i32,
     out_data1_ptr: i32,
+    out_value_status_ptr: i32,
 ) -> i32 {
     let saved_stack_count: i32 = load_i32(locals_stack_count_ptr);
     let saved_next_index: i32 = load_i32(locals_next_index_ptr);
@@ -821,13 +822,15 @@ fn parse_block_expression_body(
     let stmt_expr_kind_ptr: i32 = statements_end;
     let stmt_expr_data0_ptr: i32 = stmt_expr_kind_ptr + 4;
     let stmt_expr_data1_ptr: i32 = stmt_expr_kind_ptr + 8;
-    let stmt_nested_temp_base: i32 = stmt_expr_kind_ptr + 32;
+    let stmt_expr_value_status_ptr: i32 = stmt_expr_kind_ptr + 12;
+    let stmt_nested_temp_base: i32 = stmt_expr_kind_ptr + 64;
 
     let allow_empty_value: bool = allow_empty_final_expr != 0;
     let mut have_value_expr: bool = false;
     let mut final_kind: i32 = -1;
     let mut final_data0: i32 = 0;
     let mut final_data1: i32 = 0;
+    store_i32(out_value_status_ptr, 0);
 
     loop {
         idx = skip_whitespace(base, len, idx);
@@ -1230,6 +1233,7 @@ fn parse_block_expression_body(
             final_kind = 23;
             final_data0 = return_expr_index;
             final_data1 = 0;
+            store_i32(out_value_status_ptr, 1);
             idx = skip_whitespace(base, len, after_return);
             continue;
         };
@@ -1264,6 +1268,7 @@ fn parse_block_expression_body(
                 stmt_expr_kind_ptr,
                 stmt_expr_data0_ptr,
                 stmt_expr_data1_ptr,
+                stmt_expr_value_status_ptr,
             );
             if after_loop < 0 {
                 store_i32(loop_depth_ptr, saved_loop_depth);
@@ -1499,10 +1504,17 @@ fn parse_block_expression_body(
             continue;
         };
 
+        let expr_metadata: i32 = load_i32(stmt_expr_data1_ptr);
+        if expr_metadata < 0 {
+            store_i32(locals_stack_count_ptr, saved_stack_count);
+            store_i32(locals_next_index_ptr, saved_next_index);
+            return -1;
+        };
         have_value_expr = true;
         final_kind = expr_kind;
         final_data0 = expr_data0;
         final_data1 = expr_data1;
+        store_i32(out_value_status_ptr, 1);
         idx = next_cursor;
     };
 
@@ -1697,7 +1709,7 @@ fn scratch_types_base(out_ptr: i32) -> i32 {
 }
 
 fn ast_max_functions() -> i32 {
-    16
+    256
 }
 
 fn ast_function_entry_size() -> i32 {
@@ -1705,11 +1717,11 @@ fn ast_function_entry_size() -> i32 {
 }
 
 fn ast_names_capacity() -> i32 {
-    512
+    8192
 }
 
 fn ast_call_data_capacity() -> i32 {
-    512
+    8192
 }
 
 fn ast_program_base(out_ptr: i32) -> i32 {
@@ -1830,7 +1842,7 @@ fn ast_expr_entry_size() -> i32 {
 }
 
 fn ast_expr_capacity() -> i32 {
-    256
+    8192
 }
 
 fn ast_expr_count_ptr(ast_base: i32) -> i32 {
@@ -2058,6 +2070,7 @@ fn parse_basic_expression(
     };
     let first_byte: i32 = load_u8(base + cursor);
     if first_byte == 123 {
+        let block_status_ptr: i32 = nested_temp_base + 4096;
         let block_cursor: i32 = parse_block_expression_body(
             base,
             len,
@@ -2077,6 +2090,7 @@ fn parse_basic_expression(
             out_kind_ptr,
             out_data0_ptr,
             out_data1_ptr,
+            block_status_ptr,
         );
         if block_cursor < 0 {
             return -1;
@@ -2092,12 +2106,14 @@ fn parse_basic_expression(
             let then_kind_ptr: i32 = nested_temp_base + 12;
             let then_data0_ptr: i32 = nested_temp_base + 16;
             let then_data1_ptr: i32 = nested_temp_base + 20;
-            let else_kind_ptr: i32 = nested_temp_base + 24;
-            let else_data0_ptr: i32 = nested_temp_base + 28;
-            let else_data1_ptr: i32 = nested_temp_base + 32;
-            let cond_nested_base: i32 = nested_temp_base + 128;
-            let then_nested_base: i32 = nested_temp_base + 256;
-            let else_nested_base: i32 = nested_temp_base + 384;
+            let then_status_ptr: i32 = nested_temp_base + 24;
+            let else_kind_ptr: i32 = nested_temp_base + 28;
+            let else_data0_ptr: i32 = nested_temp_base + 32;
+            let else_data1_ptr: i32 = nested_temp_base + 36;
+            let else_status_ptr: i32 = nested_temp_base + 40;
+            let cond_nested_base: i32 = nested_temp_base + 160;
+            let then_nested_base: i32 = nested_temp_base + 320;
+            let else_nested_base: i32 = nested_temp_base + 480;
             if_cursor = skip_whitespace(base, len, if_cursor);
             if_cursor = parse_expression(
                 base,
@@ -2137,11 +2153,12 @@ fn parse_basic_expression(
                 ident_start_ptr,
                 ident_len_ptr,
                 then_nested_base,
-                0,
+                1,
                 loop_depth_ptr,
                 then_kind_ptr,
                 then_data0_ptr,
                 then_data1_ptr,
+                then_status_ptr,
             );
             if if_cursor < 0 {
                 return -1;
@@ -2149,6 +2166,7 @@ fn parse_basic_expression(
             store_i32(else_kind_ptr, 0);
             store_i32(else_data0_ptr, 0);
             store_i32(else_data1_ptr, 0);
+            store_i32(else_status_ptr, 1);
             store_i32(literal_ptr, if_cursor);
             if_cursor = expect_keyword_else(base, len, if_cursor);
             if if_cursor >= 0 {
@@ -2171,11 +2189,12 @@ fn parse_basic_expression(
                     ident_start_ptr,
                     ident_len_ptr,
                     else_nested_base,
-                    0,
+                    1,
                     loop_depth_ptr,
                     else_kind_ptr,
                     else_data0_ptr,
                     else_data1_ptr,
+                    else_status_ptr,
                 );
                 if if_cursor < 0 {
                     return -1;
@@ -2207,13 +2226,20 @@ fn parse_basic_expression(
             if else_index < 0 {
                 return -1;
             };
+            let then_has_value: i32 = load_i32(then_status_ptr);
+            let else_has_value: i32 = load_i32(else_status_ptr);
             let if_index: i32 = ast_expr_alloc_if(ast_base, cond_index, then_index, else_index);
             if if_index < 0 {
                 return -1;
             };
             store_i32(out_kind_ptr, 2);
             store_i32(out_data0_ptr, if_index);
-            store_i32(out_data1_ptr, 0);
+            let both_have_values: i32 = if then_has_value != 0 && else_has_value != 0 {
+                0
+            } else {
+                -1
+            };
+            store_i32(out_data1_ptr, both_have_values);
             return skip_whitespace(base, len, if_cursor);
         };
     };
@@ -3720,18 +3746,29 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     store_i32(locals_next_index_ptr, 0);
     cursor = skip_whitespace(base, len, cursor);
 
-    cursor = expect_char(base, len, cursor, 45);
-    if cursor < 0 {
-        return -1;
+    let mut block_allow_empty: i32 = 0;
+    let mut has_return_type: bool = false;
+    if cursor < len {
+        let maybe_arrow: i32 = load_u8(base + cursor);
+        if maybe_arrow == 45 {
+            has_return_type = true;
+            cursor = expect_char(base, len, cursor, 45);
+            if cursor < 0 {
+                return -1;
+            };
+            cursor = expect_char(base, len, cursor, 62);
+            if cursor < 0 {
+                return -1;
+            };
+            cursor = skip_whitespace(base, len, cursor);
+            cursor = parse_type(base, len, cursor, -1);
+            if cursor < 0 {
+                return -1;
+            };
+        };
     };
-    cursor = expect_char(base, len, cursor, 62);
-    if cursor < 0 {
-        return -1;
-    };
-    cursor = skip_whitespace(base, len, cursor);
-    cursor = parse_type(base, len, cursor, -1);
-    if cursor < 0 {
-        return -1;
+    if !has_return_type {
+        block_allow_empty = 1;
     };
 
     cursor = skip_whitespace(base, len, cursor);
@@ -3743,8 +3780,9 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     let block_literal_ptr: i32 = expr_temp_base;
     let block_ident_start_ptr: i32 = expr_temp_base + 4;
     let block_ident_len_ptr: i32 = expr_temp_base + 8;
-    let loop_depth_ptr: i32 = expr_temp_base + 12;
-    let block_temp_base: i32 = expr_temp_base + 32;
+    let block_value_status_ptr: i32 = expr_temp_base + 12;
+    let loop_depth_ptr: i32 = expr_temp_base + 16;
+    let block_temp_base: i32 = expr_temp_base + 48;
 
     store_i32(loop_depth_ptr, 0);
     cursor = parse_block_expression_body(
@@ -3761,11 +3799,12 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
         block_ident_start_ptr,
         block_ident_len_ptr,
         block_temp_base,
-        0,
+        block_allow_empty,
         loop_depth_ptr,
         expr_kind_ptr,
         expr_data0_ptr,
         expr_data1_ptr,
+        block_value_status_ptr,
     );
     if cursor < 0 {
         return -1;
