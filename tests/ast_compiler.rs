@@ -189,6 +189,34 @@ fn main() -> i32 {
 }
 
 #[test]
+fn ast_compiler_supports_boolean_types_and_literals() {
+    let source = r#"
+fn invert(flag: bool) -> bool {
+    if flag {
+        false
+    } else {
+        true
+    }
+}
+
+fn main() -> i32 {
+    let truth: bool = true;
+    let falsity: bool = invert(truth);
+    if falsity {
+        0
+    } else {
+        1
+    }
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 1);
+}
+
+#[test]
 fn ast_compiler_compiles_addition_with_function_call() {
     let source = r#"
 fn helper() -> i32 {
