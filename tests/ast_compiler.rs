@@ -439,6 +439,42 @@ fn main() -> i32 {
 }
 
 #[test]
+fn ast_compiler_supports_return_statements() {
+    let source = r#"
+fn choose(flag: i32) -> i32 {
+    if flag {
+        return 10;
+    } else {
+        return 20;
+    }
+}
+
+fn accumulate(limit: i32) -> i32 {
+    let mut total: i32 = 0;
+    let mut current: i32 = limit;
+    loop {
+        if current <= 0 {
+            return total;
+        } else {
+            total = total + current;
+            current = current - 1;
+            0
+        };
+    }
+}
+
+fn main() -> i32 {
+    choose(1) + choose(0) + accumulate(3)
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 36);
+}
+
+#[test]
 fn ast_compiler_rejects_break_outside_loop() {
     let source = r#"
 fn main() -> i32 {
