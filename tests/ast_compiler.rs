@@ -207,6 +207,111 @@ fn main() -> i32 {
 }
 
 #[test]
+fn ast_compiler_supports_loop_and_break() {
+    let source = r#"
+fn sum_up_to(limit: i32) -> i32 {
+    let mut total: i32 = 0;
+    let mut count: i32 = 0;
+    let mut remaining: i32 = limit;
+    loop {
+        if remaining {
+            total = total + count;
+            count = count + 1;
+            remaining = remaining - 1;
+            0
+        } else {
+            break;
+            0
+        };
+    }
+    total
+}
+
+fn main() -> i32 {
+    sum_up_to(5)
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 10);
+}
+
+#[test]
+fn ast_compiler_loop_break_value_returns() {
+    let source = r#"
+fn choose() -> i32 {
+    loop {
+        break 42;
+    }
+}
+
+fn main() -> i32 {
+    choose()
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 42);
+}
+
+#[test]
+fn ast_compiler_nested_loops_break_with_values() {
+    let source = r#"
+fn nested(limit: i32) -> i32 {
+    let mut outer: i32 = limit;
+    let mut total: i32 = 0;
+    loop {
+        if outer {
+            let mut inner: i32 = outer;
+            loop {
+                if inner {
+                    total = total + outer;
+                    inner = inner - 1;
+                    0
+                } else {
+                    break;
+                    0
+                };
+            }
+            outer = outer - 1;
+            0
+        } else {
+            break total;
+            0
+        };
+    }
+}
+
+fn main() -> i32 {
+    nested(3)
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 14);
+}
+
+#[test]
+fn ast_compiler_rejects_break_outside_loop() {
+    let source = r#"
+fn main() -> i32 {
+    break;
+    0
+}
+"#;
+
+    let error = try_compile_with_ast_compiler(source)
+        .expect_err("break outside loop should be rejected");
+    assert!(error.produced_len <= 0);
+}
+
+#[test]
 fn ast_compiler_rejects_unknown_function_in_addition() {
     let source = r#"
 fn main() -> i32 {
