@@ -17,8 +17,6 @@ being able to compile its own source:
 - **Bitwise operators and shifts.** Encoding LEB128 values depends on `&`, `|`,
   and `>>`, operations that the expression allocator does not currently
   support.【F:compiler/ast_compiler.bp†L23-L68】【F:compiler/ast_compiler.bp†L1339-L1413】
-- **`continue` statements.** Loop bodies (such as comment skipping) use
-  `continue;`, a control-flow form that the parser does not yet handle.【F:compiler/ast_compiler.bp†L89-L119】【F:compiler/ast_compiler.bp†L440-L803】
 - **`return` statements.** Nearly every helper exits early with `return ...;`,
   so emitting function bodies requires first-class support for explicit returns
   instead of only relying on final block expressions.【F:compiler/ast_compiler.bp†L124-L132】【F:compiler/ast_compiler.bp†L440-L803】
