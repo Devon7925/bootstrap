@@ -1744,11 +1744,11 @@ fn ast_function_entry_size() -> i32 {
 }
 
 fn ast_names_capacity() -> i32 {
-    8192
+    65536
 }
 
 fn ast_call_data_capacity() -> i32 {
-    8192
+    65536
 }
 
 fn ast_program_base(out_ptr: i32) -> i32 {
@@ -1869,7 +1869,7 @@ fn ast_expr_entry_size() -> i32 {
 }
 
 fn ast_expr_capacity() -> i32 {
-    8192
+    65536
 }
 
 fn ast_expr_count_ptr(ast_base: i32) -> i32 {
