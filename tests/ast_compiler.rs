@@ -466,3 +466,105 @@ fn main() -> i32 {
     let result = run_wasm_main(&engine, &wasm);
     assert_eq!(result, 23);
 }
+
+#[test]
+fn ast_compiler_compiles_functions_with_local_variables() {
+    let source = r#"
+fn compute() -> i32 {
+    let base: i32 = 40;
+    let mut total: i32 = base + 1;
+    total = total + 1;
+    total
+}
+
+fn main() -> i32 {
+    compute()
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 42);
+}
+
+#[test]
+fn ast_compiler_scopes_locals_to_blocks() {
+    let source = r#"
+fn main() -> i32 {
+    let outer: i32 = 5;
+    {
+        let inner: i32 = outer + 10;
+        inner
+    } + outer
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 20);
+}
+
+#[test]
+fn ast_compiler_allows_shadowing_locals_in_nested_blocks() {
+    let source = r#"
+fn main() -> i32 {
+    let value: i32 = 5;
+    {
+        let value: i32 = value + 1;
+        value
+    }
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 6);
+}
+
+#[test]
+fn ast_compiler_rejects_use_of_out_of_scope_local() {
+    let source = r#"
+fn main() -> i32 {
+    {
+        let inner: i32 = 5;
+        inner
+    };
+    inner
+}
+"#;
+
+    let error = try_compile_with_ast_compiler(source)
+        .expect_err("ast compiler should reject references to out-of-scope locals");
+    assert!(error.produced_len <= 0);
+}
+
+#[test]
+fn ast_compiler_rejects_assignment_to_immutable_local() {
+    let source = r#"
+fn main() -> i32 {
+    let value: i32 = 1;
+    value = 2;
+    value
+}
+"#;
+
+    let error = try_compile_with_ast_compiler(source)
+        .expect_err("ast compiler should reject assignment to immutable locals");
+    assert!(error.produced_len <= 0);
+}
+
+#[test]
+fn ast_compiler_requires_block_to_have_final_expression() {
+    let source = r#"
+fn main() -> i32 {
+    let value: i32 = 1;
+}
+"#;
+
+    let error = try_compile_with_ast_compiler(source)
+        .expect_err("ast compiler should reject blocks without a final expression");
+    assert!(error.produced_len <= 0);
+}
