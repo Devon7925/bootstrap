@@ -205,6 +205,50 @@ fn main() -> i32 {
 }
 
 #[test]
+fn loop_allows_final_if_without_semicolon() {
+    let source = r#"
+fn loop_with_final_if(limit: i32) -> i32 {
+    let mut value: i32 = 0;
+    loop {
+        if value >= limit {
+            break;
+        };
+        value = value + 1;
+        if value == limit {
+            break;
+        }
+    }
+    value
+}
+
+fn main() -> i32 {
+    loop_with_final_if(4)
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+
+    let engine = Engine::default();
+    let mut wasm_reader = wasm.as_slice();
+    let module = Module::new(&engine, &mut wasm_reader).expect("failed to create module");
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = linker
+        .instantiate(&mut store, &module)
+        .expect("failed to instantiate module")
+        .start(&mut store)
+        .expect("failed to start module");
+
+    let main: TypedFunc<(), i32> = instance
+        .get_typed_func(&mut store, "main")
+        .expect("expected exported main");
+
+    let result = main.call(&mut store, ()).expect("failed to execute main");
+
+    assert_eq!(result, 4);
+}
+
+#[test]
 fn while_break_cannot_carry_values() {
     let source = r#"
 fn bad() {

@@ -1506,6 +1506,33 @@ fn parse_block_expression_body(
 
         let expr_metadata: i32 = load_i32(stmt_expr_data1_ptr);
         if expr_metadata < 0 {
+            if allow_empty_value {
+                if next_cursor < len {
+                    let after_byte: i32 = load_u8(base + next_cursor);
+                    if after_byte == 125 {
+                        let expr_index: i32 =
+                            expression_node_from_parts(ast_base, expr_kind, expr_data0, expr_data1);
+                        if expr_index < 0 {
+                            store_i32(locals_stack_count_ptr, saved_stack_count);
+                            store_i32(locals_next_index_ptr, saved_next_index);
+                            return -1;
+                        };
+                        let stmt_count: i32 = load_i32(statement_count_ptr);
+                        if stmt_count >= statements_capacity {
+                            store_i32(locals_stack_count_ptr, saved_stack_count);
+                            store_i32(locals_next_index_ptr, saved_next_index);
+                            return -1;
+                        };
+                        let stmt_ptr: i32 = statements_base + stmt_count * statement_entry_size;
+                        store_i32(stmt_ptr, 1);
+                        store_i32(stmt_ptr + 4, expr_index);
+                        store_i32(stmt_ptr + 8, 0);
+                        store_i32(statement_count_ptr, stmt_count + 1);
+                        idx = next_cursor;
+                        continue;
+                    };
+                };
+            };
             store_i32(locals_stack_count_ptr, saved_stack_count);
             store_i32(locals_next_index_ptr, saved_next_index);
             return -1;
