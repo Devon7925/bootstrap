@@ -1865,37 +1865,42 @@ fn parse_basic_expression(
             if if_cursor < 0 {
                 return -1;
             };
+            store_i32(else_kind_ptr, 0);
+            store_i32(else_data0_ptr, 0);
+            store_i32(else_data1_ptr, 0);
+            store_i32(literal_ptr, if_cursor);
             if_cursor = expect_keyword_else(base, len, if_cursor);
-            if if_cursor < 0 {
-                return -1;
-            };
-            if_cursor = skip_whitespace(base, len, if_cursor);
-            if_cursor = expect_char(base, len, if_cursor, 123);
-            if if_cursor < 0 {
-                return -1;
-            };
-            if_cursor = parse_block_expression_body(
-                base,
-                len,
-                if_cursor,
-                ast_base,
-                params_table_ptr,
-                params_count,
-                locals_table_ptr,
-                locals_stack_count_ptr,
-                locals_next_index_ptr,
-                literal_ptr,
-                ident_start_ptr,
-                ident_len_ptr,
-                else_nested_base,
-                0,
-                loop_depth_ptr,
-                else_kind_ptr,
-                else_data0_ptr,
-                else_data1_ptr,
-            );
-            if if_cursor < 0 {
-                return -1;
+            if if_cursor >= 0 {
+                if_cursor = skip_whitespace(base, len, if_cursor);
+                if_cursor = expect_char(base, len, if_cursor, 123);
+                if if_cursor < 0 {
+                    return -1;
+                };
+                if_cursor = parse_block_expression_body(
+                    base,
+                    len,
+                    if_cursor,
+                    ast_base,
+                    params_table_ptr,
+                    params_count,
+                    locals_table_ptr,
+                    locals_stack_count_ptr,
+                    locals_next_index_ptr,
+                    literal_ptr,
+                    ident_start_ptr,
+                    ident_len_ptr,
+                    else_nested_base,
+                    0,
+                    loop_depth_ptr,
+                    else_kind_ptr,
+                    else_data0_ptr,
+                    else_data1_ptr,
+                );
+                if if_cursor < 0 {
+                    return -1;
+                };
+            } else {
+                if_cursor = load_i32(literal_ptr);
             };
             let cond_kind: i32 = load_i32(cond_kind_ptr);
             let cond_data0: i32 = load_i32(cond_data0_ptr);
