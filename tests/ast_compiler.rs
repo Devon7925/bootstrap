@@ -330,6 +330,36 @@ fn main() -> i32 {
 }
 
 #[test]
+fn ast_compiler_supports_bitwise_operations_and_shifts() {
+    let source = r#"
+fn evaluate(a: i32, b: i32, shift: i32) -> i32 {
+    let mask: i32 = (a & b) | ((a | b) >> shift);
+    (mask << 1) + (a >> shift)
+}
+
+fn main() -> i32 {
+    let first: i32 = evaluate(29, 23, 2);
+    let second: i32 = evaluate(-64, 7, 3);
+    first + second
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+
+    let expected = {
+        let eval = |a: i32, b: i32, shift: i32| {
+            let mask = (a & b) | ((a | b) >> shift);
+            (mask << 1) + (a >> shift)
+        };
+        eval(29, 23, 2) + eval(-64, 7, 3)
+    };
+
+    assert_eq!(result, expected);
+}
+
+#[test]
 fn ast_compiler_compiles_addition_with_function_call() {
     let source = r#"
 fn helper() -> i32 {

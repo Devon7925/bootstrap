@@ -1635,6 +1635,22 @@ fn ast_expr_alloc_div(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
     ast_expr_alloc(ast_base, 5, left_index, right_index, 0)
 }
 
+fn ast_expr_alloc_bitwise_or(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
+    ast_expr_alloc(ast_base, 25, left_index, right_index, 0)
+}
+
+fn ast_expr_alloc_bitwise_and(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
+    ast_expr_alloc(ast_base, 26, left_index, right_index, 0)
+}
+
+fn ast_expr_alloc_shl(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
+    ast_expr_alloc(ast_base, 27, left_index, right_index, 0)
+}
+
+fn ast_expr_alloc_shr_s(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
+    ast_expr_alloc(ast_base, 28, left_index, right_index, 0)
+}
+
 fn ast_expr_alloc_eq(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
     ast_expr_alloc(ast_base, 14, left_index, right_index, 0)
 }
@@ -2411,7 +2427,7 @@ fn parse_additive_expression(
     current_cursor
 }
 
-fn parse_relational_expression(
+fn parse_shift_expression(
     base: i32,
     len: i32,
     cursor: i32,
@@ -2429,6 +2445,120 @@ fn parse_relational_expression(
 ) -> i32 {
     let nested_temp_base: i32 = temp_base + 32;
     let mut current_cursor: i32 = parse_additive_expression(
+        base,
+        len,
+        cursor,
+        ast_base,
+        params_table_ptr,
+        params_count,
+        locals_table_ptr,
+        locals_stack_count_ptr,
+        locals_next_index_ptr,
+        nested_temp_base,
+        loop_depth_ptr,
+        out_kind_ptr,
+        out_data0_ptr,
+        out_data1_ptr,
+    );
+    if current_cursor < 0 {
+        return -1;
+    };
+
+    let next_kind_ptr: i32 = temp_base;
+    let next_data0_ptr: i32 = temp_base + 4;
+    let next_data1_ptr: i32 = temp_base + 8;
+
+    loop {
+        if current_cursor + 1 >= len {
+            break;
+        };
+        let first: i32 = load_u8(base + current_cursor);
+        let second: i32 = load_u8(base + current_cursor + 1);
+        let mut op_kind: i32 = -1;
+        if first == 60 && second == 60 {
+            op_kind = 0;
+        } else {
+            if first == 62 && second == 62 {
+                op_kind = 1;
+            } else {
+                break;
+            };
+        };
+
+        current_cursor = skip_whitespace(base, len, current_cursor + 2);
+        current_cursor = parse_additive_expression(
+            base,
+            len,
+            current_cursor,
+            ast_base,
+            params_table_ptr,
+            params_count,
+            locals_table_ptr,
+            locals_stack_count_ptr,
+            locals_next_index_ptr,
+            nested_temp_base,
+            loop_depth_ptr,
+            next_kind_ptr,
+            next_data0_ptr,
+            next_data1_ptr,
+        );
+        if current_cursor < 0 {
+            return -1;
+        };
+
+        let current_kind: i32 = load_i32(out_kind_ptr);
+        let current_data0: i32 = load_i32(out_data0_ptr);
+        let current_data1: i32 = load_i32(out_data1_ptr);
+        let left_index: i32 =
+            expression_node_from_parts(ast_base, current_kind, current_data0, current_data1);
+        if left_index < 0 {
+            return -1;
+        };
+
+        let right_kind: i32 = load_i32(next_kind_ptr);
+        let right_data0: i32 = load_i32(next_data0_ptr);
+        let right_data1: i32 = load_i32(next_data1_ptr);
+        let right_index: i32 =
+            expression_node_from_parts(ast_base, right_kind, right_data0, right_data1);
+        if right_index < 0 {
+            return -1;
+        };
+
+        let new_index: i32 = if op_kind == 0 {
+            ast_expr_alloc_shl(ast_base, left_index, right_index)
+        } else {
+            ast_expr_alloc_shr_s(ast_base, left_index, right_index)
+        };
+        if new_index < 0 {
+            return -1;
+        };
+
+        store_i32(out_kind_ptr, 2);
+        store_i32(out_data0_ptr, new_index);
+        store_i32(out_data1_ptr, 0);
+    };
+
+    current_cursor
+}
+
+fn parse_relational_expression(
+    base: i32,
+    len: i32,
+    cursor: i32,
+    ast_base: i32,
+    params_table_ptr: i32,
+    params_count: i32,
+    locals_table_ptr: i32,
+    locals_stack_count_ptr: i32,
+    locals_next_index_ptr: i32,
+    temp_base: i32,
+    loop_depth_ptr: i32,
+    out_kind_ptr: i32,
+    out_data0_ptr: i32,
+    out_data1_ptr: i32,
+) -> i32 {
+    let nested_temp_base: i32 = temp_base + 32;
+    let mut current_cursor: i32 = parse_shift_expression(
         base,
         len,
         cursor,
@@ -2679,7 +2809,7 @@ fn parse_equality_expression(
     current_cursor
 }
 
-fn parse_logical_and_expression(
+fn parse_bitwise_and_expression(
     base: i32,
     len: i32,
     cursor: i32,
@@ -2721,6 +2851,222 @@ fn parse_logical_and_expression(
     let next_data1_ptr: i32 = temp_base + 8;
 
     loop {
+        if current_cursor >= len {
+            break;
+        };
+        let operator_byte: i32 = load_u8(base + current_cursor);
+        if operator_byte != 38 {
+            break;
+        };
+        if current_cursor + 1 < len {
+            let next: i32 = load_u8(base + current_cursor + 1);
+            if next == 38 {
+                break;
+            };
+        };
+
+        current_cursor = skip_whitespace(base, len, current_cursor + 1);
+        current_cursor = parse_equality_expression(
+            base,
+            len,
+            current_cursor,
+            ast_base,
+            params_table_ptr,
+            params_count,
+            locals_table_ptr,
+            locals_stack_count_ptr,
+            locals_next_index_ptr,
+            nested_temp_base,
+            loop_depth_ptr,
+            next_kind_ptr,
+            next_data0_ptr,
+            next_data1_ptr,
+        );
+        if current_cursor < 0 {
+            return -1;
+        };
+
+        let current_kind: i32 = load_i32(out_kind_ptr);
+        let current_data0: i32 = load_i32(out_data0_ptr);
+        let current_data1: i32 = load_i32(out_data1_ptr);
+        let left_index: i32 =
+            expression_node_from_parts(ast_base, current_kind, current_data0, current_data1);
+        if left_index < 0 {
+            return -1;
+        };
+
+        let right_kind: i32 = load_i32(next_kind_ptr);
+        let right_data0: i32 = load_i32(next_data0_ptr);
+        let right_data1: i32 = load_i32(next_data1_ptr);
+        let right_index: i32 =
+            expression_node_from_parts(ast_base, right_kind, right_data0, right_data1);
+        if right_index < 0 {
+            return -1;
+        };
+
+        let new_index: i32 = ast_expr_alloc_bitwise_and(ast_base, left_index, right_index);
+        if new_index < 0 {
+            return -1;
+        };
+
+        store_i32(out_kind_ptr, 2);
+        store_i32(out_data0_ptr, new_index);
+        store_i32(out_data1_ptr, 0);
+    };
+
+    current_cursor
+}
+
+fn parse_bitwise_or_expression(
+    base: i32,
+    len: i32,
+    cursor: i32,
+    ast_base: i32,
+    params_table_ptr: i32,
+    params_count: i32,
+    locals_table_ptr: i32,
+    locals_stack_count_ptr: i32,
+    locals_next_index_ptr: i32,
+    temp_base: i32,
+    loop_depth_ptr: i32,
+    out_kind_ptr: i32,
+    out_data0_ptr: i32,
+    out_data1_ptr: i32,
+) -> i32 {
+    let nested_temp_base: i32 = temp_base + 32;
+    let mut current_cursor: i32 = parse_bitwise_and_expression(
+        base,
+        len,
+        cursor,
+        ast_base,
+        params_table_ptr,
+        params_count,
+        locals_table_ptr,
+        locals_stack_count_ptr,
+        locals_next_index_ptr,
+        nested_temp_base,
+        loop_depth_ptr,
+        out_kind_ptr,
+        out_data0_ptr,
+        out_data1_ptr,
+    );
+    if current_cursor < 0 {
+        return -1;
+    };
+
+    let next_kind_ptr: i32 = temp_base;
+    let next_data0_ptr: i32 = temp_base + 4;
+    let next_data1_ptr: i32 = temp_base + 8;
+
+    loop {
+        if current_cursor >= len {
+            break;
+        };
+        let operator_byte: i32 = load_u8(base + current_cursor);
+        if operator_byte != 124 {
+            break;
+        };
+        if current_cursor + 1 < len {
+            let next: i32 = load_u8(base + current_cursor + 1);
+            if next == 124 {
+                break;
+            };
+        };
+
+        current_cursor = skip_whitespace(base, len, current_cursor + 1);
+        current_cursor = parse_bitwise_and_expression(
+            base,
+            len,
+            current_cursor,
+            ast_base,
+            params_table_ptr,
+            params_count,
+            locals_table_ptr,
+            locals_stack_count_ptr,
+            locals_next_index_ptr,
+            nested_temp_base,
+            loop_depth_ptr,
+            next_kind_ptr,
+            next_data0_ptr,
+            next_data1_ptr,
+        );
+        if current_cursor < 0 {
+            return -1;
+        };
+
+        let current_kind: i32 = load_i32(out_kind_ptr);
+        let current_data0: i32 = load_i32(out_data0_ptr);
+        let current_data1: i32 = load_i32(out_data1_ptr);
+        let left_index: i32 =
+            expression_node_from_parts(ast_base, current_kind, current_data0, current_data1);
+        if left_index < 0 {
+            return -1;
+        };
+
+        let right_kind: i32 = load_i32(next_kind_ptr);
+        let right_data0: i32 = load_i32(next_data0_ptr);
+        let right_data1: i32 = load_i32(next_data1_ptr);
+        let right_index: i32 =
+            expression_node_from_parts(ast_base, right_kind, right_data0, right_data1);
+        if right_index < 0 {
+            return -1;
+        };
+
+        let new_index: i32 = ast_expr_alloc_bitwise_or(ast_base, left_index, right_index);
+        if new_index < 0 {
+            return -1;
+        };
+
+        store_i32(out_kind_ptr, 2);
+        store_i32(out_data0_ptr, new_index);
+        store_i32(out_data1_ptr, 0);
+    };
+
+    current_cursor
+}
+
+fn parse_logical_and_expression(
+    base: i32,
+    len: i32,
+    cursor: i32,
+    ast_base: i32,
+    params_table_ptr: i32,
+    params_count: i32,
+    locals_table_ptr: i32,
+    locals_stack_count_ptr: i32,
+    locals_next_index_ptr: i32,
+    temp_base: i32,
+    loop_depth_ptr: i32,
+    out_kind_ptr: i32,
+    out_data0_ptr: i32,
+    out_data1_ptr: i32,
+) -> i32 {
+    let nested_temp_base: i32 = temp_base + 32;
+    let mut current_cursor: i32 = parse_bitwise_or_expression(
+        base,
+        len,
+        cursor,
+        ast_base,
+        params_table_ptr,
+        params_count,
+        locals_table_ptr,
+        locals_stack_count_ptr,
+        locals_next_index_ptr,
+        nested_temp_base,
+        loop_depth_ptr,
+        out_kind_ptr,
+        out_data0_ptr,
+        out_data1_ptr,
+    );
+    if current_cursor < 0 {
+        return -1;
+    };
+
+    let next_kind_ptr: i32 = temp_base;
+    let next_data0_ptr: i32 = temp_base + 4;
+    let next_data1_ptr: i32 = temp_base + 8;
+
+    loop {
         if current_cursor + 1 >= len {
             break;
         };
@@ -2733,7 +3079,7 @@ fn parse_logical_and_expression(
             return -1;
         };
         current_cursor = skip_whitespace(base, len, current_cursor + 2);
-        current_cursor = parse_equality_expression(
+        current_cursor = parse_bitwise_or_expression(
             base,
             len,
             current_cursor,
@@ -3321,6 +3667,10 @@ fn resolve_expression_internal(
         || kind == 19
         || kind == 20
         || kind == 21
+        || kind == 25
+        || kind == 26
+        || kind == 27
+        || kind == 28
     {
         let left_index: i32 = load_i32(entry_ptr + 4);
         let right_index: i32 = load_i32(entry_ptr + 8);
@@ -3648,6 +3998,10 @@ fn expression_code_size(ast_base: i32, expr_index: i32) -> i32 {
         || kind == 17
         || kind == 18
         || kind == 19
+        || kind == 25
+        || kind == 26
+        || kind == 27
+        || kind == 28
     {
         let left_index: i32 = load_i32(entry_ptr + 4);
         let right_index: i32 = load_i32(entry_ptr + 8);
@@ -3852,6 +4206,10 @@ fn emit_expression(base: i32, offset: i32, ast_base: i32, expr_index: i32) -> i3
         || kind == 17
         || kind == 18
         || kind == 19
+        || kind == 25
+        || kind == 26
+        || kind == 27
+        || kind == 28
     {
         let left_index: i32 = load_i32(entry_ptr + 4);
         let right_index: i32 = load_i32(entry_ptr + 8);
@@ -3890,7 +4248,23 @@ fn emit_expression(base: i32, offset: i32, ast_base: i32, expr_index: i32) -> i3
                                         if kind == 18 {
                                             76
                                         } else {
-                                            78
+                                            if kind == 19 {
+                                                78
+                                            } else {
+                                                if kind == 25 {
+                                                    114
+                                                } else {
+                                                    if kind == 26 {
+                                                        113
+                                                    } else {
+                                                        if kind == 27 {
+                                                            116
+                                                        } else {
+                                                            117
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
