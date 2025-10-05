@@ -14,9 +14,6 @@ being able to compile its own source:
   example `==`, `!=`, `<`, `<=`, and `>=`) drive almost every loop and guard in
   the source file, but the AST only models arithmetic expressions, leaving no
   way to encode these comparisons.【F:compiler/ast_compiler.bp†L23-L117】【F:compiler/ast_compiler.bp†L1339-L1413】
-- **Logical operators.** The implementation combines conditions with `&&`,
-  `||`, and unary `!`, which likewise have no expression variants in the AST
-  yet.【F:compiler/ast_compiler.bp†L23-L118】【F:compiler/ast_compiler.bp†L1339-L1413】
 - **Bitwise operators and shifts.** Encoding LEB128 values depends on `&`, `|`,
   and `>>`, operations that the expression allocator does not currently
   support.【F:compiler/ast_compiler.bp†L23-L68】【F:compiler/ast_compiler.bp†L1339-L1413】

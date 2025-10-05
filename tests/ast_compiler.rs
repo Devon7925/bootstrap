@@ -304,6 +304,32 @@ fn main() -> i32 {
 }
 
 #[test]
+fn ast_compiler_supports_logical_operators() {
+    let source = r#"
+fn main() -> i32 {
+    let mut count: i32 = 0;
+    let result1: bool = true || { count = count + 1; false };
+    let result2: bool = false || { count = count + 1; true };
+    let result3: bool = false && { count = count + 1; true };
+    let result4: bool = true && { count = count + 1; true };
+    let toggled: bool = !false;
+    let double_negated: bool = !(!true);
+    let inverted: bool = !result4;
+    if result1 && result2 && !result3 && result4 && toggled && !inverted && double_negated {
+        count
+    } else {
+        0
+    }
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 2);
+}
+
+#[test]
 fn ast_compiler_compiles_addition_with_function_call() {
     let source = r#"
 fn helper() -> i32 {
