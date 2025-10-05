@@ -217,6 +217,93 @@ fn main() -> i32 {
 }
 
 #[test]
+fn ast_compiler_supports_comparison_operators() {
+    let source = r#"
+fn evaluate(a: i32, b: i32) -> i32 {
+    let mut total: i32 = 0;
+    if a == b {
+        total = total + 1;
+        0
+    } else {
+        total = total + 2;
+        0
+    };
+    if a != b {
+        total = total + 4;
+        0
+    } else {
+        total = total + 8;
+        0
+    };
+    if a < b {
+        total = total + 16;
+        0
+    } else {
+        total = total + 32;
+        0
+    };
+    if a > b {
+        total = total + 64;
+        0
+    } else {
+        total = total + 128;
+        0
+    };
+    if a <= b {
+        total = total + 256;
+        0
+    } else {
+        total = total + 512;
+        0
+    };
+    if a >= b {
+        total = total + 1024;
+        0
+    } else {
+        total = total + 2048;
+        0
+    };
+    total
+}
+
+fn precedence() -> i32 {
+    let mut total: i32 = 0;
+    if 1 + 2 == 3 {
+        total = total + 1000;
+        0
+    } else {
+        total = total + 1;
+        0
+    };
+    if 20 - 5 >= 15 {
+        total = total + 2000;
+        0
+    } else {
+        total = total + 2;
+        0
+    };
+    if 3 * 3 < 10 {
+        total = total + 4000;
+        0
+    } else {
+        total = total + 4;
+        0
+    };
+    total
+}
+
+fn main() -> i32 {
+    evaluate(4, 4) + evaluate(2, 5) + precedence()
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 10903);
+}
+
+#[test]
 fn ast_compiler_compiles_addition_with_function_call() {
     let source = r#"
 fn helper() -> i32 {
