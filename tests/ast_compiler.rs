@@ -410,6 +410,112 @@ fn main() -> i32 {
 }
 
 #[test]
+fn ast_compiler_supports_functions_without_return_type() {
+    let source = r#"
+fn helper() {
+    let mut counter: i32 = 0;
+    counter = counter + 1;
+}
+
+fn main() -> i32 {
+    helper();
+    42
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 42);
+}
+
+#[test]
+fn ast_compiler_handles_many_function_parameters() {
+    let source = r#"
+fn wide(
+    a0: i32,
+    a1: i32,
+    a2: i32,
+    a3: i32,
+    a4: i32,
+    a5: i32,
+    a6: i32,
+    a7: i32,
+    a8: i32,
+    a9: i32,
+    a10: i32,
+    a11: i32,
+    a12: i32,
+    a13: i32,
+    a14: i32,
+    a15: i32,
+    a16: i32,
+    a17: i32,
+    a18: i32,
+    a19: i32,
+) -> i32 {
+    a0 + a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9
+        + a10 + a11 + a12 + a13 + a14 + a15 + a16 + a17 + a18 + a19
+}
+
+fn main() -> i32 {
+    wide(
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+    )
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 190);
+}
+
+#[test]
+fn ast_compiler_supports_if_statements_in_blocks() {
+    let source = r#"
+fn adjust(input: i32) -> i32 {
+    let mut value: i32 = input;
+    if value > 0 {
+        value = value - 1;
+    };
+    if value < 0 {
+        value = 0;
+    };
+    value
+}
+
+fn main() -> i32 {
+    adjust(2) + adjust(-1)
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 1);
+}
+
+#[test]
 fn ast_compiler_supports_continue_statements() {
     let source = r#"
 fn sum_even(limit: i32) -> i32 {
