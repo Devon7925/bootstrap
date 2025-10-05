@@ -163,6 +163,46 @@ fn expect_keyword_fn(base: i32, len: i32, offset: i32) -> i32 {
     next
 }
 
+fn expect_keyword_if(base: i32, len: i32, offset: i32) -> i32 {
+    if offset + 1 >= len {
+        return -1;
+    };
+    let first: i32 = load_u8(base + offset);
+    let second: i32 = load_u8(base + offset + 1);
+    if first != 105 || second != 102 {
+        return -1;
+    };
+    let next: i32 = offset + 2;
+    if next < len {
+        let after: i32 = load_u8(base + next);
+        if is_identifier_continue(after) {
+            return -1;
+        };
+    };
+    next
+}
+
+fn expect_keyword_else(base: i32, len: i32, offset: i32) -> i32 {
+    if offset + 3 >= len {
+        return -1;
+    };
+    let e: i32 = load_u8(base + offset);
+    let l: i32 = load_u8(base + offset + 1);
+    let s: i32 = load_u8(base + offset + 2);
+    let e2: i32 = load_u8(base + offset + 3);
+    if e != 101 || l != 108 || s != 115 || e2 != 101 {
+        return -1;
+    };
+    let next: i32 = offset + 4;
+    if next < len {
+        let after: i32 = load_u8(base + next);
+        if is_identifier_continue(after) {
+            return -1;
+        };
+    };
+    next
+}
+
 fn parse_identifier(base: i32, len: i32, offset: i32, out_start_ptr: i32, out_len_ptr: i32) -> i32 {
     if offset >= len {
         return -1;
@@ -566,6 +606,15 @@ fn ast_expr_alloc_param(ast_base: i32, param_index: i32) -> i32 {
     ast_expr_alloc(ast_base, 6, param_index, 0, 0)
 }
 
+fn ast_expr_alloc_if(
+    ast_base: i32,
+    condition_index: i32,
+    then_index: i32,
+    else_index: i32,
+) -> i32 {
+    ast_expr_alloc(ast_base, 7, condition_index, then_index, else_index)
+}
+
 fn expression_node_from_parts(ast_base: i32, kind: i32, data0: i32, data1: i32) -> i32 {
     if kind == 0 {
         return ast_expr_alloc_literal(ast_base, data0);
@@ -598,6 +647,176 @@ fn parse_basic_expression(
         return -1;
     };
     let first_byte: i32 = load_u8(base + cursor);
+    if first_byte == 123 {
+        let mut block_cursor: i32 = cursor + 1;
+        block_cursor = skip_whitespace(base, len, block_cursor);
+        block_cursor = parse_expression(
+            base,
+            len,
+            block_cursor,
+            ast_base,
+            params_table_ptr,
+            params_count,
+            nested_temp_base,
+            out_kind_ptr,
+            out_data0_ptr,
+            out_data1_ptr,
+        );
+        if block_cursor < 0 {
+            return -1;
+        };
+        block_cursor = skip_whitespace(base, len, block_cursor);
+        if block_cursor < len {
+            let maybe_semicolon: i32 = load_u8(base + block_cursor);
+            if maybe_semicolon == 59 {
+                block_cursor = skip_whitespace(base, len, block_cursor + 1);
+            };
+        };
+        block_cursor = expect_char(base, len, block_cursor, 125);
+        if block_cursor < 0 {
+            return -1;
+        };
+        return skip_whitespace(base, len, block_cursor);
+    };
+    if first_byte == 105 {
+        let mut if_cursor: i32 = expect_keyword_if(base, len, cursor);
+        if if_cursor >= 0 {
+            let cond_kind_ptr: i32 = nested_temp_base;
+            let cond_data0_ptr: i32 = nested_temp_base + 4;
+            let cond_data1_ptr: i32 = nested_temp_base + 8;
+            let then_kind_ptr: i32 = nested_temp_base + 12;
+            let then_data0_ptr: i32 = nested_temp_base + 16;
+            let then_data1_ptr: i32 = nested_temp_base + 20;
+            let else_kind_ptr: i32 = nested_temp_base + 24;
+            let else_data0_ptr: i32 = nested_temp_base + 28;
+            let else_data1_ptr: i32 = nested_temp_base + 32;
+            let cond_nested_base: i32 = nested_temp_base + 128;
+            let then_nested_base: i32 = nested_temp_base + 256;
+            let else_nested_base: i32 = nested_temp_base + 384;
+            if_cursor = skip_whitespace(base, len, if_cursor);
+            if_cursor = parse_expression(
+                base,
+                len,
+                if_cursor,
+                ast_base,
+                params_table_ptr,
+                params_count,
+                cond_nested_base,
+                cond_kind_ptr,
+                cond_data0_ptr,
+                cond_data1_ptr,
+            );
+            if if_cursor < 0 {
+                return -1;
+            };
+            if_cursor = skip_whitespace(base, len, if_cursor);
+            if_cursor = expect_char(base, len, if_cursor, 123);
+            if if_cursor < 0 {
+                return -1;
+            };
+            if_cursor = skip_whitespace(base, len, if_cursor);
+            if_cursor = parse_expression(
+                base,
+                len,
+                if_cursor,
+                ast_base,
+                params_table_ptr,
+                params_count,
+                then_nested_base,
+                then_kind_ptr,
+                then_data0_ptr,
+                then_data1_ptr,
+            );
+            if if_cursor < 0 {
+                return -1;
+            };
+            if_cursor = skip_whitespace(base, len, if_cursor);
+            if if_cursor < len {
+                let maybe_then_semicolon: i32 = load_u8(base + if_cursor);
+                if maybe_then_semicolon == 59 {
+                    if_cursor = skip_whitespace(base, len, if_cursor + 1);
+                };
+            };
+            if_cursor = expect_char(base, len, if_cursor, 125);
+            if if_cursor < 0 {
+                return -1;
+            };
+            if_cursor = skip_whitespace(base, len, if_cursor);
+            if_cursor = expect_keyword_else(base, len, if_cursor);
+            if if_cursor < 0 {
+                return -1;
+            };
+            if_cursor = skip_whitespace(base, len, if_cursor);
+            if_cursor = expect_char(base, len, if_cursor, 123);
+            if if_cursor < 0 {
+                return -1;
+            };
+            if_cursor = skip_whitespace(base, len, if_cursor);
+            if_cursor = parse_expression(
+                base,
+                len,
+                if_cursor,
+                ast_base,
+                params_table_ptr,
+                params_count,
+                else_nested_base,
+                else_kind_ptr,
+                else_data0_ptr,
+                else_data1_ptr,
+            );
+            if if_cursor < 0 {
+                return -1;
+            };
+            if_cursor = skip_whitespace(base, len, if_cursor);
+            if if_cursor < len {
+                let maybe_else_semicolon: i32 = load_u8(base + if_cursor);
+                if maybe_else_semicolon == 59 {
+                    if_cursor = skip_whitespace(base, len, if_cursor + 1);
+                };
+            };
+            if_cursor = expect_char(base, len, if_cursor, 125);
+            if if_cursor < 0 {
+                return -1;
+            };
+            let cond_kind: i32 = load_i32(cond_kind_ptr);
+            let cond_data0: i32 = load_i32(cond_data0_ptr);
+            let cond_data1: i32 = load_i32(cond_data1_ptr);
+            let condition_index: i32 =
+                expression_node_from_parts(ast_base, cond_kind, cond_data0, cond_data1);
+            if condition_index < 0 {
+                return -1;
+            };
+            let then_kind: i32 = load_i32(then_kind_ptr);
+            let then_data0: i32 = load_i32(then_data0_ptr);
+            let then_data1: i32 = load_i32(then_data1_ptr);
+            let then_index: i32 =
+                expression_node_from_parts(ast_base, then_kind, then_data0, then_data1);
+            if then_index < 0 {
+                return -1;
+            };
+            let else_kind: i32 = load_i32(else_kind_ptr);
+            let else_data0: i32 = load_i32(else_data0_ptr);
+            let else_data1: i32 = load_i32(else_data1_ptr);
+            let else_index: i32 =
+                expression_node_from_parts(ast_base, else_kind, else_data0, else_data1);
+            if else_index < 0 {
+                return -1;
+            };
+            let if_index: i32 = ast_expr_alloc_if(
+                ast_base,
+                condition_index,
+                then_index,
+                else_index,
+            );
+            if if_index < 0 {
+                return -1;
+            };
+            store_i32(out_kind_ptr, 2);
+            store_i32(out_data0_ptr, if_index);
+            store_i32(out_data1_ptr, 0);
+            return skip_whitespace(base, len, if_cursor);
+        };
+    };
     if first_byte == 40 {
         let mut next_cursor: i32 = cursor + 1;
         next_cursor = skip_whitespace(base, len, next_cursor);
@@ -1318,6 +1537,21 @@ fn resolve_expression(ast_base: i32, expr_index: i32, func_count: i32) -> i32 {
         };
         return 0;
     };
+    if kind == 7 {
+        let condition_index: i32 = load_i32(entry_ptr + 4);
+        let then_index: i32 = load_i32(entry_ptr + 8);
+        let else_index: i32 = load_i32(entry_ptr + 12);
+        if resolve_expression(ast_base, condition_index, func_count) < 0 {
+            return -1;
+        };
+        if resolve_expression(ast_base, then_index, func_count) < 0 {
+            return -1;
+        };
+        if resolve_expression(ast_base, else_index, func_count) < 0 {
+            return -1;
+        };
+        return 0;
+    };
     -1
 }
 
@@ -1380,6 +1614,24 @@ fn expression_code_size(ast_base: i32, expr_index: i32) -> i32 {
             return -1;
         };
         return left_size + right_size + 1;
+    };
+    if kind == 7 {
+        let condition_index: i32 = load_i32(entry_ptr + 4);
+        let then_index: i32 = load_i32(entry_ptr + 8);
+        let else_index: i32 = load_i32(entry_ptr + 12);
+        let condition_size: i32 = expression_code_size(ast_base, condition_index);
+        if condition_size < 0 {
+            return -1;
+        };
+        let then_size: i32 = expression_code_size(ast_base, then_index);
+        if then_size < 0 {
+            return -1;
+        };
+        let else_size: i32 = expression_code_size(ast_base, else_index);
+        if else_size < 0 {
+            return -1;
+        };
+        return condition_size + then_size + else_size + 4;
     };
     -1
 }
@@ -1463,6 +1715,28 @@ fn emit_expression(base: i32, offset: i32, ast_base: i32, expr_index: i32) -> i3
             }
         };
         out = write_byte(base, out, opcode);
+        return out;
+    };
+    if kind == 7 {
+        let condition_index: i32 = load_i32(entry_ptr + 4);
+        let then_index: i32 = load_i32(entry_ptr + 8);
+        let else_index: i32 = load_i32(entry_ptr + 12);
+        let mut out: i32 = emit_expression(base, offset, ast_base, condition_index);
+        if out < 0 {
+            return -1;
+        };
+        out = write_byte(base, out, 4);
+        out = write_byte(base, out, 127);
+        out = emit_expression(base, out, ast_base, then_index);
+        if out < 0 {
+            return -1;
+        };
+        out = write_byte(base, out, 5);
+        out = emit_expression(base, out, ast_base, else_index);
+        if out < 0 {
+            return -1;
+        };
+        out = write_byte(base, out, 11);
         return out;
     };
     -1
