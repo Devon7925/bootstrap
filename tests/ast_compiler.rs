@@ -1117,6 +1117,38 @@ fn main() -> i32 {
 }
 
 #[test]
+fn ast_compiler_emits_function_section_with_multibyte_type_indices() {
+    use std::fmt::Write as _;
+
+    let helper_count: i32 = (1 << 7) + 2;
+    let mut source = String::new();
+
+    let mut idx = 0;
+    loop {
+        if idx >= helper_count {
+            break;
+        }
+        writeln!(&mut source, "fn helper_{idx}() -> i32 {{").unwrap();
+        writeln!(&mut source, "    {idx}").unwrap();
+        writeln!(&mut source, "}}").unwrap();
+        writeln!(&mut source).unwrap();
+        idx += 1;
+    }
+
+    writeln!(
+        &mut source,
+        "fn main() -> i32 {{\n    helper_{}()\n}}",
+        helper_count - 1
+    )
+    .unwrap();
+
+    let wasm = compile_with_ast_compiler(&source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, helper_count - 1);
+}
+
+#[test]
 fn ast_compiler_compiles_its_source_once() {
     let mut compiler = CompilerInstance::new(ast_compiler_wasm());
     let source = ast_compiler_source();
