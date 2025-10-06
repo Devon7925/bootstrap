@@ -1698,6 +1698,67 @@ fn parse_i32_literal(base: i32, len: i32, offset: i32, out_value_ptr: i32) -> i3
     idx
 }
 
+fn parse_char_literal(base: i32, len: i32, offset: i32, out_value_ptr: i32) -> i32 {
+    if offset >= len {
+        return -1;
+    };
+    let quote: i32 = load_u8(base + offset);
+    if quote != 39 {
+        return -1;
+    };
+    let mut idx: i32 = offset + 1;
+    if idx >= len {
+        return -1;
+    };
+    let mut value: i32 = load_u8(base + idx);
+    if value == 92 {
+        idx = idx + 1;
+        if idx >= len {
+            return -1;
+        };
+        let escape: i32 = load_u8(base + idx);
+        value = if escape == 110 {
+            10
+        } else {
+            if escape == 114 {
+                13
+            } else {
+                if escape == 116 {
+                    9
+                } else {
+                    if escape == 48 {
+                        0
+                    } else {
+                        if escape == 92 {
+                            92
+                        } else {
+                            if escape == 39 {
+                                39
+                            } else {
+                                return -1;
+                            }
+                        }
+                    }
+                }
+            }
+        };
+    } else {
+        if value == 10 || value == 13 {
+            return -1;
+        };
+    };
+    idx = idx + 1;
+    if idx >= len {
+        return -1;
+    };
+    let closing: i32 = load_u8(base + idx);
+    if closing != 39 {
+        return -1;
+    };
+    store_i32(out_value_ptr, value);
+    idx + 1
+}
+
 fn word_size() -> i32 {
     4
 }
@@ -2337,6 +2398,17 @@ fn parse_basic_expression(
             return -1;
         };
         return skip_whitespace(base, len, paren_cursor);
+    };
+    if first_byte == 39 {
+        let next_cursor: i32 = parse_char_literal(base, len, cursor, literal_ptr);
+        if next_cursor < 0 {
+            return -1;
+        };
+        let value: i32 = load_i32(literal_ptr);
+        store_i32(out_kind_ptr, 0);
+        store_i32(out_data0_ptr, value);
+        store_i32(out_data1_ptr, 0);
+        return skip_whitespace(base, len, next_cursor);
     };
     if first_byte == 45 || is_digit(first_byte) {
         let next_cursor: i32 = parse_i32_literal(base, len, cursor, literal_ptr);
