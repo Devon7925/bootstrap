@@ -1,12 +1,17 @@
 #[path = "wasm_harness.rs"]
 mod wasm_harness;
 
-use wasm_harness::run_wasm_main;
+use wasm_harness::{run_wasm_main, CompilerInstance, DEFAULT_OUTPUT_STRIDE};
 
 #[path = "ast_compiler_helpers.rs"]
 mod ast_compiler_helpers;
 
-use ast_compiler_helpers::{compile_with_ast_compiler, try_compile_with_ast_compiler};
+use ast_compiler_helpers::{
+    ast_compiler_source,
+    ast_compiler_wasm,
+    compile_with_ast_compiler,
+    try_compile_with_ast_compiler,
+};
 
 #[test]
 fn ast_compiler_emits_constant_main() {
@@ -1109,4 +1114,19 @@ fn main() -> i32 {
     let error = try_compile_with_ast_compiler(source)
         .expect_err("ast compiler should reject blocks without a final expression");
     assert!(error.produced_len <= 0);
+}
+
+#[test]
+fn ast_compiler_compiles_its_source_once() {
+    let mut compiler = CompilerInstance::new(ast_compiler_wasm());
+    let source = ast_compiler_source();
+
+    let wasm = compiler
+        .compile_at(0, source.len() as i32, source)
+        .expect("ast compiler should compile its own source");
+
+    assert!(
+        wasm.len() > DEFAULT_OUTPUT_STRIDE as usize,
+        "self-compiled output should be larger than the default stride",
+    );
 }
