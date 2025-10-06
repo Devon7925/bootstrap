@@ -37,7 +37,7 @@ pub fn ast_compiler_wasm() -> &'static [u8] {
 pub fn try_compile_with_ast_compiler(source: &str) -> Result<Vec<u8>, CompileFailure> {
     let mut compiler = CompilerInstance::new(ast_compiler_wasm());
     let mut input_cursor = 0usize;
-    let mut output_cursor = 1024i32;
+    let mut output_cursor = source.len() as i32;
     compiler.compile_with_layout(&mut input_cursor, &mut output_cursor, source)
 }
 
