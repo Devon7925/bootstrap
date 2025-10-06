@@ -24,12 +24,12 @@ impl fmt::Display for Target {
     }
 }
 
-const STAGE2_WASM: &[u8] = include_bytes!("../stage2.wasm");
+const COMPILER_WASM: &[u8] = include_bytes!("../compiler.wasm");
 const INSTR_OFFSET_PTR_OFFSET: usize = 4_096;
 const FUNCTIONS_COUNT_PTR_OFFSET: usize = 851_960;
-const FUNCTIONS_BASE_OFFSET: usize = 851_968;
-const FUNCTION_ENTRY_SIZE: usize = 32;
-const STAGE1_MAX_FUNCTIONS: usize = 512;
+pub const FUNCTIONS_BASE_OFFSET: usize = 851_968;
+pub const FUNCTION_ENTRY_SIZE: usize = 32;
+pub const STAGE1_MAX_FUNCTIONS: usize = 512;
 
 pub struct Compilation {
     target: Target,
@@ -79,7 +79,7 @@ pub fn compile(source: &str, target: Target) -> Result<Compilation, CompileError
     }
 
     let engine = Engine::default();
-    let module = Module::new(&engine, STAGE2_WASM)
+    let module = Module::new(&engine, COMPILER_WASM)
         .map_err(|err| CompileError::new(format!("failed to load stage2 module: {err}")))?;
     let mut store = Store::new(&engine, ());
     let linker = Linker::new(&engine);
@@ -111,12 +111,7 @@ pub fn compile(source: &str, target: Target) -> Result<Compilation, CompileError
         ));
     }
 
-    let output_ptr = (memory_size - reserved) as i32;
-    if source.len() >= output_ptr as usize {
-        return Err(CompileError::new(
-            "source is too large to fit in stage2 compiler memory",
-        ));
-    }
+    let output_ptr = source.len() as i32;
 
     memory
         .write(&mut store, 0, source.as_bytes())

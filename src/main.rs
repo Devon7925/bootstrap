@@ -4,19 +4,19 @@ use std::io::{self, Write};
 use std::path::Path;
 use std::process::{self, Command, Stdio};
 
+use bootstrap::FUNCTION_ENTRY_SIZE;
+use bootstrap::FUNCTIONS_BASE_OFFSET;
+use bootstrap::STAGE1_MAX_FUNCTIONS;
 use bootstrap::{Target, compile};
 use wasmi::{Engine, Linker, Memory, Module, Store, TypedFunc};
 
-const STAGE1_SOURCE_PATH: &str = "compiler/stage1.bp";
-const STAGE2_OUTPUT_PATH: &str = "stage2.wasm";
-const STAGE1_INPUT_PTR: usize = 0;
-const STAGE1_FUNCTION_ENTRY_SIZE: usize = 32;
-const STAGE1_FUNCTIONS_BASE_OFFSET: usize = 851_968;
-const STAGE1_MAX_FUNCTIONS: usize = 512;
+const COMPILER_SOURCE_PATH: &str = "compiler/ast_compiler.bp";
+const COMPILER_OUTPUT_PATH: &str = "compiler.wasm";
+const COMPILER_INPUT_PTR: usize = 0;
 
 fn build_stage2_wasm() -> Result<(), String> {
-    let source = fs::read_to_string(STAGE1_SOURCE_PATH)
-        .map_err(|err| format!("failed to read '{STAGE1_SOURCE_PATH}': {err}"))?;
+    let source = fs::read_to_string(COMPILER_SOURCE_PATH)
+        .map_err(|err| format!("failed to read '{COMPILER_SOURCE_PATH}': {err}"))?;
     let compilation = compile(&source, Target::Wasm).map_err(|err| err.to_string())?;
     let stage1_wasm = compilation.to_wasm().map_err(|err| err.to_string())?;
 
@@ -43,24 +43,21 @@ fn build_stage2_wasm() -> Result<(), String> {
         .to_bytes()
         .ok_or_else(|| "failed to compute stage1 memory size".to_string())?
         as usize;
-    let reserved = STAGE1_FUNCTIONS_BASE_OFFSET + STAGE1_MAX_FUNCTIONS * STAGE1_FUNCTION_ENTRY_SIZE;
+    let reserved = FUNCTIONS_BASE_OFFSET + STAGE1_MAX_FUNCTIONS * FUNCTION_ENTRY_SIZE;
     if memory_size <= reserved {
         return Err("stage1 memory is smaller than reserved layout".into());
     }
 
-    let output_ptr = (memory_size - reserved) as i32;
-    if source.len() >= output_ptr as usize {
-        return Err("stage1 source overlaps output buffer".into());
-    }
+    let output_ptr = source.len();
 
     memory
-        .write(&mut store, STAGE1_INPUT_PTR, source.as_bytes())
+        .write(&mut store, COMPILER_INPUT_PTR, source.as_bytes())
         .map_err(|err| format!("failed to write stage1 source into memory: {err}"))?;
 
     let produced_len = compile
         .call(
             &mut store,
-            (STAGE1_INPUT_PTR as i32, source.len() as i32, output_ptr),
+            (COMPILER_INPUT_PTR as i32, source.len() as i32, output_ptr as i32),
         )
         .map_err(|err| format!("stage1 compile trapped: {err}"))?;
     if produced_len <= 0 {
@@ -74,10 +71,10 @@ fn build_stage2_wasm() -> Result<(), String> {
         .read(&store, output_ptr as usize, &mut stage2_wasm)
         .map_err(|err| format!("failed to read stage2 wasm from memory: {err}"))?;
 
-    fs::write(STAGE2_OUTPUT_PATH, &stage2_wasm)
-        .map_err(|err| format!("failed to write '{STAGE2_OUTPUT_PATH}': {err}"))?;
+    fs::write(COMPILER_OUTPUT_PATH, &stage2_wasm)
+        .map_err(|err| format!("failed to write '{COMPILER_OUTPUT_PATH}': {err}"))?;
 
-    println!("wrote stage2 wasm to {STAGE2_OUTPUT_PATH}");
+    println!("wrote stage2 wasm to {COMPILER_OUTPUT_PATH}");
 
     Ok(())
 }

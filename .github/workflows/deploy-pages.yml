@@ -30,7 +30,7 @@ jobs:
         run: cargo run --release
 
       - name: Copy stage2 wasm into playground
-        run: cp stage2.wasm docs/stage2.wasm
+        run: cp compiler.wasm docs/compiler.wasm
 
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v3
