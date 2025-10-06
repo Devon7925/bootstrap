@@ -5091,12 +5091,21 @@ fn emit_type_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
 }
 
 fn emit_function_section(base: i32, offset: i32, func_count: i32) -> i32 {
+    let mut payload_size: i32 = leb_u32_len(func_count);
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= func_count {
+            break;
+        };
+        payload_size = payload_size + leb_u32_len(idx);
+        idx = idx + 1;
+    };
+
     let mut out: i32 = offset;
     out = write_byte(base, out, 3);
-    let payload_size: i32 = leb_u32_len(func_count) + func_count;
     out = write_u32_leb(base, out, payload_size);
     out = write_u32_leb(base, out, func_count);
-    let mut idx: i32 = 0;
+    idx = 0;
     loop {
         if idx >= func_count {
             break;
