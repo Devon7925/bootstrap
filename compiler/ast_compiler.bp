@@ -71,10 +71,10 @@ fn leb_i32_len(value: i32) -> i32 {
 
 fn write_magic(base: i32, offset: i32) -> i32 {
     let mut out: i32 = offset;
-    out = write_byte(base, out, 0);
-    out = write_byte(base, out, 97);
-    out = write_byte(base, out, 115);
-    out = write_byte(base, out, 109);
+    out = write_byte(base, out, '\0');
+    out = write_byte(base, out, 'a');
+    out = write_byte(base, out, 's');
+    out = write_byte(base, out, 'm');
     out = write_byte(base, out, 1);
     out = write_byte(base, out, 0);
     out = write_byte(base, out, 0);
@@ -83,7 +83,7 @@ fn write_magic(base: i32, offset: i32) -> i32 {
 }
 
 fn is_whitespace(byte: i32) -> bool {
-    byte == 32 || byte == 9 || byte == 10 || byte == 13
+    byte == ' ' || byte == '\t' || byte == '\n' || byte == '\r'
 }
 
 fn skip_whitespace(base: i32, len: i32, offset: i32) -> i32 {
@@ -93,17 +93,17 @@ fn skip_whitespace(base: i32, len: i32, offset: i32) -> i32 {
             break;
         };
         let byte: i32 = load_u8(base + idx);
-        if byte == 47 {
+        if byte == '/' {
             if idx + 1 < len {
                 let next: i32 = load_u8(base + idx + 1);
-                if next == 47 {
+                if next == '/' {
                     idx = idx + 2;
                     loop {
                         if idx >= len {
                             break;
                         };
                         let comment_byte: i32 = load_u8(base + idx);
-                        if comment_byte == 10 {
+                        if comment_byte == '\n' {
                             idx = idx + 1;
                             break;
                         };
@@ -133,11 +133,11 @@ fn expect_char(base: i32, len: i32, offset: i32, expected: i32) -> i32 {
 }
 
 fn is_identifier_start(byte: i32) -> bool {
-    (byte >= 65 && byte <= 90) || (byte >= 97 && byte <= 122) || byte == 95
+    (byte >= 'A' && byte <= 'Z') || (byte >= 'a' && byte <= 'z') || byte == '_'
 }
 
 fn is_digit(byte: i32) -> bool {
-    byte >= 48 && byte <= 57
+    byte >= '0' && byte <= '9'
 }
 
 fn is_identifier_continue(byte: i32) -> bool {
@@ -150,7 +150,7 @@ fn expect_keyword_fn(base: i32, len: i32, offset: i32) -> i32 {
     };
     let first: i32 = load_u8(base + offset);
     let second: i32 = load_u8(base + offset + 1);
-    if first != 102 || second != 110 {
+    if first != 'f' || second != 'n' {
         return -1;
     };
     let next: i32 = offset + 2;
@@ -169,7 +169,7 @@ fn expect_keyword_if(base: i32, len: i32, offset: i32) -> i32 {
     };
     let first: i32 = load_u8(base + offset);
     let second: i32 = load_u8(base + offset + 1);
-    if first != 105 || second != 102 {
+    if first != 'i' || second != 'f' {
         return -1;
     };
     let next: i32 = offset + 2;
@@ -190,7 +190,7 @@ fn expect_keyword_true(base: i32, len: i32, offset: i32) -> i32 {
     let r: i32 = load_u8(base + offset + 1);
     let u: i32 = load_u8(base + offset + 2);
     let e: i32 = load_u8(base + offset + 3);
-    if t != 116 || r != 114 || u != 117 || e != 101 {
+    if t != 't' || r != 'r' || u != 'u' || e != 'e' {
         return -1;
     };
     let next: i32 = offset + 4;
@@ -212,7 +212,7 @@ fn expect_keyword_false(base: i32, len: i32, offset: i32) -> i32 {
     let l: i32 = load_u8(base + offset + 2);
     let s: i32 = load_u8(base + offset + 3);
     let e: i32 = load_u8(base + offset + 4);
-    if f != 102 || a != 97 || l != 108 || s != 115 || e != 101 {
+    if f != 'f' || a != 'a' || l != 'l' || s != 's' || e != 'e' {
         return -1;
     };
     let next: i32 = offset + 5;
@@ -233,7 +233,7 @@ fn expect_keyword_else(base: i32, len: i32, offset: i32) -> i32 {
     let l: i32 = load_u8(base + offset + 1);
     let s: i32 = load_u8(base + offset + 2);
     let e2: i32 = load_u8(base + offset + 3);
-    if e != 101 || l != 108 || s != 115 || e2 != 101 {
+    if e != 'e' || l != 'l' || s != 's' || e2 != 'e' {
         return -1;
     };
     let next: i32 = offset + 4;
@@ -254,7 +254,7 @@ fn expect_keyword_loop(base: i32, len: i32, offset: i32) -> i32 {
     let o1: i32 = load_u8(base + offset + 1);
     let o2: i32 = load_u8(base + offset + 2);
     let p: i32 = load_u8(base + offset + 3);
-    if l != 108 || o1 != 111 || o2 != 111 || p != 112 {
+    if l != 'l' || o1 != 'o' || o2 != 'o' || p != 'p' {
         return -1;
     };
     let next: i32 = offset + 4;
@@ -276,7 +276,7 @@ fn expect_keyword_break(base: i32, len: i32, offset: i32) -> i32 {
     let e: i32 = load_u8(base + offset + 2);
     let a: i32 = load_u8(base + offset + 3);
     let k: i32 = load_u8(base + offset + 4);
-    if b != 98 || r != 114 || e != 101 || a != 97 || k != 107 {
+    if b != 'b' || r != 'r' || e != 'e' || a != 'a' || k != 'k' {
         return -1;
     };
     let next: i32 = offset + 5;
@@ -290,35 +290,35 @@ fn expect_keyword_break(base: i32, len: i32, offset: i32) -> i32 {
 }
 
 fn expect_keyword_continue(base: i32, len: i32, offset: i32) -> i32 {
-    let mut idx: i32 = expect_char(base, len, offset, 99);
+    let mut idx: i32 = expect_char(base, len, offset, 'c');
     if idx < 0 {
         return -1;
     };
-    idx = expect_char(base, len, idx, 111);
+    idx = expect_char(base, len, idx, 'o');
     if idx < 0 {
         return -1;
     };
-    idx = expect_char(base, len, idx, 110);
+    idx = expect_char(base, len, idx, 'n');
     if idx < 0 {
         return -1;
     };
-    idx = expect_char(base, len, idx, 116);
+    idx = expect_char(base, len, idx, 't');
     if idx < 0 {
         return -1;
     };
-    idx = expect_char(base, len, idx, 105);
+    idx = expect_char(base, len, idx, 'i');
     if idx < 0 {
         return -1;
     };
-    idx = expect_char(base, len, idx, 110);
+    idx = expect_char(base, len, idx, 'n');
     if idx < 0 {
         return -1;
     };
-    idx = expect_char(base, len, idx, 117);
+    idx = expect_char(base, len, idx, 'u');
     if idx < 0 {
         return -1;
     };
-    idx = expect_char(base, len, idx, 101);
+    idx = expect_char(base, len, idx, 'e');
     if idx < 0 {
         return -1;
     };
@@ -341,7 +341,7 @@ fn expect_keyword_return(base: i32, len: i32, offset: i32) -> i32 {
     let u: i32 = load_u8(base + offset + 3);
     let r2: i32 = load_u8(base + offset + 4);
     let n: i32 = load_u8(base + offset + 5);
-    if r != 114 || e != 101 || t != 116 || u != 117 || r2 != 114 || n != 110 {
+    if r != 'r' || e != 'e' || t != 't' || u != 'u' || r2 != 'r' || n != 'n' {
         return -1;
     };
     let next: i32 = offset + 6;
@@ -417,25 +417,25 @@ fn is_identifier_load_u8(base: i32, len: i32, start: i32, ident_len: i32) -> boo
     if start < 0 || start + ident_len > len {
         return false;
     };
-    if load_u8(base + start) != 108 {
+    if load_u8(base + start) != 'l' {
         return false;
     };
-    if load_u8(base + start + 1) != 111 {
+    if load_u8(base + start + 1) != 'o' {
         return false;
     };
-    if load_u8(base + start + 2) != 97 {
+    if load_u8(base + start + 2) != 'a' {
         return false;
     };
-    if load_u8(base + start + 3) != 100 {
+    if load_u8(base + start + 3) != 'd' {
         return false;
     };
-    if load_u8(base + start + 4) != 95 {
+    if load_u8(base + start + 4) != '_' {
         return false;
     };
-    if load_u8(base + start + 5) != 117 {
+    if load_u8(base + start + 5) != 'u' {
         return false;
     };
-    if load_u8(base + start + 6) != 56 {
+    if load_u8(base + start + 6) != '8' {
         return false;
     };
     true
@@ -448,28 +448,28 @@ fn is_identifier_store_u8(base: i32, len: i32, start: i32, ident_len: i32) -> bo
     if start < 0 || start + ident_len > len {
         return false;
     };
-    if load_u8(base + start) != 115 {
+    if load_u8(base + start) != 's' {
         return false;
     };
-    if load_u8(base + start + 1) != 116 {
+    if load_u8(base + start + 1) != 't' {
         return false;
     };
-    if load_u8(base + start + 2) != 111 {
+    if load_u8(base + start + 2) != 'o' {
         return false;
     };
-    if load_u8(base + start + 3) != 114 {
+    if load_u8(base + start + 3) != 'r' {
         return false;
     };
-    if load_u8(base + start + 4) != 101 {
+    if load_u8(base + start + 4) != 'e' {
         return false;
     };
-    if load_u8(base + start + 5) != 95 {
+    if load_u8(base + start + 5) != '_' {
         return false;
     };
-    if load_u8(base + start + 6) != 117 {
+    if load_u8(base + start + 6) != 'u' {
         return false;
     };
-    if load_u8(base + start + 7) != 56 {
+    if load_u8(base + start + 7) != '8' {
         return false;
     };
     true
@@ -482,28 +482,28 @@ fn is_identifier_load_i32(base: i32, len: i32, start: i32, ident_len: i32) -> bo
     if start < 0 || start + ident_len > len {
         return false;
     };
-    if load_u8(base + start) != 108 {
+    if load_u8(base + start) != 'l' {
         return false;
     };
-    if load_u8(base + start + 1) != 111 {
+    if load_u8(base + start + 1) != 'o' {
         return false;
     };
-    if load_u8(base + start + 2) != 97 {
+    if load_u8(base + start + 2) != 'a' {
         return false;
     };
-    if load_u8(base + start + 3) != 100 {
+    if load_u8(base + start + 3) != 'd' {
         return false;
     };
-    if load_u8(base + start + 4) != 95 {
+    if load_u8(base + start + 4) != '_' {
         return false;
     };
-    if load_u8(base + start + 5) != 105 {
+    if load_u8(base + start + 5) != 'i' {
         return false;
     };
-    if load_u8(base + start + 6) != 51 {
+    if load_u8(base + start + 6) != '3' {
         return false;
     };
-    if load_u8(base + start + 7) != 50 {
+    if load_u8(base + start + 7) != '2' {
         return false;
     };
     true
@@ -516,31 +516,31 @@ fn is_identifier_store_i32(base: i32, len: i32, start: i32, ident_len: i32) -> b
     if start < 0 || start + ident_len > len {
         return false;
     };
-    if load_u8(base + start) != 115 {
+    if load_u8(base + start) != 's' {
         return false;
     };
-    if load_u8(base + start + 1) != 116 {
+    if load_u8(base + start + 1) != 't' {
         return false;
     };
-    if load_u8(base + start + 2) != 111 {
+    if load_u8(base + start + 2) != 'o' {
         return false;
     };
-    if load_u8(base + start + 3) != 114 {
+    if load_u8(base + start + 3) != 'r' {
         return false;
     };
-    if load_u8(base + start + 4) != 101 {
+    if load_u8(base + start + 4) != 'e' {
         return false;
     };
-    if load_u8(base + start + 5) != 95 {
+    if load_u8(base + start + 5) != '_' {
         return false;
     };
-    if load_u8(base + start + 6) != 105 {
+    if load_u8(base + start + 6) != 'i' {
         return false;
     };
-    if load_u8(base + start + 7) != 51 {
+    if load_u8(base + start + 7) != '3' {
         return false;
     };
-    if load_u8(base + start + 8) != 50 {
+    if load_u8(base + start + 8) != '2' {
         return false;
     };
     true
@@ -553,28 +553,28 @@ fn is_identifier_load_u16(base: i32, len: i32, start: i32, ident_len: i32) -> bo
     if start < 0 || start + ident_len > len {
         return false;
     };
-    if load_u8(base + start) != 108 {
+    if load_u8(base + start) != 'l' {
         return false;
     };
-    if load_u8(base + start + 1) != 111 {
+    if load_u8(base + start + 1) != 'o' {
         return false;
     };
-    if load_u8(base + start + 2) != 97 {
+    if load_u8(base + start + 2) != 'a' {
         return false;
     };
-    if load_u8(base + start + 3) != 100 {
+    if load_u8(base + start + 3) != 'd' {
         return false;
     };
-    if load_u8(base + start + 4) != 95 {
+    if load_u8(base + start + 4) != '_' {
         return false;
     };
-    if load_u8(base + start + 5) != 117 {
+    if load_u8(base + start + 5) != 'u' {
         return false;
     };
-    if load_u8(base + start + 6) != 49 {
+    if load_u8(base + start + 6) != '1' {
         return false;
     };
-    if load_u8(base + start + 7) != 54 {
+    if load_u8(base + start + 7) != '6' {
         return false;
     };
     true
@@ -587,31 +587,31 @@ fn is_identifier_store_u16(base: i32, len: i32, start: i32, ident_len: i32) -> b
     if start < 0 || start + ident_len > len {
         return false;
     };
-    if load_u8(base + start) != 115 {
+    if load_u8(base + start) != 's' {
         return false;
     };
-    if load_u8(base + start + 1) != 116 {
+    if load_u8(base + start + 1) != 't' {
         return false;
     };
-    if load_u8(base + start + 2) != 111 {
+    if load_u8(base + start + 2) != 'o' {
         return false;
     };
-    if load_u8(base + start + 3) != 114 {
+    if load_u8(base + start + 3) != 'r' {
         return false;
     };
-    if load_u8(base + start + 4) != 101 {
+    if load_u8(base + start + 4) != 'e' {
         return false;
     };
-    if load_u8(base + start + 5) != 95 {
+    if load_u8(base + start + 5) != '_' {
         return false;
     };
-    if load_u8(base + start + 6) != 117 {
+    if load_u8(base + start + 6) != 'u' {
         return false;
     };
-    if load_u8(base + start + 7) != 49 {
+    if load_u8(base + start + 7) != '1' {
         return false;
     };
-    if load_u8(base + start + 8) != 54 {
+    if load_u8(base + start + 8) != '6' {
         return false;
     };
     true
@@ -694,7 +694,7 @@ fn expect_keyword_let(base: i32, len: i32, offset: i32) -> i32 {
     let l: i32 = load_u8(base + offset);
     let e: i32 = load_u8(base + offset + 1);
     let t: i32 = load_u8(base + offset + 2);
-    if l != 108 || e != 101 || t != 116 {
+    if l != 'l' || e != 'e' || t != 't' {
         return -1;
     };
     let next: i32 = offset + 3;
@@ -880,7 +880,7 @@ fn parse_block_expression_body(
             return -1;
         };
         let next_byte: i32 = load_u8(base + idx);
-        if next_byte == 125 {
+        if next_byte == '}' {
             if !have_value_expr {
                 if allow_empty_value {
                     have_value_expr = true;
@@ -941,10 +941,10 @@ fn parse_block_expression_body(
             let mut is_mut: bool = false;
             if idx + 3 <= len {
                 let m: i32 = load_u8(base + idx);
-                if m == 109 {
+                if m == 'm' {
                     let u: i32 = load_u8(base + idx + 1);
                     let t: i32 = load_u8(base + idx + 2);
-                    if u == 117 && t == 116 {
+                    if u == 'u' && t == 't' {
                         let after_mut: i32 = idx + 3;
                         if after_mut >= len {
                             store_i32(locals_stack_count_ptr, saved_stack_count);
@@ -985,7 +985,7 @@ fn parse_block_expression_body(
             };
 
             idx = skip_whitespace(base, len, idx);
-            idx = expect_char(base, len, idx, 58);
+            idx = expect_char(base, len, idx, ':');
             if idx < 0 {
                 store_i32(locals_stack_count_ptr, saved_stack_count);
                 store_i32(locals_next_index_ptr, saved_next_index);
@@ -999,7 +999,7 @@ fn parse_block_expression_body(
                 return -1;
             };
             idx = skip_whitespace(base, len, idx);
-            idx = expect_char(base, len, idx, 61);
+            idx = expect_char(base, len, idx, '=');
             if idx < 0 {
                 store_i32(locals_stack_count_ptr, saved_stack_count);
                 store_i32(locals_next_index_ptr, saved_next_index);
@@ -1038,7 +1038,7 @@ fn parse_block_expression_body(
                 return -1;
             };
             idx = skip_whitespace(base, len, idx);
-            idx = expect_char(base, len, idx, 59);
+            idx = expect_char(base, len, idx, ';');
             if idx < 0 {
                 store_i32(locals_stack_count_ptr, saved_stack_count);
                 store_i32(locals_next_index_ptr, saved_next_index);
@@ -1102,7 +1102,7 @@ fn parse_block_expression_body(
             };
             let mut value_index: i32 = -1;
             let after_byte: i32 = load_u8(base + after_break);
-            if after_byte != 59 {
+            if after_byte != ';' {
                 after_break = parse_expression(
                     base,
                     len,
@@ -1139,7 +1139,7 @@ fn parse_block_expression_body(
                     return -1;
                 };
                 after_break = skip_whitespace(base, len, after_break);
-                after_break = expect_char(base, len, after_break, 59);
+                after_break = expect_char(base, len, after_break, ';');
                 if after_break < 0 {
                     store_i32(locals_stack_count_ptr, saved_stack_count);
                     store_i32(locals_next_index_ptr, saved_next_index);
@@ -1179,14 +1179,14 @@ fn parse_block_expression_body(
             };
             if continue_cursor < len {
                 let after_byte: i32 = load_u8(base + continue_cursor);
-                if after_byte != 59 && !is_whitespace(after_byte) {
+                if after_byte != ';' && !is_whitespace(after_byte) {
                     store_i32(locals_stack_count_ptr, saved_stack_count);
                     store_i32(locals_next_index_ptr, saved_next_index);
                     return -1;
                 };
             };
             let mut after_continue: i32 = skip_whitespace(base, len, continue_cursor);
-            after_continue = expect_char(base, len, after_continue, 59);
+            after_continue = expect_char(base, len, after_continue, ';');
             if after_continue < 0 {
                 store_i32(locals_stack_count_ptr, saved_stack_count);
                 store_i32(locals_next_index_ptr, saved_next_index);
@@ -1252,7 +1252,7 @@ fn parse_block_expression_body(
                 return -1;
             };
             after_return = skip_whitespace(base, len, after_return);
-            after_return = expect_char(base, len, after_return, 59);
+            after_return = expect_char(base, len, after_return, ';');
             if after_return < 0 {
                 store_i32(locals_stack_count_ptr, saved_stack_count);
                 store_i32(locals_next_index_ptr, saved_next_index);
@@ -1276,7 +1276,7 @@ fn parse_block_expression_body(
         let mut loop_cursor: i32 = expect_keyword_loop(base, len, idx);
         if loop_cursor >= 0 {
             let mut after_loop: i32 = skip_whitespace(base, len, loop_cursor);
-            after_loop = expect_char(base, len, after_loop, 123);
+            after_loop = expect_char(base, len, after_loop, '{');
             if after_loop < 0 {
                 store_i32(locals_stack_count_ptr, saved_stack_count);
                 store_i32(locals_next_index_ptr, saved_next_index);
@@ -1358,7 +1358,7 @@ fn parse_block_expression_body(
                     let mut after_ident: i32 = skip_whitespace(base, len, assignment_cursor);
                     if after_ident < len {
                         let assign_byte: i32 = load_u8(base + after_ident);
-                        if assign_byte == 61 {
+                        if assign_byte == '=' {
                             let mut after_equal: i32 = after_ident + 1;
                             if after_equal >= len {
                                 store_i32(locals_stack_count_ptr, saved_stack_count);
@@ -1366,7 +1366,7 @@ fn parse_block_expression_body(
                                 return -1;
                             };
                             let maybe_second_equal: i32 = load_u8(base + after_equal);
-                            if maybe_second_equal != 61 {
+                            if maybe_second_equal != '=' {
                                 let current_stack: i32 = load_i32(locals_stack_count_ptr);
                                 let entry_index: i32 = find_local_entry_index(
                                     base,
@@ -1435,7 +1435,7 @@ fn parse_block_expression_body(
                     return -1;
                 };
                 idx = skip_whitespace(base, len, idx);
-                idx = expect_char(base, len, idx, 59);
+                idx = expect_char(base, len, idx, ';');
                 if idx < 0 {
                     store_i32(locals_stack_count_ptr, saved_stack_count);
                     store_i32(locals_next_index_ptr, saved_next_index);
@@ -1491,11 +1491,11 @@ fn parse_block_expression_body(
         let mut treat_as_statement: bool = false;
         if next_cursor < len {
             let delimiter: i32 = load_u8(base + next_cursor);
-            if delimiter == 59 {
+            if delimiter == ';' {
                 let after_semicolon: i32 = skip_whitespace(base, len, next_cursor + 1);
                 if after_semicolon < len {
                     let after_byte: i32 = load_u8(base + after_semicolon);
-                    if after_byte == 125 && !have_value_expr {
+                    if after_byte == '}' && !have_value_expr {
                         next_cursor = after_semicolon;
                     } else {
                         treat_as_statement = true;
@@ -1511,7 +1511,7 @@ fn parse_block_expression_body(
             if expr_kind == 12 {
                 if next_cursor < len {
                     let after_byte: i32 = load_u8(base + next_cursor);
-                    if after_byte != 125 {
+                    if after_byte != '}' {
                         treat_as_statement = true;
                     };
                 };
@@ -1544,7 +1544,7 @@ fn parse_block_expression_body(
             if allow_empty_value {
                 if next_cursor < len {
                     let after_byte: i32 = load_u8(base + next_cursor);
-                    if after_byte == 125 {
+                    if after_byte == '}' {
                         let expr_index: i32 =
                             expression_node_from_parts(ast_base, expr_kind, expr_data0, expr_data1);
                         if expr_index < 0 {
@@ -1627,7 +1627,7 @@ fn parse_type(base: i32, len: i32, offset: i32, out_type_ptr: i32) -> i32 {
         let byte0: i32 = load_u8(base + offset);
         let byte1: i32 = load_u8(base + offset + 1);
         let byte2: i32 = load_u8(base + offset + 2);
-        if byte0 == 105 && byte1 == 51 && byte2 == 50 {
+        if byte0 == 'i' && byte1 == '3' && byte2 == '2' {
             let next: i32 = offset + 3;
             if next < len {
                 let after: i32 = load_u8(base + next);
@@ -1646,7 +1646,7 @@ fn parse_type(base: i32, len: i32, offset: i32, out_type_ptr: i32) -> i32 {
         let o: i32 = load_u8(base + offset + 1);
         let o2: i32 = load_u8(base + offset + 2);
         let l: i32 = load_u8(base + offset + 3);
-        if b == 98 && o == 111 && o2 == 111 && l == 108 {
+        if b == 'b' && o == 'o' && o2 == 'o' && l == 'l' {
             let next: i32 = offset + 4;
             if next < len {
                 let after: i32 = load_u8(base + next);
@@ -1670,7 +1670,7 @@ fn parse_i32_literal(base: i32, len: i32, offset: i32, out_value_ptr: i32) -> i3
     let mut idx: i32 = offset;
     let mut sign: i32 = 1;
     let first: i32 = load_u8(base + idx);
-    if first == 45 {
+    if first == '-' {
         sign = -1;
         idx = idx + 1;
         if idx >= len {
@@ -1687,7 +1687,7 @@ fn parse_i32_literal(base: i32, len: i32, offset: i32, out_value_ptr: i32) -> i3
         if !is_digit(byte) {
             break;
         };
-        value = value * 10 + (byte - 48);
+        value = value * 10 + (byte - '0');
         idx = idx + 1;
         digits = digits + 1;
     };
@@ -1703,7 +1703,7 @@ fn parse_char_literal(base: i32, len: i32, offset: i32, out_value_ptr: i32) -> i
         return -1;
     };
     let quote: i32 = load_u8(base + offset);
-    if quote != 39 {
+    if quote != '\'' {
         return -1;
     };
     let mut idx: i32 = offset + 1;
@@ -1711,29 +1711,29 @@ fn parse_char_literal(base: i32, len: i32, offset: i32, out_value_ptr: i32) -> i
         return -1;
     };
     let mut value: i32 = load_u8(base + idx);
-    if value == 92 {
+    if value == '\\' {
         idx = idx + 1;
         if idx >= len {
             return -1;
         };
         let escape: i32 = load_u8(base + idx);
-        value = if escape == 110 {
-            10
+        value = if escape == 'n' {
+            '\n'
         } else {
-            if escape == 114 {
-                13
+            if escape == 'r' {
+                '\r'
             } else {
-                if escape == 116 {
-                    9
+                if escape == 't' {
+                    '\t'
                 } else {
-                    if escape == 48 {
-                        0
+                    if escape == '0' {
+                        '\0'
                     } else {
-                        if escape == 92 {
-                            92
+                        if escape == '\\' {
+                            '\\'
                         } else {
-                            if escape == 39 {
-                                39
+                            if escape == '\'' {
+                                '\''
                             } else {
                                 return -1;
                             }
@@ -1743,7 +1743,7 @@ fn parse_char_literal(base: i32, len: i32, offset: i32, out_value_ptr: i32) -> i
             }
         };
     } else {
-        if value == 10 || value == 13 {
+        if value == '\n' || value == '\r' {
             return -1;
         };
     };
@@ -1752,7 +1752,7 @@ fn parse_char_literal(base: i32, len: i32, offset: i32, out_value_ptr: i32) -> i
         return -1;
     };
     let closing: i32 = load_u8(base + idx);
-    if closing != 39 {
+    if closing != '\'' {
         return -1;
     };
     store_i32(out_value_ptr, value);
@@ -2196,7 +2196,7 @@ fn parse_basic_expression(
         return -1;
     };
     let first_byte: i32 = load_u8(base + cursor);
-    if first_byte == 123 {
+    if first_byte == '{' {
         let block_status_ptr: i32 = nested_temp_base + 4096;
         let block_cursor: i32 = parse_block_expression_body(
             base,
@@ -2224,7 +2224,7 @@ fn parse_basic_expression(
         };
         return block_cursor;
     };
-    if first_byte == 105 {
+    if first_byte == 'i' {
         let mut if_cursor: i32 = expect_keyword_if(base, len, cursor);
         if if_cursor >= 0 {
             let cond_kind_ptr: i32 = nested_temp_base;
@@ -2262,7 +2262,7 @@ fn parse_basic_expression(
                 return -1;
             };
             if_cursor = skip_whitespace(base, len, if_cursor);
-            if_cursor = expect_char(base, len, if_cursor, 123);
+            if_cursor = expect_char(base, len, if_cursor, '{');
             if if_cursor < 0 {
                 return -1;
             };
@@ -2298,7 +2298,7 @@ fn parse_basic_expression(
             if_cursor = expect_keyword_else(base, len, if_cursor);
             if if_cursor >= 0 {
                 if_cursor = skip_whitespace(base, len, if_cursor);
-                if_cursor = expect_char(base, len, if_cursor, 123);
+                if_cursor = expect_char(base, len, if_cursor, '{');
                 if if_cursor < 0 {
                     return -1;
                 };
@@ -2370,7 +2370,7 @@ fn parse_basic_expression(
             return skip_whitespace(base, len, if_cursor);
         };
     };
-    if first_byte == 40 {
+    if first_byte == '(' {
         let mut paren_cursor: i32 = cursor + 1;
         paren_cursor = skip_whitespace(base, len, paren_cursor);
         paren_cursor = parse_expression(
@@ -2393,13 +2393,13 @@ fn parse_basic_expression(
             return -1;
         };
         paren_cursor = skip_whitespace(base, len, paren_cursor);
-        paren_cursor = expect_char(base, len, paren_cursor, 41);
+        paren_cursor = expect_char(base, len, paren_cursor, ')');
         if paren_cursor < 0 {
             return -1;
         };
         return skip_whitespace(base, len, paren_cursor);
     };
-    if first_byte == 39 {
+    if first_byte == '\'' {
         let next_cursor: i32 = parse_char_literal(base, len, cursor, literal_ptr);
         if next_cursor < 0 {
             return -1;
@@ -2410,7 +2410,7 @@ fn parse_basic_expression(
         store_i32(out_data1_ptr, 0);
         return skip_whitespace(base, len, next_cursor);
     };
-    if first_byte == 45 || is_digit(first_byte) {
+    if first_byte == '-' || is_digit(first_byte) {
         let next_cursor: i32 = parse_i32_literal(base, len, cursor, literal_ptr);
         if next_cursor < 0 {
             return -1;
@@ -2421,7 +2421,7 @@ fn parse_basic_expression(
         store_i32(out_data1_ptr, 0);
         return skip_whitespace(base, len, next_cursor);
     };
-    if first_byte == 116 {
+    if first_byte == 't' {
         let next_cursor: i32 = expect_keyword_true(base, len, cursor);
         if next_cursor >= 0 {
             store_i32(out_kind_ptr, 0);
@@ -2430,7 +2430,7 @@ fn parse_basic_expression(
             return skip_whitespace(base, len, next_cursor);
         };
     };
-    if first_byte == 102 {
+    if first_byte == 'f' {
         let next_cursor: i32 = expect_keyword_false(base, len, cursor);
         if next_cursor >= 0 {
             store_i32(out_kind_ptr, 0);
@@ -2451,7 +2451,7 @@ fn parse_basic_expression(
     next_cursor = skip_whitespace(base, len, next_cursor);
     if next_cursor < len {
         let next_byte: i32 = load_u8(base + next_cursor);
-        if next_byte == 40 {
+        if next_byte == '(' {
             let mut call_cursor: i32 = next_cursor + 1;
             call_cursor = skip_whitespace(base, len, call_cursor);
             let args_limit: i32 = max_params();
@@ -2463,7 +2463,7 @@ fn parse_basic_expression(
             let mut arg_count: i32 = 0;
             if call_cursor < len {
                 let maybe_close: i32 = load_u8(base + call_cursor);
-                if maybe_close == 41 {
+                if maybe_close == ')' {
                     call_cursor = call_cursor + 1;
                 } else {
                     loop {
@@ -2504,19 +2504,19 @@ fn parse_basic_expression(
                             return -1;
                         };
                         let delimiter: i32 = load_u8(base + call_cursor);
-                        if delimiter == 44 {
+                        if delimiter == ',' {
                             call_cursor = skip_whitespace(base, len, call_cursor + 1);
                             if call_cursor >= len {
                                 return -1;
                             };
                             let after_comma: i32 = load_u8(base + call_cursor);
-                            if after_comma == 41 {
+                            if after_comma == ')' {
                                 call_cursor = call_cursor + 1;
                                 break;
                             };
                             continue;
                         };
-                        if delimiter == 41 {
+                        if delimiter == ')' {
                             call_cursor = call_cursor + 1;
                             break;
                         };
@@ -2662,7 +2662,7 @@ fn parse_unary_expression(
             break;
         };
         let next_byte: i32 = load_u8(base + current_cursor);
-        if next_byte != 33 {
+        if next_byte != '!' {
             break;
         };
         not_count = not_count + 1;
@@ -2765,7 +2765,7 @@ fn parse_multiplicative_expression(
             break;
         };
         let next_byte: i32 = load_u8(base + current_cursor);
-        if next_byte != 42 && next_byte != 47 {
+        if next_byte != '*' && next_byte != '/' {
             break;
         };
         let operator: i32 = next_byte;
@@ -2810,7 +2810,7 @@ fn parse_multiplicative_expression(
             return -1;
         };
 
-        let new_index: i32 = if operator == 42 {
+        let new_index: i32 = if operator == '*' {
             ast_expr_alloc_mul(ast_base, left_index, right_index)
         } else {
             ast_expr_alloc_div(ast_base, left_index, right_index)
@@ -2873,7 +2873,7 @@ fn parse_additive_expression(
             break;
         };
         let next_byte: i32 = load_u8(base + current_cursor);
-        if next_byte != 43 && next_byte != 45 {
+        if next_byte != '+' && next_byte != '-' {
             break;
         };
         let operator: i32 = next_byte;
@@ -2915,7 +2915,7 @@ fn parse_additive_expression(
             return -1;
         };
 
-        let new_index: i32 = if operator == 43 {
+        let new_index: i32 = if operator == '+' {
             ast_expr_alloc_add(ast_base, left_index, right_index)
         } else {
             ast_expr_alloc_sub(ast_base, left_index, right_index)
@@ -2980,10 +2980,10 @@ fn parse_shift_expression(
         let first: i32 = load_u8(base + current_cursor);
         let second: i32 = load_u8(base + current_cursor + 1);
         let mut op_kind: i32 = -1;
-        if first == 60 && second == 60 {
+        if first == '<' && second == '<' {
             op_kind = 0;
         } else {
-            if first == 62 && second == 62 {
+            if first == '>' && second == '>' {
                 op_kind = 1;
             } else {
                 break;
@@ -3094,14 +3094,14 @@ fn parse_relational_expression(
         let operator_byte: i32 = load_u8(base + current_cursor);
         let mut relation_op: i32 = -1;
         let mut consume: i32 = 1;
-        if operator_byte == 60 {
+        if operator_byte == '<' {
             if current_cursor + 1 < len {
                 let next: i32 = load_u8(base + current_cursor + 1);
-                if next == 61 {
+                if next == '=' {
                     relation_op = 2;
                     consume = 2;
                 } else {
-                    if next == 60 {
+                    if next == '<' {
                         return -1;
                     };
                     relation_op = 0;
@@ -3110,14 +3110,14 @@ fn parse_relational_expression(
                 relation_op = 0;
             };
         } else {
-            if operator_byte == 62 {
+            if operator_byte == '>' {
                 if current_cursor + 1 < len {
                     let next: i32 = load_u8(base + current_cursor + 1);
-                    if next == 61 {
+                    if next == '=' {
                         relation_op = 3;
                         consume = 2;
                     } else {
-                        if next == 62 {
+                        if next == '>' {
                             return -1;
                         };
                         relation_op = 1;
@@ -3243,14 +3243,14 @@ fn parse_equality_expression(
         let operator_byte: i32 = load_u8(base + current_cursor);
         let next_byte: i32 = load_u8(base + current_cursor + 1);
         let mut equality_op: i32 = -1;
-        if operator_byte == 61 {
-            if next_byte != 61 {
+        if operator_byte == '=' {
+            if next_byte != '=' {
                 break;
             };
             equality_op = 0;
         } else {
-            if operator_byte == 33 {
-                if next_byte != 61 {
+            if operator_byte == '!' {
+                if next_byte != '=' {
                     break;
                 };
                 equality_op = 1;
@@ -3360,12 +3360,12 @@ fn parse_bitwise_and_expression(
             break;
         };
         let operator_byte: i32 = load_u8(base + current_cursor);
-        if operator_byte != 38 {
+        if operator_byte != '&' {
             break;
         };
         if current_cursor + 1 < len {
             let next: i32 = load_u8(base + current_cursor + 1);
-            if next == 38 {
+            if next == '&' {
                 break;
             };
         };
@@ -3468,12 +3468,12 @@ fn parse_bitwise_or_expression(
             break;
         };
         let operator_byte: i32 = load_u8(base + current_cursor);
-        if operator_byte != 124 {
+        if operator_byte != '|' {
             break;
         };
         if current_cursor + 1 < len {
             let next: i32 = load_u8(base + current_cursor + 1);
-            if next == 124 {
+            if next == '|' {
                 break;
             };
         };
@@ -3576,11 +3576,11 @@ fn parse_logical_and_expression(
             break;
         };
         let first: i32 = load_u8(base + current_cursor);
-        if first != 38 {
+        if first != '&' {
             break;
         };
         let second: i32 = load_u8(base + current_cursor + 1);
-        if second != 38 {
+        if second != '&' {
             return -1;
         };
         current_cursor = skip_whitespace(base, len, current_cursor + 2);
@@ -3681,11 +3681,11 @@ fn parse_logical_or_expression(
             break;
         };
         let first: i32 = load_u8(base + current_cursor);
-        if first != 124 {
+        if first != '|' {
             break;
         };
         let second: i32 = load_u8(base + current_cursor + 1);
-        if second != 124 {
+        if second != '|' {
             return -1;
         };
         current_cursor = skip_whitespace(base, len, current_cursor + 2);
@@ -3805,7 +3805,7 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     let name_len: i32 = load_i32(name_len_ptr);
 
     cursor = skip_whitespace(base, len, cursor);
-    cursor = expect_char(base, len, cursor, 40);
+    cursor = expect_char(base, len, cursor, '(');
     if cursor < 0 {
         return -1;
     };
@@ -3817,7 +3817,7 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
             return -1;
         };
         let next_byte: i32 = load_u8(base + cursor);
-        if next_byte == 41 {
+        if next_byte == ')' {
             cursor = cursor + 1;
             break;
         };
@@ -3844,7 +3844,7 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
             existing_idx = existing_idx + 1;
         };
         cursor = skip_whitespace(base, len, cursor);
-        cursor = expect_char(base, len, cursor, 58);
+        cursor = expect_char(base, len, cursor, ':');
         if cursor < 0 {
             return -1;
         };
@@ -3861,19 +3861,19 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
             return -1;
         };
         let delimiter: i32 = load_u8(base + cursor);
-        if delimiter == 44 {
+        if delimiter == ',' {
             cursor = skip_whitespace(base, len, cursor + 1);
             if cursor >= len {
                 return -1;
             };
             let maybe_close: i32 = load_u8(base + cursor);
-            if maybe_close == 41 {
+            if maybe_close == ')' {
                 cursor = cursor + 1;
                 break;
             };
             continue;
         };
-        if delimiter == 41 {
+        if delimiter == ')' {
             cursor = cursor + 1;
             break;
         };
@@ -3888,13 +3888,13 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     let mut has_return_type: bool = false;
     if cursor < len {
         let maybe_arrow: i32 = load_u8(base + cursor);
-        if maybe_arrow == 45 {
+        if maybe_arrow == '-' {
             has_return_type = true;
-            cursor = expect_char(base, len, cursor, 45);
+            cursor = expect_char(base, len, cursor, '-');
             if cursor < 0 {
                 return -1;
             };
-            cursor = expect_char(base, len, cursor, 62);
+            cursor = expect_char(base, len, cursor, '>');
             if cursor < 0 {
                 return -1;
             };
@@ -3910,7 +3910,7 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     };
 
     cursor = skip_whitespace(base, len, cursor);
-    cursor = expect_char(base, len, cursor, 123);
+    cursor = expect_char(base, len, cursor, '{');
     if cursor < 0 {
         return -1;
     };
@@ -4066,10 +4066,10 @@ fn validate_program(ast_base: i32, func_count: i32) -> i32 {
     };
     let mut main_count: i32 = 0;
     let main_name_ptr: i32 = ast_temp_base(ast_base);
-    store_u8(main_name_ptr + 0, 109);
-    store_u8(main_name_ptr + 1, 97);
-    store_u8(main_name_ptr + 2, 105);
-    store_u8(main_name_ptr + 3, 110);
+    store_u8(main_name_ptr + 0, 'm');
+    store_u8(main_name_ptr + 1, 'a');
+    store_u8(main_name_ptr + 2, 'i');
+    store_u8(main_name_ptr + 3, 'n');
     let mut idx: i32 = 0;
     loop {
         if idx >= func_count {
@@ -4080,10 +4080,10 @@ fn validate_program(ast_base: i32, func_count: i32) -> i32 {
         let name_len: i32 = load_i32(entry_ptr + 4);
         let param_count: i32 = load_i32(entry_ptr + 8);
         let body_kind: i32 = load_i32(entry_ptr + 12);
-        store_u8(main_name_ptr + 0, 109);
-        store_u8(main_name_ptr + 1, 97);
-        store_u8(main_name_ptr + 2, 105);
-        store_u8(main_name_ptr + 3, 110);
+        store_u8(main_name_ptr + 0, 'm');
+        store_u8(main_name_ptr + 1, 'a');
+        store_u8(main_name_ptr + 2, 'i');
+        store_u8(main_name_ptr + 3, 'n');
         if name_len == 4 {
             if identifiers_match(name_ptr, name_len, main_name_ptr, 4) {
                 main_count = main_count + 1;
@@ -5225,12 +5225,12 @@ fn emit_export_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -
     out = write_u32_leb(base, out, func_count + 1);
 
     out = write_u32_leb(base, out, 6);
-    out = write_byte(base, out, 109);
-    out = write_byte(base, out, 101);
-    out = write_byte(base, out, 109);
-    out = write_byte(base, out, 111);
-    out = write_byte(base, out, 114);
-    out = write_byte(base, out, 121);
+    out = write_byte(base, out, 'm');
+    out = write_byte(base, out, 'e');
+    out = write_byte(base, out, 'm');
+    out = write_byte(base, out, 'o');
+    out = write_byte(base, out, 'r');
+    out = write_byte(base, out, 'y');
     out = write_byte(base, out, 2);
     out = write_u32_leb(base, out, 0);
 
@@ -5252,7 +5252,7 @@ fn emit_export_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -
             out = write_byte(base, out, byte);
             byte_idx = byte_idx + 1;
         };
-        out = write_byte(base, out, 0);
+        out = write_byte(base, out, '\0');
         out = write_u32_leb(base, out, idx);
         idx = idx + 1;
     };
