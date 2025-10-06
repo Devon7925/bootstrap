@@ -223,12 +223,12 @@ pub fn run_wasm_main(engine: &Engine, wasm: &[u8]) -> i32 {
     let memory: Memory = instance
         .get_memory(&mut store, "memory")
         .expect("compiled module should export memory");
-    assert_eq!(
+    assert!(
         memory
             .current_pages(&store)
             .to_bytes()
-            .expect("memory pages to bytes"),
-        1048576
+            .expect("memory pages to bytes")
+            >= 1_048_576
     );
 
     let main_fn: TypedFunc<(), i32> = instance

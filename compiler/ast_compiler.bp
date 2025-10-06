@@ -1786,8 +1786,12 @@ fn ast_call_data_capacity() -> i32 {
     65536
 }
 
-fn ast_program_base(out_ptr: i32) -> i32 {
-    scratch_instr_base(out_ptr)
+fn ast_output_reserve(input_len: i32) -> i32 {
+    input_len + scratch_instr_capacity()
+}
+
+fn ast_program_base(out_ptr: i32, input_len: i32) -> i32 {
+    out_ptr + ast_output_reserve(input_len)
 }
 
 fn ast_functions_count_ptr(ast_base: i32) -> i32 {
@@ -5103,15 +5107,20 @@ fn emit_function_section(base: i32, offset: i32, func_count: i32) -> i32 {
     out
 }
 
+fn compiler_memory_pages() -> i32 {
+    64
+}
+
 fn emit_memory_section(base: i32, offset: i32) -> i32 {
     let mut out: i32 = offset;
     out = write_byte(base, out, 5);
-    let payload_size: i32 = leb_u32_len(1) + 1 + leb_u32_len(16) + leb_u32_len(16);
+    let pages: i32 = compiler_memory_pages();
+    let payload_size: i32 = leb_u32_len(1) + 1 + leb_u32_len(pages) + leb_u32_len(pages);
     out = write_u32_leb(base, out, payload_size);
     out = write_u32_leb(base, out, 1);
     out = write_byte(base, out, 1);
-    out = write_u32_leb(base, out, 16);
-    out = write_u32_leb(base, out, 16);
+    out = write_u32_leb(base, out, pages);
+    out = write_u32_leb(base, out, pages);
     out
 }
 
@@ -5363,7 +5372,7 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
 
     initialize_layout(out_ptr);
 
-    let ast_base: i32 = ast_program_base(out_ptr);
+    let ast_base: i32 = ast_program_base(out_ptr, input_len);
     ast_reset(ast_base);
 
     let func_count: i32 = parse_program(input_ptr, input_len, ast_base);
