@@ -28,6 +28,89 @@ fn main() -> i32 {
 }
 
 #[test]
+fn ast_compiler_supports_global_constants() {
+    let source = r#"
+const ANSWER: i32 = 42;
+
+fn main() -> i32 {
+    ANSWER
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 42);
+}
+
+#[test]
+fn ast_compiler_constants_can_reference_other_constants() {
+    let source = r#"
+const BASE: i32 = 40;
+const VALUE: i32 = BASE;
+
+fn main() -> i32 {
+    VALUE + 2
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 42);
+}
+
+#[test]
+fn ast_compiler_rejects_duplicate_constants() {
+    let source = r#"
+const VALUE: i32 = 1;
+const VALUE: i32 = 2;
+
+fn main() -> i32 {
+    VALUE
+}
+"#;
+
+    let error = try_compile_with_ast_compiler(source)
+        .expect_err("duplicate constants should be rejected");
+    assert!(error.produced_len <= 0);
+}
+
+#[test]
+fn ast_compiler_rejects_non_literal_constant_initializer() {
+    let source = r#"
+const VALUE: i32 = 1 + 2;
+
+fn main() -> i32 {
+    VALUE
+}
+"#;
+
+    let error = try_compile_with_ast_compiler(source)
+        .expect_err("non-literal constant initializers should be rejected");
+    assert!(error.produced_len <= 0);
+}
+
+#[test]
+fn ast_compiler_rejects_function_name_conflicting_with_constant() {
+    let source = r#"
+const helper: i32 = 1;
+
+fn helper() -> i32 {
+    0
+}
+
+fn main() -> i32 {
+    helper
+}
+"#;
+
+    let error = try_compile_with_ast_compiler(source)
+        .expect_err("function names should not conflict with constants");
+    assert!(error.produced_len <= 0);
+}
+
+#[test]
 fn ast_compiler_requires_main_function() {
     let source = r#"
 fn helper() -> i32 {
