@@ -69,6 +69,141 @@ fn leb_i32_len(value: i32) -> i32 {
     count
 }
 
+fn u32_add_carry(left: i32, right: i32, sum: i32) -> i32 {
+    let mask: i32 = -2147483648;
+    let carry_bits: i32 = (left & right) | ((left | right) & (sum ^ -1));
+    let carry: i32 = (carry_bits & mask) >> 31;
+    carry & 1
+}
+
+fn u64_store(ptr: i32, low: i32, high: i32) {
+    store_i32(ptr, low);
+    store_i32(ptr + 4, high);
+}
+
+fn u64_copy(src_ptr: i32, dst_ptr: i32) {
+    let low: i32 = load_i32(src_ptr);
+    let high: i32 = load_i32(src_ptr + 4);
+    u64_store(dst_ptr, low, high);
+}
+
+fn u64_add(dest_ptr: i32, left_ptr: i32, right_ptr: i32) -> i32 {
+    let left_low: i32 = load_i32(left_ptr);
+    let left_high: i32 = load_i32(left_ptr + 4);
+    let right_low: i32 = load_i32(right_ptr);
+    let right_high: i32 = load_i32(right_ptr + 4);
+    let sum_low: i32 = left_low + right_low;
+    let carry_low: i32 = u32_add_carry(left_low, right_low, sum_low);
+    let sum_high_partial: i32 = left_high + right_high;
+    let carry_high_partial: i32 = u32_add_carry(left_high, right_high, sum_high_partial);
+    let sum_high: i32 = sum_high_partial + carry_low;
+    let carry_high: i32 = u32_add_carry(sum_high_partial, carry_low, sum_high);
+    u64_store(dest_ptr, sum_low, sum_high);
+    if carry_high_partial != 0 || carry_high != 0 {
+        return -1;
+    };
+    0
+}
+
+fn u64_negate(ptr: i32) {
+    let low: i32 = load_i32(ptr);
+    let high: i32 = load_i32(ptr + 4);
+    let inv_low: i32 = low ^ -1;
+    let inv_high: i32 = high ^ -1;
+    let neg_low: i32 = inv_low + 1;
+    let carry: i32 = u32_add_carry(inv_low, 1, neg_low);
+    let neg_high: i32 = inv_high + carry;
+    u64_store(ptr, neg_low, neg_high);
+}
+
+fn u64_is_zero(ptr: i32) -> bool {
+    load_i32(ptr) == 0 && load_i32(ptr + 4) == 0
+}
+
+fn u64_is_minus_one(ptr: i32) -> bool {
+    load_i32(ptr) == -1 && load_i32(ptr + 4) == -1
+}
+
+fn u32_compare_unsigned(left: i32, right: i32) -> i32 {
+    let left_adjusted: i32 = left ^ -2147483648;
+    let right_adjusted: i32 = right ^ -2147483648;
+    if left_adjusted < right_adjusted {
+        return -1;
+    };
+    if left_adjusted > right_adjusted {
+        return 1;
+    };
+    0
+}
+
+fn u64_compare_unsigned(left_ptr: i32, right_ptr: i32) -> i32 {
+    let high_compare: i32 = u32_compare_unsigned(load_i32(left_ptr + 4), load_i32(right_ptr + 4));
+    if high_compare != 0 {
+        return high_compare;
+    };
+    u32_compare_unsigned(load_i32(left_ptr), load_i32(right_ptr))
+}
+
+fn i64_compare(left_ptr: i32, right_ptr: i32) -> i32 {
+    let left_high: i32 = load_i32(left_ptr + 4);
+    let right_high: i32 = load_i32(right_ptr + 4);
+    if left_high < right_high {
+        return -1;
+    };
+    if left_high > right_high {
+        return 1;
+    };
+    u32_compare_unsigned(load_i32(left_ptr), load_i32(right_ptr))
+}
+
+fn leb_i64_len(value_low: i32, value_high: i32) -> i32 {
+    let mut current_low: i32 = value_low;
+    let mut current_high: i32 = value_high;
+    let mut count: i32 = 0;
+    loop {
+        let byte: i32 = current_low & 127;
+        let next_low_shifted: i32 = (current_low >> 7) & 33_554_431;
+        let next_low: i32 = next_low_shifted | (current_high << 25);
+        let next_high: i32 = current_high >> 7;
+        count = count + 1;
+        let sign_bit: i32 = byte & 64;
+        let done: bool = (next_high == 0 && next_low == 0 && sign_bit == 0)
+            || (next_high == -1 && next_low == -1 && sign_bit != 0);
+        current_low = next_low;
+        current_high = next_high;
+        if done {
+            break;
+        };
+    };
+    count
+}
+
+fn write_i64_leb(base: i32, offset: i32, value_low: i32, value_high: i32) -> i32 {
+    let mut remaining_low: i32 = value_low;
+    let mut remaining_high: i32 = value_high;
+    let mut out: i32 = offset;
+    loop {
+        let byte: i32 = remaining_low & 127;
+        let next_low_shifted: i32 = (remaining_low >> 7) & 33_554_431;
+        let next_low: i32 = next_low_shifted | (remaining_high << 25);
+        let next_high: i32 = remaining_high >> 7;
+        let sign_bit: i32 = byte & 64;
+        let done: bool = (next_high == 0 && next_low == 0 && sign_bit == 0)
+            || (next_high == -1 && next_low == -1 && sign_bit != 0);
+        let mut out_byte: i32 = byte;
+        if !done {
+            out_byte = out_byte | 128;
+        };
+        out = write_byte(base, out, out_byte);
+        remaining_low = next_low;
+        remaining_high = next_high;
+        if done {
+            break;
+        };
+    };
+    out
+}
+
 fn write_magic(base: i32, offset: i32) -> i32 {
     let mut out: i32 = offset;
     out = write_byte(base, out, '\0');
@@ -410,6 +545,46 @@ fn intrinsic_kind_store_u16() -> i32 {
     5
 }
 
+fn intrinsic_kind_load_i8() -> i32 {
+    6
+}
+
+fn intrinsic_kind_store_i8() -> i32 {
+    7
+}
+
+fn intrinsic_kind_load_i16() -> i32 {
+    8
+}
+
+fn intrinsic_kind_store_i16() -> i32 {
+    9
+}
+
+fn intrinsic_kind_load_u32() -> i32 {
+    10
+}
+
+fn intrinsic_kind_store_u32() -> i32 {
+    11
+}
+
+fn intrinsic_kind_load_i64() -> i32 {
+    12
+}
+
+fn intrinsic_kind_store_i64() -> i32 {
+    13
+}
+
+fn intrinsic_kind_load_u64() -> i32 {
+    14
+}
+
+fn intrinsic_kind_store_u64() -> i32 {
+    15
+}
+
 fn is_identifier_load_u8(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
     if ident_len != 7 {
         return false;
@@ -617,12 +792,367 @@ fn is_identifier_store_u16(base: i32, len: i32, start: i32, ident_len: i32) -> b
     true
 }
 
+fn is_identifier_load_i8(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
+    if ident_len != 7 {
+        return false;
+    };
+    if start < 0 || start + ident_len > len {
+        return false;
+    };
+    if load_u8(base + start) != 'l' {
+        return false;
+    };
+    if load_u8(base + start + 1) != 'o' {
+        return false;
+    };
+    if load_u8(base + start + 2) != 'a' {
+        return false;
+    };
+    if load_u8(base + start + 3) != 'd' {
+        return false;
+    };
+    if load_u8(base + start + 4) != '_' {
+        return false;
+    };
+    if load_u8(base + start + 5) != 'i' {
+        return false;
+    };
+    if load_u8(base + start + 6) != '8' {
+        return false;
+    };
+    true
+}
+
+fn is_identifier_store_i8(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
+    if ident_len != 8 {
+        return false;
+    };
+    if start < 0 || start + ident_len > len {
+        return false;
+    };
+    if load_u8(base + start) != 's' {
+        return false;
+    };
+    if load_u8(base + start + 1) != 't' {
+        return false;
+    };
+    if load_u8(base + start + 2) != 'o' {
+        return false;
+    };
+    if load_u8(base + start + 3) != 'r' {
+        return false;
+    };
+    if load_u8(base + start + 4) != 'e' {
+        return false;
+    };
+    if load_u8(base + start + 5) != '_' {
+        return false;
+    };
+    if load_u8(base + start + 6) != 'i' {
+        return false;
+    };
+    if load_u8(base + start + 7) != '8' {
+        return false;
+    };
+    true
+}
+
+fn is_identifier_load_i16(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
+    if ident_len != 8 {
+        return false;
+    };
+    if start < 0 || start + ident_len > len {
+        return false;
+    };
+    if load_u8(base + start) != 'l' {
+        return false;
+    };
+    if load_u8(base + start + 1) != 'o' {
+        return false;
+    };
+    if load_u8(base + start + 2) != 'a' {
+        return false;
+    };
+    if load_u8(base + start + 3) != 'd' {
+        return false;
+    };
+    if load_u8(base + start + 4) != '_' {
+        return false;
+    };
+    if load_u8(base + start + 5) != 'i' {
+        return false;
+    };
+    if load_u8(base + start + 6) != '1' {
+        return false;
+    };
+    if load_u8(base + start + 7) != '6' {
+        return false;
+    };
+    true
+}
+
+fn is_identifier_store_i16(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
+    if ident_len != 9 {
+        return false;
+    };
+    if start < 0 || start + ident_len > len {
+        return false;
+    };
+    if load_u8(base + start) != 's' {
+        return false;
+    };
+    if load_u8(base + start + 1) != 't' {
+        return false;
+    };
+    if load_u8(base + start + 2) != 'o' {
+        return false;
+    };
+    if load_u8(base + start + 3) != 'r' {
+        return false;
+    };
+    if load_u8(base + start + 4) != 'e' {
+        return false;
+    };
+    if load_u8(base + start + 5) != '_' {
+        return false;
+    };
+    if load_u8(base + start + 6) != 'i' {
+        return false;
+    };
+    if load_u8(base + start + 7) != '1' {
+        return false;
+    };
+    if load_u8(base + start + 8) != '6' {
+        return false;
+    };
+    true
+}
+
+fn is_identifier_load_u32(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
+    if ident_len != 8 {
+        return false;
+    };
+    if start < 0 || start + ident_len > len {
+        return false;
+    };
+    if load_u8(base + start) != 'l' {
+        return false;
+    };
+    if load_u8(base + start + 1) != 'o' {
+        return false;
+    };
+    if load_u8(base + start + 2) != 'a' {
+        return false;
+    };
+    if load_u8(base + start + 3) != 'd' {
+        return false;
+    };
+    if load_u8(base + start + 4) != '_' {
+        return false;
+    };
+    if load_u8(base + start + 5) != 'u' {
+        return false;
+    };
+    if load_u8(base + start + 6) != '3' {
+        return false;
+    };
+    if load_u8(base + start + 7) != '2' {
+        return false;
+    };
+    true
+}
+
+fn is_identifier_store_u32(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
+    if ident_len != 9 {
+        return false;
+    };
+    if start < 0 || start + ident_len > len {
+        return false;
+    };
+    if load_u8(base + start) != 's' {
+        return false;
+    };
+    if load_u8(base + start + 1) != 't' {
+        return false;
+    };
+    if load_u8(base + start + 2) != 'o' {
+        return false;
+    };
+    if load_u8(base + start + 3) != 'r' {
+        return false;
+    };
+    if load_u8(base + start + 4) != 'e' {
+        return false;
+    };
+    if load_u8(base + start + 5) != '_' {
+        return false;
+    };
+    if load_u8(base + start + 6) != 'u' {
+        return false;
+    };
+    if load_u8(base + start + 7) != '3' {
+        return false;
+    };
+    if load_u8(base + start + 8) != '2' {
+        return false;
+    };
+    true
+}
+
+fn is_identifier_load_i64(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
+    if ident_len != 8 {
+        return false;
+    };
+    if start < 0 || start + ident_len > len {
+        return false;
+    };
+    if load_u8(base + start) != 'l' {
+        return false;
+    };
+    if load_u8(base + start + 1) != 'o' {
+        return false;
+    };
+    if load_u8(base + start + 2) != 'a' {
+        return false;
+    };
+    if load_u8(base + start + 3) != 'd' {
+        return false;
+    };
+    if load_u8(base + start + 4) != '_' {
+        return false;
+    };
+    if load_u8(base + start + 5) != 'i' {
+        return false;
+    };
+    if load_u8(base + start + 6) != '6' {
+        return false;
+    };
+    if load_u8(base + start + 7) != '4' {
+        return false;
+    };
+    true
+}
+
+fn is_identifier_store_i64(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
+    if ident_len != 9 {
+        return false;
+    };
+    if start < 0 || start + ident_len > len {
+        return false;
+    };
+    if load_u8(base + start) != 's' {
+        return false;
+    };
+    if load_u8(base + start + 1) != 't' {
+        return false;
+    };
+    if load_u8(base + start + 2) != 'o' {
+        return false;
+    };
+    if load_u8(base + start + 3) != 'r' {
+        return false;
+    };
+    if load_u8(base + start + 4) != 'e' {
+        return false;
+    };
+    if load_u8(base + start + 5) != '_' {
+        return false;
+    };
+    if load_u8(base + start + 6) != 'i' {
+        return false;
+    };
+    if load_u8(base + start + 7) != '6' {
+        return false;
+    };
+    if load_u8(base + start + 8) != '4' {
+        return false;
+    };
+    true
+}
+
+fn is_identifier_load_u64(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
+    if ident_len != 8 {
+        return false;
+    };
+    if start < 0 || start + ident_len > len {
+        return false;
+    };
+    if load_u8(base + start) != 'l' {
+        return false;
+    };
+    if load_u8(base + start + 1) != 'o' {
+        return false;
+    };
+    if load_u8(base + start + 2) != 'a' {
+        return false;
+    };
+    if load_u8(base + start + 3) != 'd' {
+        return false;
+    };
+    if load_u8(base + start + 4) != '_' {
+        return false;
+    };
+    if load_u8(base + start + 5) != 'u' {
+        return false;
+    };
+    if load_u8(base + start + 6) != '6' {
+        return false;
+    };
+    if load_u8(base + start + 7) != '4' {
+        return false;
+    };
+    true
+}
+
+fn is_identifier_store_u64(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
+    if ident_len != 9 {
+        return false;
+    };
+    if start < 0 || start + ident_len > len {
+        return false;
+    };
+    if load_u8(base + start) != 's' {
+        return false;
+    };
+    if load_u8(base + start + 1) != 't' {
+        return false;
+    };
+    if load_u8(base + start + 2) != 'o' {
+        return false;
+    };
+    if load_u8(base + start + 3) != 'r' {
+        return false;
+    };
+    if load_u8(base + start + 4) != 'e' {
+        return false;
+    };
+    if load_u8(base + start + 5) != '_' {
+        return false;
+    };
+    if load_u8(base + start + 6) != 'u' {
+        return false;
+    };
+    if load_u8(base + start + 7) != '6' {
+        return false;
+    };
+    if load_u8(base + start + 8) != '4' {
+        return false;
+    };
+    true
+}
+
 fn identify_intrinsic(base: i32, len: i32, start: i32, ident_len: i32) -> i32 {
     if is_identifier_load_u8(base, len, start, ident_len) {
         return intrinsic_kind_load_u8();
     };
+    if is_identifier_load_i8(base, len, start, ident_len) {
+        return intrinsic_kind_load_i8();
+    };
     if is_identifier_store_u8(base, len, start, ident_len) {
         return intrinsic_kind_store_u8();
+    };
+    if is_identifier_store_i8(base, len, start, ident_len) {
+        return intrinsic_kind_store_i8();
     };
     if is_identifier_load_i32(base, len, start, ident_len) {
         return intrinsic_kind_load_i32();
@@ -635,6 +1165,30 @@ fn identify_intrinsic(base: i32, len: i32, start: i32, ident_len: i32) -> i32 {
     };
     if is_identifier_store_u16(base, len, start, ident_len) {
         return intrinsic_kind_store_u16();
+    };
+    if is_identifier_load_i16(base, len, start, ident_len) {
+        return intrinsic_kind_load_i16();
+    };
+    if is_identifier_store_i16(base, len, start, ident_len) {
+        return intrinsic_kind_store_i16();
+    };
+    if is_identifier_load_u32(base, len, start, ident_len) {
+        return intrinsic_kind_load_u32();
+    };
+    if is_identifier_store_u32(base, len, start, ident_len) {
+        return intrinsic_kind_store_u32();
+    };
+    if is_identifier_load_i64(base, len, start, ident_len) {
+        return intrinsic_kind_load_i64();
+    };
+    if is_identifier_store_i64(base, len, start, ident_len) {
+        return intrinsic_kind_store_i64();
+    };
+    if is_identifier_load_u64(base, len, start, ident_len) {
+        return intrinsic_kind_load_u64();
+    };
+    if is_identifier_store_u64(base, len, start, ident_len) {
+        return intrinsic_kind_store_u64();
     };
     intrinsic_kind_none()
 }
@@ -1677,6 +2231,64 @@ fn type_id_is_integer(type_id: i32) -> bool {
         || type_id == builtin_type_id_u64()
 }
 
+fn type_id_is_signed_integer(type_id: i32) -> bool {
+    type_id == builtin_type_id_i8()
+        || type_id == builtin_type_id_i16()
+        || type_id == builtin_type_id_i32()
+        || type_id == builtin_type_id_i64()
+}
+
+fn type_id_is_unsigned_integer(type_id: i32) -> bool {
+    type_id == builtin_type_id_u8()
+        || type_id == builtin_type_id_u16()
+        || type_id == builtin_type_id_u32()
+        || type_id == builtin_type_id_u64()
+}
+
+fn integer_type_range(type_id: i32, min_ptr: i32, max_ptr: i32) -> i32 {
+    if type_id == builtin_type_id_i8() {
+        u64_store(min_ptr, -128, -1);
+        u64_store(max_ptr, 127, 0);
+        return 0;
+    };
+    if type_id == builtin_type_id_i16() {
+        u64_store(min_ptr, -32_768, -1);
+        u64_store(max_ptr, 32_767, 0);
+        return 0;
+    };
+    if type_id == builtin_type_id_i32() {
+        u64_store(min_ptr, -2_147_483_648, -1);
+        u64_store(max_ptr, 2_147_483_647, 0);
+        return 0;
+    };
+    if type_id == builtin_type_id_i64() {
+        u64_store(min_ptr, 0, -2_147_483_648);
+        u64_store(max_ptr, -1, 2_147_483_647);
+        return 0;
+    };
+    if type_id == builtin_type_id_u8() {
+        u64_store(min_ptr, 0, 0);
+        u64_store(max_ptr, 255, 0);
+        return 0;
+    };
+    if type_id == builtin_type_id_u16() {
+        u64_store(min_ptr, 0, 0);
+        u64_store(max_ptr, 65_535, 0);
+        return 0;
+    };
+    if type_id == builtin_type_id_u32() {
+        u64_store(min_ptr, 0, 0);
+        u64_store(max_ptr, -1, 0);
+        return 0;
+    };
+    if type_id == builtin_type_id_u64() {
+        u64_store(min_ptr, 0, 0);
+        u64_store(max_ptr, -1, -1);
+        return 0;
+    };
+    -1
+}
+
 fn builtin_integer_variant_count() -> i32 {
     4
 }
@@ -1810,7 +2422,7 @@ fn parse_type(base: i32, len: i32, offset: i32, out_type_ptr: i32) -> i32 {
     -1
 }
 
-fn parse_i32_literal(base: i32, len: i32, offset: i32, out_value_ptr: i32) -> i32 {
+fn parse_integer_literal(base: i32, len: i32, offset: i32, scratch_ptr: i32) -> i32 {
     if offset >= len {
         return -1;
     };
@@ -1824,8 +2436,14 @@ fn parse_i32_literal(base: i32, len: i32, offset: i32, out_value_ptr: i32) -> i3
             return -1;
         };
     };
+    let value_ptr: i32 = scratch_ptr;
+    let type_ptr: i32 = scratch_ptr + 8;
+    let range_min_ptr: i32 = scratch_ptr + 12;
+    let range_max_ptr: i32 = scratch_ptr + 20;
+    let temp_ptr: i32 = scratch_ptr + 28;
+    let temp2_ptr: i32 = scratch_ptr + 36;
+    u64_store(value_ptr, 0, 0);
     let mut digits: i32 = 0;
-    let mut value: i32 = 0;
     loop {
         if idx >= len {
             break;
@@ -1834,14 +2452,86 @@ fn parse_i32_literal(base: i32, len: i32, offset: i32, out_value_ptr: i32) -> i3
         if !is_digit(byte) {
             break;
         };
-        value = value * 10 + (byte - '0');
+        u64_copy(value_ptr, temp_ptr);
+        if u64_add(temp_ptr, temp_ptr, temp_ptr) < 0 {
+            return -1;
+        };
+        u64_copy(temp_ptr, temp2_ptr);
+        if u64_add(temp_ptr, temp_ptr, temp_ptr) < 0 {
+            return -1;
+        };
+        if u64_add(temp_ptr, temp_ptr, temp_ptr) < 0 {
+            return -1;
+        };
+        if u64_add(temp_ptr, temp_ptr, temp2_ptr) < 0 {
+            return -1;
+        };
+        let digit_value: i32 = byte - '0';
+        u64_store(temp2_ptr, digit_value, 0);
+        if u64_add(temp_ptr, temp_ptr, temp2_ptr) < 0 {
+            return -1;
+        };
+        u64_copy(temp_ptr, value_ptr);
         idx = idx + 1;
         digits = digits + 1;
     };
     if digits == 0 {
         return -1;
     };
-    store_i32(out_value_ptr, value * sign);
+    let mut type_id: i32 = -1;
+    if idx < len {
+        let next_byte: i32 = load_u8(base + idx);
+        if is_identifier_start(next_byte) {
+            let type_start: i32 = idx;
+            idx = idx + 1;
+            loop {
+                if idx >= len {
+                    break;
+                };
+                let type_byte: i32 = load_u8(base + idx);
+                if !is_identifier_continue(type_byte) {
+                    break;
+                };
+                idx = idx + 1;
+            };
+            let ident_len: i32 = idx - type_start;
+            if ident_len <= 0 {
+                return -1;
+            };
+            type_id = builtin_integer_type_keyword_to_id(base, type_start, ident_len);
+            if type_id < 0 {
+                return -1;
+            };
+        };
+    };
+    if type_id < 0 {
+        type_id = builtin_type_id_i32();
+    };
+    if sign < 0 {
+        if !type_id_is_signed_integer(type_id) {
+            return -1;
+        };
+        u64_negate(value_ptr);
+    };
+    if integer_type_range(type_id, range_min_ptr, range_max_ptr) < 0 {
+        return -1;
+    };
+    if type_id_is_signed_integer(type_id) {
+        if i64_compare(value_ptr, range_min_ptr) < 0 {
+            return -1;
+        };
+        if i64_compare(value_ptr, range_max_ptr) > 0 {
+            return -1;
+        };
+    } else {
+        if sign < 0 {
+            return -1;
+        };
+        if u64_compare_unsigned(value_ptr, range_max_ptr) > 0 {
+            return -1;
+        };
+    };
+    store_i32(type_ptr, type_id);
     idx
 }
 
@@ -1903,6 +2593,7 @@ fn parse_char_literal(base: i32, len: i32, offset: i32, out_value_ptr: i32) -> i
         return -1;
     };
     store_i32(out_value_ptr, value);
+    store_i32(out_value_ptr + 4, 0);
     idx + 1
 }
 
@@ -2092,6 +2783,17 @@ fn ast_call_data_alloc(ast_base: i32, word_count: i32) -> i32 {
     entry_ptr
 }
 
+fn ast_literal_data_alloc(ast_base: i32, value_low: i32, value_high: i32, type_id: i32) -> i32 {
+    let ptr: i32 = ast_call_data_alloc(ast_base, 3);
+    if ptr < 0 {
+        return -1;
+    };
+    store_i32(ptr, value_low);
+    store_i32(ptr + 4, value_high);
+    store_i32(ptr + 8, type_id);
+    ptr
+}
+
 fn call_metadata_name_ptr(metadata_ptr: i32) -> i32 {
     load_i32(metadata_ptr)
 }
@@ -2205,8 +2907,8 @@ fn ast_expr_alloc(ast_base: i32, kind: i32, data0: i32, data1: i32, data2: i32) 
     count
 }
 
-fn ast_expr_alloc_literal(ast_base: i32, value: i32, type_id: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 0, value, 0, 0);
+fn ast_expr_alloc_literal(ast_base: i32, value_low: i32, value_high: i32, type_id: i32) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, 0, value_low, value_high, 0);
     if index < 0 {
         return -1;
     };
@@ -2277,58 +2979,97 @@ fn ast_expr_alloc_bitwise_and(ast_base: i32, left_index: i32, right_index: i32) 
     index
 }
 
-fn ast_expr_alloc_load_u8(ast_base: i32, ptr_index: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 29, ptr_index, 0, 0);
+fn ast_expr_alloc_load_generic(
+    ast_base: i32,
+    kind: i32,
+    ptr_index: i32,
+    type_id: i32,
+) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, kind, ptr_index, 0, 0);
     if index < 0 {
         return -1;
     };
-    ast_expr_set_type(ast_base, index, builtin_type_id_i32());
+    ast_expr_set_type(ast_base, index, type_id);
     index
+}
+
+fn ast_expr_alloc_store_generic(
+    ast_base: i32,
+    kind: i32,
+    ptr_index: i32,
+    value_index: i32,
+    type_id: i32,
+) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, kind, ptr_index, value_index, 0);
+    if index < 0 {
+        return -1;
+    };
+    ast_expr_set_type(ast_base, index, type_id);
+    index
+}
+
+fn ast_expr_alloc_load_u8(ast_base: i32, ptr_index: i32) -> i32 {
+    ast_expr_alloc_load_generic(ast_base, 29, ptr_index, builtin_type_id_u8())
+}
+
+fn ast_expr_alloc_load_i8(ast_base: i32, ptr_index: i32) -> i32 {
+    ast_expr_alloc_load_generic(ast_base, 35, ptr_index, builtin_type_id_i8())
 }
 
 fn ast_expr_alloc_load_u16(ast_base: i32, ptr_index: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 30, ptr_index, 0, 0);
-    if index < 0 {
-        return -1;
-    };
-    ast_expr_set_type(ast_base, index, builtin_type_id_i32());
-    index
+    ast_expr_alloc_load_generic(ast_base, 30, ptr_index, builtin_type_id_u16())
+}
+
+fn ast_expr_alloc_load_i16(ast_base: i32, ptr_index: i32) -> i32 {
+    ast_expr_alloc_load_generic(ast_base, 36, ptr_index, builtin_type_id_i16())
+}
+
+fn ast_expr_alloc_load_u32(ast_base: i32, ptr_index: i32) -> i32 {
+    ast_expr_alloc_load_generic(ast_base, 37, ptr_index, builtin_type_id_u32())
 }
 
 fn ast_expr_alloc_load_i32(ast_base: i32, ptr_index: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 31, ptr_index, 0, 0);
-    if index < 0 {
-        return -1;
-    };
-    ast_expr_set_type(ast_base, index, builtin_type_id_i32());
-    index
+    ast_expr_alloc_load_generic(ast_base, 31, ptr_index, builtin_type_id_i32())
+}
+
+fn ast_expr_alloc_load_i64(ast_base: i32, ptr_index: i32) -> i32 {
+    ast_expr_alloc_load_generic(ast_base, 38, ptr_index, builtin_type_id_i64())
+}
+
+fn ast_expr_alloc_load_u64(ast_base: i32, ptr_index: i32) -> i32 {
+    ast_expr_alloc_load_generic(ast_base, 39, ptr_index, builtin_type_id_u64())
 }
 
 fn ast_expr_alloc_store_u8(ast_base: i32, ptr_index: i32, value_index: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 32, ptr_index, value_index, 0);
-    if index < 0 {
-        return -1;
-    };
-    ast_expr_set_type(ast_base, index, builtin_type_id_i32());
-    index
+    ast_expr_alloc_store_generic(ast_base, 32, ptr_index, value_index, builtin_type_id_u8())
+}
+
+fn ast_expr_alloc_store_i8(ast_base: i32, ptr_index: i32, value_index: i32) -> i32 {
+    ast_expr_alloc_store_generic(ast_base, 40, ptr_index, value_index, builtin_type_id_i8())
 }
 
 fn ast_expr_alloc_store_u16(ast_base: i32, ptr_index: i32, value_index: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 33, ptr_index, value_index, 0);
-    if index < 0 {
-        return -1;
-    };
-    ast_expr_set_type(ast_base, index, builtin_type_id_i32());
-    index
+    ast_expr_alloc_store_generic(ast_base, 33, ptr_index, value_index, builtin_type_id_u16())
+}
+
+fn ast_expr_alloc_store_i16(ast_base: i32, ptr_index: i32, value_index: i32) -> i32 {
+    ast_expr_alloc_store_generic(ast_base, 41, ptr_index, value_index, builtin_type_id_i16())
+}
+
+fn ast_expr_alloc_store_u32(ast_base: i32, ptr_index: i32, value_index: i32) -> i32 {
+    ast_expr_alloc_store_generic(ast_base, 42, ptr_index, value_index, builtin_type_id_u32())
 }
 
 fn ast_expr_alloc_store_i32(ast_base: i32, ptr_index: i32, value_index: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 34, ptr_index, value_index, 0);
-    if index < 0 {
-        return -1;
-    };
-    ast_expr_set_type(ast_base, index, builtin_type_id_i32());
-    index
+    ast_expr_alloc_store_generic(ast_base, 34, ptr_index, value_index, builtin_type_id_i32())
+}
+
+fn ast_expr_alloc_store_i64(ast_base: i32, ptr_index: i32, value_index: i32) -> i32 {
+    ast_expr_alloc_store_generic(ast_base, 43, ptr_index, value_index, builtin_type_id_i64())
+}
+
+fn ast_expr_alloc_store_u64(ast_base: i32, ptr_index: i32, value_index: i32) -> i32 {
+    ast_expr_alloc_store_generic(ast_base, 44, ptr_index, value_index, builtin_type_id_u64())
 }
 
 fn ast_expr_alloc_shl(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
@@ -2537,7 +3278,13 @@ fn ast_expr_alloc_return(ast_base: i32, value_index: i32) -> i32 {
 
 fn expression_node_from_parts(ast_base: i32, kind: i32, data0: i32, data1: i32) -> i32 {
     if kind == 0 {
-        return ast_expr_alloc_literal(ast_base, data0, data1);
+        if data0 < 0 {
+            return -1;
+        };
+        let value_low: i32 = load_i32(data0);
+        let value_high: i32 = load_i32(data0 + 4);
+        let type_id: i32 = load_i32(data0 + 8);
+        return ast_expr_alloc_literal(ast_base, value_low, value_high, type_id);
     };
     if kind == 1 {
         return ast_expr_alloc_call(ast_base, data0);
@@ -2782,38 +3529,63 @@ fn parse_basic_expression(
         if next_cursor < 0 {
             return -1;
         };
-        let value: i32 = load_i32(literal_ptr);
+        let value_low: i32 = load_i32(literal_ptr);
+        let literal_data_ptr: i32 = ast_literal_data_alloc(
+            ast_base,
+            value_low,
+            0,
+            builtin_type_id_i32(),
+        );
+        if literal_data_ptr < 0 {
+            return -1;
+        };
         store_i32(out_kind_ptr, 0);
-        store_i32(out_data0_ptr, value);
-        store_i32(out_data1_ptr, builtin_type_id_i32());
+        store_i32(out_data0_ptr, literal_data_ptr);
+        store_i32(out_data1_ptr, 0);
         return skip_whitespace(base, len, next_cursor);
     };
     if first_byte == '-' || is_digit(first_byte) {
-        let next_cursor: i32 = parse_i32_literal(base, len, cursor, literal_ptr);
+        let next_cursor: i32 = parse_integer_literal(base, len, cursor, literal_ptr);
         if next_cursor < 0 {
             return -1;
         };
-        let value: i32 = load_i32(literal_ptr);
+        let value_low: i32 = load_i32(literal_ptr);
+        let value_high: i32 = load_i32(literal_ptr + 4);
+        let type_id: i32 = load_i32(literal_ptr + 8);
+        let literal_data_ptr: i32 = ast_literal_data_alloc(ast_base, value_low, value_high, type_id);
+        if literal_data_ptr < 0 {
+            return -1;
+        };
         store_i32(out_kind_ptr, 0);
-        store_i32(out_data0_ptr, value);
-        store_i32(out_data1_ptr, builtin_type_id_i32());
+        store_i32(out_data0_ptr, literal_data_ptr);
+        store_i32(out_data1_ptr, 0);
         return skip_whitespace(base, len, next_cursor);
     };
     if first_byte == 't' {
         let next_cursor: i32 = expect_keyword_true(base, len, cursor);
         if next_cursor >= 0 {
+            let literal_data_ptr: i32 =
+                ast_literal_data_alloc(ast_base, 1, 0, builtin_type_id_bool());
+            if literal_data_ptr < 0 {
+                return -1;
+            };
             store_i32(out_kind_ptr, 0);
-            store_i32(out_data0_ptr, 1);
-            store_i32(out_data1_ptr, builtin_type_id_bool());
+            store_i32(out_data0_ptr, literal_data_ptr);
+            store_i32(out_data1_ptr, 0);
             return skip_whitespace(base, len, next_cursor);
         };
     };
     if first_byte == 'f' {
         let next_cursor: i32 = expect_keyword_false(base, len, cursor);
         if next_cursor >= 0 {
+            let literal_data_ptr: i32 =
+                ast_literal_data_alloc(ast_base, 0, 0, builtin_type_id_bool());
+            if literal_data_ptr < 0 {
+                return -1;
+            };
             store_i32(out_kind_ptr, 0);
-            store_i32(out_data0_ptr, 0);
-            store_i32(out_data1_ptr, builtin_type_id_bool());
+            store_i32(out_data0_ptr, literal_data_ptr);
+            store_i32(out_data1_ptr, 0);
             return skip_whitespace(base, len, next_cursor);
         };
     };
@@ -2907,8 +3679,13 @@ fn parse_basic_expression(
             let intrinsic_kind: i32 = identify_intrinsic(base, len, ident_start, ident_len);
             if intrinsic_kind != intrinsic_kind_none() {
                 if intrinsic_kind == intrinsic_kind_load_u8()
+                    || intrinsic_kind == intrinsic_kind_load_i8()
                     || intrinsic_kind == intrinsic_kind_load_u16()
+                    || intrinsic_kind == intrinsic_kind_load_i16()
+                    || intrinsic_kind == intrinsic_kind_load_u32()
                     || intrinsic_kind == intrinsic_kind_load_i32()
+                    || intrinsic_kind == intrinsic_kind_load_i64()
+                    || intrinsic_kind == intrinsic_kind_load_u64()
                 {
                     if arg_count != 1 {
                         return -1;
@@ -2917,23 +3694,77 @@ fn parse_basic_expression(
                     let expr_index: i32 = if intrinsic_kind == intrinsic_kind_load_u8() {
                         ast_expr_alloc_load_u8(ast_base, arg_index)
                     } else {
-                        if intrinsic_kind == intrinsic_kind_load_u16() {
-                            ast_expr_alloc_load_u16(ast_base, arg_index)
+                        if intrinsic_kind == intrinsic_kind_load_i8() {
+                            ast_expr_alloc_load_i8(ast_base, arg_index)
                         } else {
-                            ast_expr_alloc_load_i32(ast_base, arg_index)
+                            if intrinsic_kind == intrinsic_kind_load_u16() {
+                                ast_expr_alloc_load_u16(ast_base, arg_index)
+                            } else {
+                                if intrinsic_kind == intrinsic_kind_load_i16() {
+                                    ast_expr_alloc_load_i16(ast_base, arg_index)
+                                } else {
+                                    if intrinsic_kind == intrinsic_kind_load_u32() {
+                                        ast_expr_alloc_load_u32(ast_base, arg_index)
+                                    } else {
+                                        if intrinsic_kind == intrinsic_kind_load_i32() {
+                                            ast_expr_alloc_load_i32(ast_base, arg_index)
+                                        } else {
+                                            if intrinsic_kind == intrinsic_kind_load_i64() {
+                                                ast_expr_alloc_load_i64(ast_base, arg_index)
+                                            } else {
+                                                ast_expr_alloc_load_u64(ast_base, arg_index)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     };
                     if expr_index < 0 {
                         return -1;
                     };
-                    store_i32(out_kind_ptr, 29);
+                    let expr_kind: i32 = if intrinsic_kind == intrinsic_kind_load_u8() {
+                        29
+                    } else {
+                        if intrinsic_kind == intrinsic_kind_load_i8() {
+                            35
+                        } else {
+                            if intrinsic_kind == intrinsic_kind_load_u16() {
+                                30
+                            } else {
+                                if intrinsic_kind == intrinsic_kind_load_i16() {
+                                    36
+                                } else {
+                                    if intrinsic_kind == intrinsic_kind_load_u32() {
+                                        37
+                                    } else {
+                                        if intrinsic_kind == intrinsic_kind_load_i32() {
+                                            31
+                                        } else {
+                                            if intrinsic_kind == intrinsic_kind_load_i64() {
+                                                38
+                                            } else {
+                                                39
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    };
+                    store_i32(out_kind_ptr, expr_kind);
                     store_i32(out_data0_ptr, expr_index);
                     store_i32(out_data1_ptr, 0);
                     return skip_whitespace(base, len, call_cursor);
                 };
                 if intrinsic_kind == intrinsic_kind_store_u8()
+                    || intrinsic_kind == intrinsic_kind_store_i8()
                     || intrinsic_kind == intrinsic_kind_store_u16()
+                    || intrinsic_kind == intrinsic_kind_store_i16()
+                    || intrinsic_kind == intrinsic_kind_store_u32()
                     || intrinsic_kind == intrinsic_kind_store_i32()
+                    || intrinsic_kind == intrinsic_kind_store_i64()
+                    || intrinsic_kind == intrinsic_kind_store_u64()
                 {
                     if arg_count != 2 {
                         return -1;
@@ -2943,16 +3774,65 @@ fn parse_basic_expression(
                     let expr_index: i32 = if intrinsic_kind == intrinsic_kind_store_u8() {
                         ast_expr_alloc_store_u8(ast_base, ptr_index, value_index)
                     } else {
-                        if intrinsic_kind == intrinsic_kind_store_u16() {
-                            ast_expr_alloc_store_u16(ast_base, ptr_index, value_index)
+                        if intrinsic_kind == intrinsic_kind_store_i8() {
+                            ast_expr_alloc_store_i8(ast_base, ptr_index, value_index)
                         } else {
-                            ast_expr_alloc_store_i32(ast_base, ptr_index, value_index)
+                            if intrinsic_kind == intrinsic_kind_store_u16() {
+                                ast_expr_alloc_store_u16(ast_base, ptr_index, value_index)
+                            } else {
+                                if intrinsic_kind == intrinsic_kind_store_i16() {
+                                    ast_expr_alloc_store_i16(ast_base, ptr_index, value_index)
+                                } else {
+                                    if intrinsic_kind == intrinsic_kind_store_u32() {
+                                        ast_expr_alloc_store_u32(ast_base, ptr_index, value_index)
+                                    } else {
+                                        if intrinsic_kind == intrinsic_kind_store_i32() {
+                                            ast_expr_alloc_store_i32(ast_base, ptr_index, value_index)
+                                        } else {
+                                            if intrinsic_kind == intrinsic_kind_store_i64() {
+                                                ast_expr_alloc_store_i64(ast_base, ptr_index, value_index)
+                                            } else {
+                                                ast_expr_alloc_store_u64(ast_base, ptr_index, value_index)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     };
                     if expr_index < 0 {
                         return -1;
                     };
-                    store_i32(out_kind_ptr, 32);
+                    let expr_kind: i32 = if intrinsic_kind == intrinsic_kind_store_u8() {
+                        32
+                    } else {
+                        if intrinsic_kind == intrinsic_kind_store_i8() {
+                            40
+                        } else {
+                            if intrinsic_kind == intrinsic_kind_store_u16() {
+                                33
+                            } else {
+                                if intrinsic_kind == intrinsic_kind_store_i16() {
+                                    41
+                                } else {
+                                    if intrinsic_kind == intrinsic_kind_store_u32() {
+                                        42
+                                    } else {
+                                        if intrinsic_kind == intrinsic_kind_store_i32() {
+                                            34
+                                        } else {
+                                            if intrinsic_kind == intrinsic_kind_store_i64() {
+                                                43
+                                            } else {
+                                                44
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    };
+                    store_i32(out_kind_ptr, expr_kind);
                     store_i32(out_data0_ptr, expr_index);
                     store_i32(out_data1_ptr, 0);
                     return skip_whitespace(base, len, call_cursor);
@@ -3111,12 +3991,12 @@ fn parse_multiplicative_expression(
     out_data1_ptr: i32,
 ) -> i32 {
     let literal_ptr: i32 = temp_base;
-    let ident_start_ptr: i32 = temp_base + 4;
-    let ident_len_ptr: i32 = temp_base + 8;
-    let next_kind_ptr: i32 = temp_base + 12;
-    let next_data0_ptr: i32 = temp_base + 16;
-    let next_data1_ptr: i32 = temp_base + 20;
-    let nested_temp_base: i32 = temp_base + 32;
+    let ident_start_ptr: i32 = temp_base + 48;
+    let ident_len_ptr: i32 = temp_base + 52;
+    let next_kind_ptr: i32 = temp_base + 56;
+    let next_data0_ptr: i32 = temp_base + 60;
+    let next_data1_ptr: i32 = temp_base + 64;
+    let nested_temp_base: i32 = temp_base + 96;
 
     let mut current_cursor: i32 = parse_unary_expression(
         base,
@@ -4303,11 +5183,11 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     };
 
     let block_literal_ptr: i32 = expr_temp_base;
-    let block_ident_start_ptr: i32 = expr_temp_base + 4;
-    let block_ident_len_ptr: i32 = expr_temp_base + 8;
-    let block_value_status_ptr: i32 = expr_temp_base + 12;
-    let loop_depth_ptr: i32 = expr_temp_base + 16;
-    let block_temp_base: i32 = expr_temp_base + 48;
+    let block_ident_start_ptr: i32 = expr_temp_base + 48;
+    let block_ident_len_ptr: i32 = expr_temp_base + 52;
+    let block_value_status_ptr: i32 = expr_temp_base + 56;
+    let loop_depth_ptr: i32 = expr_temp_base + 60;
+    let block_temp_base: i32 = expr_temp_base + 96;
 
     store_i32(loop_depth_ptr, 0);
     cursor = parse_block_expression_body(
@@ -4607,7 +5487,15 @@ fn resolve_expression_internal(
     if kind == 8 {
         return 0;
     };
-    if kind == 29 || kind == 30 || kind == 31 {
+    if kind == 29
+        || kind == 30
+        || kind == 31
+        || kind == 35
+        || kind == 36
+        || kind == 37
+        || kind == 38
+        || kind == 39
+    {
         let ptr_index: i32 = load_i32(entry_ptr + 4);
         return resolve_expression_internal(
             ast_base,
@@ -4619,7 +5507,15 @@ fn resolve_expression_internal(
             loop_stack_count_ptr,
         );
     };
-    if kind == 32 || kind == 33 || kind == 34 {
+    if kind == 32
+        || kind == 33
+        || kind == 34
+        || kind == 40
+        || kind == 41
+        || kind == 42
+        || kind == 43
+        || kind == 44
+    {
         let ptr_index: i32 = load_i32(entry_ptr + 4);
         let value_index: i32 = load_i32(entry_ptr + 8);
         if resolve_expression_internal(
@@ -5027,8 +5923,16 @@ fn expression_code_size(ast_base: i32, expr_index: i32) -> i32 {
     let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
     let kind: i32 = load_i32(entry_ptr);
     if kind == 0 {
-        let value: i32 = load_i32(entry_ptr + 4);
-        return 1 + leb_i32_len(value);
+        let value_low: i32 = load_i32(entry_ptr + 4);
+        let value_high: i32 = load_i32(entry_ptr + 8);
+        let type_id: i32 = ast_expr_type(ast_base, expr_index);
+        let is_64: bool = type_id == builtin_type_id_i64() || type_id == builtin_type_id_u64();
+        let imm_len: i32 = if is_64 {
+            leb_i64_len(value_low, value_high)
+        } else {
+            leb_i32_len(value_low)
+        };
+        return 1 + imm_len;
     };
     if kind == 1 {
         let metadata_ptr: i32 = load_i32(entry_ptr + 4);
@@ -5071,24 +5975,44 @@ fn expression_code_size(ast_base: i32, expr_index: i32) -> i32 {
         };
         return 1 + leb_u32_len(local_index);
     };
-    if kind == 29 || kind == 30 || kind == 31 {
+    if kind == 29
+        || kind == 30
+        || kind == 31
+        || kind == 35
+        || kind == 36
+        || kind == 37
+        || kind == 38
+        || kind == 39
+    {
         let ptr_index: i32 = load_i32(entry_ptr + 4);
         let ptr_size: i32 = expression_code_size(ast_base, ptr_index);
         if ptr_size < 0 {
             return -1;
         };
-        let align: i32 = if kind == 29 {
+        let align: i32 = if kind == 29 || kind == 35 {
             0
         } else {
-            if kind == 30 {
+            if kind == 30 || kind == 36 {
                 1
             } else {
-                2
+                if kind == 31 || kind == 37 {
+                    2
+                } else {
+                    3
+                }
             }
         };
         return ptr_size + 1 + leb_u32_len(align) + leb_u32_len(0);
     };
-    if kind == 32 || kind == 33 || kind == 34 {
+    if kind == 32
+        || kind == 33
+        || kind == 34
+        || kind == 40
+        || kind == 41
+        || kind == 42
+        || kind == 43
+        || kind == 44
+    {
         let ptr_index: i32 = load_i32(entry_ptr + 4);
         let value_index: i32 = load_i32(entry_ptr + 8);
         let ptr_size: i32 = expression_code_size(ast_base, ptr_index);
@@ -5099,14 +6023,25 @@ fn expression_code_size(ast_base: i32, expr_index: i32) -> i32 {
         if value_size < 0 {
             return -1;
         };
-        let align: i32 = if kind == 32 {
+        let align: i32 = if kind == 32 || kind == 40 {
             0
         } else {
-            if kind == 33 {
+            if kind == 33 || kind == 41 {
                 1
             } else {
-                2
+                if kind == 34 || kind == 42 {
+                    2
+                } else {
+                    3
+                }
             }
+        };
+        let result_type: i32 = ast_expr_type(ast_base, expr_index);
+        let zero_is_64: bool = result_type == builtin_type_id_i64() || result_type == builtin_type_id_u64();
+        let zero_imm_len: i32 = if zero_is_64 {
+            leb_i64_len(0, 0)
+        } else {
+            leb_i32_len(0)
         };
         return ptr_size
             + value_size
@@ -5114,7 +6049,7 @@ fn expression_code_size(ast_base: i32, expr_index: i32) -> i32 {
             + leb_u32_len(align)
             + leb_u32_len(0)
             + 1
-            + leb_i32_len(0);
+            + zero_imm_len;
     };
     if kind == 2
         || kind == 3
@@ -5270,10 +6205,17 @@ fn emit_expression(base: i32, offset: i32, ast_base: i32, expr_index: i32) -> i3
     let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
     let kind: i32 = load_i32(entry_ptr);
     if kind == 0 {
-        let value: i32 = load_i32(entry_ptr + 4);
         let mut out: i32 = offset;
-        out = write_byte(base, out, 65);
-        out = write_i32_leb(base, out, value);
+        let value_low: i32 = load_i32(entry_ptr + 4);
+        let value_high: i32 = load_i32(entry_ptr + 8);
+        let type_id: i32 = ast_expr_type(ast_base, expr_index);
+        if type_id == builtin_type_id_i64() || type_id == builtin_type_id_u64() {
+            out = write_byte(base, out, 66);
+            out = write_i64_leb(base, out, value_low, value_high);
+        } else {
+            out = write_byte(base, out, 65);
+            out = write_i32_leb(base, out, value_low);
+        };
         return out;
     };
     if kind == 1 {
@@ -5324,7 +6266,15 @@ fn emit_expression(base: i32, offset: i32, ast_base: i32, expr_index: i32) -> i3
         out = write_u32_leb(base, out, local_index);
         return out;
     };
-    if kind == 29 || kind == 30 || kind == 31 {
+    if kind == 29
+        || kind == 30
+        || kind == 31
+        || kind == 35
+        || kind == 36
+        || kind == 37
+        || kind == 38
+        || kind == 39
+    {
         let ptr_index: i32 = load_i32(entry_ptr + 4);
         let mut out: i32 = emit_expression(base, offset, ast_base, ptr_index);
         if out < 0 {
@@ -5333,19 +6283,35 @@ fn emit_expression(base: i32, offset: i32, ast_base: i32, expr_index: i32) -> i3
         let opcode: i32 = if kind == 29 {
             45
         } else {
-            if kind == 30 {
-                47
+            if kind == 35 {
+                44
             } else {
-                40
+                if kind == 30 {
+                    47
+                } else {
+                    if kind == 36 {
+                        46
+                    } else {
+                        if kind == 31 || kind == 37 {
+                            40
+                        } else {
+                            41
+                        }
+                    }
+                }
             }
         };
-        let align: i32 = if kind == 29 {
+        let align: i32 = if kind == 29 || kind == 35 {
             0
         } else {
-            if kind == 30 {
+            if kind == 30 || kind == 36 {
                 1
             } else {
-                2
+                if kind == 31 || kind == 37 {
+                    2
+                } else {
+                    3
+                }
             }
         };
         out = write_byte(base, out, opcode);
@@ -5353,7 +6319,15 @@ fn emit_expression(base: i32, offset: i32, ast_base: i32, expr_index: i32) -> i3
         out = write_u32_leb(base, out, 0);
         return out;
     };
-    if kind == 32 || kind == 33 || kind == 34 {
+    if kind == 32
+        || kind == 33
+        || kind == 34
+        || kind == 40
+        || kind == 41
+        || kind == 42
+        || kind == 43
+        || kind == 44
+    {
         let ptr_index: i32 = load_i32(entry_ptr + 4);
         let value_index: i32 = load_i32(entry_ptr + 8);
         let mut out: i32 = emit_expression(base, offset, ast_base, ptr_index);
@@ -5364,29 +6338,44 @@ fn emit_expression(base: i32, offset: i32, ast_base: i32, expr_index: i32) -> i3
         if out < 0 {
             return -1;
         };
-        let opcode: i32 = if kind == 32 {
+        let opcode: i32 = if kind == 32 || kind == 40 {
             58
         } else {
-            if kind == 33 {
+            if kind == 33 || kind == 41 {
                 59
             } else {
-                54
+                if kind == 34 || kind == 42 {
+                    54
+                } else {
+                    55
+                }
             }
         };
-        let align: i32 = if kind == 32 {
+        let align: i32 = if kind == 32 || kind == 40 {
             0
         } else {
-            if kind == 33 {
+            if kind == 33 || kind == 41 {
                 1
             } else {
-                2
+                if kind == 34 || kind == 42 {
+                    2
+                } else {
+                    3
+                }
             }
         };
         out = write_byte(base, out, opcode);
         out = write_u32_leb(base, out, align);
         out = write_u32_leb(base, out, 0);
-        out = write_byte(base, out, 65);
-        out = write_i32_leb(base, out, 0);
+        let result_type: i32 = ast_expr_type(ast_base, expr_index);
+        let zero_is_64: bool = result_type == builtin_type_id_i64() || result_type == builtin_type_id_u64();
+        if zero_is_64 {
+            out = write_byte(base, out, 66);
+            out = write_i64_leb(base, out, 0, 0);
+        } else {
+            out = write_byte(base, out, 65);
+            out = write_i32_leb(base, out, 0);
+        };
         return out;
     };
     if kind == 2
@@ -5800,8 +6789,20 @@ fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
         };
         let mut body_size: i32 = 0;
         if body_kind == 0 {
-            let literal_value: i32 = load_i32(entry_ptr + 16);
-            body_size = locals_decl_size + 1 + leb_i32_len(literal_value) + 1;
+            let literal_ptr: i32 = load_i32(entry_ptr + 16);
+            if literal_ptr < 0 {
+                return -1;
+            };
+            let value_low: i32 = load_i32(literal_ptr);
+            let value_high: i32 = load_i32(literal_ptr + 4);
+            let type_id: i32 = load_i32(literal_ptr + 8);
+            let is_64: bool = type_id == builtin_type_id_i64() || type_id == builtin_type_id_u64();
+            let imm_len: i32 = if is_64 {
+                leb_i64_len(value_low, value_high)
+            } else {
+                leb_i32_len(value_low)
+            };
+            body_size = locals_decl_size + 1 + imm_len + 1;
         } else {
             if body_kind == 1 {
                 let metadata_ptr: i32 = load_i32(entry_ptr + 16);
@@ -5862,8 +6863,20 @@ fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
         };
         let mut body_size: i32 = 0;
         if body_kind == 0 {
-            let literal_value: i32 = load_i32(entry_ptr + 16);
-            body_size = locals_decl_size + 1 + leb_i32_len(literal_value) + 1;
+            let literal_ptr: i32 = load_i32(entry_ptr + 16);
+            if literal_ptr < 0 {
+                return -1;
+            };
+            let value_low: i32 = load_i32(literal_ptr);
+            let value_high: i32 = load_i32(literal_ptr + 4);
+            let type_id: i32 = load_i32(literal_ptr + 8);
+            let is_64: bool = type_id == builtin_type_id_i64() || type_id == builtin_type_id_u64();
+            let imm_len: i32 = if is_64 {
+                leb_i64_len(value_low, value_high)
+            } else {
+                leb_i32_len(value_low)
+            };
+            body_size = locals_decl_size + 1 + imm_len + 1;
             out = write_u32_leb(base, out, body_size);
             if locals_count > 0 {
                 out = write_u32_leb(base, out, 1);
@@ -5872,8 +6885,13 @@ fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
             } else {
                 out = write_u32_leb(base, out, 0);
             };
-            out = write_byte(base, out, 65);
-            out = write_i32_leb(base, out, literal_value);
+            if is_64 {
+                out = write_byte(base, out, 66);
+                out = write_i64_leb(base, out, value_low, value_high);
+            } else {
+                out = write_byte(base, out, 65);
+                out = write_i32_leb(base, out, value_low);
+            };
             out = write_byte(base, out, 11);
         } else {
             if body_kind == 1 {
