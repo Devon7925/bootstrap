@@ -844,6 +844,57 @@ fn main() -> i32 {
 }
 
 #[test]
+fn ast_compiler_rejects_mixed_integer_widths_without_casts() {
+    let source = r#"
+fn main() -> i32 {
+    let lhs: i16 = 12;
+    let rhs: i64 = 34;
+    if lhs < rhs { 0 } else { 1 }
+}
+"#;
+
+    let error = try_compile_with_ast_compiler(source)
+        .expect_err("ast compiler should reject integer width mismatches");
+    assert!(error.produced_len <= 0);
+}
+
+#[test]
+fn ast_compiler_rejects_unsigned_and_signed_integer_mixes() {
+    let source = r#"
+fn difference(a: u16, b: i16) -> u16 {
+    a - b
+}
+
+fn main() -> i32 {
+    0
+}
+"#;
+
+    let error = try_compile_with_ast_compiler(source)
+        .expect_err("ast compiler should reject signed/unsigned mixes without casts");
+    assert!(error.produced_len <= 0);
+}
+
+#[test]
+fn ast_compiler_rejects_integer_arguments_with_incompatible_widths() {
+    let source = r#"
+fn take_i8(value: i8) -> i8 {
+    value
+}
+
+fn main() -> i32 {
+    let sample: i16 = 10;
+    let _ = take_i8(sample);
+    0
+}
+"#;
+
+    let error = try_compile_with_ast_compiler(source)
+        .expect_err("ast compiler should reject calls with mismatched integer widths");
+    assert!(error.produced_len <= 0);
+}
+
+#[test]
 fn ast_compiler_compiles_literal_multiplication() {
     let source = r#"
 fn main() -> i32 {
