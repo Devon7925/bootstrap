@@ -2712,33 +2712,66 @@ fn parse_basic_expression(
             if_cursor = expect_keyword_else(base, len, if_cursor);
             if if_cursor >= 0 {
                 if_cursor = skip_whitespace(base, len, if_cursor);
-                if_cursor = expect_char(base, len, if_cursor, '{');
-                if if_cursor < 0 {
+                if if_cursor >= len {
                     return -1;
                 };
-                if_cursor = parse_block_expression_body(
-                    base,
-                    len,
-                    if_cursor,
-                    ast_base,
-                    params_table_ptr,
-                    params_count,
-                    locals_table_ptr,
-                    locals_stack_count_ptr,
-                    locals_next_index_ptr,
-                    literal_ptr,
-                    ident_start_ptr,
-                    ident_len_ptr,
-                    else_nested_base,
-                    1,
-                    loop_depth_ptr,
-                    else_kind_ptr,
-                    else_data0_ptr,
-                    else_data1_ptr,
-                    else_status_ptr,
-                );
-                if if_cursor < 0 {
-                    return -1;
+                let after_else_byte: i32 = load_u8(base + if_cursor);
+                if after_else_byte == '{' {
+                    if_cursor = expect_char(base, len, if_cursor, '{');
+                    if if_cursor < 0 {
+                        return -1;
+                    };
+                    if_cursor = parse_block_expression_body(
+                        base,
+                        len,
+                        if_cursor,
+                        ast_base,
+                        params_table_ptr,
+                        params_count,
+                        locals_table_ptr,
+                        locals_stack_count_ptr,
+                        locals_next_index_ptr,
+                        literal_ptr,
+                        ident_start_ptr,
+                        ident_len_ptr,
+                        else_nested_base,
+                        1,
+                        loop_depth_ptr,
+                        else_kind_ptr,
+                        else_data0_ptr,
+                        else_data1_ptr,
+                        else_status_ptr,
+                    );
+                    if if_cursor < 0 {
+                        return -1;
+                    };
+                } else {
+                    let else_if_cursor: i32 = if_cursor;
+                    let maybe_else_if: i32 = expect_keyword_if(base, len, else_if_cursor);
+                    if maybe_else_if < 0 {
+                        return -1;
+                    };
+                    if_cursor = parse_expression(
+                        base,
+                        len,
+                        else_if_cursor,
+                        ast_base,
+                        params_table_ptr,
+                        params_count,
+                        locals_table_ptr,
+                        locals_stack_count_ptr,
+                        locals_next_index_ptr,
+                        else_nested_base,
+                        loop_depth_ptr,
+                        else_kind_ptr,
+                        else_data0_ptr,
+                        else_data1_ptr,
+                    );
+                    if if_cursor < 0 {
+                        return -1;
+                    };
+                    store_i32(else_status_ptr, -1);
+                    if_cursor = skip_whitespace(base, len, if_cursor);
                 };
             } else {
                 if_cursor = load_i32(literal_ptr);
@@ -2766,6 +2799,11 @@ fn parse_basic_expression(
                 expression_node_from_parts(ast_base, else_kind, else_data0, else_data1);
             if else_index < 0 {
                 return -1;
+            };
+            if load_i32(else_status_ptr) < 0 {
+                let else_diverges: bool = expression_guaranteed_diverges(ast_base, else_index);
+                let else_has_value: i32 = if else_diverges { 0 } else { 1 };
+                store_i32(else_status_ptr, else_has_value);
             };
             let then_has_value: i32 = load_i32(then_status_ptr);
             let else_has_value: i32 = load_i32(else_status_ptr);
