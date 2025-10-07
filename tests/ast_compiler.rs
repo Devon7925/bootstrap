@@ -1066,6 +1066,30 @@ fn main() -> i32 {
 }
 
 #[test]
+fn ast_compiler_compiles_else_if_chains() {
+    let source = r#"
+fn classify(value: i32) -> i32 {
+    if value < 0 {
+        1
+    } else if value == 0 {
+        2
+    } else {
+        3
+    }
+}
+
+fn main() -> i32 {
+    classify(-2) + classify(0) * 10 + classify(5) * 100
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 321);
+}
+
+#[test]
 fn ast_compiler_compiles_functions_with_local_variables() {
     let source = r#"
 fn compute() -> i32 {
