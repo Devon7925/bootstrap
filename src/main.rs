@@ -281,10 +281,13 @@ fn main() {
             eprintln!("error: failed to write '{path}': {err}");
             process::exit(1);
         }
-    } else if emit_flag.unwrap_or(true) {
-        if let Err(err) = io::stdout().write_all(&wasm_bytes) {
-            eprintln!("error: failed to write wasm to stdout: {err}");
-            process::exit(1);
+    } else {
+        let emit_to_stdout = emit_flag.unwrap_or(true);
+        if emit_to_stdout {
+            if let Err(err) = io::stdout().write_all(&wasm_bytes) {
+                eprintln!("error: failed to write wasm to stdout: {err}");
+                process::exit(1);
+            }
         }
     }
 
