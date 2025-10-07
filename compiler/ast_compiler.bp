@@ -712,7 +712,7 @@ fn max_locals() -> i32 {
 }
 
 fn locals_entry_size() -> i32 {
-    16
+    20
 }
 
 fn locals_entry_ptr(locals_table_ptr: i32, index: i32) -> i32 {
@@ -776,8 +776,12 @@ fn locals_entry_local_index(entry_ptr: i32) -> i32 {
     load_i32(entry_ptr + 8)
 }
 
+fn locals_entry_type_id(entry_ptr: i32) -> i32 {
+    load_i32(entry_ptr + 12)
+}
+
 fn locals_entry_is_mut(entry_ptr: i32) -> bool {
-    load_i32(entry_ptr + 12) != 0
+    load_i32(entry_ptr + 16) != 0
 }
 
 fn expression_guaranteed_diverges(ast_base: i32, expr_index: i32) -> bool {
@@ -863,6 +867,7 @@ fn parse_block_expression_body(
     let stmt_expr_data0_ptr: i32 = stmt_expr_kind_ptr + 4;
     let stmt_expr_data1_ptr: i32 = stmt_expr_kind_ptr + 8;
     let stmt_expr_value_status_ptr: i32 = stmt_expr_kind_ptr + 12;
+    let stmt_local_type_ptr: i32 = stmt_expr_value_status_ptr + 4;
     let stmt_nested_temp_base: i32 = stmt_expr_kind_ptr + 64;
 
     let allow_empty_value: bool = allow_empty_final_expr != 0;
@@ -992,7 +997,7 @@ fn parse_block_expression_body(
                 return -1;
             };
             idx = skip_whitespace(base, len, idx);
-            idx = parse_type(base, len, idx, -1);
+            idx = parse_type(base, len, idx, stmt_local_type_ptr);
             if idx < 0 {
                 store_i32(locals_stack_count_ptr, saved_stack_count);
                 store_i32(locals_next_index_ptr, saved_next_index);
@@ -1062,7 +1067,9 @@ fn parse_block_expression_body(
             store_i32(entry_ptr, name_start);
             store_i32(entry_ptr + 4, name_len);
             store_i32(entry_ptr + 8, local_index);
-            store_i32(entry_ptr + 12, if is_mut { 1 } else { 0 });
+            let local_type_id: i32 = load_i32(stmt_local_type_ptr);
+            store_i32(entry_ptr + 12, local_type_id);
+            store_i32(entry_ptr + 16, if is_mut { 1 } else { 0 });
             store_i32(locals_stack_count_ptr, stack_count + 1);
             store_i32(locals_next_index_ptr, next_local_offset + 1);
 
@@ -1985,7 +1992,7 @@ fn ast_max_functions() -> i32 {
 }
 
 fn ast_function_entry_size() -> i32 {
-    24
+    32
 }
 
 fn ast_names_capacity() -> i32 {
@@ -2098,7 +2105,9 @@ fn ast_write_function_entry(
     param_count: i32,
     body_kind: i32,
     body_data0: i32,
-    body_data1: i32,
+    locals_count: i32,
+    param_types_ptr: i32,
+    return_type_id: i32,
 ) {
     let entry_ptr: i32 = ast_function_entry_ptr(ast_base, index);
     store_i32(entry_ptr, name_ptr);
@@ -2106,7 +2115,9 @@ fn ast_write_function_entry(
     store_i32(entry_ptr + 8, param_count);
     store_i32(entry_ptr + 12, body_kind);
     store_i32(entry_ptr + 16, body_data0);
-    store_i32(entry_ptr + 20, body_data1);
+    store_i32(entry_ptr + 20, locals_count);
+    store_i32(entry_ptr + 24, param_types_ptr);
+    store_i32(entry_ptr + 28, return_type_id);
 }
 
 fn ast_extra_base(ast_base: i32) -> i32 {
@@ -3937,9 +3948,11 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     let params_count_ptr: i32 = temp_base + 8;
     let params_table_ptr: i32 = temp_base + 12;
     let params_table_end: i32 = params_table_ptr + max_params() * 8;
-    let param_name_start_ptr: i32 = params_table_end;
+    let param_types_table_ptr: i32 = params_table_end;
+    let param_name_start_ptr: i32 = param_types_table_ptr + max_params() * 4;
     let param_name_len_ptr: i32 = param_name_start_ptr + 4;
-    let expr_kind_ptr: i32 = param_name_len_ptr + 4;
+    let param_type_temp_ptr: i32 = param_name_len_ptr + 4;
+    let expr_kind_ptr: i32 = param_type_temp_ptr + 4;
     let expr_data0_ptr: i32 = expr_kind_ptr + 4;
     let expr_data1_ptr: i32 = expr_kind_ptr + 8;
     let locals_stack_count_ptr: i32 = expr_kind_ptr + 12;
@@ -3998,12 +4011,14 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
             return -1;
         };
         cursor = skip_whitespace(base, len, cursor);
-        cursor = parse_type(base, len, cursor, -1);
+        cursor = parse_type(base, len, cursor, param_type_temp_ptr);
         if cursor < 0 {
             return -1;
         };
+        let param_type_id: i32 = load_i32(param_type_temp_ptr);
         store_i32(params_table_ptr + param_count * 8, param_start);
         store_i32(params_table_ptr + param_count * 8 + 4, param_len);
+        store_i32(param_types_table_ptr + param_count * 4, param_type_id);
         param_count = param_count + 1;
         cursor = skip_whitespace(base, len, cursor);
         if cursor >= len {
@@ -4035,6 +4050,7 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
 
     let mut block_allow_empty: i32 = 0;
     let mut has_return_type: bool = false;
+    let mut return_type_id: i32 = -1;
     if cursor < len {
         let maybe_arrow: i32 = load_u8(base + cursor);
         if maybe_arrow == '-' {
@@ -4048,10 +4064,11 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
                 return -1;
             };
             cursor = skip_whitespace(base, len, cursor);
-            cursor = parse_type(base, len, cursor, -1);
+            cursor = parse_type(base, len, cursor, param_type_temp_ptr);
             if cursor < 0 {
                 return -1;
             };
+            return_type_id = load_i32(param_type_temp_ptr);
         };
     };
     if !has_return_type {
@@ -4103,11 +4120,26 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     };
     let body_kind: i32 = load_i32(expr_kind_ptr);
     let body_data0: i32 = load_i32(expr_data0_ptr);
-    let body_data1: i32 = load_i32(expr_data1_ptr);
     if body_kind < 0 {
         return -1;
     };
     let locals_total: i32 = load_i32(locals_next_index_ptr);
+    let mut param_types_ptr: i32 = -1;
+    if param_count > 0 {
+        param_types_ptr = ast_call_data_alloc(ast_base, param_count);
+        if param_types_ptr < 0 {
+            return -1;
+        };
+        let mut copy_idx: i32 = 0;
+        loop {
+            if copy_idx >= param_count {
+                break;
+            };
+            let type_id: i32 = load_i32(param_types_table_ptr + copy_idx * 4);
+            store_i32(param_types_ptr + copy_idx * 4, type_id);
+            copy_idx = copy_idx + 1;
+        };
+    };
     ast_write_function_entry(
         ast_base,
         func_index,
@@ -4117,6 +4149,8 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
         body_kind,
         body_data0,
         locals_total,
+        param_types_ptr,
+        return_type_id,
     );
     cursor
 }
