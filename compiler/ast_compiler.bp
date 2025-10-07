@@ -1962,11 +1962,11 @@ fn scratch_instr_capacity() -> i32 {
     65536
 }
 
-fn scratch_functions_count_offset() -> i32 {
+fn scratch_fn_count_offset() -> i32 {
     851960
 }
 
-fn scratch_functions_base_offset() -> i32 {
+fn scratch_fn_base_offset() -> i32 {
     851968
 }
 
@@ -1995,7 +1995,7 @@ fn scratch_types_capacity() -> i32 {
 }
 
 fn scratch_types_base_offset() -> i32 {
-    scratch_functions_base_offset() - scratch_types_capacity() * type_entry_size()
+    scratch_fn_base_offset() - scratch_types_capacity() * type_entry_size()
 }
 
 fn scratch_types_count_offset() -> i32 {
@@ -2014,12 +2014,12 @@ fn scratch_instr_base(out_ptr: i32) -> i32 {
     out_ptr + scratch_instr_base_offset()
 }
 
-fn scratch_functions_count_ptr(out_ptr: i32) -> i32 {
-    out_ptr + scratch_functions_count_offset()
+fn scratch_fn_count_ptr(out_ptr: i32) -> i32 {
+    out_ptr + scratch_fn_count_offset()
 }
 
-fn scratch_functions_base(out_ptr: i32) -> i32 {
-    out_ptr + scratch_functions_base_offset()
+fn scratch_fn_base(out_ptr: i32) -> i32 {
+    out_ptr + scratch_fn_base_offset()
 }
 
 fn scratch_types_count_ptr(out_ptr: i32) -> i32 {
@@ -2055,7 +2055,9 @@ fn ast_call_data_capacity() -> i32 {
 }
 
 fn ast_output_reserve(input_len: i32) -> i32 {
-    input_len + scratch_instr_capacity()
+    let after_output: i32 = input_len + scratch_instr_capacity();
+    let scratch_end: i32 = scratch_fn_base_offset() + 16384;
+    if after_output > scratch_end { after_output } else { scratch_end }
 }
 
 fn ast_program_base(out_ptr: i32, input_len: i32) -> i32 {
@@ -2172,7 +2174,7 @@ fn ast_write_function_entry(
 }
 
 fn ast_extra_base(ast_base: i32) -> i32 {
-    ast_call_data_base(ast_base) + ast_call_data_capacity() * word_size()
+    ast_call_data_base(ast_base) + 262144
 }
 
 fn ast_expr_entry_size() -> i32 {
@@ -2180,7 +2182,7 @@ fn ast_expr_entry_size() -> i32 {
 }
 
 fn ast_expr_capacity() -> i32 {
-    65536
+    32768
 }
 
 fn ast_expr_count_ptr(ast_base: i32) -> i32 {
@@ -2192,7 +2194,7 @@ fn ast_expr_entry_ptr(ast_base: i32, index: i32) -> i32 {
 }
 
 fn ast_expr_types_base(ast_base: i32) -> i32 {
-    ast_extra_base(ast_base) + word_size() + ast_expr_capacity() * ast_expr_entry_size()
+    ast_extra_base(ast_base) + 524292
 }
 
 fn ast_expr_type_entry_ptr(ast_base: i32, index: i32) -> i32 {
@@ -2214,7 +2216,7 @@ fn ast_expr_type(ast_base: i32, index: i32) -> i32 {
 }
 
 fn ast_temp_base(ast_base: i32) -> i32 {
-    ast_expr_types_base(ast_base) + ast_expr_capacity() * word_size()
+    ast_expr_types_base(ast_base) + 131072
 }
 
 fn ast_expr_reset(ast_base: i32) {
@@ -6542,7 +6544,7 @@ fn emit_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
 fn initialize_layout(out_ptr: i32) {
     store_i32(scratch_instr_offset_ptr(out_ptr), 0);
     store_i32(scratch_expr_type_ptr(out_ptr), -1);
-    store_i32(scratch_functions_count_ptr(out_ptr), 0);
+    store_i32(scratch_fn_count_ptr(out_ptr), 0);
     store_i32(scratch_types_count_ptr(out_ptr), 0);
 }
 
@@ -6565,7 +6567,7 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
         return -1;
     };
 
-    store_i32(scratch_functions_count_ptr(out_ptr), func_count);
+    store_i32(scratch_fn_count_ptr(out_ptr), func_count);
 
     let produced_len: i32 = emit_program(out_ptr, ast_base, func_count);
     if produced_len <= 0 {
