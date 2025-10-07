@@ -23,6 +23,7 @@ New programming language:
         * u8, u16, u32, u64
         * i8, i16, i32, i64
         * f16, f32, f64
+        * Integer literals currently default to `i32`. Use type annotations, parameters, or explicit coercions to work with other widths, and note that the type checker does not perform implicit promotions between widths or signedness.
     * Borrow/mutable borrow
     * Raw pointers(unsafe only)
 * Operator overloading can be done via traits
