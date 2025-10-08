@@ -2653,6 +2653,15 @@ fn ast_expr_alloc_array_repeat(ast_base: i32, element_index: i32, length: i32) -
     index
 }
 
+fn ast_expr_alloc_array_get(ast_base: i32, array_index: i32, index_index: i32) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, 36, array_index, index_index, 0);
+    if index < 0 {
+        return -1;
+    };
+    ast_expr_set_type(ast_base, index, -1);
+    index
+}
+
 fn ast_expr_alloc_shl(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
     let index: i32 = ast_expr_alloc(ast_base, 27, left_index, right_index, 0);
     if index < 0 {
@@ -3479,7 +3488,7 @@ fn parse_unary_expression(
         current_cursor = skip_whitespace(base, len, current_cursor + 1);
     };
 
-    let resolved_cursor: i32 = parse_basic_expression(
+    let mut resolved_cursor: i32 = parse_basic_expression(
         base,
         len,
         current_cursor,
@@ -3500,6 +3509,75 @@ fn parse_unary_expression(
     );
     if resolved_cursor < 0 {
         return -1;
+    };
+
+    let index_kind_ptr: i32 = nested_temp_base;
+    let index_data0_ptr: i32 = nested_temp_base + 4;
+    let index_data1_ptr: i32 = nested_temp_base + 8;
+    let index_temp_base: i32 = nested_temp_base + 32;
+
+    loop {
+        if resolved_cursor >= len {
+            break;
+        };
+        let next_byte: i32 = load_u8(base + resolved_cursor);
+        if next_byte != '[' {
+            break;
+        };
+        let mut index_cursor: i32 = skip_whitespace(base, len, resolved_cursor + 1);
+        index_cursor = parse_expression(
+            base,
+            len,
+            index_cursor,
+            ast_base,
+            params_table_ptr,
+            params_count,
+            locals_table_ptr,
+            locals_stack_count_ptr,
+            locals_next_index_ptr,
+            index_temp_base,
+            loop_depth_ptr,
+            index_kind_ptr,
+            index_data0_ptr,
+            index_data1_ptr,
+        );
+        if index_cursor < 0 {
+            return -1;
+        };
+        index_cursor = skip_whitespace(base, len, index_cursor);
+        index_cursor = expect_char(base, len, index_cursor, ']');
+        if index_cursor < 0 {
+            return -1;
+        };
+
+        let array_kind: i32 = load_i32(out_kind_ptr);
+        let array_data0: i32 = load_i32(out_data0_ptr);
+        let array_data1: i32 = load_i32(out_data1_ptr);
+        let array_expr_index: i32 =
+            expression_node_from_parts(ast_base, array_kind, array_data0, array_data1);
+        if array_expr_index < 0 {
+            return -1;
+        };
+
+        let idx_kind: i32 = load_i32(index_kind_ptr);
+        let idx_data0: i32 = load_i32(index_data0_ptr);
+        let idx_data1: i32 = load_i32(index_data1_ptr);
+        let idx_expr_index: i32 =
+            expression_node_from_parts(ast_base, idx_kind, idx_data0, idx_data1);
+        if idx_expr_index < 0 {
+            return -1;
+        };
+
+        let get_index: i32 = ast_expr_alloc_array_get(ast_base, array_expr_index, idx_expr_index);
+        if get_index < 0 {
+            return -1;
+        };
+
+        store_i32(out_kind_ptr, 2);
+        store_i32(out_data0_ptr, get_index);
+        store_i32(out_data1_ptr, 0);
+
+        resolved_cursor = skip_whitespace(base, len, index_cursor);
     };
 
     if (not_count & 1) != 0 {
@@ -5301,6 +5379,54 @@ fn resolve_expression_internal(
         ast_expr_set_type(ast_base, expr_index, array_type_id);
         return 0;
     };
+    if kind == 36 {
+        let array_index: i32 = load_i32(entry_ptr + 4);
+        let index_index: i32 = load_i32(entry_ptr + 8);
+        if resolve_expression_internal(
+            out_ptr,
+            ast_base,
+            array_index,
+            func_count,
+            control_stack_base,
+            control_stack_count_ptr,
+            loop_stack_base,
+            loop_stack_count_ptr,
+        ) < 0 {
+            return -1;
+        };
+        if resolve_expression_internal(
+            out_ptr,
+            ast_base,
+            index_index,
+            func_count,
+            control_stack_base,
+            control_stack_count_ptr,
+            loop_stack_base,
+            loop_stack_count_ptr,
+        ) < 0 {
+            return -1;
+        };
+        let array_type: i32 = ast_expr_type(ast_base, array_index);
+        if !type_id_is_array(array_type) {
+            return -1;
+        };
+        if resolve_type_id(out_ptr, ast_base, array_type) < 0 {
+            return -1;
+        };
+        let index_type: i32 = ast_expr_type(ast_base, index_index);
+        if index_type != BUILTIN_TYPE_ID_I32 {
+            return -1;
+        };
+        let element_type: i32 = array_type_element_type(ast_base, array_type);
+        if element_type < 0 {
+            return -1;
+        };
+        if resolve_type_id(out_ptr, ast_base, element_type) < 0 {
+            return -1;
+        };
+        ast_expr_set_type(ast_base, expr_index, element_type);
+        return 0;
+    };
     if kind == 29 || kind == 30 || kind == 31 {
         let ptr_index: i32 = load_i32(entry_ptr + 4);
         if resolve_expression_internal(out_ptr, ast_base,
@@ -5801,6 +5927,29 @@ fn collect_local_counts_from_expression(
             locals_end,
         );
     };
+    if kind == 36 {
+        let array_index: i32 = load_i32(entry_ptr + 4);
+        let index_index: i32 = load_i32(entry_ptr + 8);
+        let array_counts: i32 = collect_local_counts_from_expression(
+            ast_base,
+            array_index,
+            param_count,
+            locals_end,
+        );
+        if array_counts < 0 {
+            return -1;
+        };
+        let index_counts: i32 = collect_local_counts_from_expression(
+            ast_base,
+            index_index,
+            param_count,
+            locals_end,
+        );
+        if index_counts < 0 {
+            return -1;
+        };
+        return local_counts_add(array_counts, index_counts);
+    };
     if kind == 2
         || kind == 3
         || kind == 4
@@ -6152,6 +6301,27 @@ fn expression_code_size(ast_base: i32, expr_index: i32) -> i32 {
         };
         return element_size + 1 + leb_i32_len(length) + 2 + leb_u32_len(type_index);
     };
+    if kind == 36 {
+        let array_index: i32 = load_i32(entry_ptr + 4);
+        let index_index: i32 = load_i32(entry_ptr + 8);
+        let array_size: i32 = expression_code_size(ast_base, array_index);
+        if array_size < 0 {
+            return -1;
+        };
+        let index_size: i32 = expression_code_size(ast_base, index_index);
+        if index_size < 0 {
+            return -1;
+        };
+        let array_type: i32 = ast_expr_type(ast_base, array_index);
+        if !type_id_is_array(array_type) {
+            return -1;
+        };
+        let type_index: i32 = array_type_index(array_type);
+        if type_index < 0 {
+            return -1;
+        };
+        return array_size + index_size + 2 + leb_u32_len(type_index);
+    };
     if kind == 29 || kind == 30 || kind == 31 {
         let ptr_index: i32 = load_i32(entry_ptr + 4);
         let ptr_size: i32 = expression_code_size(ast_base, ptr_index);
@@ -6423,6 +6593,30 @@ fn emit_expression(base: i32, offset: i32, ast_base: i32, expr_index: i32) -> i3
         };
         out = write_byte(base, out, 251);
         out = write_byte(base, out, 6);
+        out = write_u32_leb(base, out, type_index);
+        return out;
+    };
+    if kind == 36 {
+        let array_index: i32 = load_i32(entry_ptr + 4);
+        let index_index: i32 = load_i32(entry_ptr + 8);
+        let mut out: i32 = emit_expression(base, offset, ast_base, array_index);
+        if out < 0 {
+            return -1;
+        };
+        out = emit_expression(base, out, ast_base, index_index);
+        if out < 0 {
+            return -1;
+        };
+        let array_type: i32 = ast_expr_type(ast_base, array_index);
+        if !type_id_is_array(array_type) {
+            return -1;
+        };
+        let type_index: i32 = array_type_index(array_type);
+        if type_index < 0 {
+            return -1;
+        };
+        out = write_byte(base, out, 251);
+        out = write_byte(base, out, 11);
         out = write_u32_leb(base, out, type_index);
         return out;
     };
