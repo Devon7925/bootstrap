@@ -36,6 +36,29 @@ fn main() -> i32 {
 }
 
 #[test]
+fn array_list_literal_emits_array_new_fixed() {
+    let source = r#"
+fn build() -> [i32; 4] {
+    [1, 2, 3, 4]
+}
+
+fn main() -> i32 {
+    0
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+
+    let pattern = [
+        0x41, 0x01, 0x41, 0x02, 0x41, 0x03, 0x41, 0x04, 0xfb, 0x08, 0x00, 0x04,
+    ];
+    assert!(
+        contains_sequence(&wasm, &pattern),
+        "expected wasm to contain array.new_fixed for [1, 2, 3, 4] literal",
+    );
+}
+
+#[test]
 fn array_literal_uses_expression_default_value() {
     let source = r#"
 fn build(value: i32) -> [i32; 3] {
@@ -97,6 +120,41 @@ fn main() -> i32 {
 }
 
 #[test]
+fn array_list_literal_can_be_passed_to_function_arguments() {
+    let source = r#"
+fn take(arg: [i32; 4]) -> i32 {
+    0
+}
+
+fn main() -> i32 {
+    take([1, 2, 3, 4,])
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+
+    let mut found = false;
+    for call_index in 0u8..=10 {
+        let pattern = [
+            0x41, 0x01, 0x41, 0x02, 0x41, 0x03, 0x41, 0x04, 0xfb, 0x08, 0x00, 0x04,
+            0x10, call_index,
+        ];
+        if contains_sequence(&wasm, &pattern) {
+            found = true;
+            break;
+        }
+    }
+
+    assert!(
+        found,
+        "expected wasm to allocate the array literal before calling take",
+    );
+
+    let result = run_wasm_main_with_gc(&wasm);
+    assert_eq!(result, 0, "expected main to execute successfully");
+}
+
+#[test]
 fn array_literal_rejects_negative_length() {
     let source = r#"
 fn build() -> [i32; 4] {
@@ -127,5 +185,39 @@ fn main() -> i32 {
 
     let error = try_compile_with_ast_compiler(source)
         .expect_err("array literals should not allow mismatched lengths");
+    assert!(error.produced_len <= 0);
+}
+
+#[test]
+fn array_list_literal_length_must_match_declared_type() {
+    let source = r#"
+fn build() -> [i32; 4] {
+    [1, 2, 3]
+}
+
+fn main() -> i32 {
+    0
+}
+"#;
+
+    let error = try_compile_with_ast_compiler(source)
+        .expect_err("array literals should not allow mismatched list lengths");
+    assert!(error.produced_len <= 0);
+}
+
+#[test]
+fn array_list_literal_requires_uniform_element_types() {
+    let source = r#"
+fn build() -> [i32; 3] {
+    [1, true, 3]
+}
+
+fn main() -> i32 {
+    0
+}
+"#;
+
+    let error = try_compile_with_ast_compiler(source)
+        .expect_err("list array literals must have uniform element types");
     assert!(error.produced_len <= 0);
 }
