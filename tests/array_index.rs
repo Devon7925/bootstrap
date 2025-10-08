@@ -37,3 +37,42 @@ fn main() -> i32 {
         .expect_err("array indices must be 32-bit integers");
     assert!(error.produced_len <= 0);
 }
+
+#[test]
+fn len_intrinsic_returns_array_length() {
+    let source = r#"
+fn main() -> i32 {
+    len([7; 3]) + len([1, 2, 3, 4])
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let result = run_wasm_main_with_gc(&wasm);
+    assert_eq!(result, 7, "expected len intrinsic to return array length");
+}
+
+#[test]
+fn array_elements_can_be_summed() {
+    let source = r#"
+fn sum(values: [i32; 4]) -> i32 {
+    let mut total: i32 = 0;
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= len(values) {
+            break;
+        };
+        total = total + values[idx];
+        idx = idx + 1;
+    }
+    total
+}
+
+fn main() -> i32 {
+    sum([1, 2, 3, 4])
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let result = run_wasm_main_with_gc(&wasm);
+    assert_eq!(result, 10, "expected loop to sum array elements");
+}
