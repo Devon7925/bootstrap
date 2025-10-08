@@ -67,3 +67,17 @@ fn main() -> i32 {
     let result = run_wasm_main_with_gc(&wasm);
     assert_eq!(result, 0, "expected empty string literal to have length 0");
 }
+
+#[test]
+fn assign_to_array_local() {
+    let source = r#"
+fn main() -> i32 {
+    let test: [u8; 4] = "test";
+    len(test)
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let result = run_wasm_main_with_gc(&wasm);
+    assert_eq!(result, 4, "expected 'test' string literal to have length 4");
+}
