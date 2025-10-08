@@ -1,7 +1,11 @@
 #[path = "ast_compiler_helpers.rs"]
 mod ast_compiler_helpers;
 
+#[path = "wasm_harness.rs"]
+mod wasm_harness;
+
 use ast_compiler_helpers::{compile_with_ast_compiler, try_compile_with_ast_compiler};
+use wasm_harness::run_wasm_main;
 use wasmi::{Engine, Linker, Module, Store, TypedFunc};
 
 #[test]
@@ -76,4 +80,268 @@ fn main() -> i32 {
     let error =
         try_compile_with_ast_compiler(source).expect_err("expected float remainder to be rejected");
     assert!(error.produced_len <= 0);
+}
+
+#[test]
+fn literal_addition_executes() {
+    let source = r#"
+fn main() -> i32 {
+    1 + 2 + 3
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 6);
+}
+
+#[test]
+fn addition_with_function_call_executes() {
+    let source = r#"
+fn helper() -> i32 {
+    5
+}
+
+fn main() -> i32 {
+    helper() + 7
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 12);
+}
+
+#[test]
+fn comparison_operators_evaluate() {
+    let source = r#"
+fn evaluate(a: i32, b: i32) -> i32 {
+    let mut total: i32 = 0;
+    if a == b {
+        total = total + 1;
+        0
+    } else {
+        total = total + 2;
+        0
+    };
+    if a != b {
+        total = total + 4;
+        0
+    } else {
+        total = total + 8;
+        0
+    };
+    if a < b {
+        total = total + 16;
+        0
+    } else {
+        total = total + 32;
+        0
+    };
+    if a > b {
+        total = total + 64;
+        0
+    } else {
+        total = total + 128;
+        0
+    };
+    if a <= b {
+        total = total + 256;
+        0
+    } else {
+        total = total + 512;
+        0
+    };
+    if a >= b {
+        total = total + 1024;
+        0
+    } else {
+        total = total + 2048;
+        0
+    };
+    total
+}
+
+fn precedence() -> i32 {
+    let mut total: i32 = 0;
+    if 1 + 2 == 3 {
+        total = total + 1000;
+        0
+    } else {
+        total = total + 1;
+        0
+    };
+    if 20 - 5 >= 15 {
+        total = total + 2000;
+        0
+    } else {
+        total = total + 2;
+        0
+    };
+    if 3 * 3 < 10 {
+        total = total + 4000;
+        0
+    } else {
+        total = total + 4;
+        0
+    };
+    total
+}
+
+fn main() -> i32 {
+    evaluate(4, 4) + evaluate(2, 5) + precedence()
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 10903);
+}
+
+#[test]
+fn missing_function_in_addition_is_rejected() {
+    let source = r#"
+fn main() -> i32 {
+    missing() + 1
+}
+"#;
+
+    let error = try_compile_with_ast_compiler(source)
+        .expect_err("unknown calls in addition expressions should be rejected");
+    assert!(error.produced_len <= 0);
+}
+
+#[test]
+fn literal_subtraction_executes() {
+    let source = r#"
+fn main() -> i32 {
+    50 - 8
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 42);
+}
+
+#[test]
+fn subtraction_with_function_call_executes() {
+    let source = r#"
+fn helper() -> i32 {
+    20
+}
+
+fn main() -> i32 {
+    helper() - 7
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 13);
+}
+
+#[test]
+fn subtraction_rejects_unknown_function_calls() {
+    let source = r#"
+fn main() -> i32 {
+    5 - missing()
+}
+"#;
+
+    let error = try_compile_with_ast_compiler(source)
+        .expect_err("unknown calls in subtraction expressions should be rejected");
+    assert!(error.produced_len <= 0);
+}
+
+#[test]
+fn literal_multiplication_executes() {
+    let source = r#"
+fn main() -> i32 {
+    6 * 7
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 42);
+}
+
+#[test]
+fn multiplication_with_function_call_executes() {
+    let source = r#"
+fn helper() -> i32 {
+    6
+}
+
+fn main() -> i32 {
+    helper() * 7
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 42);
+}
+
+#[test]
+fn literal_division_executes() {
+    let source = r#"
+fn main() -> i32 {
+    126 / 3
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 42);
+}
+
+#[test]
+fn multiplication_precedence_is_respected() {
+    let source = r#"
+fn main() -> i32 {
+    2 + 3 * 4
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 14);
+}
+
+#[test]
+fn multiplication_rejects_unknown_function_calls() {
+    let source = r#"
+fn main() -> i32 {
+    3 * missing()
+}
+"#;
+
+    let error = try_compile_with_ast_compiler(source)
+        .expect_err("unknown calls in multiplication expressions should be rejected");
+    assert!(error.produced_len <= 0);
+}
+
+#[test]
+fn mixed_addition_and_subtraction_executes() {
+    let source = r#"
+fn main() -> i32 {
+    10 + 5 - 3 + 2 - 4
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 10);
 }
