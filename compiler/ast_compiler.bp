@@ -1731,6 +1731,12 @@ const WASM_VALUE_TYPE_I32: i32 = 127;
 
 const WASM_VALUE_TYPE_I64: i32 = 126;
 
+const WASM_REF_TYPE_REF: i32 = -28;
+
+const WASM_COMPOSITE_TYPE_ARRAY: i32 = -34;
+
+const WASM_MUTABILITY_VAR: i32 = 1;
+
 fn type_id_to_wasm_value_type(type_id: i32) -> i32 {
     if type_id_is_64_bit_integer(type_id) {
         return WASM_VALUE_TYPE_I64;
@@ -1739,6 +1745,38 @@ fn type_id_to_wasm_value_type(type_id: i32) -> i32 {
         return WASM_VALUE_TYPE_I32;
     };
     -1
+}
+
+fn type_id_wasm_value_type_len(type_id: i32) -> i32 {
+    if type_id_is_array(type_id) {
+        let heap_index: i32 = array_type_index(type_id);
+        if heap_index < 0 {
+            return -1;
+        };
+        return leb_i32_len(WASM_REF_TYPE_REF) + leb_i32_len(heap_index);
+    };
+    let numeric: i32 = type_id_to_wasm_value_type(type_id);
+    if numeric < 0 {
+        return -1;
+    };
+    1
+}
+
+fn write_type_id_as_wasm_value_type(base: i32, offset: i32, type_id: i32) -> i32 {
+    if type_id_is_array(type_id) {
+        let heap_index: i32 = array_type_index(type_id);
+        if heap_index < 0 {
+            return -1;
+        };
+        let mut out: i32 = write_i32_leb(base, offset, WASM_REF_TYPE_REF);
+        out = write_i32_leb(base, out, heap_index);
+        return out;
+    };
+    let numeric: i32 = type_id_to_wasm_value_type(type_id);
+    if numeric < 0 {
+        return -1;
+    };
+    write_byte(base, offset, numeric)
 }
 
 const BUILTIN_INTEGER_VARIANT_COUNT: i32 = 4;
@@ -6539,33 +6577,36 @@ fn emit_expression(base: i32, offset: i32, ast_base: i32, expr_index: i32) -> i3
     -1
 }
 
-fn emit_type_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> i32 {
-    let mut payload_size: i32 = leb_u32_len(func_count);
-    let mut idx: i32 = 0;
+fn emit_type_section(
+    base: i32,
+    offset: i32,
+    ast_base: i32,
+    func_count: i32,
+    array_count: i32,
+) -> i32 {
+    if array_count < 0 {
+        return -1;
+    };
+    let total_types: i32 = array_count + func_count;
+    let mut payload_size: i32 = leb_u32_len(total_types);
+
+    let mut array_idx: i32 = 0;
     loop {
-        if idx >= func_count {
+        if array_idx >= array_count {
             break;
         };
-        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
-        let param_count: i32 = load_i32(entry_ptr + 8);
-        let return_type_id: i32 = load_i32(entry_ptr + 28);
-        let mut entry_size: i32 = 1;
-        entry_size = entry_size + leb_u32_len(param_count) + param_count;
-        if return_type_id >= 0 {
-            entry_size = entry_size + leb_u32_len(1) + 1;
-        } else {
-            entry_size = entry_size + leb_u32_len(0);
+        let entry_ptr: i32 = ast_array_type_entry_ptr(ast_base, array_idx);
+        let element_type_id: i32 = load_i32(entry_ptr + AST_ARRAY_TYPE_ELEMENT_OFFSET);
+        let element_size: i32 = type_id_wasm_value_type_len(element_type_id);
+        if element_size < 0 {
+            return -1;
         };
+        let entry_size: i32 = leb_i32_len(WASM_COMPOSITE_TYPE_ARRAY) + element_size + 1;
         payload_size = payload_size + entry_size;
-        idx = idx + 1;
+        array_idx = array_idx + 1;
     };
 
-    let mut out: i32 = offset;
-    out = write_byte(base, out, 1);
-    out = write_u32_leb(base, out, payload_size);
-    out = write_u32_leb(base, out, func_count);
-
-    idx = 0;
+    let mut idx: i32 = 0;
     loop {
         if idx >= func_count {
             break;
@@ -6578,6 +6619,64 @@ fn emit_type_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
                 return -1;
             };
         };
+        let mut entry_size: i32 = 1;
+        entry_size = entry_size + leb_u32_len(param_count);
+        let mut param_idx: i32 = 0;
+        loop {
+            if param_idx >= param_count {
+                break;
+            };
+            let param_type_id: i32 = load_i32(param_types_ptr + param_idx * 4);
+            let param_size: i32 = type_id_wasm_value_type_len(param_type_id);
+            if param_size < 0 {
+                return -1;
+            };
+            entry_size = entry_size + param_size;
+            param_idx = param_idx + 1;
+        };
+        let return_type_id: i32 = load_i32(entry_ptr + 28);
+        if return_type_id >= 0 {
+            let return_size: i32 = type_id_wasm_value_type_len(return_type_id);
+            if return_size < 0 {
+                return -1;
+            };
+            entry_size = entry_size + leb_u32_len(1) + return_size;
+        } else {
+            entry_size = entry_size + leb_u32_len(0);
+        };
+        payload_size = payload_size + entry_size;
+        idx = idx + 1;
+    };
+
+    let mut out: i32 = offset;
+    out = write_byte(base, out, 1);
+    out = write_u32_leb(base, out, payload_size);
+    out = write_u32_leb(base, out, total_types);
+
+    array_idx = 0;
+    loop {
+        if array_idx >= array_count {
+            break;
+        };
+        let entry_ptr: i32 = ast_array_type_entry_ptr(ast_base, array_idx);
+        let element_type_id: i32 = load_i32(entry_ptr + AST_ARRAY_TYPE_ELEMENT_OFFSET);
+        out = write_i32_leb(base, out, WASM_COMPOSITE_TYPE_ARRAY);
+        let next: i32 = write_type_id_as_wasm_value_type(base, out, element_type_id);
+        if next < 0 {
+            return -1;
+        };
+        out = write_byte(base, next, WASM_MUTABILITY_VAR);
+        array_idx = array_idx + 1;
+    };
+
+    idx = 0;
+    loop {
+        if idx >= func_count {
+            break;
+        };
+        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
+        let param_count: i32 = load_i32(entry_ptr + 8);
+        let param_types_ptr: i32 = load_i32(entry_ptr + 24);
         out = write_byte(base, out, 96);
         out = write_u32_leb(base, out, param_count);
         let mut param_idx: i32 = 0;
@@ -6586,21 +6685,21 @@ fn emit_type_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
                 break;
             };
             let param_type_id: i32 = load_i32(param_types_ptr + param_idx * 4);
-            let wasm_type: i32 = type_id_to_wasm_value_type(param_type_id);
-            if wasm_type < 0 {
+            let next: i32 = write_type_id_as_wasm_value_type(base, out, param_type_id);
+            if next < 0 {
                 return -1;
             };
-            out = write_byte(base, out, wasm_type);
+            out = next;
             param_idx = param_idx + 1;
         };
         let return_type_id: i32 = load_i32(entry_ptr + 28);
         if return_type_id >= 0 {
-            let wasm_return: i32 = type_id_to_wasm_value_type(return_type_id);
-            if wasm_return < 0 {
+            out = write_u32_leb(base, out, 1);
+            let next: i32 = write_type_id_as_wasm_value_type(base, out, return_type_id);
+            if next < 0 {
                 return -1;
             };
-            out = write_u32_leb(base, out, 1);
-            out = write_byte(base, out, wasm_return);
+            out = next;
         } else {
             out = write_u32_leb(base, out, 0);
         };
@@ -6609,14 +6708,20 @@ fn emit_type_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
     out
 }
 
-fn emit_function_section(base: i32, offset: i32, func_count: i32) -> i32 {
+fn emit_function_section(
+    base: i32,
+    offset: i32,
+    func_count: i32,
+    array_count: i32,
+) -> i32 {
     let mut payload_size: i32 = leb_u32_len(func_count);
     let mut idx: i32 = 0;
     loop {
         if idx >= func_count {
             break;
         };
-        payload_size = payload_size + leb_u32_len(idx);
+        let type_index: i32 = array_count + idx;
+        payload_size = payload_size + leb_u32_len(type_index);
         idx = idx + 1;
     };
 
@@ -6629,7 +6734,8 @@ fn emit_function_section(base: i32, offset: i32, func_count: i32) -> i32 {
         if idx >= func_count {
             break;
         };
-        out = write_u32_leb(base, out, idx);
+        let type_index: i32 = array_count + idx;
+        out = write_u32_leb(base, out, type_index);
         idx = idx + 1;
     };
     out
@@ -6968,8 +7074,9 @@ fn write_type_metadata(out_ptr: i32, ast_base: i32) -> i32 {
 fn emit_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
     let mut offset: i32 = 0;
     offset = write_magic(out_ptr, offset);
-    offset = emit_type_section(out_ptr, offset, ast_base, func_count);
-    offset = emit_function_section(out_ptr, offset, func_count);
+    let array_count: i32 = ast_array_types_count(ast_base);
+    offset = emit_type_section(out_ptr, offset, ast_base, func_count, array_count);
+    offset = emit_function_section(out_ptr, offset, func_count, array_count);
     offset = emit_memory_section(out_ptr, offset);
     offset = emit_export_section(out_ptr, offset, ast_base, func_count);
     offset = emit_code_section(out_ptr, offset, ast_base, func_count);
