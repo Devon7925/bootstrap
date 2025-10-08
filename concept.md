@@ -17,7 +17,12 @@ New programming language:
     * Enum
     * Tuple
     * Unit(0 length tuple)
-    * Array
+* Array
+    * Written using Rust-style syntax: `[T; N]` declares an array that stores `N` consecutive values of type `T` inline.
+    * The length `N` is part of the type and must be a compile-time constant (a literal, `const`, or `type` expression); arrays cannot grow or shrink at runtime.
+    * Array literals follow the host expression syntax: `[a, b, c]` lists each element explicitly, while `[value; N]` repeats the same initializer `N` times when `value` is `Copy`.
+    * Arrays own their contents. Moving an array moves all of its elements, and borrows (`&[T; N]` / `&mut [T; N]`) lock the entire array for the duration of the borrow just like any other aggregate value. Shared borrows may produce slice views, but the array itself cannot be moved or mutably borrowed while a shared borrow is outstanding.
+    * Taking a slice (`&arr[..]`) yields a `slice` type that borrows the array memory without copying; slices keep the underlying array alive until the borrow ends.
     * Slice
     * Numbers (depending on target)
         * u8, u16, u32, u64
