@@ -378,37 +378,21 @@ fn parse_identifier(base: i32, len: i32, offset: i32, out_start_ptr: i32, out_le
     idx
 }
 
-fn max_params() -> i32 {
-    64
-}
+const MAX_PARAMS: i32 = 64;
 
-fn intrinsic_kind_none() -> i32 {
-    -1
-}
+const INTRINSIC_KIND_NONE: i32 = -1;
 
-fn intrinsic_kind_load_u8() -> i32 {
-    0
-}
+const INTRINSIC_KIND_LOAD_U8: i32 = 0;
 
-fn intrinsic_kind_store_u8() -> i32 {
-    1
-}
+const INTRINSIC_KIND_STORE_U8: i32 = 1;
 
-fn intrinsic_kind_load_i32() -> i32 {
-    2
-}
+const INTRINSIC_KIND_LOAD_I32: i32 = 2;
 
-fn intrinsic_kind_store_i32() -> i32 {
-    3
-}
+const INTRINSIC_KIND_STORE_I32: i32 = 3;
 
-fn intrinsic_kind_load_u16() -> i32 {
-    4
-}
+const INTRINSIC_KIND_LOAD_U16: i32 = 4;
 
-fn intrinsic_kind_store_u16() -> i32 {
-    5
-}
+const INTRINSIC_KIND_STORE_U16: i32 = 5;
 
 fn is_identifier_load_u8(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
     if ident_len != 7 {
@@ -619,24 +603,24 @@ fn is_identifier_store_u16(base: i32, len: i32, start: i32, ident_len: i32) -> b
 
 fn identify_intrinsic(base: i32, len: i32, start: i32, ident_len: i32) -> i32 {
     if is_identifier_load_u8(base, len, start, ident_len) {
-        return intrinsic_kind_load_u8();
+        return INTRINSIC_KIND_LOAD_U8;
     };
     if is_identifier_store_u8(base, len, start, ident_len) {
-        return intrinsic_kind_store_u8();
+        return INTRINSIC_KIND_STORE_U8;
     };
     if is_identifier_load_i32(base, len, start, ident_len) {
-        return intrinsic_kind_load_i32();
+        return INTRINSIC_KIND_LOAD_I32;
     };
     if is_identifier_store_i32(base, len, start, ident_len) {
-        return intrinsic_kind_store_i32();
+        return INTRINSIC_KIND_STORE_I32;
     };
     if is_identifier_load_u16(base, len, start, ident_len) {
-        return intrinsic_kind_load_u16();
+        return INTRINSIC_KIND_LOAD_U16;
     };
     if is_identifier_store_u16(base, len, start, ident_len) {
-        return intrinsic_kind_store_u16();
+        return INTRINSIC_KIND_STORE_U16;
     };
-    intrinsic_kind_none()
+    INTRINSIC_KIND_NONE
 }
 
 fn identifiers_match_source(
@@ -729,16 +713,12 @@ fn expect_keyword_let(base: i32, len: i32, offset: i32) -> i32 {
     next
 }
 
-fn max_locals() -> i32 {
-    512
-}
+const MAX_LOCALS: i32 = 512;
 
-fn locals_entry_size() -> i32 {
-    20
-}
+const LOCALS_ENTRY_SIZE: i32 = 20;
 
 fn locals_entry_ptr(locals_table_ptr: i32, index: i32) -> i32 {
-    locals_table_ptr + index * locals_entry_size()
+    locals_table_ptr + index * LOCALS_ENTRY_SIZE
 }
 
 fn find_local_entry_index(
@@ -872,13 +852,9 @@ fn expression_guaranteed_diverges(ast_base: i32, expr_index: i32) -> bool {
     false
 }
 
-fn block_statement_entry_size() -> i32 {
-    12
-}
+const BLOCK_STATEMENT_ENTRY_SIZE: i32 = 12;
 
-fn block_statements_capacity() -> i32 {
-    512
-}
+const BLOCK_STATEMENTS_CAPACITY: i32 = 512;
 
 fn parse_block_expression_body(
     base: i32,
@@ -908,8 +884,8 @@ fn parse_block_expression_body(
     let statement_count_ptr: i32 = temp_base;
     store_i32(statement_count_ptr, 0);
     let statements_base: i32 = statement_count_ptr + 4;
-    let statements_capacity: i32 = block_statements_capacity();
-    let statement_entry_size: i32 = block_statement_entry_size();
+    let statements_capacity: i32 = BLOCK_STATEMENTS_CAPACITY;
+    let statement_entry_size: i32 = BLOCK_STATEMENT_ENTRY_SIZE;
     let statements_end: i32 = statements_base + statements_capacity * statement_entry_size;
     let stmt_expr_kind_ptr: i32 = statements_end;
     let stmt_expr_data0_ptr: i32 = stmt_expr_kind_ptr + 4;
@@ -1099,13 +1075,13 @@ fn parse_block_expression_body(
             };
 
             let stack_count: i32 = load_i32(locals_stack_count_ptr);
-            if stack_count >= max_locals() {
+            if stack_count >= MAX_LOCALS {
                 store_i32(locals_stack_count_ptr, saved_stack_count);
                 store_i32(locals_next_index_ptr, saved_next_index);
                 return -1;
             };
             let next_local_offset: i32 = load_i32(locals_next_index_ptr);
-            if next_local_offset >= max_locals() {
+            if next_local_offset >= MAX_LOCALS {
                 store_i32(locals_stack_count_ptr, saved_stack_count);
                 store_i32(locals_next_index_ptr, saved_next_index);
                 return -1;
@@ -1674,96 +1650,72 @@ fn parse_block_expression_body(
     idx
 }
 
-fn builtin_type_id_i32() -> i32 {
-    0
-}
+const BUILTIN_TYPE_ID_I32: i32 = 0;
 
-fn builtin_type_id_bool() -> i32 {
-    1
-}
+const BUILTIN_TYPE_ID_BOOL: i32 = 1;
 
-fn builtin_type_id_i8() -> i32 {
-    2
-}
+const BUILTIN_TYPE_ID_I8: i32 = 2;
 
-fn builtin_type_id_i16() -> i32 {
-    3
-}
+const BUILTIN_TYPE_ID_I16: i32 = 3;
 
-fn builtin_type_id_i64() -> i32 {
-    4
-}
+const BUILTIN_TYPE_ID_I64: i32 = 4;
 
-fn builtin_type_id_u8() -> i32 {
-    5
-}
+const BUILTIN_TYPE_ID_U8: i32 = 5;
 
-fn builtin_type_id_u16() -> i32 {
-    6
-}
+const BUILTIN_TYPE_ID_U16: i32 = 6;
 
-fn builtin_type_id_u32() -> i32 {
-    7
-}
+const BUILTIN_TYPE_ID_U32: i32 = 7;
 
-fn builtin_type_id_u64() -> i32 {
-    8
-}
+const BUILTIN_TYPE_ID_U64: i32 = 8;
 
 fn type_id_is_bool(type_id: i32) -> bool {
-    type_id == builtin_type_id_bool()
+    type_id == BUILTIN_TYPE_ID_BOOL
 }
 
 fn type_id_is_integer(type_id: i32) -> bool {
-    type_id == builtin_type_id_i8()
-        || type_id == builtin_type_id_i16()
-        || type_id == builtin_type_id_i32()
-        || type_id == builtin_type_id_i64()
-        || type_id == builtin_type_id_u8()
-        || type_id == builtin_type_id_u16()
-        || type_id == builtin_type_id_u32()
-        || type_id == builtin_type_id_u64()
+    type_id == BUILTIN_TYPE_ID_I8
+        || type_id == BUILTIN_TYPE_ID_I16
+        || type_id == BUILTIN_TYPE_ID_I32
+        || type_id == BUILTIN_TYPE_ID_I64
+        || type_id == BUILTIN_TYPE_ID_U8
+        || type_id == BUILTIN_TYPE_ID_U16
+        || type_id == BUILTIN_TYPE_ID_U32
+        || type_id == BUILTIN_TYPE_ID_U64
 }
 
 fn type_id_is_signed_integer(type_id: i32) -> bool {
-    type_id == builtin_type_id_i8()
-        || type_id == builtin_type_id_i16()
-        || type_id == builtin_type_id_i32()
-        || type_id == builtin_type_id_i64()
+    type_id == BUILTIN_TYPE_ID_I8
+        || type_id == BUILTIN_TYPE_ID_I16
+        || type_id == BUILTIN_TYPE_ID_I32
+        || type_id == BUILTIN_TYPE_ID_I64
 }
 
 fn type_id_is_unsigned_integer(type_id: i32) -> bool {
-    type_id == builtin_type_id_u8()
-        || type_id == builtin_type_id_u16()
-        || type_id == builtin_type_id_u32()
-        || type_id == builtin_type_id_u64()
+    type_id == BUILTIN_TYPE_ID_U8
+        || type_id == BUILTIN_TYPE_ID_U16
+        || type_id == BUILTIN_TYPE_ID_U32
+        || type_id == BUILTIN_TYPE_ID_U64
 }
 
 fn type_id_is_64_bit_integer(type_id: i32) -> bool {
-    type_id == builtin_type_id_i64() || type_id == builtin_type_id_u64()
+    type_id == BUILTIN_TYPE_ID_I64 || type_id == BUILTIN_TYPE_ID_U64
 }
 
-fn wasm_value_type_i32() -> i32 {
-    127
-}
+const WASM_VALUE_TYPE_I32: i32 = 127;
 
-fn wasm_value_type_i64() -> i32 {
-    126
-}
+const WASM_VALUE_TYPE_I64: i32 = 126;
 
 fn type_id_to_wasm_value_type(type_id: i32) -> i32 {
     if type_id_is_64_bit_integer(type_id) {
-        return wasm_value_type_i64();
+        return WASM_VALUE_TYPE_I64;
     };
     if type_id_is_integer(type_id) || type_id_is_bool(type_id) {
-        return wasm_value_type_i32();
+        return WASM_VALUE_TYPE_I32;
     };
     -1
 }
 
-fn builtin_integer_variant_count() -> i32 {
-    4
-}
+const BUILTIN_INTEGER_VARIANT_COUNT: i32 = 4;
 
 fn builtin_integer_variant_width(index: i32) -> i32 {
     if index == 0 {
@@ -1780,32 +1732,32 @@ fn builtin_integer_variant_width(index: i32) -> i32 {
 
 fn builtin_signed_integer_type_id_for_variant(index: i32) -> i32 {
     if index == 0 {
-        return builtin_type_id_i8();
+        return BUILTIN_TYPE_ID_I8;
     };
     if index == 1 {
-        return builtin_type_id_i16();
+        return BUILTIN_TYPE_ID_I16;
     };
     if index == 2 {
-        return builtin_type_id_i32();
+        return BUILTIN_TYPE_ID_I32;
     };
     if index == 3 {
-        return builtin_type_id_i64();
+        return BUILTIN_TYPE_ID_I64;
     };
     -1
 }
 
 fn builtin_unsigned_integer_type_id_for_variant(index: i32) -> i32 {
     if index == 0 {
-        return builtin_type_id_u8();
+        return BUILTIN_TYPE_ID_U8;
     };
     if index == 1 {
-        return builtin_type_id_u16();
+        return BUILTIN_TYPE_ID_U16;
     };
     if index == 2 {
-        return builtin_type_id_u32();
+        return BUILTIN_TYPE_ID_U32;
     };
     if index == 3 {
-        return builtin_type_id_u64();
+        return BUILTIN_TYPE_ID_U64;
     };
     -1
 }
@@ -1831,7 +1783,7 @@ fn builtin_integer_type_keyword_to_id(base: i32, start: i32, ident_len: i32) -> 
         width = width * 10 + (digit - '0');
         idx = idx + 1;
     };
-    let variant_count: i32 = builtin_integer_variant_count();
+    let variant_count: i32 = BUILTIN_INTEGER_VARIANT_COUNT;
     let mut variant_index: i32 = 0;
     loop {
         if variant_index >= variant_count {
@@ -1886,7 +1838,7 @@ fn parse_type(base: i32, len: i32, offset: i32, out_type_ptr: i32) -> i32 {
         let l: i32 = load_u8(base + offset + 3);
         if b == 'b' && o0 == 'o' && o1 == 'o' && l == 'l' {
             if out_type_ptr >= 0 {
-                store_i32(out_type_ptr, builtin_type_id_bool());
+                store_i32(out_type_ptr, BUILTIN_TYPE_ID_BOOL);
             };
             return next;
         };
@@ -1978,84 +1930,58 @@ fn parse_char_literal(base: i32, len: i32, offset: i32, out_value_ptr: i32) -> i
     idx + 1
 }
 
-fn word_size() -> i32 {
-    4
-}
+const WORD_SIZE: i32 = 4;
 
-fn scratch_instr_offset() -> i32 {
-    4096
-}
+const SCRATCH_INSTR_OFFSET: i32 = 4096;
 
-fn scratch_expr_type_offset() -> i32 {
-    4092
-}
+const SCRATCH_EXPR_TYPE_OFFSET: i32 = 4092;
 
-fn scratch_instr_base_offset() -> i32 {
-    8192
-}
+const SCRATCH_INSTR_BASE_OFFSET: i32 = 8192;
 
-fn scratch_instr_capacity() -> i32 {
-    65536
-}
+const SCRATCH_INSTR_CAPACITY: i32 = 65536;
 
-fn scratch_fn_count_offset() -> i32 {
-    851960
-}
+const SCRATCH_FN_COUNT_OFFSET: i32 = 851960;
 
-fn scratch_fn_base_offset() -> i32 {
-    851968
-}
+const SCRATCH_FN_BASE_OFFSET: i32 = 851968;
 
-fn type_entry_size() -> i32 {
-    16
-}
+const TYPE_ENTRY_SIZE: i32 = 16;
 
-fn type_entry_type_id_offset() -> i32 {
-    0
-}
+const TYPE_ENTRY_TYPE_ID_OFFSET: i32 = 0;
 
-fn type_entry_name_ptr_offset() -> i32 {
-    4
-}
+const TYPE_ENTRY_NAME_PTR_OFFSET: i32 = 4;
 
-fn type_entry_name_len_offset() -> i32 {
-    8
-}
+const TYPE_ENTRY_NAME_LEN_OFFSET: i32 = 8;
 
-fn type_entry_extra_offset() -> i32 {
-    12
-}
+const TYPE_ENTRY_EXTRA_OFFSET: i32 = 12;
 
-fn scratch_types_capacity() -> i32 {
-    2048
-}
+const SCRATCH_TYPES_CAPACITY: i32 = 2048;
 
 fn scratch_types_base_offset() -> i32 {
-    scratch_fn_base_offset() - scratch_types_capacity() * type_entry_size()
+    SCRATCH_FN_BASE_OFFSET - SCRATCH_TYPES_CAPACITY * TYPE_ENTRY_SIZE
 }
 
 fn scratch_types_count_offset() -> i32 {
-    scratch_types_base_offset() - word_size()
+    scratch_types_base_offset() - WORD_SIZE
 }
 
 fn scratch_instr_offset_ptr(out_ptr: i32) -> i32 {
-    out_ptr + scratch_instr_offset()
+    out_ptr + SCRATCH_INSTR_OFFSET
 }
 
 fn scratch_expr_type_ptr(out_ptr: i32) -> i32 {
-    out_ptr + scratch_expr_type_offset()
+    out_ptr + SCRATCH_EXPR_TYPE_OFFSET
 }
 
 fn scratch_instr_base(out_ptr: i32) -> i32 {
-    out_ptr + scratch_instr_base_offset()
+    out_ptr + SCRATCH_INSTR_BASE_OFFSET
 }
 
 fn scratch_fn_count_ptr(out_ptr: i32) -> i32 {
-    out_ptr + scratch_fn_count_offset()
+    out_ptr + SCRATCH_FN_COUNT_OFFSET
 }
 
 fn scratch_fn_base(out_ptr: i32) -> i32 {
-    out_ptr + scratch_fn_base_offset()
+    out_ptr + SCRATCH_FN_BASE_OFFSET
 }
 
 fn scratch_types_count_ptr(out_ptr: i32) -> i32 {
@@ -2067,32 +1993,26 @@ fn scratch_types_base(out_ptr: i32) -> i32 {
 }
 
 fn scratch_type_entry_ptr(out_ptr: i32, index: i32) -> i32 {
-    scratch_types_base(out_ptr) + index * type_entry_size()
+    scratch_types_base(out_ptr) + index * TYPE_ENTRY_SIZE
 }
 
 fn scratch_type_entry_type_id_ptr(out_ptr: i32, index: i32) -> i32 {
-    scratch_type_entry_ptr(out_ptr, index) + type_entry_type_id_offset()
+    scratch_type_entry_ptr(out_ptr, index) + TYPE_ENTRY_TYPE_ID_OFFSET
 }
 
-fn ast_max_functions() -> i32 {
-    256
-}
+const AST_MAX_FUNCTIONS: i32 = 256;
 
-fn ast_function_entry_size() -> i32 {
-    32
-}
+const AST_FUNCTION_ENTRY_SIZE: i32 = 32;
 
-fn ast_names_capacity() -> i32 {
-    65536
-}
+const AST_NAMES_CAPACITY: i32 = 65536;
 
 fn ast_call_data_capacity() -> i32 {
     65536 - ast_constants_section_words()
 }
 
 fn ast_output_reserve(input_len: i32) -> i32 {
-    let after_output: i32 = input_len + scratch_instr_capacity();
-    let scratch_end: i32 = scratch_fn_base_offset() + 16384;
+    let after_output: i32 = input_len + SCRATCH_INSTR_CAPACITY;
+    let scratch_end: i32 = SCRATCH_FN_BASE_OFFSET + 16384;
     if after_output > scratch_end { after_output } else { scratch_end }
 }
 
@@ -2105,23 +2025,23 @@ fn ast_functions_count_ptr(ast_base: i32) -> i32 {
 }
 
 fn ast_function_entry_ptr(ast_base: i32, index: i32) -> i32 {
-    ast_base + word_size() + index * ast_function_entry_size()
+    ast_base + WORD_SIZE + index * AST_FUNCTION_ENTRY_SIZE
 }
 
 fn ast_names_len_ptr(ast_base: i32) -> i32 {
-    ast_base + word_size() + ast_max_functions() * ast_function_entry_size()
+    ast_base + WORD_SIZE + AST_MAX_FUNCTIONS * AST_FUNCTION_ENTRY_SIZE
 }
 
 fn ast_names_base(ast_base: i32) -> i32 {
-    ast_names_len_ptr(ast_base) + word_size()
+    ast_names_len_ptr(ast_base) + WORD_SIZE
 }
 
 fn ast_call_data_len_ptr(ast_base: i32) -> i32 {
-    ast_names_base(ast_base) + ast_names_capacity()
+    ast_names_base(ast_base) + AST_NAMES_CAPACITY
 }
 
 fn ast_call_data_base(ast_base: i32) -> i32 {
-    ast_call_data_len_ptr(ast_base) + word_size()
+    ast_call_data_len_ptr(ast_base) + WORD_SIZE
 }
 
 fn ast_reset(ast_base: i32) {
@@ -2135,7 +2055,7 @@ fn ast_reset(ast_base: i32) {
 fn ast_store_name(ast_base: i32, source_base: i32, start: i32, len: i32) -> i32 {
     let name_len_ptr: i32 = ast_names_len_ptr(ast_base);
     let mut used: i32 = load_i32(name_len_ptr);
-    if used + len > ast_names_capacity() {
+    if used + len > AST_NAMES_CAPACITY {
         return -1;
     };
     let name_ptr: i32 = ast_names_base(ast_base) + used;
@@ -2162,7 +2082,7 @@ fn ast_call_data_alloc(ast_base: i32, word_count: i32) -> i32 {
     if used + word_count > ast_call_data_capacity() {
         return -1;
     };
-    let entry_ptr: i32 = ast_call_data_base(ast_base) + used * word_size();
+    let entry_ptr: i32 = ast_call_data_base(ast_base) + used * WORD_SIZE;
     store_i32(used_ptr, used + word_count);
     entry_ptr
 }
@@ -2210,28 +2130,24 @@ fn ast_write_function_entry(
     store_i32(entry_ptr + 28, return_type_id);
 }
 
-fn ast_constants_capacity() -> i32 {
-    1024
-}
+const AST_CONSTANTS_CAPACITY: i32 = 1024;
 
-fn ast_constant_entry_size() -> i32 {
-    16
-}
+const AST_CONSTANT_ENTRY_SIZE: i32 = 16;
 
 fn ast_constants_section_size() -> i32 {
-    word_size() + ast_constants_capacity() * ast_constant_entry_size()
+    WORD_SIZE + AST_CONSTANTS_CAPACITY * AST_CONSTANT_ENTRY_SIZE
 }
 
 fn ast_constants_section_words() -> i32 {
-    ast_constants_section_size() / word_size()
+    ast_constants_section_size() / WORD_SIZE
 }
 
 fn ast_constants_count_ptr(ast_base: i32) -> i32 {
-    ast_call_data_base(ast_base) + ast_call_data_capacity() * word_size()
+    ast_call_data_base(ast_base) + ast_call_data_capacity() * WORD_SIZE
 }
 
 fn ast_constant_entry_ptr(ast_base: i32, index: i32) -> i32 {
-    ast_constants_count_ptr(ast_base) + word_size() + index * ast_constant_entry_size()
+    ast_constants_count_ptr(ast_base) + WORD_SIZE + index * AST_CONSTANT_ENTRY_SIZE
 }
 
 fn ast_constants_count(ast_base: i32) -> i32 {
@@ -2246,20 +2162,16 @@ fn ast_extra_base(ast_base: i32) -> i32 {
     ast_constants_count_ptr(ast_base) + ast_constants_section_size()
 }
 
-fn ast_expr_entry_size() -> i32 {
-    16
-}
+const AST_EXPR_ENTRY_SIZE: i32 = 16;
 
-fn ast_expr_capacity() -> i32 {
-    32768
-}
+const AST_EXPR_CAPACITY: i32 = 32768;
 
 fn ast_expr_count_ptr(ast_base: i32) -> i32 {
     ast_extra_base(ast_base)
 }
 
 fn ast_expr_entry_ptr(ast_base: i32, index: i32) -> i32 {
-    ast_extra_base(ast_base) + word_size() + index * ast_expr_entry_size()
+    ast_extra_base(ast_base) + WORD_SIZE + index * AST_EXPR_ENTRY_SIZE
 }
 
 fn ast_expr_types_base(ast_base: i32) -> i32 {
@@ -2267,7 +2179,7 @@ fn ast_expr_types_base(ast_base: i32) -> i32 {
 }
 
 fn ast_expr_type_entry_ptr(ast_base: i32, index: i32) -> i32 {
-    ast_expr_types_base(ast_base) + index * word_size()
+    ast_expr_types_base(ast_base) + index * WORD_SIZE
 }
 
 fn ast_expr_set_type(ast_base: i32, index: i32, type_id: i32) {
@@ -2299,7 +2211,7 @@ fn ast_expr_count(ast_base: i32) -> i32 {
 fn ast_expr_alloc(ast_base: i32, kind: i32, data0: i32, data1: i32, data2: i32) -> i32 {
     let count_ptr: i32 = ast_expr_count_ptr(ast_base);
     let count: i32 = load_i32(count_ptr);
-    if count >= ast_expr_capacity() {
+    if count >= AST_EXPR_CAPACITY {
         return -1;
     };
     let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, count);
@@ -2389,7 +2301,7 @@ fn ast_expr_alloc_load_u8(ast_base: i32, ptr_index: i32) -> i32 {
     if index < 0 {
         return -1;
     };
-    ast_expr_set_type(ast_base, index, builtin_type_id_i32());
+    ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_I32);
     index
 }
 
@@ -2398,7 +2310,7 @@ fn ast_expr_alloc_load_u16(ast_base: i32, ptr_index: i32) -> i32 {
     if index < 0 {
         return -1;
     };
-    ast_expr_set_type(ast_base, index, builtin_type_id_i32());
+    ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_I32);
     index
 }
 
@@ -2407,7 +2319,7 @@ fn ast_expr_alloc_load_i32(ast_base: i32, ptr_index: i32) -> i32 {
     if index < 0 {
         return -1;
     };
-    ast_expr_set_type(ast_base, index, builtin_type_id_i32());
+    ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_I32);
     index
 }
 
@@ -2416,7 +2328,7 @@ fn ast_expr_alloc_store_u8(ast_base: i32, ptr_index: i32, value_index: i32) -> i
     if index < 0 {
         return -1;
     };
-    ast_expr_set_type(ast_base, index, builtin_type_id_i32());
+    ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_I32);
     index
 }
 
@@ -2425,7 +2337,7 @@ fn ast_expr_alloc_store_u16(ast_base: i32, ptr_index: i32, value_index: i32) -> 
     if index < 0 {
         return -1;
     };
-    ast_expr_set_type(ast_base, index, builtin_type_id_i32());
+    ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_I32);
     index
 }
 
@@ -2434,7 +2346,7 @@ fn ast_expr_alloc_store_i32(ast_base: i32, ptr_index: i32, value_index: i32) -> 
     if index < 0 {
         return -1;
     };
-    ast_expr_set_type(ast_base, index, builtin_type_id_i32());
+    ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_I32);
     index
 }
 
@@ -2461,7 +2373,7 @@ fn ast_expr_alloc_eq(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
     if index < 0 {
         return -1;
     };
-    ast_expr_set_type(ast_base, index, builtin_type_id_bool());
+    ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_BOOL);
     index
 }
 
@@ -2470,7 +2382,7 @@ fn ast_expr_alloc_ne(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
     if index < 0 {
         return -1;
     };
-    ast_expr_set_type(ast_base, index, builtin_type_id_bool());
+    ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_BOOL);
     index
 }
 
@@ -2479,7 +2391,7 @@ fn ast_expr_alloc_lt(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
     if index < 0 {
         return -1;
     };
-    ast_expr_set_type(ast_base, index, builtin_type_id_bool());
+    ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_BOOL);
     index
 }
 
@@ -2488,7 +2400,7 @@ fn ast_expr_alloc_gt(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
     if index < 0 {
         return -1;
     };
-    ast_expr_set_type(ast_base, index, builtin_type_id_bool());
+    ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_BOOL);
     index
 }
 
@@ -2497,7 +2409,7 @@ fn ast_expr_alloc_le(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
     if index < 0 {
         return -1;
     };
-    ast_expr_set_type(ast_base, index, builtin_type_id_bool());
+    ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_BOOL);
     index
 }
 
@@ -2506,7 +2418,7 @@ fn ast_expr_alloc_ge(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
     if index < 0 {
         return -1;
     };
-    ast_expr_set_type(ast_base, index, builtin_type_id_bool());
+    ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_BOOL);
     index
 }
 
@@ -2515,7 +2427,7 @@ fn ast_expr_alloc_logical_or(ast_base: i32, left_index: i32, right_index: i32) -
     if index < 0 {
         return -1;
     };
-    ast_expr_set_type(ast_base, index, builtin_type_id_bool());
+    ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_BOOL);
     index
 }
 
@@ -2524,7 +2436,7 @@ fn ast_expr_alloc_logical_and(ast_base: i32, left_index: i32, right_index: i32) 
     if index < 0 {
         return -1;
     };
-    ast_expr_set_type(ast_base, index, builtin_type_id_bool());
+    ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_BOOL);
     index
 }
 
@@ -2533,7 +2445,7 @@ fn ast_expr_alloc_logical_not(ast_base: i32, value_index: i32) -> i32 {
     if index < 0 {
         return -1;
     };
-    ast_expr_set_type(ast_base, index, builtin_type_id_bool());
+    ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_BOOL);
     index
 }
 
@@ -2930,7 +2842,7 @@ fn parse_basic_expression(
         let value: i32 = load_i32(literal_ptr);
         store_i32(out_kind_ptr, 0);
         store_i32(out_data0_ptr, value);
-        store_i32(out_data1_ptr, builtin_type_id_i32());
+        store_i32(out_data1_ptr, BUILTIN_TYPE_ID_I32);
         return skip_whitespace(base, len, next_cursor);
     };
     if first_byte == '-' || is_digit(first_byte) {
@@ -2941,7 +2853,7 @@ fn parse_basic_expression(
         let value: i32 = load_i32(literal_ptr);
         store_i32(out_kind_ptr, 0);
         store_i32(out_data0_ptr, value);
-        store_i32(out_data1_ptr, builtin_type_id_i32());
+        store_i32(out_data1_ptr, BUILTIN_TYPE_ID_I32);
         return skip_whitespace(base, len, next_cursor);
     };
     if first_byte == 't' {
@@ -2949,7 +2861,7 @@ fn parse_basic_expression(
         if next_cursor >= 0 {
             store_i32(out_kind_ptr, 0);
             store_i32(out_data0_ptr, 1);
-            store_i32(out_data1_ptr, builtin_type_id_bool());
+            store_i32(out_data1_ptr, BUILTIN_TYPE_ID_BOOL);
             return skip_whitespace(base, len, next_cursor);
         };
     };
@@ -2958,7 +2870,7 @@ fn parse_basic_expression(
         if next_cursor >= 0 {
             store_i32(out_kind_ptr, 0);
             store_i32(out_data0_ptr, 0);
-            store_i32(out_data1_ptr, builtin_type_id_bool());
+            store_i32(out_data1_ptr, BUILTIN_TYPE_ID_BOOL);
             return skip_whitespace(base, len, next_cursor);
         };
     };
@@ -2977,7 +2889,7 @@ fn parse_basic_expression(
         if next_byte == '(' {
             let mut call_cursor: i32 = next_cursor + 1;
             call_cursor = skip_whitespace(base, len, call_cursor);
-            let args_limit: i32 = max_params();
+            let args_limit: i32 = MAX_PARAMS;
             let arg_kind_ptr: i32 = nested_temp_base;
             let arg_data0_ptr: i32 = nested_temp_base + 4;
             let arg_data1_ptr: i32 = nested_temp_base + 8;
@@ -3050,18 +2962,18 @@ fn parse_basic_expression(
                 return -1;
             };
             let intrinsic_kind: i32 = identify_intrinsic(base, len, ident_start, ident_len);
-            if intrinsic_kind != intrinsic_kind_none() {
-                if intrinsic_kind == intrinsic_kind_load_u8()
-                    || intrinsic_kind == intrinsic_kind_load_u16()
-                    || intrinsic_kind == intrinsic_kind_load_i32()
+            if intrinsic_kind != INTRINSIC_KIND_NONE {
+                if intrinsic_kind == INTRINSIC_KIND_LOAD_U8
+                    || intrinsic_kind == INTRINSIC_KIND_LOAD_U16
+                    || intrinsic_kind == INTRINSIC_KIND_LOAD_I32
                 {
                     if arg_count != 1 {
                         return -1;
                     };
                     let arg_index: i32 = load_i32(args_list_ptr);
-                    let expr_index: i32 = if intrinsic_kind == intrinsic_kind_load_u8() {
+                    let expr_index: i32 = if intrinsic_kind == INTRINSIC_KIND_LOAD_U8 {
                         ast_expr_alloc_load_u8(ast_base, arg_index)
-                    } else if intrinsic_kind == intrinsic_kind_load_u16() {
+                    } else if intrinsic_kind == INTRINSIC_KIND_LOAD_U16 {
                         ast_expr_alloc_load_u16(ast_base, arg_index)
                     } else {
                         ast_expr_alloc_load_i32(ast_base, arg_index)
@@ -3074,18 +2986,18 @@ fn parse_basic_expression(
                     store_i32(out_data1_ptr, 0);
                     return skip_whitespace(base, len, call_cursor);
                 };
-                if intrinsic_kind == intrinsic_kind_store_u8()
-                    || intrinsic_kind == intrinsic_kind_store_u16()
-                    || intrinsic_kind == intrinsic_kind_store_i32()
+                if intrinsic_kind == INTRINSIC_KIND_STORE_U8
+                    || intrinsic_kind == INTRINSIC_KIND_STORE_U16
+                    || intrinsic_kind == INTRINSIC_KIND_STORE_I32
                 {
                     if arg_count != 2 {
                         return -1;
                     };
                     let ptr_index: i32 = load_i32(args_list_ptr);
                     let value_index: i32 = load_i32(args_list_ptr + 4);
-                    let expr_index: i32 = if intrinsic_kind == intrinsic_kind_store_u8() {
+                    let expr_index: i32 = if intrinsic_kind == INTRINSIC_KIND_STORE_U8 {
                         ast_expr_alloc_store_u8(ast_base, ptr_index, value_index)
-                    } else if intrinsic_kind == intrinsic_kind_store_u16() {
+                    } else if intrinsic_kind == INTRINSIC_KIND_STORE_U16 {
                         ast_expr_alloc_store_u16(ast_base, ptr_index, value_index)
                     } else {
                         ast_expr_alloc_store_i32(ast_base, ptr_index, value_index)
@@ -3131,7 +3043,7 @@ fn parse_basic_expression(
     let param_index: i32 =
         find_parameter_index(base, params_table_ptr, params_count, ident_start, ident_len);
     if param_index >= 0 {
-        let param_types_table_ptr: i32 = params_table_ptr + max_params() * 8;
+        let param_types_table_ptr: i32 = params_table_ptr + MAX_PARAMS * 8;
         let param_type_id: i32 = load_i32(param_types_table_ptr + param_index * 4);
         store_i32(out_kind_ptr, 6);
         store_i32(out_data0_ptr, param_index);
@@ -4308,9 +4220,9 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     let name_len_ptr: i32 = temp_base + 4;
     let params_count_ptr: i32 = temp_base + 8;
     let params_table_ptr: i32 = temp_base + 12;
-    let params_table_end: i32 = params_table_ptr + max_params() * 8;
+    let params_table_end: i32 = params_table_ptr + MAX_PARAMS * 8;
     let param_types_table_ptr: i32 = params_table_end;
-    let param_name_start_ptr: i32 = param_types_table_ptr + max_params() * 4;
+    let param_name_start_ptr: i32 = param_types_table_ptr + MAX_PARAMS * 4;
     let param_name_len_ptr: i32 = param_name_start_ptr + 4;
     let param_type_temp_ptr: i32 = param_name_len_ptr + 4;
     let expr_kind_ptr: i32 = param_type_temp_ptr + 4;
@@ -4318,7 +4230,7 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     let expr_data1_ptr: i32 = expr_kind_ptr + 8;
     let locals_stack_count_ptr: i32 = expr_kind_ptr + 12;
     let locals_table_ptr: i32 = locals_stack_count_ptr + 4;
-    let locals_next_index_ptr: i32 = locals_table_ptr + max_locals() * locals_entry_size();
+    let locals_next_index_ptr: i32 = locals_table_ptr + MAX_LOCALS * LOCALS_ENTRY_SIZE;
     let expr_temp_base: i32 = locals_next_index_ptr + 4;
     cursor = parse_identifier(base, len, cursor, name_start_ptr, name_len_ptr);
     if cursor < 0 {
@@ -4359,7 +4271,7 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
             cursor = cursor + 1;
             break;
         };
-        if param_count >= max_params() {
+        if param_count >= MAX_PARAMS {
             return -1;
         };
         cursor = parse_identifier(base, len, cursor, param_name_start_ptr, param_name_len_ptr);
@@ -4449,7 +4361,7 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     };
     if !has_return_type {
         block_allow_empty = 1;
-        return_type_id = builtin_type_id_i32();
+        return_type_id = BUILTIN_TYPE_ID_I32;
     };
 
     cursor = skip_whitespace(base, len, cursor);
@@ -4555,7 +4467,7 @@ fn parse_constant_declaration(
 
     let temp_base: i32 = ast_temp_base(ast_base);
     let params_table_ptr: i32 = temp_base;
-    let ident_start_ptr: i32 = params_table_ptr + max_params() * 8;
+    let ident_start_ptr: i32 = params_table_ptr + MAX_PARAMS * 8;
     let ident_len_ptr: i32 = ident_start_ptr + 4;
     let type_ptr: i32 = ident_len_ptr + 4;
     let expr_kind_ptr: i32 = type_ptr + 4;
@@ -4563,7 +4475,7 @@ fn parse_constant_declaration(
     let expr_data1_ptr: i32 = expr_kind_ptr + 8;
     let locals_stack_count_ptr: i32 = expr_kind_ptr + 12;
     let locals_table_ptr: i32 = locals_stack_count_ptr + 4;
-    let locals_next_index_ptr: i32 = locals_table_ptr + max_locals() * locals_entry_size();
+    let locals_next_index_ptr: i32 = locals_table_ptr + MAX_LOCALS * LOCALS_ENTRY_SIZE;
     let loop_depth_ptr: i32 = locals_next_index_ptr + 4;
     let expr_temp_base: i32 = loop_depth_ptr + 4;
 
@@ -4668,7 +4580,7 @@ fn parse_constant_declaration(
 
     let count_ptr: i32 = ast_constants_count_ptr(ast_base);
     let count: i32 = load_i32(count_ptr);
-    if count >= ast_constants_capacity() {
+    if count >= AST_CONSTANTS_CAPACITY {
         return -1;
     };
     let entry_ptr: i32 = ast_constant_entry_ptr(ast_base, count);
@@ -4696,7 +4608,7 @@ fn parse_program(base: i32, len: i32, ast_base: i32) -> i32 {
         if const_cursor == -1 {
             return -1;
         };
-        if count >= ast_max_functions() {
+        if count >= AST_MAX_FUNCTIONS {
             return -1;
         };
         cursor = parse_function(base, len, cursor, ast_base, count);
@@ -4867,13 +4779,9 @@ fn validate_program(ast_base: i32, func_count: i32) -> i32 {
     0
 }
 
-fn resolve_control_stack_capacity() -> i32 {
-    128
-}
+const RESOLVE_CONTROL_STACK_CAPACITY: i32 = 128;
 
-fn resolve_loop_stack_capacity() -> i32 {
-    64
-}
+const RESOLVE_LOOP_STACK_CAPACITY: i32 = 64;
 
 fn resolve_expression_internal(
     ast_base: i32,
@@ -5004,7 +4912,7 @@ fn resolve_expression_internal(
             if !type_id_is_bool(right_type) {
                 return -1;
             };
-            ast_expr_set_type(ast_base, expr_index, builtin_type_id_bool());
+            ast_expr_set_type(ast_base, expr_index, BUILTIN_TYPE_ID_BOOL);
             return 0;
         };
         if kind == 14
@@ -5023,7 +4931,7 @@ fn resolve_expression_internal(
             if left_type != right_type {
                 return -1;
             };
-            ast_expr_set_type(ast_base, expr_index, builtin_type_id_bool());
+            ast_expr_set_type(ast_base, expr_index, BUILTIN_TYPE_ID_BOOL);
             return 0;
         };
         if !type_id_is_integer(left_type) {
@@ -5055,7 +4963,7 @@ fn resolve_expression_internal(
         if !type_id_is_bool(value_type) {
             return -1;
         };
-        ast_expr_set_type(ast_base, expr_index, builtin_type_id_bool());
+        ast_expr_set_type(ast_base, expr_index, BUILTIN_TYPE_ID_BOOL);
         return 0;
     };
     if kind == 23 {
@@ -5090,7 +4998,7 @@ fn resolve_expression_internal(
             return -1;
         };
         let control_count: i32 = load_i32(control_stack_count_ptr);
-        if control_count >= resolve_control_stack_capacity() {
+        if control_count >= RESOLVE_CONTROL_STACK_CAPACITY {
             return -1;
         };
         store_i32(control_stack_base + control_count * 4, 0);
@@ -5222,12 +5130,12 @@ fn resolve_expression_internal(
     if kind == 12 {
         let body_index: i32 = load_i32(entry_ptr + 4);
         let control_count: i32 = load_i32(control_stack_count_ptr);
-        let control_capacity: i32 = resolve_control_stack_capacity();
+        let control_capacity: i32 = RESOLVE_CONTROL_STACK_CAPACITY;
         if control_count + 2 > control_capacity {
             return -1;
         };
         let loop_count: i32 = load_i32(loop_stack_count_ptr);
-        let loop_capacity: i32 = resolve_loop_stack_capacity();
+        let loop_capacity: i32 = RESOLVE_LOOP_STACK_CAPACITY;
         if loop_count >= loop_capacity {
             return -1;
         };
@@ -5308,7 +5216,7 @@ fn resolve_expression(ast_base: i32, expr_index: i32, func_count: i32) -> i32 {
     let control_count_ptr: i32 = temp_base;
     let loop_count_ptr: i32 = temp_base + 4;
     let control_stack_base: i32 = temp_base + 8;
-    let control_capacity: i32 = resolve_control_stack_capacity();
+    let control_capacity: i32 = RESOLVE_CONTROL_STACK_CAPACITY;
     let loop_stack_base: i32 = control_stack_base + control_capacity * 4;
     let saved_control_count: i32 = load_i32(control_count_ptr);
     let saved_loop_count: i32 = load_i32(loop_count_ptr);
@@ -5520,7 +5428,7 @@ fn collect_local_counts_from_expression(
         if wasm_type < 0 {
             return -1;
         };
-        let declaration_counts: i32 = if wasm_type == wasm_value_type_i64() {
+        let declaration_counts: i32 = if wasm_type == WASM_VALUE_TYPE_I64 {
             local_counts_pack(0, 1)
         } else {
             local_counts_pack(1, 0)
@@ -6411,14 +6319,12 @@ fn emit_function_section(base: i32, offset: i32, func_count: i32) -> i32 {
     out
 }
 
-fn compiler_memory_pages() -> i32 {
-    64
-}
+const COMPILER_MEMORY_PAGES: i32 = 64;
 
 fn emit_memory_section(base: i32, offset: i32) -> i32 {
     let mut out: i32 = offset;
     out = write_byte(base, out, 5);
-    let pages: i32 = compiler_memory_pages();
+    let pages: i32 = COMPILER_MEMORY_PAGES;
     let payload_size: i32 = leb_u32_len(1) + 1 + leb_u32_len(pages) + leb_u32_len(pages);
     out = write_u32_leb(base, out, payload_size);
     out = write_u32_leb(base, out, 1);
@@ -6628,11 +6534,11 @@ fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
                 out = write_u32_leb(base, out, local_groups);
                 if local_i32_count > 0 {
                     out = write_u32_leb(base, out, local_i32_count);
-                    out = write_byte(base, out, wasm_value_type_i32());
+                    out = write_byte(base, out, WASM_VALUE_TYPE_I32);
                 };
                 if local_i64_count > 0 {
                     out = write_u32_leb(base, out, local_i64_count);
-                    out = write_byte(base, out, wasm_value_type_i64());
+                    out = write_byte(base, out, WASM_VALUE_TYPE_I64);
                 };
             } else {
                 out = write_u32_leb(base, out, 0);
@@ -6671,11 +6577,11 @@ fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
                     out = write_u32_leb(base, out, local_groups);
                     if local_i32_count > 0 {
                         out = write_u32_leb(base, out, local_i32_count);
-                        out = write_byte(base, out, wasm_value_type_i32());
+                        out = write_byte(base, out, WASM_VALUE_TYPE_I32);
                     };
                     if local_i64_count > 0 {
                         out = write_u32_leb(base, out, local_i64_count);
-                        out = write_byte(base, out, wasm_value_type_i64());
+                        out = write_byte(base, out, WASM_VALUE_TYPE_I64);
                     };
                 } else {
                     out = write_u32_leb(base, out, 0);
@@ -6707,11 +6613,11 @@ fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
                 out = write_u32_leb(base, out, local_groups);
                 if local_i32_count > 0 {
                     out = write_u32_leb(base, out, local_i32_count);
-                    out = write_byte(base, out, wasm_value_type_i32());
+                    out = write_byte(base, out, WASM_VALUE_TYPE_I32);
                 };
                 if local_i64_count > 0 {
                     out = write_u32_leb(base, out, local_i64_count);
-                    out = write_byte(base, out, wasm_value_type_i64());
+                    out = write_byte(base, out, WASM_VALUE_TYPE_I64);
                 };
             } else {
                 out = write_u32_leb(base, out, 0);
