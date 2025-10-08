@@ -178,8 +178,25 @@ fn read_stage2_failure(
         }
     }
 
+    let mut detail_buf = vec![0u8; 256];
+    let mut detail = String::new();
+    if memory
+        .read(store, output_ptr as usize, &mut detail_buf)
+        .is_ok()
+    {
+        if let Some(end) = detail_buf.iter().position(|&b| b == 0) {
+            detail_buf.truncate(end);
+        }
+        if let Ok(text) = String::from_utf8(detail_buf.clone()) {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                detail = format!(", detail=\"{}\"", trimmed);
+            }
+        }
+    }
+
     format!(
-        "stage2 compilation failed (status {produced_len}, functions={functions}, instr_offset={instr_offset}, compiled_functions={compiled_functions})"
+        "stage2 compilation failed (status {produced_len}, functions={functions}, instr_offset={instr_offset}, compiled_functions={compiled_functions}{detail})"
     )
 }
 
