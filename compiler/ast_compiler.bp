@@ -6160,16 +6160,26 @@ fn resolve_expression(out_ptr: i32, ast_base: i32, expr_index: i32, func_count: 
     result
 }
 
-fn local_counts_pack(i32_count: i32, i64_count: i32) -> i32 {
-    i32_count + i64_count * 65536
+const LOCAL_COUNTS_BASE: i32 = 1024;
+
+fn local_counts_pack(i32_count: i32, i64_count: i32, ref_count: i32) -> i32 {
+    i32_count
+        + i64_count * LOCAL_COUNTS_BASE
+        + ref_count * LOCAL_COUNTS_BASE * LOCAL_COUNTS_BASE
+}
+
+fn local_counts_ref(packed: i32) -> i32 {
+    packed / (LOCAL_COUNTS_BASE * LOCAL_COUNTS_BASE)
 }
 
 fn local_counts_i64(packed: i32) -> i32 {
-    packed / 65536
+    packed / LOCAL_COUNTS_BASE - local_counts_ref(packed) * LOCAL_COUNTS_BASE
 }
 
 fn local_counts_i32(packed: i32) -> i32 {
-    packed - local_counts_i64(packed) * 65536
+    packed
+        - local_counts_i64(packed) * LOCAL_COUNTS_BASE
+        - local_counts_ref(packed) * LOCAL_COUNTS_BASE * LOCAL_COUNTS_BASE
 }
 
 fn local_counts_add(a: i32, b: i32) -> i32 {
@@ -6181,14 +6191,15 @@ fn local_counts_add(a: i32, b: i32) -> i32 {
     };
     let sum_i32: i32 = local_counts_i32(a) + local_counts_i32(b);
     let sum_i64: i32 = local_counts_i64(a) + local_counts_i64(b);
-    local_counts_pack(sum_i32, sum_i64)
+    let sum_ref: i32 = local_counts_ref(a) + local_counts_ref(b);
+    local_counts_pack(sum_i32, sum_i64, sum_ref)
 }
 
 fn local_counts_total(packed: i32) -> i32 {
     if packed < 0 {
         return -1;
     };
-    local_counts_i32(packed) + local_counts_i64(packed)
+    local_counts_i32(packed) + local_counts_i64(packed) + local_counts_ref(packed)
 }
 
 fn collect_local_counts_from_expression(
@@ -6196,6 +6207,7 @@ fn collect_local_counts_from_expression(
     expr_index: i32,
     param_count: i32,
     locals_end: i32,
+    local_types_ptr: i32,
 ) -> i32 {
     if expr_index < 0 {
         return 0;
@@ -6227,6 +6239,7 @@ fn collect_local_counts_from_expression(
                 arg_expr_index,
                 param_count,
                 locals_end,
+                local_types_ptr,
             );
             if arg_counts < 0 {
                 return -1;
@@ -6246,7 +6259,8 @@ fn collect_local_counts_from_expression(
             element_index,
             param_count,
             locals_end,
-        );
+                local_types_ptr,
+            );
     };
     if kind == 37 {
         let values_ptr: i32 = load_i32(entry_ptr + 4);
@@ -6269,6 +6283,7 @@ fn collect_local_counts_from_expression(
                 element_index,
                 param_count,
                 locals_end,
+                local_types_ptr,
             );
             if element_counts < 0 {
                 return -1;
@@ -6289,7 +6304,8 @@ fn collect_local_counts_from_expression(
             array_index,
             param_count,
             locals_end,
-        );
+                local_types_ptr,
+            );
         if array_counts < 0 {
             return -1;
         };
@@ -6298,7 +6314,8 @@ fn collect_local_counts_from_expression(
             index_index,
             param_count,
             locals_end,
-        );
+                local_types_ptr,
+            );
         if index_counts < 0 {
             return -1;
         };
@@ -6311,7 +6328,8 @@ fn collect_local_counts_from_expression(
             array_index,
             param_count,
             locals_end,
-        );
+                local_types_ptr,
+            );
     };
     if kind == 2
         || kind == 3
@@ -6337,7 +6355,8 @@ fn collect_local_counts_from_expression(
             left_index,
             param_count,
             locals_end,
-        );
+                local_types_ptr,
+            );
         if left_counts < 0 {
             return -1;
         };
@@ -6346,7 +6365,8 @@ fn collect_local_counts_from_expression(
             right_index,
             param_count,
             locals_end,
-        );
+                local_types_ptr,
+            );
         if right_counts < 0 {
             return -1;
         };
@@ -6361,7 +6381,8 @@ fn collect_local_counts_from_expression(
             condition_index,
             param_count,
             locals_end,
-        );
+                local_types_ptr,
+            );
         if total < 0 {
             return -1;
         };
@@ -6370,7 +6391,8 @@ fn collect_local_counts_from_expression(
             then_index,
             param_count,
             locals_end,
-        );
+                local_types_ptr,
+            );
         if then_counts < 0 {
             return -1;
         };
@@ -6383,7 +6405,8 @@ fn collect_local_counts_from_expression(
             else_index,
             param_count,
             locals_end,
-        );
+                local_types_ptr,
+            );
         if else_counts < 0 {
             return -1;
         };
@@ -6398,7 +6421,8 @@ fn collect_local_counts_from_expression(
             init_index,
             param_count,
             locals_end,
-        );
+                local_types_ptr,
+            );
         if init_counts < 0 {
             return -1;
         };
@@ -6407,7 +6431,8 @@ fn collect_local_counts_from_expression(
             body_index,
             param_count,
             locals_end,
-        );
+                local_types_ptr,
+            );
         if body_counts < 0 {
             return -1;
         };
@@ -6422,14 +6447,29 @@ fn collect_local_counts_from_expression(
             return -1;
         };
         let init_type_id: i32 = ast_expr_type(ast_base, init_index);
-        let wasm_type: i32 = type_id_to_wasm_value_type(init_type_id);
-        if wasm_type < 0 {
+        let local_slot: i32 = local_index - param_count;
+        if local_slot < 0 {
             return -1;
         };
-        let declaration_counts: i32 = if wasm_type == WASM_VALUE_TYPE_I64 {
-            local_counts_pack(0, 1)
+        let total_locals: i32 = locals_end - param_count;
+        if local_slot >= total_locals {
+            return -1;
+        };
+        if local_types_ptr >= 0 {
+            store_i32(local_types_ptr + local_slot * WORD_SIZE, init_type_id);
+        };
+        let declaration_counts: i32 = if type_id_is_array(init_type_id) {
+            local_counts_pack(0, 0, 1)
         } else {
-            local_counts_pack(1, 0)
+            let wasm_type: i32 = type_id_to_wasm_value_type(init_type_id);
+            if wasm_type < 0 {
+                return -1;
+            };
+            if wasm_type == WASM_VALUE_TYPE_I64 {
+                local_counts_pack(0, 1, 0)
+            } else {
+                local_counts_pack(1, 0, 0)
+            }
         };
         local_counts_add(total, declaration_counts)
     } else if kind == 10 {
@@ -6439,7 +6479,8 @@ fn collect_local_counts_from_expression(
             value_index,
             param_count,
             locals_end,
-        );
+                local_types_ptr,
+            );
     } else if kind == 11 {
         let first_index: i32 = load_i32(entry_ptr + 4);
         let then_index: i32 = load_i32(entry_ptr + 8);
@@ -6448,7 +6489,8 @@ fn collect_local_counts_from_expression(
             first_index,
             param_count,
             locals_end,
-        );
+                local_types_ptr,
+            );
         if first_counts < 0 {
             return -1;
         };
@@ -6457,7 +6499,8 @@ fn collect_local_counts_from_expression(
             then_index,
             param_count,
             locals_end,
-        );
+                local_types_ptr,
+            );
         if then_counts < 0 {
             return -1;
         };
@@ -6469,7 +6512,8 @@ fn collect_local_counts_from_expression(
             body_index,
             param_count,
             locals_end,
-        );
+                local_types_ptr,
+            );
     } else if kind == 13 {
         let value_index: i32 = load_i32(entry_ptr + 8);
         if value_index >= 0 {
@@ -6478,6 +6522,7 @@ fn collect_local_counts_from_expression(
                 value_index,
                 param_count,
                 locals_end,
+                local_types_ptr,
             );
         };
         return 0;
@@ -6488,7 +6533,8 @@ fn collect_local_counts_from_expression(
             value_index,
             param_count,
             locals_end,
-        );
+                local_types_ptr,
+            );
     } else if kind == 38 {
         let array_index: i32 = load_i32(entry_ptr + 4);
         return collect_local_counts_from_expression(
@@ -6496,7 +6542,8 @@ fn collect_local_counts_from_expression(
             array_index,
             param_count,
             locals_end,
-        );
+                local_types_ptr,
+            );
     } else if kind == 29 || kind == 30 || kind == 31 {
         let ptr_index: i32 = load_i32(entry_ptr + 4);
         return collect_local_counts_from_expression(
@@ -6504,7 +6551,8 @@ fn collect_local_counts_from_expression(
             ptr_index,
             param_count,
             locals_end,
-        );
+                local_types_ptr,
+            );
     } else if kind == 32 || kind == 33 || kind == 34 {
         let ptr_index: i32 = load_i32(entry_ptr + 4);
         let value_index: i32 = load_i32(entry_ptr + 8);
@@ -6513,7 +6561,8 @@ fn collect_local_counts_from_expression(
             ptr_index,
             param_count,
             locals_end,
-        );
+                local_types_ptr,
+            );
         if ptr_counts < 0 {
             return -1;
         };
@@ -6522,7 +6571,8 @@ fn collect_local_counts_from_expression(
             value_index,
             param_count,
             locals_end,
-        );
+                local_types_ptr,
+            );
         if value_counts < 0 {
             return -1;
         };
@@ -6538,11 +6588,22 @@ fn collect_function_local_counts(
     body_data0: i32,
     param_count: i32,
     locals_count: i32,
+    local_types_ptr: i32,
 ) -> i32 {
     if locals_count <= 0 {
         return 0;
     };
     let locals_end: i32 = param_count + locals_count;
+    if local_types_ptr >= 0 {
+        let mut init_idx: i32 = 0;
+        loop {
+            if init_idx >= locals_count {
+                break;
+            };
+            store_i32(local_types_ptr + init_idx * WORD_SIZE, -1);
+            init_idx = init_idx + 1;
+        };
+    };
     if body_kind == 0 {
         if locals_count != 0 {
             return -1;
@@ -6568,6 +6629,7 @@ fn collect_function_local_counts(
                 arg_expr_index,
                 param_count,
                 locals_end,
+                local_types_ptr,
             );
             if arg_counts < 0 {
                 return -1;
@@ -6588,6 +6650,7 @@ fn collect_function_local_counts(
         body_data0,
         param_count,
         locals_end,
+        local_types_ptr,
     );
     if counts < 0 {
         return -1;
@@ -7660,18 +7723,78 @@ fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
         let param_count: i32 = load_i32(entry_ptr + 8);
         let locals_count: i32 = load_i32(entry_ptr + 20);
         let body_data0: i32 = load_i32(entry_ptr + 16);
-        let local_counts: i32 = collect_function_local_counts(
+        let mut local_counts: i32 = collect_function_local_counts(
             ast_base,
             body_kind,
             body_data0,
             param_count,
             locals_count,
+            -1,
         );
         if local_counts < 0 {
             return -1;
         };
-        let local_i32_count: i32 = local_counts_i32(local_counts);
-        let local_i64_count: i32 = local_counts_i64(local_counts);
+        let mut local_i32_count: i32 = local_counts_i32(local_counts);
+        let mut local_i64_count: i32 = local_counts_i64(local_counts);
+        let mut local_ref_count: i32 = local_counts_ref(local_counts);
+        let local_types_ptr: i32 = ast_temp_base(ast_base);
+        let ref_types_ptr: i32 = local_types_ptr + locals_count * WORD_SIZE;
+        let ref_counts_ptr: i32 = ref_types_ptr + locals_count * WORD_SIZE;
+        let mut ref_unique_count: i32 = 0;
+        if local_ref_count > 0 {
+            local_counts = collect_function_local_counts(
+                ast_base,
+                body_kind,
+                body_data0,
+                param_count,
+                locals_count,
+                local_types_ptr,
+            );
+            if local_counts < 0 {
+                return -1;
+            };
+            local_i32_count = local_counts_i32(local_counts);
+            local_i64_count = local_counts_i64(local_counts);
+            local_ref_count = local_counts_ref(local_counts);
+            let mut ref_init: i32 = 0;
+            loop {
+                if ref_init >= local_ref_count {
+                    break;
+                };
+                store_i32(ref_counts_ptr + ref_init * WORD_SIZE, 0);
+                ref_init = ref_init + 1;
+            };
+            let mut local_idx: i32 = 0;
+            loop {
+                if local_idx >= locals_count {
+                    break;
+                };
+                let type_id: i32 = load_i32(local_types_ptr + local_idx * WORD_SIZE);
+                if type_id_is_array(type_id) {
+                    let mut found: bool = false;
+                    let mut ref_idx: i32 = 0;
+                    loop {
+                        if ref_idx >= ref_unique_count {
+                            break;
+                        };
+                        let existing: i32 = load_i32(ref_types_ptr + ref_idx * WORD_SIZE);
+                        if existing == type_id {
+                            let current: i32 = load_i32(ref_counts_ptr + ref_idx * WORD_SIZE);
+                            store_i32(ref_counts_ptr + ref_idx * WORD_SIZE, current + 1);
+                            found = true;
+                            break;
+                        };
+                        ref_idx = ref_idx + 1;
+                    };
+                    if !found {
+                        store_i32(ref_types_ptr + ref_unique_count * WORD_SIZE, type_id);
+                        store_i32(ref_counts_ptr + ref_unique_count * WORD_SIZE, 1);
+                        ref_unique_count = ref_unique_count + 1;
+                    };
+                };
+                local_idx = local_idx + 1;
+            };
+        };
         let mut local_groups: i32 = 0;
         if local_i32_count > 0 {
             local_groups = local_groups + 1;
@@ -7679,18 +7802,30 @@ fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
         if local_i64_count > 0 {
             local_groups = local_groups + 1;
         };
+        local_groups = local_groups + ref_unique_count;
         let locals_decl_size: i32 = if locals_count > 0 {
-            leb_u32_len(local_groups)
-                + if local_i32_count > 0 {
-                    leb_u32_len(local_i32_count) + 1
-                } else {
-                    0
-                }
-                + if local_i64_count > 0 {
-                    leb_u32_len(local_i64_count) + 1
-                } else {
-                    0
-                }
+            let mut size: i32 = leb_u32_len(local_groups);
+            if local_i32_count > 0 {
+                size = size + leb_u32_len(local_i32_count) + 1;
+            };
+            if local_i64_count > 0 {
+                size = size + leb_u32_len(local_i64_count) + 1;
+            };
+            let mut ref_idx: i32 = 0;
+            loop {
+                if ref_idx >= ref_unique_count {
+                    break;
+                };
+                let ref_count: i32 = load_i32(ref_counts_ptr + ref_idx * WORD_SIZE);
+                let ref_type_id: i32 = load_i32(ref_types_ptr + ref_idx * WORD_SIZE);
+                let type_len: i32 = type_id_wasm_value_type_len(ref_type_id);
+                if type_len < 0 {
+                    return -1;
+                };
+                size = size + leb_u32_len(ref_count) + type_len;
+                ref_idx = ref_idx + 1;
+            };
+            size
         } else {
             leb_u32_len(0)
         };
@@ -7751,18 +7886,78 @@ fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
         let param_count: i32 = load_i32(entry_ptr + 8);
         let locals_count: i32 = load_i32(entry_ptr + 20);
         let body_data0: i32 = load_i32(entry_ptr + 16);
-        let local_counts: i32 = collect_function_local_counts(
+        let mut local_counts: i32 = collect_function_local_counts(
             ast_base,
             body_kind,
             body_data0,
             param_count,
             locals_count,
+            -1,
         );
         if local_counts < 0 {
             return -1;
         };
-        let local_i32_count: i32 = local_counts_i32(local_counts);
-        let local_i64_count: i32 = local_counts_i64(local_counts);
+        let mut local_i32_count: i32 = local_counts_i32(local_counts);
+        let mut local_i64_count: i32 = local_counts_i64(local_counts);
+        let mut local_ref_count: i32 = local_counts_ref(local_counts);
+        let local_types_ptr: i32 = ast_temp_base(ast_base);
+        let ref_types_ptr: i32 = local_types_ptr + locals_count * WORD_SIZE;
+        let ref_counts_ptr: i32 = ref_types_ptr + locals_count * WORD_SIZE;
+        let mut ref_unique_count: i32 = 0;
+        if local_ref_count > 0 {
+            local_counts = collect_function_local_counts(
+                ast_base,
+                body_kind,
+                body_data0,
+                param_count,
+                locals_count,
+                local_types_ptr,
+            );
+            if local_counts < 0 {
+                return -1;
+            };
+            local_i32_count = local_counts_i32(local_counts);
+            local_i64_count = local_counts_i64(local_counts);
+            local_ref_count = local_counts_ref(local_counts);
+            let mut ref_init: i32 = 0;
+            loop {
+                if ref_init >= local_ref_count {
+                    break;
+                };
+                store_i32(ref_counts_ptr + ref_init * WORD_SIZE, 0);
+                ref_init = ref_init + 1;
+            };
+            let mut local_idx: i32 = 0;
+            loop {
+                if local_idx >= locals_count {
+                    break;
+                };
+                let type_id: i32 = load_i32(local_types_ptr + local_idx * WORD_SIZE);
+                if type_id_is_array(type_id) {
+                    let mut found: bool = false;
+                    let mut ref_idx: i32 = 0;
+                    loop {
+                        if ref_idx >= ref_unique_count {
+                            break;
+                        };
+                        let existing: i32 = load_i32(ref_types_ptr + ref_idx * WORD_SIZE);
+                        if existing == type_id {
+                            let current: i32 = load_i32(ref_counts_ptr + ref_idx * WORD_SIZE);
+                            store_i32(ref_counts_ptr + ref_idx * WORD_SIZE, current + 1);
+                            found = true;
+                            break;
+                        };
+                        ref_idx = ref_idx + 1;
+                    };
+                    if !found {
+                        store_i32(ref_types_ptr + ref_unique_count * WORD_SIZE, type_id);
+                        store_i32(ref_counts_ptr + ref_unique_count * WORD_SIZE, 1);
+                        ref_unique_count = ref_unique_count + 1;
+                    };
+                };
+                local_idx = local_idx + 1;
+            };
+        };
         let mut local_groups: i32 = 0;
         if local_i32_count > 0 {
             local_groups = local_groups + 1;
@@ -7770,18 +7965,30 @@ fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
         if local_i64_count > 0 {
             local_groups = local_groups + 1;
         };
+        local_groups = local_groups + ref_unique_count;
         let locals_decl_size: i32 = if locals_count > 0 {
-            leb_u32_len(local_groups)
-                + if local_i32_count > 0 {
-                    leb_u32_len(local_i32_count) + 1
-                } else {
-                    0
-                }
-                + if local_i64_count > 0 {
-                    leb_u32_len(local_i64_count) + 1
-                } else {
-                    0
-                }
+            let mut size: i32 = leb_u32_len(local_groups);
+            if local_i32_count > 0 {
+                size = size + leb_u32_len(local_i32_count) + 1;
+            };
+            if local_i64_count > 0 {
+                size = size + leb_u32_len(local_i64_count) + 1;
+            };
+            let mut ref_idx: i32 = 0;
+            loop {
+                if ref_idx >= ref_unique_count {
+                    break;
+                };
+                let ref_count: i32 = load_i32(ref_counts_ptr + ref_idx * WORD_SIZE);
+                let ref_type_id: i32 = load_i32(ref_types_ptr + ref_idx * WORD_SIZE);
+                let type_len: i32 = type_id_wasm_value_type_len(ref_type_id);
+                if type_len < 0 {
+                    return -1;
+                };
+                size = size + leb_u32_len(ref_count) + type_len;
+                ref_idx = ref_idx + 1;
+            };
+            size
         } else {
             leb_u32_len(0)
         };
@@ -7799,6 +8006,21 @@ fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
                 if local_i64_count > 0 {
                     out = write_u32_leb(base, out, local_i64_count);
                     out = write_byte(base, out, WASM_VALUE_TYPE_I64);
+                };
+                let mut ref_idx: i32 = 0;
+                loop {
+                    if ref_idx >= ref_unique_count {
+                        break;
+                    };
+                    let ref_count: i32 = load_i32(ref_counts_ptr + ref_idx * WORD_SIZE);
+                    let ref_type_id: i32 = load_i32(ref_types_ptr + ref_idx * WORD_SIZE);
+                    out = write_u32_leb(base, out, ref_count);
+                    let next: i32 = write_type_id_as_wasm_value_type(base, out, ref_type_id);
+                    if next < 0 {
+                        return -1;
+                    };
+                    out = next;
+                    ref_idx = ref_idx + 1;
                 };
             } else {
                 out = write_u32_leb(base, out, 0);
@@ -7831,23 +8053,38 @@ fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
                     args_size = args_size + arg_size;
                     arg_idx = arg_idx + 1;
                 };
-                body_size = locals_decl_size + args_size + 1 + leb_u32_len(callee_index) + 1;
-                out = write_u32_leb(base, out, body_size);
-                if locals_count > 0 {
-                    out = write_u32_leb(base, out, local_groups);
-                    if local_i32_count > 0 {
-                        out = write_u32_leb(base, out, local_i32_count);
-                        out = write_byte(base, out, WASM_VALUE_TYPE_I32);
-                    };
-                    if local_i64_count > 0 {
-                        out = write_u32_leb(base, out, local_i64_count);
-                        out = write_byte(base, out, WASM_VALUE_TYPE_I64);
-                    };
-                } else {
-                    out = write_u32_leb(base, out, 0);
+            body_size = locals_decl_size + args_size + 1 + leb_u32_len(callee_index) + 1;
+            out = write_u32_leb(base, out, body_size);
+            if locals_count > 0 {
+                out = write_u32_leb(base, out, local_groups);
+                if local_i32_count > 0 {
+                    out = write_u32_leb(base, out, local_i32_count);
+                    out = write_byte(base, out, WASM_VALUE_TYPE_I32);
                 };
-                let mut emit_idx: i32 = 0;
+                if local_i64_count > 0 {
+                    out = write_u32_leb(base, out, local_i64_count);
+                    out = write_byte(base, out, WASM_VALUE_TYPE_I64);
+                };
+                let mut ref_idx: i32 = 0;
                 loop {
+                    if ref_idx >= ref_unique_count {
+                        break;
+                    };
+                    let ref_count: i32 = load_i32(ref_counts_ptr + ref_idx * WORD_SIZE);
+                    let ref_type_id: i32 = load_i32(ref_types_ptr + ref_idx * WORD_SIZE);
+                    out = write_u32_leb(base, out, ref_count);
+                    let next: i32 = write_type_id_as_wasm_value_type(base, out, ref_type_id);
+                    if next < 0 {
+                        return -1;
+                    };
+                    out = next;
+                    ref_idx = ref_idx + 1;
+                };
+            } else {
+                out = write_u32_leb(base, out, 0);
+            };
+            let mut emit_idx: i32 = 0;
+            loop {
                     if emit_idx >= arg_count {
                         break;
                     };
@@ -7878,6 +8115,21 @@ fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
                 if local_i64_count > 0 {
                     out = write_u32_leb(base, out, local_i64_count);
                     out = write_byte(base, out, WASM_VALUE_TYPE_I64);
+                };
+                let mut ref_idx: i32 = 0;
+                loop {
+                    if ref_idx >= ref_unique_count {
+                        break;
+                    };
+                    let ref_count: i32 = load_i32(ref_counts_ptr + ref_idx * WORD_SIZE);
+                    let ref_type_id: i32 = load_i32(ref_types_ptr + ref_idx * WORD_SIZE);
+                    out = write_u32_leb(base, out, ref_count);
+                    let next: i32 = write_type_id_as_wasm_value_type(base, out, ref_type_id);
+                    if next < 0 {
+                        return -1;
+                    };
+                    out = next;
+                    ref_idx = ref_idx + 1;
                 };
             } else {
                 out = write_u32_leb(base, out, 0);
