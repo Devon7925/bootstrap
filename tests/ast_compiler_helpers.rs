@@ -10,6 +10,10 @@ mod wasm_harness;
 
 use wasm_harness::{CompileFailure, CompilerInstance};
 
+pub fn run_wasm_main_with_gc(wasm: &[u8]) -> i32 {
+    wasm_harness::run_wasm_main_with_gc(wasm)
+}
+
 const AST_COMPILER_SOURCE_PATH: &str = "compiler/ast_compiler.bp";
 
 static AST_COMPILER_SOURCE: OnceLock<String> = OnceLock::new();
