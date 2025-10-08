@@ -3349,6 +3349,89 @@ fn parse_basic_expression(
         };
         return skip_whitespace(base, len, paren_cursor);
     };
+    if first_byte == '"' {
+        let values_list_ptr: i32 = nested_temp_base;
+        let mut string_cursor: i32 = cursor + 1;
+        let mut element_count: i32 = 0;
+        loop {
+            if string_cursor >= len {
+                return -1;
+            };
+            let byte: i32 = load_u8(base + string_cursor);
+            if byte == '"' {
+                string_cursor = string_cursor + 1;
+                break;
+            };
+            let mut value: i32 = byte;
+            string_cursor = string_cursor + 1;
+            if value == '\\' {
+                if string_cursor >= len {
+                    return -1;
+                };
+                let escape: i32 = load_u8(base + string_cursor);
+                value = if escape == 'n' {
+                    '\n'
+                } else if escape == 'r' {
+                    '\r'
+                } else if escape == 't' {
+                    '\t'
+                } else if escape == '0' {
+                    '\0'
+                } else if escape == '\\' {
+                    '\\'
+                } else if escape == '\'' {
+                    '\''
+                } else if escape == 34 {
+                    34
+                } else {
+                    return -1;
+                };
+                string_cursor = string_cursor + 1;
+            } else if value == '\n' || value == '\r' {
+                return -1;
+            };
+            if element_count >= MAX_ARRAY_LITERAL_ELEMENTS {
+                return -1;
+            };
+            let literal_index: i32 =
+                ast_expr_alloc_literal(ast_base, value, BUILTIN_TYPE_ID_U8);
+            if literal_index < 0 {
+                return -1;
+            };
+            store_i32(values_list_ptr + element_count * WORD_SIZE, literal_index);
+            element_count = element_count + 1;
+        };
+        let expr_index: i32 = if element_count == 0 {
+            let zero_index: i32 = ast_expr_alloc_literal(ast_base, 0, BUILTIN_TYPE_ID_U8);
+            if zero_index < 0 {
+                return -1;
+            };
+            ast_expr_alloc_array_repeat(ast_base, zero_index, 0)
+        } else {
+            let metadata_ptr: i32 = ast_call_data_alloc(ast_base, element_count);
+            if metadata_ptr < 0 {
+                return -1;
+            };
+            let mut copy_idx: i32 = 0;
+            loop {
+                if copy_idx >= element_count {
+                    break;
+                };
+                let value_index: i32 =
+                    load_i32(values_list_ptr + copy_idx * WORD_SIZE);
+                store_i32(metadata_ptr + copy_idx * WORD_SIZE, value_index);
+                copy_idx = copy_idx + 1;
+            };
+            ast_expr_alloc_array_list(ast_base, metadata_ptr, element_count)
+        };
+        if expr_index < 0 {
+            return -1;
+        };
+        store_i32(out_kind_ptr, if element_count == 0 { 35 } else { 37 });
+        store_i32(out_data0_ptr, expr_index);
+        store_i32(out_data1_ptr, 0);
+        return skip_whitespace(base, len, string_cursor);
+    };
     if first_byte == '\'' {
         let next_cursor: i32 = parse_char_literal(base, len, cursor, literal_ptr);
         if next_cursor < 0 {
