@@ -1021,7 +1021,7 @@ fn parse_block_expression_body(
                 return -1;
             };
             idx = skip_whitespace(base, len, idx);
-            idx = parse_type(base, len, idx, stmt_local_type_ptr);
+            idx = parse_type(base, len, idx, ast_base, stmt_local_type_ptr);
             if idx < 0 {
                 store_i32(locals_stack_count_ptr, saved_stack_count);
                 store_i32(locals_next_index_ptr, saved_next_index);
@@ -1668,6 +1668,33 @@ const BUILTIN_TYPE_ID_U32: i32 = 7;
 
 const BUILTIN_TYPE_ID_U64: i32 = 8;
 
+const TYPE_ID_KIND_SHIFT: i32 = 24;
+
+const TYPE_ID_PAYLOAD_MASK: i32 = 16777215;
+
+const TYPE_ID_KIND_BUILTIN: i32 = 0;
+
+const TYPE_ID_KIND_ARRAY: i32 = 1;
+
+fn composite_type_id(kind: i32, payload: i32) -> i32 {
+    (kind << TYPE_ID_KIND_SHIFT) | (payload & TYPE_ID_PAYLOAD_MASK)
+}
+
+fn type_id_kind(type_id: i32) -> i32 {
+    if type_id < 0 {
+        return -1;
+    };
+    type_id >> TYPE_ID_KIND_SHIFT
+}
+
+fn type_id_payload(type_id: i32) -> i32 {
+    type_id & TYPE_ID_PAYLOAD_MASK
+}
+
+fn type_id_is_array(type_id: i32) -> bool {
+    type_id_kind(type_id) == TYPE_ID_KIND_ARRAY
+}
+
 fn type_id_is_bool(type_id: i32) -> bool {
     type_id == BUILTIN_TYPE_ID_BOOL
 }
@@ -1801,11 +1828,50 @@ fn builtin_integer_type_keyword_to_id(base: i32, start: i32, ident_len: i32) -> 
     -1
 }
 
-fn parse_type(base: i32, len: i32, offset: i32, out_type_ptr: i32) -> i32 {
+fn parse_type(base: i32, len: i32, offset: i32, ast_base: i32, out_type_ptr: i32) -> i32 {
     if offset >= len {
         return -1;
     };
     let first: i32 = load_u8(base + offset);
+    if first == '[' {
+        if out_type_ptr < 0 {
+            return -1;
+        };
+        let mut cursor: i32 = offset + 1;
+        cursor = skip_whitespace(base, len, cursor);
+        cursor = parse_type(base, len, cursor, ast_base, out_type_ptr);
+        if cursor < 0 {
+            return -1;
+        };
+        let element_type_id: i32 = load_i32(out_type_ptr);
+        if element_type_id < 0 {
+            return -1;
+        };
+        cursor = skip_whitespace(base, len, cursor);
+        cursor = expect_char(base, len, cursor, ';');
+        if cursor < 0 {
+            return -1;
+        };
+        cursor = skip_whitespace(base, len, cursor);
+        cursor = parse_i32_literal(base, len, cursor, out_type_ptr);
+        if cursor < 0 {
+            return -1;
+        };
+        let length: i32 = load_i32(out_type_ptr);
+        cursor = skip_whitespace(base, len, cursor);
+        cursor = expect_char(base, len, cursor, ']');
+        if cursor < 0 {
+            return -1;
+        };
+        let type_id: i32 = ast_register_array_type(ast_base, element_type_id, length);
+        if type_id < 0 {
+            return -1;
+        };
+        if out_type_ptr >= 0 {
+            store_i32(out_type_ptr, type_id);
+        };
+        return cursor;
+    };
     if !is_identifier_start(first) {
         return -1;
     };
@@ -2049,6 +2115,7 @@ fn ast_reset(ast_base: i32) {
     store_i32(ast_names_len_ptr(ast_base), 0);
     store_i32(ast_call_data_len_ptr(ast_base), 0);
     ast_constants_reset(ast_base);
+    ast_array_types_reset(ast_base);
     ast_expr_reset(ast_base);
 }
 
@@ -2158,8 +2225,110 @@ fn ast_constants_reset(ast_base: i32) {
     store_i32(ast_constants_count_ptr(ast_base), 0);
 }
 
-fn ast_extra_base(ast_base: i32) -> i32 {
+const AST_ARRAY_TYPES_CAPACITY: i32 = 256;
+
+const AST_ARRAY_TYPE_ENTRY_SIZE: i32 = 12;
+
+fn ast_array_types_section_size() -> i32 {
+    WORD_SIZE + AST_ARRAY_TYPES_CAPACITY * AST_ARRAY_TYPE_ENTRY_SIZE
+}
+
+fn ast_array_types_count_ptr(ast_base: i32) -> i32 {
     ast_constants_count_ptr(ast_base) + ast_constants_section_size()
+}
+
+fn ast_array_type_entry_ptr(ast_base: i32, index: i32) -> i32 {
+    ast_array_types_count_ptr(ast_base) + WORD_SIZE + index * AST_ARRAY_TYPE_ENTRY_SIZE
+}
+
+fn ast_array_type_element_type(ast_base: i32, index: i32) -> i32 {
+    load_i32(ast_array_type_entry_ptr(ast_base, index))
+}
+
+fn ast_array_type_length(ast_base: i32, index: i32) -> i32 {
+    load_i32(ast_array_type_entry_ptr(ast_base, index) + 4)
+}
+
+fn ast_array_type_payload_ptr(ast_base: i32, index: i32) -> i32 {
+    ast_array_type_entry_ptr(ast_base, index)
+}
+
+fn ast_array_types_count(ast_base: i32) -> i32 {
+    load_i32(ast_array_types_count_ptr(ast_base))
+}
+
+fn ast_array_types_reset(ast_base: i32) {
+    store_i32(ast_array_types_count_ptr(ast_base), 0);
+}
+
+fn array_type_id(index: i32) -> i32 {
+    composite_type_id(TYPE_ID_KIND_ARRAY, index)
+}
+
+fn array_type_index(type_id: i32) -> i32 {
+    type_id_payload(type_id)
+}
+
+fn array_type_element_type(ast_base: i32, type_id: i32) -> i32 {
+    if !type_id_is_array(type_id) {
+        return -1;
+    };
+    let index: i32 = array_type_index(type_id);
+    if index < 0 {
+        return -1;
+    };
+    if index >= ast_array_types_count(ast_base) {
+        return -1;
+    };
+    ast_array_type_element_type(ast_base, index)
+}
+
+fn array_type_length(ast_base: i32, type_id: i32) -> i32 {
+    if !type_id_is_array(type_id) {
+        return -1;
+    };
+    let index: i32 = array_type_index(type_id);
+    if index < 0 {
+        return -1;
+    };
+    if index >= ast_array_types_count(ast_base) {
+        return -1;
+    };
+    ast_array_type_length(ast_base, index)
+}
+
+fn ast_register_array_type(ast_base: i32, element_type_id: i32, length: i32) -> i32 {
+    if length < 0 {
+        return -1;
+    };
+    let count_ptr: i32 = ast_array_types_count_ptr(ast_base);
+    let count: i32 = load_i32(count_ptr);
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= count {
+            break;
+        };
+        let entry_ptr: i32 = ast_array_type_entry_ptr(ast_base, idx);
+        let existing_element: i32 = load_i32(entry_ptr);
+        let existing_length: i32 = load_i32(entry_ptr + 4);
+        if existing_element == element_type_id && existing_length == length {
+            return array_type_id(idx);
+        };
+        idx = idx + 1;
+    };
+    if count >= AST_ARRAY_TYPES_CAPACITY {
+        return -1;
+    };
+    let entry_ptr: i32 = ast_array_type_entry_ptr(ast_base, count);
+    store_i32(entry_ptr, element_type_id);
+    store_i32(entry_ptr + 4, length);
+    store_i32(entry_ptr + 8, 0);
+    store_i32(count_ptr, count + 1);
+    array_type_id(count)
+}
+
+fn ast_extra_base(ast_base: i32) -> i32 {
+    ast_array_types_count_ptr(ast_base) + ast_array_types_section_size()
 }
 
 const AST_EXPR_ENTRY_SIZE: i32 = 16;
@@ -4299,7 +4468,7 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
             return -1;
         };
         cursor = skip_whitespace(base, len, cursor);
-        cursor = parse_type(base, len, cursor, param_type_temp_ptr);
+        cursor = parse_type(base, len, cursor, ast_base, param_type_temp_ptr);
         if cursor < 0 {
             return -1;
         };
@@ -4352,7 +4521,7 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
                 return -1;
             };
             cursor = skip_whitespace(base, len, cursor);
-            cursor = parse_type(base, len, cursor, param_type_temp_ptr);
+            cursor = parse_type(base, len, cursor, ast_base, param_type_temp_ptr);
             if cursor < 0 {
                 return -1;
             };
@@ -4530,7 +4699,7 @@ fn parse_constant_declaration(
         return -1;
     };
     idx = skip_whitespace(base, len, idx);
-    idx = parse_type(base, len, idx, type_ptr);
+    idx = parse_type(base, len, idx, ast_base, type_ptr);
     if idx < 0 {
         return -1;
     };
@@ -6633,6 +6802,27 @@ fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
     out
 }
 
+fn write_type_metadata(out_ptr: i32, ast_base: i32) -> i32 {
+    let array_count: i32 = ast_array_types_count(ast_base);
+    store_i32(scratch_types_count_ptr(out_ptr), array_count);
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= array_count {
+            break;
+        };
+        let scratch_entry_ptr: i32 = scratch_type_entry_ptr(out_ptr, idx);
+        store_i32(scratch_entry_ptr + TYPE_ENTRY_TYPE_ID_OFFSET, array_type_id(idx));
+        store_i32(scratch_entry_ptr + TYPE_ENTRY_NAME_PTR_OFFSET, 0);
+        store_i32(scratch_entry_ptr + TYPE_ENTRY_NAME_LEN_OFFSET, 0);
+        store_i32(
+            scratch_entry_ptr + TYPE_ENTRY_EXTRA_OFFSET,
+            ast_array_type_payload_ptr(ast_base, idx),
+        );
+        idx = idx + 1;
+    };
+    0
+}
+
 fn emit_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
     let mut offset: i32 = 0;
     offset = write_magic(out_ptr, offset);
@@ -6667,6 +6857,10 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
     };
 
     if validate_program(ast_base, func_count) < 0 {
+        return -1;
+    };
+
+    if write_type_metadata(out_ptr, ast_base) < 0 {
         return -1;
     };
 
