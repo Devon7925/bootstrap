@@ -380,6 +380,8 @@ fn parse_identifier(base: i32, len: i32, offset: i32, out_start_ptr: i32, out_le
 
 const MAX_PARAMS: i32 = 64;
 
+const MAX_ARRAY_LITERAL_ELEMENTS: i32 = 256;
+
 const INTRINSIC_KIND_NONE: i32 = -1;
 
 const INTRINSIC_KIND_LOAD_U8: i32 = 0;
@@ -2653,6 +2655,21 @@ fn ast_expr_alloc_array_repeat(ast_base: i32, element_index: i32, length: i32) -
     index
 }
 
+fn ast_expr_alloc_array_list(ast_base: i32, values_ptr: i32, count: i32) -> i32 {
+    if count <= 0 {
+        return -1;
+    };
+    if values_ptr < 0 {
+        return -1;
+    };
+    let index: i32 = ast_expr_alloc(ast_base, 37, values_ptr, count, 0);
+    if index < 0 {
+        return -1;
+    };
+    ast_expr_set_type(ast_base, index, -1);
+    index
+}
+
 fn ast_expr_alloc_array_get(ast_base: i32, array_index: i32, index_index: i32) -> i32 {
     let index: i32 = ast_expr_alloc(ast_base, 36, array_index, index_index, 0);
     if index < 0 {
@@ -3121,7 +3138,9 @@ fn parse_basic_expression(
         let element_kind_ptr: i32 = nested_temp_base;
         let element_data0_ptr: i32 = nested_temp_base + 4;
         let element_data1_ptr: i32 = nested_temp_base + 8;
-        let element_temp_base: i32 = nested_temp_base + 32;
+        let values_list_ptr: i32 = nested_temp_base + 16;
+        let element_temp_base: i32 =
+            nested_temp_base + 16 + MAX_ARRAY_LITERAL_ELEMENTS * WORD_SIZE + 64;
         let mut array_cursor: i32 = cursor + 1;
         array_cursor = skip_whitespace(base, len, array_cursor);
         array_cursor = parse_expression(
@@ -3152,29 +3171,118 @@ fn parse_basic_expression(
             return -1;
         };
         array_cursor = skip_whitespace(base, len, array_cursor);
-        array_cursor = expect_char(base, len, array_cursor, ';');
-        if array_cursor < 0 {
+        if array_cursor >= len {
             return -1;
         };
-        array_cursor = skip_whitespace(base, len, array_cursor);
-        array_cursor = parse_i32_literal(base, len, array_cursor, literal_ptr);
-        if array_cursor < 0 {
+        let mut delimiter: i32 = load_u8(base + array_cursor);
+        if delimiter == ';' {
+            array_cursor = expect_char(base, len, array_cursor, ';');
+            if array_cursor < 0 {
+                return -1;
+            };
+            array_cursor = skip_whitespace(base, len, array_cursor);
+            array_cursor = parse_i32_literal(base, len, array_cursor, literal_ptr);
+            if array_cursor < 0 {
+                return -1;
+            };
+            let length: i32 = load_i32(literal_ptr);
+            if length < 0 {
+                return -1;
+            };
+            array_cursor = skip_whitespace(base, len, array_cursor);
+            array_cursor = expect_char(base, len, array_cursor, ']');
+            if array_cursor < 0 {
+                return -1;
+            };
+            let expr_index: i32 = ast_expr_alloc_array_repeat(ast_base, element_index, length);
+            if expr_index < 0 {
+                return -1;
+            };
+            store_i32(out_kind_ptr, 35);
+            store_i32(out_data0_ptr, expr_index);
+            store_i32(out_data1_ptr, 0);
+            return skip_whitespace(base, len, array_cursor);
+        };
+        store_i32(values_list_ptr, element_index);
+        let mut element_count: i32 = 1;
+        loop {
+            if delimiter == ',' {
+                array_cursor = skip_whitespace(base, len, array_cursor + 1);
+                if array_cursor >= len {
+                    return -1;
+                };
+                let after_comma: i32 = load_u8(base + array_cursor);
+                if after_comma == ']' {
+                    array_cursor = array_cursor + 1;
+                    break;
+                };
+                array_cursor = parse_expression(
+                    base,
+                    len,
+                    array_cursor,
+                    ast_base,
+                    params_table_ptr,
+                    params_count,
+                    locals_table_ptr,
+                    locals_stack_count_ptr,
+                    locals_next_index_ptr,
+                    element_temp_base,
+                    loop_depth_ptr,
+                    element_kind_ptr,
+                    element_data0_ptr,
+                    element_data1_ptr,
+                );
+                if array_cursor < 0 {
+                    return -1;
+                };
+                let next_kind: i32 = load_i32(element_kind_ptr);
+                let next_data0: i32 = load_i32(element_data0_ptr);
+                let next_data1: i32 = load_i32(element_data1_ptr);
+                let next_index: i32 = expression_node_from_parts(
+                    ast_base,
+                    next_kind,
+                    next_data0,
+                    next_data1,
+                );
+                if next_index < 0 {
+                    return -1;
+                };
+                if element_count >= MAX_ARRAY_LITERAL_ELEMENTS {
+                    return -1;
+                };
+                store_i32(values_list_ptr + element_count * WORD_SIZE, next_index);
+                element_count = element_count + 1;
+                array_cursor = skip_whitespace(base, len, array_cursor);
+                if array_cursor >= len {
+                    return -1;
+                };
+                delimiter = load_u8(base + array_cursor);
+                continue;
+            };
+            if delimiter == ']' {
+                array_cursor = array_cursor + 1;
+                break;
+            };
             return -1;
         };
-        let length: i32 = load_i32(literal_ptr);
-        if length < 0 {
+        let metadata_ptr: i32 = ast_call_data_alloc(ast_base, element_count);
+        if metadata_ptr < 0 {
             return -1;
         };
-        array_cursor = skip_whitespace(base, len, array_cursor);
-        array_cursor = expect_char(base, len, array_cursor, ']');
-        if array_cursor < 0 {
-            return -1;
+        let mut copy_idx: i32 = 0;
+        loop {
+            if copy_idx >= element_count {
+                break;
+            };
+            let value_index: i32 = load_i32(values_list_ptr + copy_idx * WORD_SIZE);
+            store_i32(metadata_ptr + copy_idx * WORD_SIZE, value_index);
+            copy_idx = copy_idx + 1;
         };
-        let expr_index: i32 = ast_expr_alloc_array_repeat(ast_base, element_index, length);
+        let expr_index: i32 = ast_expr_alloc_array_list(ast_base, metadata_ptr, element_count);
         if expr_index < 0 {
             return -1;
         };
-        store_i32(out_kind_ptr, 35);
+        store_i32(out_kind_ptr, 37);
         store_i32(out_data0_ptr, expr_index);
         store_i32(out_data1_ptr, 0);
         return skip_whitespace(base, len, array_cursor);
@@ -5379,6 +5487,61 @@ fn resolve_expression_internal(
         ast_expr_set_type(ast_base, expr_index, array_type_id);
         return 0;
     };
+    if kind == 37 {
+        let values_ptr: i32 = load_i32(entry_ptr + 4);
+        let element_count: i32 = load_i32(entry_ptr + 8);
+        if values_ptr < 0 {
+            return -1;
+        };
+        if element_count <= 0 {
+            return -1;
+        };
+        let mut element_type: i32 = -1;
+        let mut idx: i32 = 0;
+        loop {
+            if idx >= element_count {
+                break;
+            };
+            let element_index: i32 = load_i32(values_ptr + idx * WORD_SIZE);
+            if resolve_expression_internal(
+                out_ptr,
+                ast_base,
+                element_index,
+                func_count,
+                control_stack_base,
+                control_stack_count_ptr,
+                loop_stack_base,
+                loop_stack_count_ptr,
+            ) < 0 {
+                return -1;
+            };
+            let current_type: i32 = ast_expr_type(ast_base, element_index);
+            if current_type < 0 {
+                return -1;
+            };
+            if element_type < 0 {
+                element_type = current_type;
+            } else if current_type != element_type {
+                return -1;
+            };
+            idx = idx + 1;
+        };
+        if element_type < 0 {
+            return -1;
+        };
+        if resolve_type_id(out_ptr, ast_base, element_type) < 0 {
+            return -1;
+        };
+        let array_type_id: i32 = ast_register_array_type(ast_base, element_type, element_count);
+        if array_type_id < 0 {
+            return -1;
+        };
+        if resolve_type_id(out_ptr, ast_base, array_type_id) < 0 {
+            return -1;
+        };
+        ast_expr_set_type(ast_base, expr_index, array_type_id);
+        return 0;
+    };
     if kind == 36 {
         let array_index: i32 = load_i32(entry_ptr + 4);
         let index_index: i32 = load_i32(entry_ptr + 8);
@@ -5927,6 +6090,39 @@ fn collect_local_counts_from_expression(
             locals_end,
         );
     };
+    if kind == 37 {
+        let values_ptr: i32 = load_i32(entry_ptr + 4);
+        let element_count: i32 = load_i32(entry_ptr + 8);
+        if values_ptr < 0 {
+            return -1;
+        };
+        if element_count <= 0 {
+            return -1;
+        };
+        let mut total: i32 = 0;
+        let mut idx: i32 = 0;
+        loop {
+            if idx >= element_count {
+                break;
+            };
+            let element_index: i32 = load_i32(values_ptr + idx * WORD_SIZE);
+            let element_counts: i32 = collect_local_counts_from_expression(
+                ast_base,
+                element_index,
+                param_count,
+                locals_end,
+            );
+            if element_counts < 0 {
+                return -1;
+            };
+            total = local_counts_add(total, element_counts);
+            if total < 0 {
+                return -1;
+            };
+            idx = idx + 1;
+        };
+        return total;
+    };
     if kind == 36 {
         let array_index: i32 = load_i32(entry_ptr + 4);
         let index_index: i32 = load_i32(entry_ptr + 8);
@@ -6301,6 +6497,39 @@ fn expression_code_size(ast_base: i32, expr_index: i32) -> i32 {
         };
         return element_size + 1 + leb_i32_len(length) + 2 + leb_u32_len(type_index);
     };
+    if kind == 37 {
+        let values_ptr: i32 = load_i32(entry_ptr + 4);
+        let element_count: i32 = load_i32(entry_ptr + 8);
+        if values_ptr < 0 {
+            return -1;
+        };
+        if element_count <= 0 {
+            return -1;
+        };
+        let mut total: i32 = 0;
+        let mut idx: i32 = 0;
+        loop {
+            if idx >= element_count {
+                break;
+            };
+            let element_index: i32 = load_i32(values_ptr + idx * WORD_SIZE);
+            let element_size: i32 = expression_code_size(ast_base, element_index);
+            if element_size < 0 {
+                return -1;
+            };
+            total = total + element_size;
+            idx = idx + 1;
+        };
+        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        if expr_type < 0 {
+            return -1;
+        };
+        let type_index: i32 = array_type_index(expr_type);
+        if type_index < 0 {
+            return -1;
+        };
+        return total + 2 + leb_u32_len(type_index) + leb_u32_len(element_count);
+    };
     if kind == 36 {
         let array_index: i32 = load_i32(entry_ptr + 4);
         let index_index: i32 = load_i32(entry_ptr + 8);
@@ -6594,6 +6823,42 @@ fn emit_expression(base: i32, offset: i32, ast_base: i32, expr_index: i32) -> i3
         out = write_byte(base, out, 251);
         out = write_byte(base, out, 6);
         out = write_u32_leb(base, out, type_index);
+        return out;
+    };
+    if kind == 37 {
+        let values_ptr: i32 = load_i32(entry_ptr + 4);
+        let element_count: i32 = load_i32(entry_ptr + 8);
+        if values_ptr < 0 {
+            return -1;
+        };
+        if element_count <= 0 {
+            return -1;
+        };
+        let mut out: i32 = offset;
+        let mut idx: i32 = 0;
+        loop {
+            if idx >= element_count {
+                break;
+            };
+            let element_index: i32 = load_i32(values_ptr + idx * WORD_SIZE);
+            out = emit_expression(base, out, ast_base, element_index);
+            if out < 0 {
+                return -1;
+            };
+            idx = idx + 1;
+        };
+        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        if expr_type < 0 {
+            return -1;
+        };
+        let type_index: i32 = array_type_index(expr_type);
+        if type_index < 0 {
+            return -1;
+        };
+        out = write_byte(base, out, 251);
+        out = write_byte(base, out, 8);
+        out = write_u32_leb(base, out, type_index);
+        out = write_u32_leb(base, out, element_count);
         return out;
     };
     if kind == 36 {
