@@ -1,7 +1,7 @@
 #[path = "ast_compiler_helpers.rs"]
 mod ast_compiler_helpers;
 
-use ast_compiler_helpers::compile_with_ast_compiler;
+use ast_compiler_helpers::{compile_with_ast_compiler, try_compile_with_ast_compiler};
 use wasmi::{Engine, Linker, Memory, Module, Store, TypedFunc};
 
 #[test]
@@ -253,4 +253,55 @@ fn main() -> i32 {
         .call(&mut store, (3, 10, 7, 9))
         .expect("failed to execute mix_call");
     assert_eq!(mix_call_result, 18);
+}
+
+#[test]
+fn mixed_integer_widths_are_rejected_without_casts() {
+    let source = r#"
+fn main() -> i32 {
+    let lhs: i16 = 12;
+    let rhs: i64 = 34;
+    if lhs < rhs { 0 } else { 1 }
+}
+"#;
+
+    let error = try_compile_with_ast_compiler(source)
+        .expect_err("integer width mismatches should be rejected");
+    assert!(error.produced_len <= 0);
+}
+
+#[test]
+fn signed_and_unsigned_mixes_require_casts() {
+    let source = r#"
+fn difference(a: u16, b: i16) -> u16 {
+    a - b
+}
+
+fn main() -> i32 {
+    0
+}
+"#;
+
+    let error = try_compile_with_ast_compiler(source)
+        .expect_err("signed/unsigned mixes without casts should be rejected");
+    assert!(error.produced_len <= 0);
+}
+
+#[test]
+fn integer_arguments_must_match_parameter_widths() {
+    let source = r#"
+fn take_i8(value: i8) -> i8 {
+    value
+}
+
+fn main() -> i32 {
+    let sample: i16 = 10;
+    let _ = take_i8(sample);
+    0
+}
+"#;
+
+    let error = try_compile_with_ast_compiler(source)
+        .expect_err("calls with mismatched integer widths should be rejected");
+    assert!(error.produced_len <= 0);
 }

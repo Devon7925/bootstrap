@@ -1,7 +1,11 @@
 #[path = "ast_compiler_helpers.rs"]
 mod ast_compiler_helpers;
 
+#[path = "wasm_harness.rs"]
+mod wasm_harness;
+
 use ast_compiler_helpers::compile_with_ast_compiler;
+use wasm_harness::run_wasm_main;
 use wasmi::{Engine, Linker, Module, Store, TypedFunc};
 
 #[test]
@@ -45,4 +49,50 @@ fn main() -> i32 {
     let result = main.call(&mut store, ()).expect("failed to execute main");
 
     assert_eq!(result, 13);
+}
+
+#[test]
+fn parenthesized_literal_executes() {
+    let source = r#"
+fn main() -> i32 {
+    (42)
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 42);
+}
+
+#[test]
+fn nested_parentheses_in_addition_execute() {
+    let source = r#"
+fn helper() -> i32 {
+    10
+}
+
+fn main() -> i32 {
+    (helper()) + (1 + (2 + 3))
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 16);
+}
+
+#[test]
+fn parentheses_affect_multiplication_order() {
+    let source = r#"
+fn main() -> i32 {
+    (2 + 3) * 4
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 20);
 }

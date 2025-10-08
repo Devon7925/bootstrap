@@ -1,7 +1,11 @@
 #[path = "ast_compiler_helpers.rs"]
 mod ast_compiler_helpers;
 
+#[path = "wasm_harness.rs"]
+mod wasm_harness;
+
 use ast_compiler_helpers::compile_with_ast_compiler;
+use wasm_harness::run_wasm_main;
 use wasmi::{Engine, Linker, Module, Store, TypedFunc};
 
 #[test]
@@ -106,4 +110,58 @@ fn main() -> i32 {
 
     let main_result = main.call(&mut store, ()).expect("failed to execute main");
     assert_eq!(main_result, 12);
+}
+
+#[test]
+fn boolean_types_and_literals_execute() {
+    let source = r#"
+fn invert(flag: bool) -> bool {
+    if flag {
+        false
+    } else {
+        true
+    }
+}
+
+fn main() -> i32 {
+    let truth: bool = true;
+    let falsity: bool = invert(truth);
+    if falsity {
+        0
+    } else {
+        1
+    }
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 1);
+}
+
+#[test]
+fn logical_operators_short_circuit() {
+    let source = r#"
+fn main() -> i32 {
+    let mut count: i32 = 0;
+    let result1: bool = true || { count = count + 1; false };
+    let result2: bool = false || { count = count + 1; true };
+    let result3: bool = false && { count = count + 1; true };
+    let result4: bool = true && { count = count + 1; true };
+    let toggled: bool = !false;
+    let double_negated: bool = !(!true);
+    let inverted: bool = !result4;
+    if result1 && result2 && !result3 && result4 && toggled && !inverted && double_negated {
+        count
+    } else {
+        0
+    }
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let engine = wasmi::Engine::default();
+    let result = run_wasm_main(&engine, &wasm);
+    assert_eq!(result, 2);
 }
