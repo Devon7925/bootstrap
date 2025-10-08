@@ -81,3 +81,54 @@ fn main() -> i32 {
     let result = run_wasm_main_with_gc(&wasm);
     assert_eq!(result, 4, "expected 'test' string literal to have length 4");
 }
+
+#[test]
+fn string_indices_match_char_casts() {
+    let source = r#"
+fn main() -> i32 {
+    let word: [u8; 5] = "hello";
+    let mut score: i32 = 0;
+
+    if word[0] == ('h' as u8) {
+        score = score + 1;
+        0
+    } else {
+        0
+    };
+
+    if word[1] == ('e' as u8) {
+        score = score + 1;
+        0
+    } else {
+        0
+    };
+
+    if word[2] == ('l' as u8) {
+        score = score + 1;
+        0
+    } else {
+        0
+    };
+
+    if word[3] == ('l' as u8) {
+        score = score + 1;
+        0
+    } else {
+        0
+    };
+
+    if word[4] == ('o' as u8) {
+        score = score + 1;
+        0
+    } else {
+        0
+    };
+
+    score
+}
+"#;
+
+    let wasm = compile_with_ast_compiler(source);
+    let result = run_wasm_main_with_gc(&wasm);
+    assert_eq!(result, 5, "expected every index to match its character literal");
+}

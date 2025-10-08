@@ -182,6 +182,25 @@ fn expect_keyword_if(base: i32, len: i32, offset: i32) -> i32 {
     next
 }
 
+fn expect_keyword_as(base: i32, len: i32, offset: i32) -> i32 {
+    if offset + 1 >= len {
+        return -1;
+    };
+    let first: i32 = load_u8(base + offset);
+    let second: i32 = load_u8(base + offset + 1);
+    if first != 'a' || second != 's' {
+        return -1;
+    };
+    let next: i32 = offset + 2;
+    if next < len {
+        let after: i32 = load_u8(base + next);
+        if is_identifier_continue(after) {
+            return -1;
+        };
+    };
+    next
+}
+
 fn expect_keyword_true(base: i32, len: i32, offset: i32) -> i32 {
     if offset + 4 > len {
         return -1;
@@ -1805,6 +1824,208 @@ fn write_type_id_as_wasm_value_type(base: i32, offset: i32, type_id: i32) -> i32
     write_byte(base, offset, numeric)
 }
 
+fn integer_type_bit_width(type_id: i32) -> i32 {
+    if type_id == BUILTIN_TYPE_ID_I8 || type_id == BUILTIN_TYPE_ID_U8 {
+        return 8;
+    };
+    if type_id == BUILTIN_TYPE_ID_I16 || type_id == BUILTIN_TYPE_ID_U16 {
+        return 16;
+    };
+    if type_id == BUILTIN_TYPE_ID_I32 || type_id == BUILTIN_TYPE_ID_U32 {
+        return 32;
+    };
+    if type_id == BUILTIN_TYPE_ID_I64 || type_id == BUILTIN_TYPE_ID_U64 {
+        return 64;
+    };
+    -1
+}
+
+fn mask_i32_code_size(width: i32) -> i32 {
+    if width <= 0 {
+        return -1;
+    };
+    if width >= 32 {
+        return 0;
+    };
+    let mask: i32 = (1 << width) - 1;
+    1 + leb_i32_len(mask) + 1
+}
+
+fn mask_i32_value(base: i32, offset: i32, width: i32) -> i32 {
+    if width <= 0 {
+        return -1;
+    };
+    if width >= 32 {
+        return offset;
+    };
+    let mask: i32 = (1 << width) - 1;
+    let mut out: i32 = write_byte(base, offset, 65);
+    out = write_i32_leb(base, out, mask);
+    out = write_byte(base, out, 113);
+    out
+}
+
+fn sign_extend_i32_code_size(width: i32) -> i32 {
+    if width <= 0 {
+        return -1;
+    };
+    if width >= 32 {
+        return 0;
+    };
+    let shift: i32 = 32 - width;
+    let len: i32 = leb_i32_len(shift);
+    2 * (1 + len) + 2
+}
+
+fn sign_extend_i32_value(base: i32, offset: i32, width: i32) -> i32 {
+    if width <= 0 {
+        return -1;
+    };
+    if width >= 32 {
+        return offset;
+    };
+    let shift: i32 = 32 - width;
+    let mut out: i32 = write_byte(base, offset, 65);
+    out = write_i32_leb(base, out, shift);
+    out = write_byte(base, out, 116);
+    out = write_byte(base, out, 65);
+    out = write_i32_leb(base, out, shift);
+    out = write_byte(base, out, 117);
+    out
+}
+
+fn canonicalize_i32_code_size(width: i32, signed: bool) -> i32 {
+    if width <= 0 {
+        return -1;
+    };
+    if width >= 32 {
+        return 0;
+    };
+    if signed {
+        return sign_extend_i32_code_size(width);
+    };
+    mask_i32_code_size(width)
+}
+
+fn canonicalize_i32_value(base: i32, offset: i32, width: i32, signed: bool) -> i32 {
+    if width <= 0 {
+        return -1;
+    };
+    if width >= 32 {
+        return offset;
+    };
+    if signed {
+        return sign_extend_i32_value(base, offset, width);
+    };
+    mask_i32_value(base, offset, width)
+}
+
+fn cast_expression_extra_code_size(source_type: i32, target_type: i32) -> i32 {
+    if source_type == target_type {
+        return 0;
+    };
+    if !type_id_is_integer(source_type) {
+        return -1;
+    };
+    if !type_id_is_integer(target_type) {
+        return -1;
+    };
+    let source_width: i32 = integer_type_bit_width(source_type);
+    let target_width: i32 = integer_type_bit_width(target_type);
+    if source_width < 0 {
+        return -1;
+    };
+    if target_width < 0 {
+        return -1;
+    };
+    let source_signed: bool = type_id_is_signed_integer(source_type);
+    let target_signed: bool = type_id_is_signed_integer(target_type);
+    let mut total: i32 = 0;
+    let mut working_is_64: bool = type_id_is_64_bit_integer(source_type);
+    let target_is_64: bool = type_id_is_64_bit_integer(target_type);
+    if !working_is_64 {
+        let canonical: i32 = canonicalize_i32_code_size(source_width, source_signed);
+        if canonical < 0 {
+            return -1;
+        };
+        total = total + canonical;
+    };
+    if working_is_64 && !target_is_64 {
+        total = total + 1;
+        working_is_64 = false;
+    };
+    if !working_is_64 && target_is_64 {
+        total = total + 1;
+        return total;
+    };
+    if working_is_64 && target_is_64 {
+        return total;
+    };
+    if target_width < 32 {
+        let adjust: i32 = if target_signed {
+            sign_extend_i32_code_size(target_width)
+        } else {
+            mask_i32_code_size(target_width)
+        };
+        if adjust < 0 {
+            return -1;
+        };
+        total = total + adjust;
+    };
+    total
+}
+
+fn emit_cast_value(base: i32, offset: i32, source_type: i32, target_type: i32) -> i32 {
+    if source_type == target_type {
+        return offset;
+    };
+    if !type_id_is_integer(source_type) {
+        return -1;
+    };
+    if !type_id_is_integer(target_type) {
+        return -1;
+    };
+    let source_width: i32 = integer_type_bit_width(source_type);
+    let target_width: i32 = integer_type_bit_width(target_type);
+    if source_width < 0 {
+        return -1;
+    };
+    if target_width < 0 {
+        return -1;
+    };
+    let source_signed: bool = type_id_is_signed_integer(source_type);
+    let target_signed: bool = type_id_is_signed_integer(target_type);
+    let mut out: i32 = offset;
+    let mut working_is_64: bool = type_id_is_64_bit_integer(source_type);
+    let target_is_64: bool = type_id_is_64_bit_integer(target_type);
+    if !working_is_64 {
+        out = canonicalize_i32_value(base, out, source_width, source_signed);
+        if out < 0 {
+            return -1;
+        };
+    };
+    if working_is_64 && !target_is_64 {
+        out = write_byte(base, out, 167);
+        working_is_64 = false;
+    };
+    if !working_is_64 && target_is_64 {
+        let opcode: i32 = if source_signed { 172 } else { 173 };
+        out = write_byte(base, out, opcode);
+        return out;
+    };
+    if working_is_64 && target_is_64 {
+        return out;
+    };
+    if target_width < 32 {
+        if target_signed {
+            out = sign_extend_i32_value(base, out, target_width);
+        } else {
+            out = mask_i32_value(base, out, target_width);
+        };
+    };
+    out
+}
+
 const BUILTIN_INTEGER_VARIANT_COUNT: i32 = 4;
 
 fn builtin_integer_variant_width(index: i32) -> i32 {
@@ -2709,6 +2930,15 @@ fn ast_expr_alloc_array_len(ast_base: i32, array_index: i32) -> i32 {
         return -1;
     };
     ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_I32);
+    index
+}
+
+fn ast_expr_alloc_cast(ast_base: i32, value_index: i32, target_type_id: i32) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, 39, value_index, target_type_id, 0);
+    if index < 0 {
+        return -1;
+    };
+    ast_expr_set_type(ast_base, index, target_type_id);
     index
 }
 
@@ -3836,7 +4066,37 @@ fn parse_unary_expression(
         store_i32(out_data1_ptr, 0);
     };
 
-    resolved_cursor
+    loop {
+        resolved_cursor = skip_whitespace(base, len, resolved_cursor);
+        let as_cursor: i32 = expect_keyword_as(base, len, resolved_cursor);
+        if as_cursor < 0 {
+            break;
+        };
+        let mut type_cursor: i32 = skip_whitespace(base, len, as_cursor);
+        type_cursor = parse_type(base, len, type_cursor, ast_base, literal_ptr);
+        if type_cursor < 0 {
+            return -1;
+        };
+        let target_type_id: i32 = load_i32(literal_ptr);
+        let value_kind: i32 = load_i32(out_kind_ptr);
+        let value_data0: i32 = load_i32(out_data0_ptr);
+        let value_data1: i32 = load_i32(out_data1_ptr);
+        let value_index: i32 =
+            expression_node_from_parts(ast_base, value_kind, value_data0, value_data1);
+        if value_index < 0 {
+            return -1;
+        };
+        let cast_index: i32 = ast_expr_alloc_cast(ast_base, value_index, target_type_id);
+        if cast_index < 0 {
+            return -1;
+        };
+        store_i32(out_kind_ptr, 2);
+        store_i32(out_data0_ptr, cast_index);
+        store_i32(out_data1_ptr, 0);
+        resolved_cursor = type_cursor;
+    };
+
+    skip_whitespace(base, len, resolved_cursor)
 }
 
 fn parse_multiplicative_expression(
@@ -5799,6 +6059,32 @@ fn resolve_expression_internal(
         };
         return 0;
     };
+    if kind == 39 {
+        let value_index: i32 = load_i32(entry_ptr + 4);
+        let target_type: i32 = load_i32(entry_ptr + 8);
+        if resolve_expression_internal(out_ptr, ast_base,
+            value_index,
+            func_count,
+            control_stack_base,
+            control_stack_count_ptr,
+            loop_stack_base,
+            loop_stack_count_ptr,
+        ) < 0 {
+            return -1;
+        };
+        if !type_id_is_integer(target_type) {
+            return -1;
+        };
+        if resolve_type_id(out_ptr, ast_base, target_type) < 0 {
+            return -1;
+        };
+        let value_type: i32 = ast_expr_type(ast_base, value_index);
+        if !type_id_is_integer(value_type) {
+            return -1;
+        };
+        ast_expr_set_type(ast_base, expr_index, target_type);
+        return 0;
+    };
     if kind == 2
         || kind == 3
         || kind == 4
@@ -6577,6 +6863,15 @@ fn collect_local_counts_from_expression(
             return -1;
         };
         return local_counts_add(ptr_counts, value_counts);
+    } else if kind == 39 {
+        let value_index: i32 = load_i32(entry_ptr + 4);
+        return collect_local_counts_from_expression(
+            ast_base,
+            value_index,
+            param_count,
+            locals_end,
+            local_types_ptr,
+        );
     } else {
         0
     }
@@ -6841,6 +7136,20 @@ fn expression_code_size(ast_base: i32, expr_index: i32) -> i32 {
             + leb_u32_len(0)
             + 1
             + leb_i32_len(0);
+    };
+    if kind == 39 {
+        let value_index: i32 = load_i32(entry_ptr + 4);
+        let target_type: i32 = load_i32(entry_ptr + 8);
+        let value_size: i32 = expression_code_size(ast_base, value_index);
+        if value_size < 0 {
+            return -1;
+        };
+        let value_type: i32 = ast_expr_type(ast_base, value_index);
+        let extra: i32 = cast_expression_extra_code_size(value_type, target_type);
+        if extra < 0 {
+            return -1;
+        };
+        return value_size + extra;
     };
     if kind == 2
         || kind == 3
@@ -7205,6 +7514,17 @@ fn emit_expression(base: i32, offset: i32, ast_base: i32, expr_index: i32) -> i3
         out = write_u32_leb(base, out, 0);
         out = write_byte(base, out, 65);
         out = write_i32_leb(base, out, 0);
+        return out;
+    };
+    if kind == 39 {
+        let value_index: i32 = load_i32(entry_ptr + 4);
+        let target_type: i32 = load_i32(entry_ptr + 8);
+        let mut out: i32 = emit_expression(base, offset, ast_base, value_index);
+        if out < 0 {
+            return -1;
+        };
+        let value_type: i32 = ast_expr_type(ast_base, value_index);
+        out = emit_cast_value(base, out, value_type, target_type);
         return out;
     };
     if kind == 2
@@ -7723,107 +8043,65 @@ fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
         let param_count: i32 = load_i32(entry_ptr + 8);
         let locals_count: i32 = load_i32(entry_ptr + 20);
         let body_data0: i32 = load_i32(entry_ptr + 16);
-        let mut local_counts: i32 = collect_function_local_counts(
+        let local_types_ptr: i32 = ast_temp_base(ast_base);
+        let run_types_ptr: i32 = local_types_ptr + locals_count * WORD_SIZE;
+        let run_counts_ptr: i32 = run_types_ptr + locals_count * WORD_SIZE;
+        let local_counts: i32 = collect_function_local_counts(
             ast_base,
             body_kind,
             body_data0,
             param_count,
             locals_count,
-            -1,
+            local_types_ptr,
         );
         if local_counts < 0 {
             return -1;
         };
-        let mut local_i32_count: i32 = local_counts_i32(local_counts);
-        let mut local_i64_count: i32 = local_counts_i64(local_counts);
-        let mut local_ref_count: i32 = local_counts_ref(local_counts);
-        let local_types_ptr: i32 = ast_temp_base(ast_base);
-        let ref_types_ptr: i32 = local_types_ptr + locals_count * WORD_SIZE;
-        let ref_counts_ptr: i32 = ref_types_ptr + locals_count * WORD_SIZE;
-        let mut ref_unique_count: i32 = 0;
-        if local_ref_count > 0 {
-            local_counts = collect_function_local_counts(
-                ast_base,
-                body_kind,
-                body_data0,
-                param_count,
-                locals_count,
-                local_types_ptr,
-            );
-            if local_counts < 0 {
-                return -1;
-            };
-            local_i32_count = local_counts_i32(local_counts);
-            local_i64_count = local_counts_i64(local_counts);
-            local_ref_count = local_counts_ref(local_counts);
-            let mut ref_init: i32 = 0;
-            loop {
-                if ref_init >= local_ref_count {
-                    break;
-                };
-                store_i32(ref_counts_ptr + ref_init * WORD_SIZE, 0);
-                ref_init = ref_init + 1;
-            };
-            let mut local_idx: i32 = 0;
-            loop {
-                if local_idx >= locals_count {
-                    break;
-                };
-                let type_id: i32 = load_i32(local_types_ptr + local_idx * WORD_SIZE);
-                if type_id_is_array(type_id) {
-                    let mut found: bool = false;
-                    let mut ref_idx: i32 = 0;
-                    loop {
-                        if ref_idx >= ref_unique_count {
-                            break;
-                        };
-                        let existing: i32 = load_i32(ref_types_ptr + ref_idx * WORD_SIZE);
-                        if existing == type_id {
-                            let current: i32 = load_i32(ref_counts_ptr + ref_idx * WORD_SIZE);
-                            store_i32(ref_counts_ptr + ref_idx * WORD_SIZE, current + 1);
-                            found = true;
-                            break;
-                        };
-                        ref_idx = ref_idx + 1;
-                    };
-                    if !found {
-                        store_i32(ref_types_ptr + ref_unique_count * WORD_SIZE, type_id);
-                        store_i32(ref_counts_ptr + ref_unique_count * WORD_SIZE, 1);
-                        ref_unique_count = ref_unique_count + 1;
-                    };
-                };
-                local_idx = local_idx + 1;
-            };
+        if local_counts_total(local_counts) != locals_count {
+            return -1;
         };
         let mut local_groups: i32 = 0;
-        if local_i32_count > 0 {
-            local_groups = local_groups + 1;
-        };
-        if local_i64_count > 0 {
-            local_groups = local_groups + 1;
-        };
-        local_groups = local_groups + ref_unique_count;
-        let locals_decl_size: i32 = if locals_count > 0 {
-            let mut size: i32 = leb_u32_len(local_groups);
-            if local_i32_count > 0 {
-                size = size + leb_u32_len(local_i32_count) + 1;
+        let mut type_idx: i32 = 0;
+        loop {
+            if type_idx >= locals_count {
+                break;
             };
-            if local_i64_count > 0 {
-                size = size + leb_u32_len(local_i64_count) + 1;
+            let type_id: i32 = load_i32(local_types_ptr + type_idx * WORD_SIZE);
+            if type_id < 0 {
+                return -1;
             };
-            let mut ref_idx: i32 = 0;
+            let mut run_len: i32 = 1;
             loop {
-                if ref_idx >= ref_unique_count {
+                if type_idx + run_len >= locals_count {
                     break;
                 };
-                let ref_count: i32 = load_i32(ref_counts_ptr + ref_idx * WORD_SIZE);
-                let ref_type_id: i32 = load_i32(ref_types_ptr + ref_idx * WORD_SIZE);
-                let type_len: i32 = type_id_wasm_value_type_len(ref_type_id);
+                let next_type: i32 =
+                    load_i32(local_types_ptr + (type_idx + run_len) * WORD_SIZE);
+                if next_type != type_id {
+                    break;
+                };
+                run_len = run_len + 1;
+            };
+            store_i32(run_types_ptr + local_groups * WORD_SIZE, type_id);
+            store_i32(run_counts_ptr + local_groups * WORD_SIZE, run_len);
+            local_groups = local_groups + 1;
+            type_idx = type_idx + run_len;
+        };
+        let locals_decl_size: i32 = if locals_count > 0 {
+            let mut size: i32 = leb_u32_len(local_groups);
+            let mut run_idx: i32 = 0;
+            loop {
+                if run_idx >= local_groups {
+                    break;
+                };
+                let run_len: i32 = load_i32(run_counts_ptr + run_idx * WORD_SIZE);
+                let type_id: i32 = load_i32(run_types_ptr + run_idx * WORD_SIZE);
+                let type_len: i32 = type_id_wasm_value_type_len(type_id);
                 if type_len < 0 {
                     return -1;
                 };
-                size = size + leb_u32_len(ref_count) + type_len;
-                ref_idx = ref_idx + 1;
+                size = size + leb_u32_len(run_len) + type_len;
+                run_idx = run_idx + 1;
             };
             size
         } else {
@@ -7886,107 +8164,65 @@ fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
         let param_count: i32 = load_i32(entry_ptr + 8);
         let locals_count: i32 = load_i32(entry_ptr + 20);
         let body_data0: i32 = load_i32(entry_ptr + 16);
-        let mut local_counts: i32 = collect_function_local_counts(
+        let local_types_ptr: i32 = ast_temp_base(ast_base);
+        let run_types_ptr: i32 = local_types_ptr + locals_count * WORD_SIZE;
+        let run_counts_ptr: i32 = run_types_ptr + locals_count * WORD_SIZE;
+        let local_counts: i32 = collect_function_local_counts(
             ast_base,
             body_kind,
             body_data0,
             param_count,
             locals_count,
-            -1,
+            local_types_ptr,
         );
         if local_counts < 0 {
             return -1;
         };
-        let mut local_i32_count: i32 = local_counts_i32(local_counts);
-        let mut local_i64_count: i32 = local_counts_i64(local_counts);
-        let mut local_ref_count: i32 = local_counts_ref(local_counts);
-        let local_types_ptr: i32 = ast_temp_base(ast_base);
-        let ref_types_ptr: i32 = local_types_ptr + locals_count * WORD_SIZE;
-        let ref_counts_ptr: i32 = ref_types_ptr + locals_count * WORD_SIZE;
-        let mut ref_unique_count: i32 = 0;
-        if local_ref_count > 0 {
-            local_counts = collect_function_local_counts(
-                ast_base,
-                body_kind,
-                body_data0,
-                param_count,
-                locals_count,
-                local_types_ptr,
-            );
-            if local_counts < 0 {
-                return -1;
-            };
-            local_i32_count = local_counts_i32(local_counts);
-            local_i64_count = local_counts_i64(local_counts);
-            local_ref_count = local_counts_ref(local_counts);
-            let mut ref_init: i32 = 0;
-            loop {
-                if ref_init >= local_ref_count {
-                    break;
-                };
-                store_i32(ref_counts_ptr + ref_init * WORD_SIZE, 0);
-                ref_init = ref_init + 1;
-            };
-            let mut local_idx: i32 = 0;
-            loop {
-                if local_idx >= locals_count {
-                    break;
-                };
-                let type_id: i32 = load_i32(local_types_ptr + local_idx * WORD_SIZE);
-                if type_id_is_array(type_id) {
-                    let mut found: bool = false;
-                    let mut ref_idx: i32 = 0;
-                    loop {
-                        if ref_idx >= ref_unique_count {
-                            break;
-                        };
-                        let existing: i32 = load_i32(ref_types_ptr + ref_idx * WORD_SIZE);
-                        if existing == type_id {
-                            let current: i32 = load_i32(ref_counts_ptr + ref_idx * WORD_SIZE);
-                            store_i32(ref_counts_ptr + ref_idx * WORD_SIZE, current + 1);
-                            found = true;
-                            break;
-                        };
-                        ref_idx = ref_idx + 1;
-                    };
-                    if !found {
-                        store_i32(ref_types_ptr + ref_unique_count * WORD_SIZE, type_id);
-                        store_i32(ref_counts_ptr + ref_unique_count * WORD_SIZE, 1);
-                        ref_unique_count = ref_unique_count + 1;
-                    };
-                };
-                local_idx = local_idx + 1;
-            };
+        if local_counts_total(local_counts) != locals_count {
+            return -1;
         };
         let mut local_groups: i32 = 0;
-        if local_i32_count > 0 {
-            local_groups = local_groups + 1;
-        };
-        if local_i64_count > 0 {
-            local_groups = local_groups + 1;
-        };
-        local_groups = local_groups + ref_unique_count;
-        let locals_decl_size: i32 = if locals_count > 0 {
-            let mut size: i32 = leb_u32_len(local_groups);
-            if local_i32_count > 0 {
-                size = size + leb_u32_len(local_i32_count) + 1;
+        let mut type_idx: i32 = 0;
+        loop {
+            if type_idx >= locals_count {
+                break;
             };
-            if local_i64_count > 0 {
-                size = size + leb_u32_len(local_i64_count) + 1;
+            let type_id: i32 = load_i32(local_types_ptr + type_idx * WORD_SIZE);
+            if type_id < 0 {
+                return -1;
             };
-            let mut ref_idx: i32 = 0;
+            let mut run_len: i32 = 1;
             loop {
-                if ref_idx >= ref_unique_count {
+                if type_idx + run_len >= locals_count {
                     break;
                 };
-                let ref_count: i32 = load_i32(ref_counts_ptr + ref_idx * WORD_SIZE);
-                let ref_type_id: i32 = load_i32(ref_types_ptr + ref_idx * WORD_SIZE);
-                let type_len: i32 = type_id_wasm_value_type_len(ref_type_id);
+                let next_type: i32 =
+                    load_i32(local_types_ptr + (type_idx + run_len) * WORD_SIZE);
+                if next_type != type_id {
+                    break;
+                };
+                run_len = run_len + 1;
+            };
+            store_i32(run_types_ptr + local_groups * WORD_SIZE, type_id);
+            store_i32(run_counts_ptr + local_groups * WORD_SIZE, run_len);
+            local_groups = local_groups + 1;
+            type_idx = type_idx + run_len;
+        };
+        let locals_decl_size: i32 = if locals_count > 0 {
+            let mut size: i32 = leb_u32_len(local_groups);
+            let mut run_idx: i32 = 0;
+            loop {
+                if run_idx >= local_groups {
+                    break;
+                };
+                let run_len: i32 = load_i32(run_counts_ptr + run_idx * WORD_SIZE);
+                let type_id: i32 = load_i32(run_types_ptr + run_idx * WORD_SIZE);
+                let type_len: i32 = type_id_wasm_value_type_len(type_id);
                 if type_len < 0 {
                     return -1;
                 };
-                size = size + leb_u32_len(ref_count) + type_len;
-                ref_idx = ref_idx + 1;
+                size = size + leb_u32_len(run_len) + type_len;
+                run_idx = run_idx + 1;
             };
             size
         } else {
@@ -7999,28 +8235,20 @@ fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
             out = write_u32_leb(base, out, body_size);
             if locals_count > 0 {
                 out = write_u32_leb(base, out, local_groups);
-                if local_i32_count > 0 {
-                    out = write_u32_leb(base, out, local_i32_count);
-                    out = write_byte(base, out, WASM_VALUE_TYPE_I32);
-                };
-                if local_i64_count > 0 {
-                    out = write_u32_leb(base, out, local_i64_count);
-                    out = write_byte(base, out, WASM_VALUE_TYPE_I64);
-                };
-                let mut ref_idx: i32 = 0;
+                let mut run_idx: i32 = 0;
                 loop {
-                    if ref_idx >= ref_unique_count {
+                    if run_idx >= local_groups {
                         break;
                     };
-                    let ref_count: i32 = load_i32(ref_counts_ptr + ref_idx * WORD_SIZE);
-                    let ref_type_id: i32 = load_i32(ref_types_ptr + ref_idx * WORD_SIZE);
-                    out = write_u32_leb(base, out, ref_count);
-                    let next: i32 = write_type_id_as_wasm_value_type(base, out, ref_type_id);
+                    let run_len: i32 = load_i32(run_counts_ptr + run_idx * WORD_SIZE);
+                    let type_id: i32 = load_i32(run_types_ptr + run_idx * WORD_SIZE);
+                    out = write_u32_leb(base, out, run_len);
+                    let next: i32 = write_type_id_as_wasm_value_type(base, out, type_id);
                     if next < 0 {
                         return -1;
                     };
                     out = next;
-                    ref_idx = ref_idx + 1;
+                    run_idx = run_idx + 1;
                 };
             } else {
                 out = write_u32_leb(base, out, 0);
@@ -8057,28 +8285,20 @@ fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
             out = write_u32_leb(base, out, body_size);
             if locals_count > 0 {
                 out = write_u32_leb(base, out, local_groups);
-                if local_i32_count > 0 {
-                    out = write_u32_leb(base, out, local_i32_count);
-                    out = write_byte(base, out, WASM_VALUE_TYPE_I32);
-                };
-                if local_i64_count > 0 {
-                    out = write_u32_leb(base, out, local_i64_count);
-                    out = write_byte(base, out, WASM_VALUE_TYPE_I64);
-                };
-                let mut ref_idx: i32 = 0;
+                let mut run_idx: i32 = 0;
                 loop {
-                    if ref_idx >= ref_unique_count {
+                    if run_idx >= local_groups {
                         break;
                     };
-                    let ref_count: i32 = load_i32(ref_counts_ptr + ref_idx * WORD_SIZE);
-                    let ref_type_id: i32 = load_i32(ref_types_ptr + ref_idx * WORD_SIZE);
-                    out = write_u32_leb(base, out, ref_count);
-                    let next: i32 = write_type_id_as_wasm_value_type(base, out, ref_type_id);
+                    let run_len: i32 = load_i32(run_counts_ptr + run_idx * WORD_SIZE);
+                    let type_id: i32 = load_i32(run_types_ptr + run_idx * WORD_SIZE);
+                    out = write_u32_leb(base, out, run_len);
+                    let next: i32 = write_type_id_as_wasm_value_type(base, out, type_id);
                     if next < 0 {
                         return -1;
                     };
                     out = next;
-                    ref_idx = ref_idx + 1;
+                    run_idx = run_idx + 1;
                 };
             } else {
                 out = write_u32_leb(base, out, 0);
@@ -8108,28 +8328,20 @@ fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
             out = write_u32_leb(base, out, body_size);
             if locals_count > 0 {
                 out = write_u32_leb(base, out, local_groups);
-                if local_i32_count > 0 {
-                    out = write_u32_leb(base, out, local_i32_count);
-                    out = write_byte(base, out, WASM_VALUE_TYPE_I32);
-                };
-                if local_i64_count > 0 {
-                    out = write_u32_leb(base, out, local_i64_count);
-                    out = write_byte(base, out, WASM_VALUE_TYPE_I64);
-                };
-                let mut ref_idx: i32 = 0;
+                let mut run_idx: i32 = 0;
                 loop {
-                    if ref_idx >= ref_unique_count {
+                    if run_idx >= local_groups {
                         break;
                     };
-                    let ref_count: i32 = load_i32(ref_counts_ptr + ref_idx * WORD_SIZE);
-                    let ref_type_id: i32 = load_i32(ref_types_ptr + ref_idx * WORD_SIZE);
-                    out = write_u32_leb(base, out, ref_count);
-                    let next: i32 = write_type_id_as_wasm_value_type(base, out, ref_type_id);
+                    let run_len: i32 = load_i32(run_counts_ptr + run_idx * WORD_SIZE);
+                    let type_id: i32 = load_i32(run_types_ptr + run_idx * WORD_SIZE);
+                    out = write_u32_leb(base, out, run_len);
+                    let next: i32 = write_type_id_as_wasm_value_type(base, out, type_id);
                     if next < 0 {
                         return -1;
                     };
                     out = next;
-                    ref_idx = ref_idx + 1;
+                    run_idx = run_idx + 1;
                 };
             } else {
                 out = write_u32_leb(base, out, 0);
