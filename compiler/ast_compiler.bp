@@ -2106,7 +2106,7 @@ fn scratch_types_set_count(out_ptr: i32, count: i32) {
     store_i32(scratch_types_count_ptr(out_ptr), count);
 }
 
-const AST_MAX_FUNCTIONS: i32 = 256;
+const AST_MAX_FUNCTIONS: i32 = 1024;
 
 const AST_FUNCTION_ENTRY_SIZE: i32 = 32;
 
