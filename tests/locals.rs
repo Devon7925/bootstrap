@@ -1,7 +1,7 @@
 #[path = "wasm_harness.rs"]
 mod wasm_harness;
 
-use wasm_harness::run_wasm_main;
+use wasm_harness::run_wasm_main_with_gc;
 
 #[path = "ast_compiler_helpers.rs"]
 mod ast_compiler_helpers;
@@ -21,8 +21,7 @@ fn main() -> i32 {
 "#;
 
     let wasm = compile_with_ast_compiler(source);
-    let engine = wasmi::Engine::default();
-    let result = run_wasm_main(&engine, &wasm);
+    let result = run_wasm_main_with_gc(&wasm);
     assert_eq!(result, 20);
 }
 
@@ -39,8 +38,7 @@ fn main() -> i32 {
 "#;
 
     let wasm = compile_with_ast_compiler(source);
-    let engine = wasmi::Engine::default();
-    let result = run_wasm_main(&engine, &wasm);
+    let result = run_wasm_main_with_gc(&wasm);
     assert_eq!(result, 6);
 }
 
@@ -84,7 +82,7 @@ fn main() -> i32 {
 }
 "#;
 
-    let error = try_compile_with_ast_compiler(source)
-        .expect_err("blocks must have a final expression");
+    let error =
+        try_compile_with_ast_compiler(source).expect_err("blocks must have a final expression");
     assert!(error.produced_len <= 0);
 }

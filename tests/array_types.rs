@@ -120,7 +120,10 @@ fn array_types_emit_gc_entries() {
     assert_eq!(type_count, 3, "expected one array type plus two functions");
 
     let array_tag = read_i32_leb(type_section, &mut idx);
-    assert_eq!(array_tag, -0x22, "array type should use gc composite opcode");
+    assert_eq!(
+        array_tag, -0x22,
+        "array type should use gc composite opcode"
+    );
     let element_type = read_value_type(type_section, &mut idx);
     assert_eq!(element_type, ValueType::I32, "array element should be i32");
     let mutability = type_section[idx];
@@ -133,7 +136,10 @@ fn array_types_emit_gc_entries() {
     assert_eq!(func0_params, 1, "accepts should take one parameter");
     let func0_param_type = read_value_type(type_section, &mut idx);
     match func0_param_type {
-        ValueType::Ref { nullable, heap_type } => {
+        ValueType::Ref {
+            nullable,
+            heap_type,
+        } => {
             assert!(!nullable, "array parameters should be non-null refs");
             assert_eq!(heap_type, 0, "array heap type index should be 0");
         }
@@ -151,16 +157,34 @@ fn array_types_emit_gc_entries() {
     let func1_results = read_u32_leb(type_section, &mut idx);
     assert_eq!(func1_results, 1, "main should return i32");
     let func1_result_type = read_value_type(type_section, &mut idx);
-    assert_eq!(func1_result_type, ValueType::I32, "main result should be i32");
-    assert_eq!(idx, type_section.len(), "type section should be fully consumed");
+    assert_eq!(
+        func1_result_type,
+        ValueType::I32,
+        "main result should be i32"
+    );
+    assert_eq!(
+        idx,
+        type_section.len(),
+        "type section should be fully consumed"
+    );
 
     let function_section = find_section(&wasm, 3).expect("function section");
     let mut fidx = 0usize;
     let func_decl_count = read_u32_leb(function_section, &mut fidx);
     assert_eq!(func_decl_count, 2, "expected two function declarations");
     let accepts_type_index = read_u32_leb(function_section, &mut fidx);
-    assert_eq!(accepts_type_index, 1, "first function should follow array type");
+    assert_eq!(
+        accepts_type_index, 1,
+        "first function should follow array type"
+    );
     let main_type_index = read_u32_leb(function_section, &mut fidx);
-    assert_eq!(main_type_index, 2, "second function type index should follow");
-    assert_eq!(fidx, function_section.len(), "function section fully consumed");
+    assert_eq!(
+        main_type_index, 2,
+        "second function type index should follow"
+    );
+    assert_eq!(
+        fidx,
+        function_section.len(),
+        "function section fully consumed"
+    );
 }

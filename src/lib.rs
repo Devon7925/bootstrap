@@ -3,7 +3,7 @@ pub mod error;
 use std::fmt;
 
 use crate::error::CompileError;
-use wasmi::{Engine, Linker, Memory, Module, Store, TypedFunc};
+use wasmtime::{Config, Engine, Extern, Instance, Memory, Module, Store, TypedFunc};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Target {
@@ -78,17 +78,18 @@ pub fn compile(source: &str, target: Target) -> Result<Compilation, CompileError
         )));
     }
 
-    let engine = Engine::default();
-    let module = Module::new(&engine, COMPILER_WASM)
+    let mut config = Config::new();
+    config.wasm_reference_types(true);
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+    let engine = Engine::new(&config)
+        .map_err(|err| CompileError::new(format!("failed to configure wasmtime engine: {err}")))?;
+    let module = Module::from_binary(&engine, COMPILER_WASM)
         .map_err(|err| CompileError::new(format!("failed to load stage2 module: {err}")))?;
     let mut store = Store::new(&engine, ());
-    let linker = Linker::new(&engine);
-    let instance = linker
-        .instantiate(&mut store, &module)
-        .and_then(|inst| inst.start(&mut store))
-        .map_err(|err| {
-            CompileError::new(format!("failed to instantiate stage2 compiler: {err}"))
-        })?;
+    let instance = Instance::new(&mut store, &module, &[] as &[Extern]).map_err(|err| {
+        CompileError::new(format!("failed to instantiate stage2 compiler: {err}"))
+    })?;
 
     let memory: Memory = instance
         .get_memory(&mut store, "memory")
@@ -99,11 +100,7 @@ pub fn compile(source: &str, target: Target) -> Result<Compilation, CompileError
             .get_typed_func(&mut store, "compile")
             .map_err(|_| CompileError::new("stage2 compiler missing compile export"))?;
 
-    let memory_size = memory
-        .current_pages(&store)
-        .to_bytes()
-        .ok_or_else(|| CompileError::new("stage2 memory size overflowed"))?
-        as usize;
+    let memory_size = memory.data_size(&store);
     let reserved = FUNCTIONS_BASE_OFFSET + STAGE1_MAX_FUNCTIONS * FUNCTION_ENTRY_SIZE;
     if memory_size <= reserved {
         return Err(CompileError::new(

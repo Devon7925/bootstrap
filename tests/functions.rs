@@ -1,12 +1,15 @@
 #[path = "wasm_harness.rs"]
 mod wasm_harness;
 
-use wasm_harness::{run_wasm_main, CompilerInstance, DEFAULT_OUTPUT_STRIDE};
+use wasm_harness::{CompilerInstance, DEFAULT_OUTPUT_STRIDE, run_wasm_main_with_gc};
 
 #[path = "ast_compiler_helpers.rs"]
 mod ast_compiler_helpers;
 
-use ast_compiler_helpers::{ast_compiler_source, ast_compiler_wasm, compile_with_ast_compiler, try_compile_with_ast_compiler};
+use ast_compiler_helpers::{
+    ast_compiler_source, ast_compiler_wasm, compile_with_ast_compiler,
+    try_compile_with_ast_compiler,
+};
 
 #[test]
 fn functions_can_call_other_functions() {
@@ -21,8 +24,7 @@ fn main() -> i32 {
 "#;
 
     let wasm = compile_with_ast_compiler(source);
-    let engine = wasmi::Engine::default();
-    let result = run_wasm_main(&engine, &wasm);
+    let result = run_wasm_main_with_gc(&wasm);
     assert_eq!(result, 40);
 }
 
@@ -39,8 +41,7 @@ fn main() -> i32 {
 "#;
 
     let wasm = compile_with_ast_compiler(source);
-    let engine = wasmi::Engine::default();
-    let result = run_wasm_main(&engine, &wasm);
+    let result = run_wasm_main_with_gc(&wasm);
     assert_eq!(result, 42);
 }
 
@@ -57,8 +58,7 @@ fn helper() -> i32 {
 "#;
 
     let wasm = compile_with_ast_compiler(source);
-    let engine = wasmi::Engine::default();
-    let result = run_wasm_main(&engine, &wasm);
+    let result = run_wasm_main_with_gc(&wasm);
     assert_eq!(result, 42);
 }
 
@@ -128,8 +128,7 @@ fn main() -> i32 {
 "#;
 
     let wasm = compile_with_ast_compiler(source);
-    let engine = wasmi::Engine::default();
-    let result = run_wasm_main(&engine, &wasm);
+    let result = run_wasm_main_with_gc(&wasm);
     assert_eq!(result, 42);
 }
 
@@ -189,8 +188,7 @@ fn main() -> i32 {
 "#;
 
     let wasm = compile_with_ast_compiler(source);
-    let engine = wasmi::Engine::default();
-    let result = run_wasm_main(&engine, &wasm);
+    let result = run_wasm_main_with_gc(&wasm);
     assert_eq!(result, 190);
 }
 
@@ -225,8 +223,7 @@ fn main() -> i32 {
 "#;
 
     let wasm = compile_with_ast_compiler(source);
-    let engine = wasmi::Engine::default();
-    let result = run_wasm_main(&engine, &wasm);
+    let result = run_wasm_main_with_gc(&wasm);
     assert_eq!(result, 36);
 }
 
@@ -246,8 +243,7 @@ fn main() -> i32 {
 "#;
 
     let wasm = compile_with_ast_compiler(source);
-    let engine = wasmi::Engine::default();
-    let result = run_wasm_main(&engine, &wasm);
+    let result = run_wasm_main_with_gc(&wasm);
     assert_eq!(result, 42);
 }
 
@@ -278,8 +274,7 @@ fn function_section_handles_multibyte_type_indices() {
     .unwrap();
 
     let wasm = compile_with_ast_compiler(&source);
-    let engine = wasmi::Engine::default();
-    let result = run_wasm_main(&engine, &wasm);
+    let result = run_wasm_main_with_gc(&wasm);
     assert_eq!(result, helper_count - 1);
 }
 

@@ -5,8 +5,8 @@ mod ast_compiler_helpers;
 mod wasm_harness;
 
 use ast_compiler_helpers::compile_with_ast_compiler;
-use wasm_harness::run_wasm_main;
-use wasmi::{Engine, Linker, Module, Store, TypedFunc};
+use wasm_harness::{instantiate_module, run_wasm_main_with_gc, wasmtime_engine_with_gc};
+use wasmtime::TypedFunc;
 
 #[test]
 fn bitwise_and_shifts_execute() {
@@ -28,15 +28,8 @@ fn main() -> i32 {
 
     let wasm = compile_with_ast_compiler(source);
 
-    let engine = Engine::default();
-    let module = Module::new(&engine, wasm.as_slice()).expect("failed to create module");
-    let mut store = Store::new(&engine, ());
-    let linker = Linker::new(&engine);
-    let instance = linker
-        .instantiate(&mut store, &module)
-        .expect("failed to instantiate module")
-        .start(&mut store)
-        .expect("failed to start module");
+    let engine = wasmtime_engine_with_gc();
+    let (mut store, instance) = instantiate_module(&engine, &wasm);
 
     let bit_ops: TypedFunc<(i32, i32), i32> = instance
         .get_typed_func(&mut store, "bit_ops")
@@ -80,8 +73,7 @@ fn main() -> i32 {
 "#;
 
     let wasm = compile_with_ast_compiler(source);
-    let engine = wasmi::Engine::default();
-    let result = run_wasm_main(&engine, &wasm);
+    let result = run_wasm_main_with_gc(&wasm);
 
     let expected = {
         let eval = |a: i32, b: i32, shift: i32| {

@@ -2,16 +2,16 @@
 mod ast_compiler_helpers;
 
 use ast_compiler_helpers::{
-    compile_with_ast_compiler,
-    run_wasm_main_with_gc,
-    try_compile_with_ast_compiler,
+    compile_with_ast_compiler, run_wasm_main_with_gc, try_compile_with_ast_compiler,
 };
 
 fn contains_sequence(haystack: &[u8], needle: &[u8]) -> bool {
     if needle.is_empty() {
         return true;
     }
-    haystack.windows(needle.len()).any(|window| window == needle)
+    haystack
+        .windows(needle.len())
+        .any(|window| window == needle)
 }
 
 #[test]
@@ -136,8 +136,8 @@ fn main() -> i32 {
     let mut found = false;
     for call_index in 0u8..=10 {
         let pattern = [
-            0x41, 0x01, 0x41, 0x02, 0x41, 0x03, 0x41, 0x04, 0xfb, 0x08, 0x00, 0x04,
-            0x10, call_index,
+            0x41, 0x01, 0x41, 0x02, 0x41, 0x03, 0x41, 0x04, 0xfb, 0x08, 0x00, 0x04, 0x10,
+            call_index,
         ];
         if contains_sequence(&wasm, &pattern) {
             found = true;
