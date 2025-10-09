@@ -148,6 +148,10 @@ fn expect_keyword_fn(base: i32, len: i32, offset: i32) -> i32 {
     expect_keyword_literal(base, len, offset, "fn\0\0\0\0\0\0\0\0")
 }
 
+fn expect_keyword_type(base: i32, len: i32, offset: i32) -> i32 {
+    expect_keyword_literal(base, len, offset, "type\0\0\0\0\0\0")
+}
+
 fn expect_keyword_if(base: i32, len: i32, offset: i32) -> i32 {
     expect_keyword_literal(base, len, offset, "if\0\0\0\0\0\0\0\0")
 }
@@ -4956,6 +4960,10 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     let name_start: i32 = load_i32(name_start_ptr);
     let name_len: i32 = load_i32(name_len_ptr);
 
+    if find_type_definition_entry_index(base, ast_base, name_start, name_len) >= 0 {
+        return -1;
+    };
+
     let constants_count: i32 = ast_constants_count(ast_base);
     let mut const_idx: i32 = 0;
     loop {
@@ -5161,6 +5169,104 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     cursor
 }
 
+fn parse_type_declaration(
+    base: i32,
+    len: i32,
+    cursor: i32,
+    ast_base: i32,
+    func_count: i32,
+) -> i32 {
+    let mut idx: i32 = skip_whitespace(base, len, cursor);
+    let mut type_cursor: i32 = expect_keyword_type(base, len, idx);
+    if type_cursor < 0 {
+        return -2;
+    };
+    if type_cursor >= len {
+        return -1;
+    };
+    let after_keyword: i32 = load_u8(base + type_cursor);
+    if !is_whitespace(after_keyword) {
+        return -1;
+    };
+    idx = skip_whitespace(base, len, type_cursor);
+
+    let temp_base: i32 = ast_temp_base(ast_base);
+    let ident_start_ptr: i32 = temp_base;
+    let ident_len_ptr: i32 = ident_start_ptr + 4;
+    let type_ptr: i32 = ident_len_ptr + 4;
+
+    idx = parse_identifier(base, len, idx, ident_start_ptr, ident_len_ptr);
+    if idx < 0 {
+        return -1;
+    };
+    let name_start: i32 = load_i32(ident_start_ptr);
+    let name_len: i32 = load_i32(ident_len_ptr);
+
+    if find_type_definition_entry_index(base, ast_base, name_start, name_len) >= 0 {
+        return -1;
+    };
+    if find_constant_entry_index(base, ast_base, name_start, name_len) >= 0 {
+        return -1;
+    };
+    let mut func_idx: i32 = 0;
+    loop {
+        if func_idx >= func_count {
+            break;
+        };
+        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, func_idx);
+        let func_name_ptr: i32 = load_i32(entry_ptr);
+        let func_name_len: i32 = load_i32(entry_ptr + 4);
+        if func_name_len == name_len {
+            let mut match_idx: i32 = 0;
+            let mut matches: bool = true;
+            loop {
+                if match_idx >= name_len {
+                    break;
+                };
+                let func_byte: i32 = load_u8(func_name_ptr + match_idx);
+                let type_byte: i32 = load_u8(base + name_start + match_idx);
+                if func_byte != type_byte {
+                    matches = false;
+                    break;
+                };
+                match_idx = match_idx + 1;
+            };
+            if matches {
+                return -1;
+            };
+        };
+        func_idx = func_idx + 1;
+    };
+
+    idx = skip_whitespace(base, len, idx);
+    idx = expect_char(base, len, idx, '=');
+    if idx < 0 {
+        return -1;
+    };
+    idx = skip_whitespace(base, len, idx);
+    idx = parse_type(base, len, idx, ast_base, type_ptr);
+    if idx < 0 {
+        return -1;
+    };
+    let target_type_id: i32 = load_i32(type_ptr);
+    if target_type_id < 0 {
+        return -1;
+    };
+
+    idx = skip_whitespace(base, len, idx);
+    idx = expect_char(base, len, idx, ';');
+    if idx < 0 {
+        return -1;
+    };
+    idx = skip_whitespace(base, len, idx);
+
+    if ast_type_definition_append(ast_base, name_start, name_len, target_type_id) < 0 {
+        return -1;
+    };
+
+    idx
+}
+
 fn parse_constant_declaration(
     base: i32,
     len: i32,
@@ -5206,6 +5312,10 @@ fn parse_constant_declaration(
     };
     let name_start: i32 = load_i32(ident_start_ptr);
     let name_len: i32 = load_i32(ident_len_ptr);
+
+    if find_type_definition_entry_index(base, ast_base, name_start, name_len) >= 0 {
+        return -1;
+    };
 
     if find_constant_entry_index(base, ast_base, name_start, name_len) >= 0 {
         return -1;
@@ -5316,6 +5426,14 @@ fn parse_program(base: i32, len: i32, ast_base: i32) -> i32 {
     loop {
         if cursor >= len {
             break;
+        };
+        let type_cursor: i32 = parse_type_declaration(base, len, cursor, ast_base, count);
+        if type_cursor >= 0 {
+            cursor = skip_whitespace(base, len, type_cursor);
+            continue;
+        };
+        if type_cursor == -1 {
+            return -1;
         };
         let const_cursor: i32 = parse_constant_declaration(base, len, cursor, ast_base, count);
         if const_cursor >= 0 {
