@@ -61,13 +61,68 @@ test("non literal constant initializers are evaluated", async () => {
   expect(result).toBe(4);
 });
 
-test("function calls in constant initializers are rejected", async () => {
+test("non-const function calls in constant initializers are rejected", async () => {
   const failure = await expectCompileFailure(`
     const VALUE: i32 = helper();
 
     fn helper() -> i32 {
         42
     }
+
+    fn main() -> i32 {
+        VALUE
+    }
+  `);
+  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+});
+
+test("const functions can be used in constant initializers", async () => {
+  const wasm = await compileWithAstCompiler(`
+    const fn add(a: i32, b: i32) -> i32 {
+        a + b
+    }
+
+    const VALUE: i32 = add(40, 2);
+
+    fn main() -> i32 {
+        VALUE
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(42);
+});
+
+test("const functions can call other const functions in constant initializers", async () => {
+  const wasm = await compileWithAstCompiler(`
+    const fn base() -> i32 {
+        40
+    }
+
+    const fn plus_two(value: i32) -> i32 {
+        value + 2
+    }
+
+    const VALUE: i32 = plus_two(base());
+
+    fn main() -> i32 {
+        VALUE
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(42);
+});
+
+test("const functions cannot call non-const functions in constant evaluation", async () => {
+  const failure = await expectCompileFailure(`
+    const fn call_helper() -> i32 {
+        helper()
+    }
+
+    fn helper() -> i32 {
+        7
+    }
+
+    const VALUE: i32 = call_helper();
 
     fn main() -> i32 {
         VALUE
