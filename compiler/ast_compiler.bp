@@ -2081,6 +2081,7 @@ fn ast_reset(ast_base: i32) {
     store_i32(ast_call_data_len_ptr(ast_base), 0);
     ast_constants_reset(ast_base);
     ast_array_types_reset(ast_base);
+    ast_type_definitions_reset(ast_base);
     ast_expr_reset(ast_base);
 }
 
@@ -2238,6 +2239,106 @@ fn array_type_cached_id(ast_base: i32, index: i32) -> i32 {
 
 fn array_type_set_cached_id(ast_base: i32, index: i32, type_id: i32) {
     store_i32(ast_array_type_entry_ptr(ast_base, index) + AST_ARRAY_TYPE_CACHE_OFFSET, type_id);
+}
+
+const AST_TYPE_DEFINITIONS_CAPACITY: i32 = 256;
+
+const AST_TYPE_DEFINITION_ENTRY_SIZE: i32 = 12;
+
+const AST_TYPE_DEFINITION_NAME_START_OFFSET: i32 = 0;
+
+const AST_TYPE_DEFINITION_NAME_LEN_OFFSET: i32 = 4;
+
+const AST_TYPE_DEFINITION_TARGET_TYPE_OFFSET: i32 = 8;
+
+fn ast_type_definitions_section_size() -> i32 {
+    WORD_SIZE + AST_TYPE_DEFINITIONS_CAPACITY * AST_TYPE_DEFINITION_ENTRY_SIZE
+}
+
+fn ast_type_definitions_count_ptr(ast_base: i32) -> i32 {
+    ast_array_types_count_ptr(ast_base) + ast_array_types_section_size()
+}
+
+fn ast_type_definition_entry_ptr(ast_base: i32, index: i32) -> i32 {
+    ast_type_definitions_count_ptr(ast_base) + WORD_SIZE + index * AST_TYPE_DEFINITION_ENTRY_SIZE
+}
+
+fn ast_type_definitions_count(ast_base: i32) -> i32 {
+    load_i32(ast_type_definitions_count_ptr(ast_base))
+}
+
+fn ast_type_definitions_reset(ast_base: i32) {
+    store_i32(ast_type_definitions_count_ptr(ast_base), 0);
+}
+
+fn ast_type_definition_name_start(ast_base: i32, index: i32) -> i32 {
+    load_i32(ast_type_definition_entry_ptr(ast_base, index) + AST_TYPE_DEFINITION_NAME_START_OFFSET)
+}
+
+fn ast_type_definition_name_len(ast_base: i32, index: i32) -> i32 {
+    load_i32(ast_type_definition_entry_ptr(ast_base, index) + AST_TYPE_DEFINITION_NAME_LEN_OFFSET)
+}
+
+fn ast_type_definition_target_type(ast_base: i32, index: i32) -> i32 {
+    load_i32(ast_type_definition_entry_ptr(ast_base, index) + AST_TYPE_DEFINITION_TARGET_TYPE_OFFSET)
+}
+
+fn ast_type_definition_append(
+    ast_base: i32,
+    name_start: i32,
+    name_len: i32,
+    target_type_id: i32,
+) -> i32 {
+    let count_ptr: i32 = ast_type_definitions_count_ptr(ast_base);
+    let count: i32 = load_i32(count_ptr);
+    if count >= AST_TYPE_DEFINITIONS_CAPACITY {
+        return -1;
+    };
+    let entry_ptr: i32 = ast_type_definition_entry_ptr(ast_base, count);
+    store_i32(entry_ptr + AST_TYPE_DEFINITION_NAME_START_OFFSET, name_start);
+    store_i32(entry_ptr + AST_TYPE_DEFINITION_NAME_LEN_OFFSET, name_len);
+    store_i32(entry_ptr + AST_TYPE_DEFINITION_TARGET_TYPE_OFFSET, target_type_id);
+    store_i32(count_ptr, count + 1);
+    count
+}
+
+fn find_type_definition_entry_index(
+    base: i32,
+    ast_base: i32,
+    ident_start: i32,
+    ident_len: i32,
+) -> i32 {
+    let count: i32 = ast_type_definitions_count(ast_base);
+    if count <= 0 {
+        return -1;
+    };
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= count {
+            break;
+        };
+        let entry_ptr: i32 = ast_type_definition_entry_ptr(ast_base, idx);
+        let def_start: i32 = load_i32(entry_ptr + AST_TYPE_DEFINITION_NAME_START_OFFSET);
+        let def_len: i32 = load_i32(entry_ptr + AST_TYPE_DEFINITION_NAME_LEN_OFFSET);
+        if identifiers_match_source(base, def_start, def_len, ident_start, ident_len) {
+            return idx;
+        };
+        idx = idx + 1;
+    };
+    -1
+}
+
+fn find_type_definition_target_type(
+    base: i32,
+    ast_base: i32,
+    ident_start: i32,
+    ident_len: i32,
+) -> i32 {
+    let index: i32 = find_type_definition_entry_index(base, ast_base, ident_start, ident_len);
+    if index < 0 {
+        return -1;
+    };
+    ast_type_definition_target_type(ast_base, index)
 }
 
 fn array_type_id(index: i32) -> i32 {
