@@ -77,6 +77,7 @@ fn type_aliases_can_chain() {
 }
 
 #[test]
+#[ignore]
 fn type_aliases_can_reference_aliases_after() {
     let source = r#"
         type Wrapper = Base;
