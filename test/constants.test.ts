@@ -112,6 +112,26 @@ test("const functions can call other const functions in constant initializers", 
   expect(result).toBe(42);
 });
 
+test("const functions can call other const functions", async () => {
+  const wasm = await compileWithAstCompiler(`
+    const fn base() -> i32 {
+        40
+    }
+
+    const fn plus_two() -> i32 {
+        base() + 2
+    }
+
+    const VALUE: i32 = plus_two();
+
+    fn main() -> i32 {
+        VALUE
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(42);
+});
+
 test("const functions cannot call non-const functions in constant evaluation", async () => {
   const failure = await expectCompileFailure(`
     const fn call_helper() -> i32 {
