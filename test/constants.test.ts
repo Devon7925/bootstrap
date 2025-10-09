@@ -92,7 +92,7 @@ test("const functions can be used in constant initializers", async () => {
   expect(result).toBe(42);
 });
 
-test("const functions can call other const functions in constant initializers", async () => {
+test("const functions can use const function results as parameters", async () => {
   const wasm = await compileWithAstCompiler(`
     const fn base() -> i32 {
         40
@@ -103,6 +103,23 @@ test("const functions can call other const functions in constant initializers", 
     }
 
     const VALUE: i32 = plus_two(base());
+
+    fn main() -> i32 {
+        VALUE
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(42);
+});
+
+test("const functions can use let bindings", async () => {
+  const wasm = await compileWithAstCompiler(`
+    const fn base() -> i32 {
+        let x = 40;
+        x + 2
+    }
+
+    const VALUE: i32 = base();
 
     fn main() -> i32 {
         VALUE
@@ -132,7 +149,7 @@ test("const functions can call other const functions", async () => {
   expect(result).toBe(42);
 });
 
-test("const functions cannot call non-const functions in constant evaluation", async () => {
+test("const functions cannot call non-const functions", async () => {
   const failure = await expectCompileFailure(`
     const fn call_helper() -> i32 {
         helper()
@@ -142,10 +159,8 @@ test("const functions cannot call non-const functions in constant evaluation", a
         7
     }
 
-    const VALUE: i32 = call_helper();
-
     fn main() -> i32 {
-        VALUE
+        0
     }
   `);
   expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
