@@ -49,9 +49,25 @@ test("duplicate constants are rejected", async () => {
   expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
 });
 
-test("non literal constant initializers are rejected", async () => {
+test("non literal constant initializers are evaluated", async () => {
+  const wasm = await compileWithAstCompiler(`
+    const VALUE: i32 = (1 + 2) * 3 - 5;
+
+    fn main() -> i32 {
+        VALUE
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(4);
+});
+
+test("function calls in constant initializers are rejected", async () => {
   const failure = await expectCompileFailure(`
-    const VALUE: i32 = 1 + 2;
+    const VALUE: i32 = helper();
+
+    fn helper() -> i32 {
+        42
+    }
 
     fn main() -> i32 {
         VALUE
