@@ -8,7 +8,7 @@ use bootstrap::FUNCTION_ENTRY_SIZE;
 use bootstrap::FUNCTIONS_BASE_OFFSET;
 use bootstrap::STAGE1_MAX_FUNCTIONS;
 use bootstrap::{Target, compile};
-use wasmi::{Engine, Linker, Memory, Module, Store, TypedFunc};
+use wasmtime::{Config, Engine, Extern, Instance, Memory, Module, Store, TypedFunc};
 
 const COMPILER_SOURCE_PATH: &str = "compiler/ast_compiler.bp";
 const COMPILER_OUTPUT_PATH: &str = "compiler.wasm";
@@ -20,14 +20,17 @@ fn build_stage2_wasm() -> Result<(), String> {
     let compilation = compile(&source, Target::Wasm).map_err(|err| err.to_string())?;
     let stage1_wasm = compilation.to_wasm().map_err(|err| err.to_string())?;
 
-    let engine = Engine::default();
-    let module = Module::new(&engine, stage1_wasm.as_slice())
+    let mut config = Config::new();
+    config.wasm_reference_types(true);
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+
+    let engine = Engine::new(&config)
+        .map_err(|err| format!("failed to configure wasmtime engine: {err}"))?;
+    let module = Module::from_binary(&engine, stage1_wasm.as_slice())
         .map_err(|err| format!("failed to create stage1 module: {err}"))?;
     let mut store = Store::new(&engine, ());
-    let linker = Linker::new(&engine);
-    let instance = linker
-        .instantiate(&mut store, &module)
-        .and_then(|inst| inst.start(&mut store))
+    let instance = Instance::new(&mut store, &module, &[] as &[Extern])
         .map_err(|err| format!("failed to instantiate stage1 module: {err}"))?;
 
     let memory: Memory = instance
@@ -38,11 +41,7 @@ fn build_stage2_wasm() -> Result<(), String> {
             .get_typed_func(&mut store, "compile")
             .map_err(|err| format!("failed to find stage1 compile function: {err}"))?;
 
-    let memory_size = memory
-        .current_pages(&store)
-        .to_bytes()
-        .ok_or_else(|| "failed to compute stage1 memory size".to_string())?
-        as usize;
+    let memory_size = memory.data_size(&store);
     let reserved = FUNCTIONS_BASE_OFFSET + STAGE1_MAX_FUNCTIONS * FUNCTION_ENTRY_SIZE;
     if memory_size <= reserved {
         return Err("stage1 memory is smaller than reserved layout".into());
@@ -57,7 +56,11 @@ fn build_stage2_wasm() -> Result<(), String> {
     let produced_len = compile
         .call(
             &mut store,
-            (COMPILER_INPUT_PTR as i32, source.len() as i32, output_ptr as i32),
+            (
+                COMPILER_INPUT_PTR as i32,
+                source.len() as i32,
+                output_ptr as i32,
+            ),
         )
         .map_err(|err| format!("stage1 compile trapped: {err}"))?;
     if produced_len <= 0 {

@@ -2,9 +2,7 @@
 mod ast_compiler_helpers;
 
 use ast_compiler_helpers::{
-    compile_with_ast_compiler,
-    run_wasm_main_with_gc,
-    try_compile_with_ast_compiler,
+    compile_with_ast_compiler, run_wasm_main_with_gc, try_compile_with_ast_compiler,
 };
 
 #[test]
@@ -21,7 +19,10 @@ fn main() -> i32 {
 
     let wasm = compile_with_ast_compiler(source);
     let result = run_wasm_main_with_gc(&wasm);
-    assert_eq!(result, 7, "expected array indexing to return the selected element");
+    assert_eq!(
+        result, 7,
+        "expected array indexing to return the selected element"
+    );
 }
 
 #[test]
@@ -33,8 +34,8 @@ fn main() -> i32 {
 }
 "#;
 
-    let error = try_compile_with_ast_compiler(source)
-        .expect_err("array indices must be 32-bit integers");
+    let error =
+        try_compile_with_ast_compiler(source).expect_err("array indices must be 32-bit integers");
     assert!(error.produced_len <= 0);
 }
 

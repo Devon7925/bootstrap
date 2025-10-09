@@ -1,8 +1,12 @@
 #[path = "ast_compiler_helpers.rs"]
 mod ast_compiler_helpers;
 
+#[path = "wasm_harness.rs"]
+mod wasm_harness;
+
 use ast_compiler_helpers::{compile_with_ast_compiler, try_compile_with_ast_compiler};
-use wasmi::{Engine, Linker, Memory, Module, Store, TypedFunc};
+use wasm_harness::{instantiate_module, wasmtime_engine_with_gc};
+use wasmtime::{Memory, TypedFunc};
 
 #[test]
 fn integer_width_programs_execute() {
@@ -104,15 +108,8 @@ fn main() -> i32 {
 
     let wasm = compile_with_ast_compiler(source);
 
-    let engine = Engine::default();
-    let module = Module::new(&engine, wasm.as_slice()).expect("failed to create module");
-    let mut store = Store::new(&engine, ());
-    let linker = Linker::new(&engine);
-    let instance = linker
-        .instantiate(&mut store, &module)
-        .expect("failed to instantiate module")
-        .start(&mut store)
-        .expect("failed to start module");
+    let engine = wasmtime_engine_with_gc();
+    let (mut store, instance) = instantiate_module(&engine, &wasm);
 
     let memory: Memory = instance
         .get_memory(&mut store, "memory")

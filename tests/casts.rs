@@ -5,7 +5,7 @@ mod ast_compiler_helpers;
 mod wasm_harness;
 
 use ast_compiler_helpers::compile_with_ast_compiler;
-use wasm_harness::run_wasm_main;
+use wasm_harness::run_wasm_main_with_gc;
 
 #[test]
 fn integer_casts_execute() {
@@ -98,7 +98,6 @@ fn main() -> i32 {
 "#;
 
     let wasm = compile_with_ast_compiler(source);
-    let engine = wasmi::Engine::default();
-    let result = run_wasm_main(&engine, &wasm);
+    let result = run_wasm_main_with_gc(&wasm);
     assert_eq!(result, 9);
 }

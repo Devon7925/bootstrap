@@ -417,230 +417,150 @@ const INTRINSIC_KIND_STORE_U16: i32 = 5;
 
 const INTRINSIC_KIND_LEN: i32 = 6;
 
-fn is_identifier_load_u8(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
-    if ident_len != 7 {
+fn identifier_matches_keyword(
+    base: i32,
+    source_len: i32,
+    start: i32,
+    ident_len: i32,
+    keyword: [u8; 10],
+    keyword_len: i32,
+) -> bool {
+    if start < 0 || start + ident_len > source_len {
         return false;
     };
-    if start < 0 || start + ident_len > len {
+    let keyword_capacity: i32 = len(keyword);
+    if keyword_len < 0 {
         return false;
     };
-    if load_u8(base + start) != 'l' {
+    if keyword_len > keyword_capacity {
         return false;
     };
-    if load_u8(base + start + 1) != 'o' {
+    if ident_len != keyword_len {
         return false;
     };
-    if load_u8(base + start + 2) != 'a' {
-        return false;
-    };
-    if load_u8(base + start + 3) != 'd' {
-        return false;
-    };
-    if load_u8(base + start + 4) != '_' {
-        return false;
-    };
-    if load_u8(base + start + 5) != 'u' {
-        return false;
-    };
-    if load_u8(base + start + 6) != '8' {
-        return false;
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= keyword_len {
+            break;
+        };
+        if load_u8(base + start + idx) != keyword[idx] as i32 {
+            return false;
+        };
+        idx = idx + 1;
     };
     true
+}
+
+fn is_identifier_load_u8(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
+    let keyword: [u8; 10] = [
+        'l' as u8,
+        'o' as u8,
+        'a' as u8,
+        'd' as u8,
+        '_' as u8,
+        'u' as u8,
+        '8' as u8,
+        0 as u8,
+        0 as u8,
+        0 as u8,
+    ];
+    identifier_matches_keyword(base, len, start, ident_len, keyword, 7)
 }
 
 fn is_identifier_store_u8(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
-    if ident_len != 8 {
-        return false;
-    };
-    if start < 0 || start + ident_len > len {
-        return false;
-    };
-    if load_u8(base + start) != 's' {
-        return false;
-    };
-    if load_u8(base + start + 1) != 't' {
-        return false;
-    };
-    if load_u8(base + start + 2) != 'o' {
-        return false;
-    };
-    if load_u8(base + start + 3) != 'r' {
-        return false;
-    };
-    if load_u8(base + start + 4) != 'e' {
-        return false;
-    };
-    if load_u8(base + start + 5) != '_' {
-        return false;
-    };
-    if load_u8(base + start + 6) != 'u' {
-        return false;
-    };
-    if load_u8(base + start + 7) != '8' {
-        return false;
-    };
-    true
+    let keyword: [u8; 10] = [
+        's' as u8,
+        't' as u8,
+        'o' as u8,
+        'r' as u8,
+        'e' as u8,
+        '_' as u8,
+        'u' as u8,
+        '8' as u8,
+        0 as u8,
+        0 as u8,
+    ];
+    identifier_matches_keyword(base, len, start, ident_len, keyword, 8)
 }
 
 fn is_identifier_load_i32(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
-    if ident_len != 8 {
-        return false;
-    };
-    if start < 0 || start + ident_len > len {
-        return false;
-    };
-    if load_u8(base + start) != 'l' {
-        return false;
-    };
-    if load_u8(base + start + 1) != 'o' {
-        return false;
-    };
-    if load_u8(base + start + 2) != 'a' {
-        return false;
-    };
-    if load_u8(base + start + 3) != 'd' {
-        return false;
-    };
-    if load_u8(base + start + 4) != '_' {
-        return false;
-    };
-    if load_u8(base + start + 5) != 'i' {
-        return false;
-    };
-    if load_u8(base + start + 6) != '3' {
-        return false;
-    };
-    if load_u8(base + start + 7) != '2' {
-        return false;
-    };
-    true
+    let keyword: [u8; 10] = [
+        'l' as u8,
+        'o' as u8,
+        'a' as u8,
+        'd' as u8,
+        '_' as u8,
+        'i' as u8,
+        '3' as u8,
+        '2' as u8,
+        0 as u8,
+        0 as u8,
+    ];
+    identifier_matches_keyword(base, len, start, ident_len, keyword, 8)
 }
 
 fn is_identifier_store_i32(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
-    if ident_len != 9 {
-        return false;
-    };
-    if start < 0 || start + ident_len > len {
-        return false;
-    };
-    if load_u8(base + start) != 's' {
-        return false;
-    };
-    if load_u8(base + start + 1) != 't' {
-        return false;
-    };
-    if load_u8(base + start + 2) != 'o' {
-        return false;
-    };
-    if load_u8(base + start + 3) != 'r' {
-        return false;
-    };
-    if load_u8(base + start + 4) != 'e' {
-        return false;
-    };
-    if load_u8(base + start + 5) != '_' {
-        return false;
-    };
-    if load_u8(base + start + 6) != 'i' {
-        return false;
-    };
-    if load_u8(base + start + 7) != '3' {
-        return false;
-    };
-    if load_u8(base + start + 8) != '2' {
-        return false;
-    };
-    true
+    let keyword: [u8; 10] = [
+        's' as u8,
+        't' as u8,
+        'o' as u8,
+        'r' as u8,
+        'e' as u8,
+        '_' as u8,
+        'i' as u8,
+        '3' as u8,
+        '2' as u8,
+        0 as u8,
+    ];
+    identifier_matches_keyword(base, len, start, ident_len, keyword, 9)
 }
 
 fn is_identifier_load_u16(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
-    if ident_len != 8 {
-        return false;
-    };
-    if start < 0 || start + ident_len > len {
-        return false;
-    };
-    if load_u8(base + start) != 'l' {
-        return false;
-    };
-    if load_u8(base + start + 1) != 'o' {
-        return false;
-    };
-    if load_u8(base + start + 2) != 'a' {
-        return false;
-    };
-    if load_u8(base + start + 3) != 'd' {
-        return false;
-    };
-    if load_u8(base + start + 4) != '_' {
-        return false;
-    };
-    if load_u8(base + start + 5) != 'u' {
-        return false;
-    };
-    if load_u8(base + start + 6) != '1' {
-        return false;
-    };
-    if load_u8(base + start + 7) != '6' {
-        return false;
-    };
-    true
+    let keyword: [u8; 10] = [
+        'l' as u8,
+        'o' as u8,
+        'a' as u8,
+        'd' as u8,
+        '_' as u8,
+        'u' as u8,
+        '1' as u8,
+        '6' as u8,
+        0 as u8,
+        0 as u8,
+    ];
+    identifier_matches_keyword(base, len, start, ident_len, keyword, 8)
 }
 
 fn is_identifier_store_u16(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
-    if ident_len != 9 {
-        return false;
-    };
-    if start < 0 || start + ident_len > len {
-        return false;
-    };
-    if load_u8(base + start) != 's' {
-        return false;
-    };
-    if load_u8(base + start + 1) != 't' {
-        return false;
-    };
-    if load_u8(base + start + 2) != 'o' {
-        return false;
-    };
-    if load_u8(base + start + 3) != 'r' {
-        return false;
-    };
-    if load_u8(base + start + 4) != 'e' {
-        return false;
-    };
-    if load_u8(base + start + 5) != '_' {
-        return false;
-    };
-    if load_u8(base + start + 6) != 'u' {
-        return false;
-    };
-    if load_u8(base + start + 7) != '1' {
-        return false;
-    };
-    if load_u8(base + start + 8) != '6' {
-        return false;
-    };
-    true
+    let keyword: [u8; 10] = [
+        's' as u8,
+        't' as u8,
+        'o' as u8,
+        'r' as u8,
+        'e' as u8,
+        '_' as u8,
+        'u' as u8,
+        '1' as u8,
+        '6' as u8,
+        0 as u8,
+    ];
+    identifier_matches_keyword(base, len, start, ident_len, keyword, 9)
 }
 
 fn is_identifier_len(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
-    if ident_len != 3 {
-        return false;
-    };
-    if start < 0 || start + ident_len > len {
-        return false;
-    };
-    if load_u8(base + start) != 'l' {
-        return false;
-    };
-    if load_u8(base + start + 1) != 'e' {
-        return false;
-    };
-    if load_u8(base + start + 2) != 'n' {
-        return false;
-    };
-    true
+    let keyword: [u8; 10] = [
+        'l' as u8,
+        'e' as u8,
+        'n' as u8,
+        0 as u8,
+        0 as u8,
+        0 as u8,
+        0 as u8,
+        0 as u8,
+        0 as u8,
+        0 as u8,
+    ];
+    identifier_matches_keyword(base, len, start, ident_len, keyword, 3)
 }
 
 fn identify_intrinsic(base: i32, len: i32, start: i32, ident_len: i32) -> i32 {
@@ -1713,6 +1633,8 @@ const BUILTIN_TYPE_ID_U32: i32 = 7;
 
 const BUILTIN_TYPE_ID_U64: i32 = 8;
 
+const BUILTIN_INTEGER_VARIANT_COUNT: i32 = 4;
+
 const SCRATCH_TYPES_CAPACITY: i32 = 2048;
 
 const BUILTIN_TYPE_ID_MAX: i32 = BUILTIN_TYPE_ID_U64;
@@ -1743,33 +1665,89 @@ fn type_id_is_bool(type_id: i32) -> bool {
     type_id == BUILTIN_TYPE_ID_BOOL
 }
 
+fn integer_type_variant_index(type_id: i32) -> i32 {
+    let signed: [i32; 4] = [
+        BUILTIN_TYPE_ID_I8,
+        BUILTIN_TYPE_ID_I16,
+        BUILTIN_TYPE_ID_I32,
+        BUILTIN_TYPE_ID_I64,
+    ];
+    let unsigned: [i32; 4] = [
+        BUILTIN_TYPE_ID_U8,
+        BUILTIN_TYPE_ID_U16,
+        BUILTIN_TYPE_ID_U32,
+        BUILTIN_TYPE_ID_U64,
+    ];
+    let count: i32 = len(signed);
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= count {
+            break;
+        };
+        if type_id == signed[idx] {
+            return idx;
+        };
+        if type_id == unsigned[idx] {
+            return idx;
+        };
+        idx = idx + 1;
+    };
+    -1
+}
+
 fn type_id_is_integer(type_id: i32) -> bool {
-    type_id == BUILTIN_TYPE_ID_I8
-        || type_id == BUILTIN_TYPE_ID_I16
-        || type_id == BUILTIN_TYPE_ID_I32
-        || type_id == BUILTIN_TYPE_ID_I64
-        || type_id == BUILTIN_TYPE_ID_U8
-        || type_id == BUILTIN_TYPE_ID_U16
-        || type_id == BUILTIN_TYPE_ID_U32
-        || type_id == BUILTIN_TYPE_ID_U64
+    integer_type_variant_index(type_id) >= 0
 }
 
 fn type_id_is_signed_integer(type_id: i32) -> bool {
-    type_id == BUILTIN_TYPE_ID_I8
-        || type_id == BUILTIN_TYPE_ID_I16
-        || type_id == BUILTIN_TYPE_ID_I32
-        || type_id == BUILTIN_TYPE_ID_I64
+    let signed: [i32; 4] = [
+        BUILTIN_TYPE_ID_I8,
+        BUILTIN_TYPE_ID_I16,
+        BUILTIN_TYPE_ID_I32,
+        BUILTIN_TYPE_ID_I64,
+    ];
+    let count: i32 = len(signed);
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= count {
+            break;
+        };
+        if type_id == signed[idx] {
+            return true;
+        };
+        idx = idx + 1;
+    };
+    false
 }
 
 fn type_id_is_unsigned_integer(type_id: i32) -> bool {
-    type_id == BUILTIN_TYPE_ID_U8
-        || type_id == BUILTIN_TYPE_ID_U16
-        || type_id == BUILTIN_TYPE_ID_U32
-        || type_id == BUILTIN_TYPE_ID_U64
+    let unsigned: [i32; 4] = [
+        BUILTIN_TYPE_ID_U8,
+        BUILTIN_TYPE_ID_U16,
+        BUILTIN_TYPE_ID_U32,
+        BUILTIN_TYPE_ID_U64,
+    ];
+    let count: i32 = len(unsigned);
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= count {
+            break;
+        };
+        if type_id == unsigned[idx] {
+            return true;
+        };
+        idx = idx + 1;
+    };
+    false
 }
 
 fn type_id_is_64_bit_integer(type_id: i32) -> bool {
-    type_id == BUILTIN_TYPE_ID_I64 || type_id == BUILTIN_TYPE_ID_U64
+    let variant_index: i32 = integer_type_variant_index(type_id);
+    if variant_index < 0 {
+        return false;
+    };
+    let widths: [i32; 4] = [8, 16, 32, 64];
+    widths[variant_index] == 64
 }
 
 const WASM_VALUE_TYPE_I32: i32 = 127;
@@ -1825,19 +1803,12 @@ fn write_type_id_as_wasm_value_type(base: i32, offset: i32, type_id: i32) -> i32
 }
 
 fn integer_type_bit_width(type_id: i32) -> i32 {
-    if type_id == BUILTIN_TYPE_ID_I8 || type_id == BUILTIN_TYPE_ID_U8 {
-        return 8;
+    let variant_index: i32 = integer_type_variant_index(type_id);
+    if variant_index < 0 {
+        return -1;
     };
-    if type_id == BUILTIN_TYPE_ID_I16 || type_id == BUILTIN_TYPE_ID_U16 {
-        return 16;
-    };
-    if type_id == BUILTIN_TYPE_ID_I32 || type_id == BUILTIN_TYPE_ID_U32 {
-        return 32;
-    };
-    if type_id == BUILTIN_TYPE_ID_I64 || type_id == BUILTIN_TYPE_ID_U64 {
-        return 64;
-    };
-    -1
+    let widths: [i32; 4] = [8, 16, 32, 64];
+    widths[variant_index]
 }
 
 fn mask_i32_code_size(width: i32) -> i32 {
@@ -2026,51 +1997,47 @@ fn emit_cast_value(base: i32, offset: i32, source_type: i32, target_type: i32) -
     out
 }
 
-const BUILTIN_INTEGER_VARIANT_COUNT: i32 = 4;
-
 fn builtin_integer_variant_width(index: i32) -> i32 {
-    if index == 0 {
-        return 8;
+    if index < 0 {
+        return -1;
     };
-    if index == 1 {
-        return 16;
+    if index >= BUILTIN_INTEGER_VARIANT_COUNT {
+        return -1;
     };
-    if index == 2 {
-        return 32;
-    };
-    64
+    let widths: [i32; 4] = [8, 16, 32, 64];
+    widths[index]
 }
 
 fn builtin_signed_integer_type_id_for_variant(index: i32) -> i32 {
-    if index == 0 {
-        return BUILTIN_TYPE_ID_I8;
+    if index < 0 {
+        return -1;
     };
-    if index == 1 {
-        return BUILTIN_TYPE_ID_I16;
+    if index >= BUILTIN_INTEGER_VARIANT_COUNT {
+        return -1;
     };
-    if index == 2 {
-        return BUILTIN_TYPE_ID_I32;
-    };
-    if index == 3 {
-        return BUILTIN_TYPE_ID_I64;
-    };
-    -1
+    let signed: [i32; 4] = [
+        BUILTIN_TYPE_ID_I8,
+        BUILTIN_TYPE_ID_I16,
+        BUILTIN_TYPE_ID_I32,
+        BUILTIN_TYPE_ID_I64,
+    ];
+    signed[index]
 }
 
 fn builtin_unsigned_integer_type_id_for_variant(index: i32) -> i32 {
-    if index == 0 {
-        return BUILTIN_TYPE_ID_U8;
+    if index < 0 {
+        return -1;
     };
-    if index == 1 {
-        return BUILTIN_TYPE_ID_U16;
+    if index >= BUILTIN_INTEGER_VARIANT_COUNT {
+        return -1;
     };
-    if index == 2 {
-        return BUILTIN_TYPE_ID_U32;
-    };
-    if index == 3 {
-        return BUILTIN_TYPE_ID_U64;
-    };
-    -1
+    let unsigned: [i32; 4] = [
+        BUILTIN_TYPE_ID_U8,
+        BUILTIN_TYPE_ID_U16,
+        BUILTIN_TYPE_ID_U32,
+        BUILTIN_TYPE_ID_U64,
+    ];
+    unsigned[index]
 }
 
 fn builtin_integer_type_keyword_to_id(base: i32, start: i32, ident_len: i32) -> i32 {
@@ -2181,17 +2148,23 @@ fn parse_type(base: i32, len: i32, offset: i32, ast_base: i32, out_type_ptr: i32
         };
         return next;
     };
-    if ident_len == 4 {
-        let b: i32 = load_u8(base + offset);
-        let o0: i32 = load_u8(base + offset + 1);
-        let o1: i32 = load_u8(base + offset + 2);
-        let l: i32 = load_u8(base + offset + 3);
-        if b == 'b' && o0 == 'o' && o1 == 'o' && l == 'l' {
-            if out_type_ptr >= 0 {
-                store_i32(out_type_ptr, BUILTIN_TYPE_ID_BOOL);
-            };
-            return next;
+    let bool_keyword: [u8; 10] = [
+        'b' as u8,
+        'o' as u8,
+        'o' as u8,
+        'l' as u8,
+        0 as u8,
+        0 as u8,
+        0 as u8,
+        0 as u8,
+        0 as u8,
+        0 as u8,
+    ];
+    if identifier_matches_keyword(base, len, offset, ident_len, bool_keyword, 4) {
+        if out_type_ptr >= 0 {
+            store_i32(out_type_ptr, BUILTIN_TYPE_ID_BOOL);
         };
+        return next;
     };
     -1
 }

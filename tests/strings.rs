@@ -7,7 +7,9 @@ fn contains_sequence(haystack: &[u8], needle: &[u8]) -> bool {
     if needle.is_empty() {
         return true;
     }
-    haystack.windows(needle.len()).any(|window| window == needle)
+    haystack
+        .windows(needle.len())
+        .any(|window| window == needle)
 }
 
 #[test]
@@ -25,8 +27,8 @@ fn main() -> i32 {
     let wasm = compile_with_ast_compiler(source);
 
     let pattern = [
-        0x41, 0xe8, 0x00, 0x41, 0xe5, 0x00, 0x41, 0xec, 0x00, 0x41, 0xec, 0x00, 0x41, 0xef,
-        0x00, 0xfb, 0x08, 0x00, 0x05,
+        0x41, 0xe8, 0x00, 0x41, 0xe5, 0x00, 0x41, 0xec, 0x00, 0x41, 0xec, 0x00, 0x41, 0xef, 0x00,
+        0xfb, 0x08, 0x00, 0x05,
     ];
     assert!(
         contains_sequence(&wasm, &pattern),
@@ -48,7 +50,9 @@ fn main() -> i32 {
 
     let wasm = compile_with_ast_compiler(source);
 
-    let pattern = [0x41, 0x0a, 0x41, 0x09, 0x41, 0xdc, 0x00, 0x41, 0x22, 0xfb, 0x08, 0x00, 0x04];
+    let pattern = [
+        0x41, 0x0a, 0x41, 0x09, 0x41, 0xdc, 0x00, 0x41, 0x22, 0xfb, 0x08, 0x00, 0x04,
+    ];
     assert!(
         contains_sequence(&wasm, &pattern),
         "expected wasm to contain escaped bytes in order",
@@ -130,5 +134,8 @@ fn main() -> i32 {
 
     let wasm = compile_with_ast_compiler(source);
     let result = run_wasm_main_with_gc(&wasm);
-    assert_eq!(result, 5, "expected every index to match its character literal");
+    assert_eq!(
+        result, 5,
+        "expected every index to match its character literal"
+    );
 }

@@ -5,8 +5,7 @@ mod ast_compiler_helpers;
 mod wasm_harness;
 
 use ast_compiler_helpers::{compile_with_ast_compiler, try_compile_with_ast_compiler};
-use wasm_harness::run_wasm_main;
-use wasmi::{Engine, Linker, Module, Store, TypedFunc};
+use wasm_harness::run_wasm_main_with_gc;
 
 #[test]
 fn loops_and_break_execute() {
@@ -39,23 +38,7 @@ fn main() -> i32 {
 "#;
 
     let wasm = compile_with_ast_compiler(source);
-
-    let engine = Engine::default();
-    let mut wasm_reader = wasm.as_slice();
-    let module = Module::new(&engine, &mut wasm_reader).expect("failed to create module");
-    let mut store = Store::new(&engine, ());
-    let linker = Linker::new(&engine);
-    let instance = linker
-        .instantiate(&mut store, &module)
-        .expect("failed to instantiate module")
-        .start(&mut store)
-        .expect("failed to start module");
-
-    let main: TypedFunc<(), i32> = instance
-        .get_typed_func(&mut store, "main")
-        .expect("expected exported main");
-
-    let result = main.call(&mut store, ()).expect("failed to execute main");
+    let result = run_wasm_main_with_gc(&wasm);
 
     assert_eq!(result, 10);
 }
@@ -102,23 +85,7 @@ fn main() -> i32 {
 "#;
 
     let wasm = compile_with_ast_compiler(source);
-
-    let engine = Engine::default();
-    let mut wasm_reader = wasm.as_slice();
-    let module = Module::new(&engine, &mut wasm_reader).expect("failed to create module");
-    let mut store = Store::new(&engine, ());
-    let linker = Linker::new(&engine);
-    let instance = linker
-        .instantiate(&mut store, &module)
-        .expect("failed to instantiate module")
-        .start(&mut store)
-        .expect("failed to start module");
-
-    let main: TypedFunc<(), i32> = instance
-        .get_typed_func(&mut store, "main")
-        .expect("expected exported main");
-
-    let result = main.call(&mut store, ()).expect("failed to execute main");
+    let result = run_wasm_main_with_gc(&wasm);
 
     assert_eq!(result, 24);
 }
@@ -150,23 +117,7 @@ fn main() -> i32 {
 "#;
 
     let wasm = compile_with_ast_compiler(source);
-
-    let engine = Engine::default();
-    let mut wasm_reader = wasm.as_slice();
-    let module = Module::new(&engine, &mut wasm_reader).expect("failed to create module");
-    let mut store = Store::new(&engine, ());
-    let linker = Linker::new(&engine);
-    let instance = linker
-        .instantiate(&mut store, &module)
-        .expect("failed to instantiate module")
-        .start(&mut store)
-        .expect("failed to start module");
-
-    let main: TypedFunc<(), i32> = instance
-        .get_typed_func(&mut store, "main")
-        .expect("expected exported main");
-
-    let result = main.call(&mut store, ()).expect("failed to execute main");
+    let result = run_wasm_main_with_gc(&wasm);
     assert_eq!(result, 2);
 }
 
@@ -188,23 +139,7 @@ fn main() -> i32 {
 }
 "#;
     let wasm = compile_with_ast_compiler(source);
-
-    let engine = Engine::default();
-    let mut wasm_reader = wasm.as_slice();
-    let module = Module::new(&engine, &mut wasm_reader).expect("failed to create module");
-    let mut store = Store::new(&engine, ());
-    let linker = Linker::new(&engine);
-    let instance = linker
-        .instantiate(&mut store, &module)
-        .expect("failed to instantiate module")
-        .start(&mut store)
-        .expect("failed to start module");
-
-    let main: TypedFunc<(), i32> = instance
-        .get_typed_func(&mut store, "main")
-        .expect("expected exported main");
-
-    let result = main.call(&mut store, ()).expect("failed to execute main");
+    let result = run_wasm_main_with_gc(&wasm);
     assert_eq!(result, 5);
 }
 
@@ -229,23 +164,7 @@ fn main() -> i32 {
 "#;
 
     let wasm = compile_with_ast_compiler(source);
-
-    let engine = Engine::default();
-    let mut wasm_reader = wasm.as_slice();
-    let module = Module::new(&engine, &mut wasm_reader).expect("failed to create module");
-    let mut store = Store::new(&engine, ());
-    let linker = Linker::new(&engine);
-    let instance = linker
-        .instantiate(&mut store, &module)
-        .expect("failed to instantiate module")
-        .start(&mut store)
-        .expect("failed to start module");
-
-    let main: TypedFunc<(), i32> = instance
-        .get_typed_func(&mut store, "main")
-        .expect("expected exported main");
-
-    let result = main.call(&mut store, ()).expect("failed to execute main");
+    let result = run_wasm_main_with_gc(&wasm);
     assert_eq!(result, 2099);
 }
 
@@ -272,23 +191,7 @@ fn main() -> i32 {
 "#;
 
     let wasm = compile_with_ast_compiler(source);
-
-    let engine = Engine::default();
-    let mut wasm_reader = wasm.as_slice();
-    let module = Module::new(&engine, &mut wasm_reader).expect("failed to create module");
-    let mut store = Store::new(&engine, ());
-    let linker = Linker::new(&engine);
-    let instance = linker
-        .instantiate(&mut store, &module)
-        .expect("failed to instantiate module")
-        .start(&mut store)
-        .expect("failed to start module");
-
-    let main: TypedFunc<(), i32> = instance
-        .get_typed_func(&mut store, "main")
-        .expect("expected exported main");
-
-    let result = main.call(&mut store, ()).expect("failed to execute main");
+    let result = run_wasm_main_with_gc(&wasm);
 
     assert_eq!(result, 4);
 }
@@ -338,8 +241,7 @@ fn main() -> i32 {
 "#;
 
     let wasm = compile_with_ast_compiler(source);
-    let engine = wasmi::Engine::default();
-    let result = run_wasm_main(&engine, &wasm);
+    let result = run_wasm_main_with_gc(&wasm);
     assert_eq!(result, 10);
 }
 
@@ -367,8 +269,7 @@ fn main() -> i32 {
 "#;
 
     let wasm = compile_with_ast_compiler(source);
-    let engine = wasmi::Engine::default();
-    let result = run_wasm_main(&engine, &wasm);
+    let result = run_wasm_main_with_gc(&wasm);
     assert_eq!(result, 3);
 }
 
@@ -392,8 +293,7 @@ fn main() -> i32 {
 "#;
 
     let wasm = compile_with_ast_compiler(source);
-    let engine = wasmi::Engine::default();
-    let result = run_wasm_main(&engine, &wasm);
+    let result = run_wasm_main_with_gc(&wasm);
     assert_eq!(result, 1);
 }
 
@@ -412,8 +312,7 @@ fn main() -> i32 {
 "#;
 
     let wasm = compile_with_ast_compiler(source);
-    let engine = wasmi::Engine::default();
-    let result = run_wasm_main(&engine, &wasm);
+    let result = run_wasm_main_with_gc(&wasm);
     assert_eq!(result, 42);
 }
 
@@ -465,8 +364,7 @@ fn main() -> i32 {
 "#;
 
     let wasm = compile_with_ast_compiler(source);
-    let engine = wasmi::Engine::default();
-    let result = run_wasm_main(&engine, &wasm);
+    let result = run_wasm_main_with_gc(&wasm);
     assert_eq!(result, 14);
 }
 
@@ -487,8 +385,7 @@ fn main() -> i32 {
 "#;
 
     let wasm = compile_with_ast_compiler(source);
-    let engine = wasmi::Engine::default();
-    let result = run_wasm_main(&engine, &wasm);
+    let result = run_wasm_main_with_gc(&wasm);
     assert_eq!(result, 10);
 }
 
@@ -501,8 +398,8 @@ fn main() -> i32 {
 }
 "#;
 
-    let error = try_compile_with_ast_compiler(source)
-        .expect_err("break outside loop should be rejected");
+    let error =
+        try_compile_with_ast_compiler(source).expect_err("break outside loop should be rejected");
     assert!(error.produced_len <= 0);
 }
 
@@ -519,8 +416,7 @@ fn main() -> i32 {
 "#;
 
     let wasm = compile_with_ast_compiler(source);
-    let engine = wasmi::Engine::default();
-    let result = run_wasm_main(&engine, &wasm);
+    let result = run_wasm_main_with_gc(&wasm);
     assert_eq!(result, 42);
 }
 
@@ -541,8 +437,7 @@ fn main() -> i32 {
 "#;
 
     let wasm = compile_with_ast_compiler(source);
-    let engine = wasmi::Engine::default();
-    let result = run_wasm_main(&engine, &wasm);
+    let result = run_wasm_main_with_gc(&wasm);
     assert_eq!(result, 20);
 }
 
@@ -571,8 +466,7 @@ fn main() -> i32 {
 "#;
 
     let wasm = compile_with_ast_compiler(source);
-    let engine = wasmi::Engine::default();
-    let result = run_wasm_main(&engine, &wasm);
+    let result = run_wasm_main_with_gc(&wasm);
     assert_eq!(result, 23);
 }
 
@@ -595,7 +489,6 @@ fn main() -> i32 {
 "#;
 
     let wasm = compile_with_ast_compiler(source);
-    let engine = wasmi::Engine::default();
-    let result = run_wasm_main(&engine, &wasm);
+    let result = run_wasm_main_with_gc(&wasm);
     assert_eq!(result, 321);
 }

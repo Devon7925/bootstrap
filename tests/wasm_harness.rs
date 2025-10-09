@@ -1,25 +1,19 @@
 #![allow(dead_code)]
 
-use wasmi::{Engine, Linker, Memory, Module, Store, TypedFunc};
 use wasmtime::{
-    Config as WasmtimeConfig,
-    Engine as WasmtimeEngine,
-    Extern as WasmtimeExtern,
-    Instance as WasmtimeInstance,
-    Memory as WasmtimeMemory,
-    Module as WasmtimeModule,
-    Store as WasmtimeStore,
-    TypedFunc as WasmtimeTypedFunc,
+    Config as WasmtimeConfig, Engine as WasmtimeEngine, Extern as WasmtimeExtern,
+    Instance as WasmtimeInstance, Memory as WasmtimeMemory, Module as WasmtimeModule,
+    Store as WasmtimeStore, TypedFunc as WasmtimeTypedFunc,
 };
 
 pub const DEFAULT_INPUT_STRIDE: usize = 256;
 pub const DEFAULT_OUTPUT_STRIDE: i32 = 4096;
 
 pub struct CompilerInstance {
-    engine: Engine,
-    store: Store<()>,
-    memory: Memory,
-    compile: TypedFunc<(i32, i32, i32), i32>,
+    engine: WasmtimeEngine,
+    store: WasmtimeStore<()>,
+    memory: WasmtimeMemory,
+    compile: WasmtimeTypedFunc<(i32, i32, i32), i32>,
 }
 
 const INSTR_OFFSET_PTR_OFFSET: usize = 4096;
@@ -47,19 +41,16 @@ pub struct TypeEntry {
 
 impl CompilerInstance {
     pub fn new(wasm: &[u8]) -> Self {
-        let engine = Engine::default();
+        let engine = wasmtime_engine_with_gc();
         Self::from_engine(engine, wasm)
     }
 
-    fn from_engine(engine: Engine, wasm: &[u8]) -> Self {
-        let module = Module::new(&engine, wasm).expect("failed to create module");
-        let mut store = Store::new(&engine, ());
-        let linker = Linker::new(&engine);
-        let instance = linker
-            .instantiate(&mut store, &module)
-            .expect("failed to instantiate module")
-            .start(&mut store)
-            .expect("failed to start module");
+    fn from_engine(engine: WasmtimeEngine, wasm: &[u8]) -> Self {
+        let module = WasmtimeModule::from_binary(&engine, wasm)
+            .expect("failed to create compiler module with wasmtime");
+        let mut store = WasmtimeStore::new(&engine, ());
+        let instance = WasmtimeInstance::new(&mut store, &module, &[] as &[WasmtimeExtern])
+            .expect("failed to instantiate compiler module");
         let memory = instance
             .get_memory(&mut store, "memory")
             .expect("compiler module must export memory");
@@ -75,15 +66,12 @@ impl CompilerInstance {
         }
     }
 
-    pub fn engine(&self) -> &Engine {
+    pub fn engine(&self) -> &WasmtimeEngine {
         &self.engine
     }
 
     pub fn memory_size_bytes(&self) -> usize {
-        self.memory
-            .current_pages(&self.store)
-            .to_bytes()
-            .expect("memory pages to bytes") as usize
+        self.memory.data_size(&self.store)
     }
 
     pub fn compile_at(
@@ -183,6 +171,14 @@ impl CompilerInstance {
     }
 }
 
+pub fn wasmtime_engine_with_gc() -> WasmtimeEngine {
+    let mut config = WasmtimeConfig::new();
+    config.wasm_reference_types(true);
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+    WasmtimeEngine::new(&config).expect("failed to create wasmtime engine")
+}
+
 impl CompilerInstance {
     fn read_failure(&mut self, output_ptr: i32, produced_len: i32) -> CompileFailure {
         let mut func_buf = [0u8; 4];
@@ -220,28 +216,19 @@ impl CompilerInstance {
     }
 }
 
-pub fn run_wasm_main(engine: &Engine, wasm: &[u8]) -> i32 {
-    let module = Module::new(engine, wasm).expect("failed to create target module");
-    let mut store = Store::new(engine, ());
-    let linker = Linker::new(engine);
-    let instance = linker
-        .instantiate(&mut store, &module)
-        .expect("failed to instantiate target module")
-        .start(&mut store)
-        .expect("failed to start target module");
+pub fn run_wasm_main(engine: &WasmtimeEngine, wasm: &[u8]) -> i32 {
+    let module = WasmtimeModule::from_binary(engine, wasm)
+        .expect("failed to create target module with wasmtime");
+    let mut store = WasmtimeStore::new(engine, ());
+    let instance = WasmtimeInstance::new(&mut store, &module, &[] as &[WasmtimeExtern])
+        .expect("failed to instantiate target module with wasmtime");
 
-    let memory: Memory = instance
+    let memory: WasmtimeMemory = instance
         .get_memory(&mut store, "memory")
         .expect("compiled module should export memory");
-    assert!(
-        memory
-            .current_pages(&store)
-            .to_bytes()
-            .expect("memory pages to bytes")
-            >= 1_048_576
-    );
+    assert!(memory.data_size(&store) >= 1_048_576);
 
-    let main_fn: TypedFunc<(), i32> = instance
+    let main_fn: WasmtimeTypedFunc<(), i32> = instance
         .get_typed_func(&mut store, "main")
         .expect("compiled module should export main");
     main_fn
@@ -249,13 +236,20 @@ pub fn run_wasm_main(engine: &Engine, wasm: &[u8]) -> i32 {
         .expect("failed to execute compiled main")
 }
 
-pub fn run_wasm_main_with_gc(wasm: &[u8]) -> i32 {
-    let mut config = WasmtimeConfig::new();
-    config.wasm_reference_types(true);
-    config.wasm_function_references(true);
-    config.wasm_gc(true);
+pub fn instantiate_module(
+    engine: &WasmtimeEngine,
+    wasm: &[u8],
+) -> (WasmtimeStore<()>, WasmtimeInstance) {
+    let module =
+        WasmtimeModule::from_binary(engine, wasm).expect("failed to create module with wasmtime");
+    let mut store = WasmtimeStore::new(engine, ());
+    let instance = WasmtimeInstance::new(&mut store, &module, &[] as &[WasmtimeExtern])
+        .expect("failed to instantiate module with wasmtime");
+    (store, instance)
+}
 
-    let engine = WasmtimeEngine::new(&config).expect("failed to create wasmtime engine");
+pub fn run_wasm_main_with_gc(wasm: &[u8]) -> i32 {
+    let engine = wasmtime_engine_with_gc();
     let module = WasmtimeModule::from_binary(&engine, wasm)
         .expect("failed to create target module with wasmtime");
     let mut store = WasmtimeStore::new(&engine, ());

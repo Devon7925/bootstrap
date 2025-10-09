@@ -1,8 +1,12 @@
 #[path = "ast_compiler_helpers.rs"]
 mod ast_compiler_helpers;
 
+#[path = "wasm_harness.rs"]
+mod wasm_harness;
+
 use ast_compiler_helpers::{compile_with_ast_compiler, try_compile_with_ast_compiler};
-use wasmi::{Engine, Linker, Module, Store, TypedFunc};
+use wasm_harness::{instantiate_module, wasmtime_engine_with_gc};
+use wasmtime::TypedFunc;
 
 #[test]
 fn character_literals_execute() {
@@ -29,16 +33,8 @@ fn main() -> i32 {
 
     let wasm = compile_with_ast_compiler(source);
 
-    let engine = Engine::default();
-    let mut wasm_reader = wasm.as_slice();
-    let module = Module::new(&engine, &mut wasm_reader).expect("failed to create module");
-    let mut store = Store::new(&engine, ());
-    let linker = Linker::new(&engine);
-    let instance = linker
-        .instantiate(&mut store, &module)
-        .expect("failed to instantiate module")
-        .start(&mut store)
-        .expect("failed to start module");
+    let engine = wasmtime_engine_with_gc();
+    let (mut store, instance) = instantiate_module(&engine, &wasm);
 
     let char_math: TypedFunc<(), i32> = instance
         .get_typed_func(&mut store, "char_math")
@@ -55,14 +51,10 @@ fn main() -> i32 {
         .expect("failed to execute char_math");
     assert_eq!(char_math_result, 146);
 
-    let slash_result = slash
-        .call(&mut store, ())
-        .expect("failed to execute slash");
+    let slash_result = slash.call(&mut store, ()).expect("failed to execute slash");
     assert_eq!(slash_result, 92);
 
-    let main_result = main
-        .call(&mut store, ())
-        .expect("failed to execute main");
+    let main_result = main.call(&mut store, ()).expect("failed to execute main");
     assert_eq!(main_result, 119);
 }
 

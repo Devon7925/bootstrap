@@ -1,8 +1,12 @@
 #[path = "ast_compiler_helpers.rs"]
 mod ast_compiler_helpers;
 
+#[path = "wasm_harness.rs"]
+mod wasm_harness;
+
 use ast_compiler_helpers::compile_with_ast_compiler;
-use wasmi::{Engine, Linker, Memory, Module, Store, TypedFunc};
+use wasm_harness::{instantiate_module, wasmtime_engine_with_gc};
+use wasmtime::{Memory, TypedFunc};
 
 #[test]
 fn exports_multi_page_memory() {
@@ -18,23 +22,13 @@ fn main() -> i32 {
 
     let wasm = compile_with_ast_compiler(source);
 
-    let engine = Engine::default();
-    let module = Module::new(&engine, wasm.as_slice()).expect("failed to build module");
-    let mut store = Store::new(&engine, ());
-    let linker = Linker::new(&engine);
-    let instance = linker
-        .instantiate(&mut store, &module)
-        .expect("failed to instantiate")
-        .start(&mut store)
-        .expect("failed to start module");
+    let engine = wasmtime_engine_with_gc();
+    let (mut store, instance) = instantiate_module(&engine, &wasm);
 
     let memory: Memory = instance
         .get_memory(&mut store, "memory")
         .expect("expected exported linear memory");
-    let memory_bytes = memory
-        .current_pages(&store)
-        .to_bytes()
-        .expect("memory size to fit into usize");
+    let memory_bytes = memory.data_size(&store);
     assert!(memory_bytes >= 1048576);
 
     let slice_len: TypedFunc<(i32, i32), i32> = instance
@@ -65,15 +59,8 @@ fn main() -> i32 {
 
     let wasm = compile_with_ast_compiler(source);
 
-    let engine = Engine::default();
-    let module = Module::new(&engine, wasm.as_slice()).expect("failed to build module");
-    let mut store = Store::new(&engine, ());
-    let linker = Linker::new(&engine);
-    let instance = linker
-        .instantiate(&mut store, &module)
-        .expect("failed to instantiate")
-        .start(&mut store)
-        .expect("failed to start module");
+    let engine = wasmtime_engine_with_gc();
+    let (mut store, instance) = instantiate_module(&engine, &wasm);
 
     let memory: Memory = instance
         .get_memory(&mut store, "memory")
@@ -110,15 +97,8 @@ fn main() -> i32 {
 
     let wasm = compile_with_ast_compiler(source);
 
-    let engine = Engine::default();
-    let module = Module::new(&engine, wasm.as_slice()).expect("failed to build module");
-    let mut store = Store::new(&engine, ());
-    let linker = Linker::new(&engine);
-    let instance = linker
-        .instantiate(&mut store, &module)
-        .expect("failed to instantiate")
-        .start(&mut store)
-        .expect("failed to start module");
+    let engine = wasmtime_engine_with_gc();
+    let (mut store, instance) = instantiate_module(&engine, &wasm);
 
     let memory: Memory = instance
         .get_memory(&mut store, "memory")
@@ -158,15 +138,8 @@ fn main() -> i32 {
 
     let wasm = compile_with_ast_compiler(source);
 
-    let engine = Engine::default();
-    let module = Module::new(&engine, wasm.as_slice()).expect("failed to build module");
-    let mut store = Store::new(&engine, ());
-    let linker = Linker::new(&engine);
-    let instance = linker
-        .instantiate(&mut store, &module)
-        .expect("failed to instantiate")
-        .start(&mut store)
-        .expect("failed to start module");
+    let engine = wasmtime_engine_with_gc();
+    let (mut store, instance) = instantiate_module(&engine, &wasm);
 
     let roundtrip_i32: TypedFunc<(i32, i32), i32> = instance
         .get_typed_func(&mut store, "roundtrip_i32")
@@ -192,15 +165,8 @@ fn main() -> i32 {
 
     let wasm = compile_with_ast_compiler(source);
 
-    let engine = Engine::default();
-    let module = Module::new(&engine, wasm.as_slice()).expect("failed to build module");
-    let mut store = Store::new(&engine, ());
-    let linker = Linker::new(&engine);
-    let instance = linker
-        .instantiate(&mut store, &module)
-        .expect("failed to instantiate")
-        .start(&mut store)
-        .expect("failed to start module");
+    let engine = wasmtime_engine_with_gc();
+    let (mut store, instance) = instantiate_module(&engine, &wasm);
 
     let memory: Memory = instance
         .get_memory(&mut store, "memory")
