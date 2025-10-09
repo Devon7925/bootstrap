@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2021",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "types": ["bun-types"],
+    "allowJs": false,
+    "resolveJsonModule": true
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"],
+  "exclude": ["node_modules"]
+}
