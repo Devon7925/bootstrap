@@ -145,232 +145,43 @@ fn is_identifier_continue(byte: i32) -> bool {
 }
 
 fn expect_keyword_fn(base: i32, len: i32, offset: i32) -> i32 {
-    if offset + 1 >= len {
-        return -1;
-    };
-    let first: i32 = load_u8(base + offset);
-    let second: i32 = load_u8(base + offset + 1);
-    if first != 'f' || second != 'n' {
-        return -1;
-    };
-    let next: i32 = offset + 2;
-    if next < len {
-        let after: i32 = load_u8(base + next);
-        if is_identifier_continue(after) {
-            return -1;
-        };
-    };
-    next
+    expect_keyword_literal(base, len, offset, "fn\0\0\0\0\0\0\0\0")
 }
 
 fn expect_keyword_if(base: i32, len: i32, offset: i32) -> i32 {
-    if offset + 1 >= len {
-        return -1;
-    };
-    let first: i32 = load_u8(base + offset);
-    let second: i32 = load_u8(base + offset + 1);
-    if first != 'i' || second != 'f' {
-        return -1;
-    };
-    let next: i32 = offset + 2;
-    if next < len {
-        let after: i32 = load_u8(base + next);
-        if is_identifier_continue(after) {
-            return -1;
-        };
-    };
-    next
+    expect_keyword_literal(base, len, offset, "if\0\0\0\0\0\0\0\0")
 }
 
 fn expect_keyword_as(base: i32, len: i32, offset: i32) -> i32 {
-    if offset + 1 >= len {
-        return -1;
-    };
-    let first: i32 = load_u8(base + offset);
-    let second: i32 = load_u8(base + offset + 1);
-    if first != 'a' || second != 's' {
-        return -1;
-    };
-    let next: i32 = offset + 2;
-    if next < len {
-        let after: i32 = load_u8(base + next);
-        if is_identifier_continue(after) {
-            return -1;
-        };
-    };
-    next
+    expect_keyword_literal(base, len, offset, "as\0\0\0\0\0\0\0\0")
 }
 
 fn expect_keyword_true(base: i32, len: i32, offset: i32) -> i32 {
-    if offset + 4 > len {
-        return -1;
-    };
-    let t: i32 = load_u8(base + offset);
-    let r: i32 = load_u8(base + offset + 1);
-    let u: i32 = load_u8(base + offset + 2);
-    let e: i32 = load_u8(base + offset + 3);
-    if t != 't' || r != 'r' || u != 'u' || e != 'e' {
-        return -1;
-    };
-    let next: i32 = offset + 4;
-    if next < len {
-        let after: i32 = load_u8(base + next);
-        if is_identifier_continue(after) {
-            return -1;
-        };
-    };
-    next
+    expect_keyword_literal(base, len, offset, "true\0\0\0\0\0\0")
 }
 
 fn expect_keyword_false(base: i32, len: i32, offset: i32) -> i32 {
-    if offset + 5 > len {
-        return -1;
-    };
-    let f: i32 = load_u8(base + offset);
-    let a: i32 = load_u8(base + offset + 1);
-    let l: i32 = load_u8(base + offset + 2);
-    let s: i32 = load_u8(base + offset + 3);
-    let e: i32 = load_u8(base + offset + 4);
-    if f != 'f' || a != 'a' || l != 'l' || s != 's' || e != 'e' {
-        return -1;
-    };
-    let next: i32 = offset + 5;
-    if next < len {
-        let after: i32 = load_u8(base + next);
-        if is_identifier_continue(after) {
-            return -1;
-        };
-    };
-    next
+    expect_keyword_literal(base, len, offset, "false\0\0\0\0\0")
 }
 
 fn expect_keyword_else(base: i32, len: i32, offset: i32) -> i32 {
-    if offset + 3 >= len {
-        return -1;
-    };
-    let e: i32 = load_u8(base + offset);
-    let l: i32 = load_u8(base + offset + 1);
-    let s: i32 = load_u8(base + offset + 2);
-    let e2: i32 = load_u8(base + offset + 3);
-    if e != 'e' || l != 'l' || s != 's' || e2 != 'e' {
-        return -1;
-    };
-    let next: i32 = offset + 4;
-    if next < len {
-        let after: i32 = load_u8(base + next);
-        if is_identifier_continue(after) {
-            return -1;
-        };
-    };
-    next
+    expect_keyword_literal(base, len, offset, "else\0\0\0\0\0\0")
 }
 
 fn expect_keyword_loop(base: i32, len: i32, offset: i32) -> i32 {
-    if offset + 3 >= len {
-        return -1;
-    };
-    let l: i32 = load_u8(base + offset);
-    let o1: i32 = load_u8(base + offset + 1);
-    let o2: i32 = load_u8(base + offset + 2);
-    let p: i32 = load_u8(base + offset + 3);
-    if l != 'l' || o1 != 'o' || o2 != 'o' || p != 'p' {
-        return -1;
-    };
-    let next: i32 = offset + 4;
-    if next < len {
-        let after: i32 = load_u8(base + next);
-        if is_identifier_continue(after) {
-            return -1;
-        };
-    };
-    next
+    expect_keyword_literal(base, len, offset, "loop\0\0\0\0\0\0")
 }
 
 fn expect_keyword_break(base: i32, len: i32, offset: i32) -> i32 {
-    if offset + 4 >= len {
-        return -1;
-    };
-    let b: i32 = load_u8(base + offset);
-    let r: i32 = load_u8(base + offset + 1);
-    let e: i32 = load_u8(base + offset + 2);
-    let a: i32 = load_u8(base + offset + 3);
-    let k: i32 = load_u8(base + offset + 4);
-    if b != 'b' || r != 'r' || e != 'e' || a != 'a' || k != 'k' {
-        return -1;
-    };
-    let next: i32 = offset + 5;
-    if next < len {
-        let after: i32 = load_u8(base + next);
-        if is_identifier_continue(after) {
-            return -1;
-        };
-    };
-    next
+    expect_keyword_literal(base, len, offset, "break\0\0\0\0\0")
 }
 
 fn expect_keyword_continue(base: i32, len: i32, offset: i32) -> i32 {
-    let mut idx: i32 = expect_char(base, len, offset, 'c');
-    if idx < 0 {
-        return -1;
-    };
-    idx = expect_char(base, len, idx, 'o');
-    if idx < 0 {
-        return -1;
-    };
-    idx = expect_char(base, len, idx, 'n');
-    if idx < 0 {
-        return -1;
-    };
-    idx = expect_char(base, len, idx, 't');
-    if idx < 0 {
-        return -1;
-    };
-    idx = expect_char(base, len, idx, 'i');
-    if idx < 0 {
-        return -1;
-    };
-    idx = expect_char(base, len, idx, 'n');
-    if idx < 0 {
-        return -1;
-    };
-    idx = expect_char(base, len, idx, 'u');
-    if idx < 0 {
-        return -1;
-    };
-    idx = expect_char(base, len, idx, 'e');
-    if idx < 0 {
-        return -1;
-    };
-    if idx < len {
-        let next_byte: i32 = load_u8(base + idx);
-        if is_identifier_continue(next_byte) {
-            return -1;
-        };
-    };
-    idx
+    expect_keyword_literal(base, len, offset, "continue\0\0")
 }
 
 fn expect_keyword_return(base: i32, len: i32, offset: i32) -> i32 {
-    if offset + 5 >= len {
-        return -1;
-    };
-    let r: i32 = load_u8(base + offset);
-    let e: i32 = load_u8(base + offset + 1);
-    let t: i32 = load_u8(base + offset + 2);
-    let u: i32 = load_u8(base + offset + 3);
-    let r2: i32 = load_u8(base + offset + 4);
-    let n: i32 = load_u8(base + offset + 5);
-    if r != 'r' || e != 'e' || t != 't' || u != 'u' || r2 != 'r' || n != 'n' {
-        return -1;
-    };
-    let next: i32 = offset + 6;
-    if next < len {
-        let after: i32 = load_u8(base + next);
-        if is_identifier_continue(after) {
-            return -1;
-        };
-    };
-    next
+    expect_keyword_literal(base, len, offset, "return\0\0\0\0")
 }
 
 fn parse_identifier(base: i32, len: i32, offset: i32, out_start_ptr: i32, out_len_ptr: i32) -> i32 {
@@ -417,22 +228,34 @@ const INTRINSIC_KIND_STORE_U16: i32 = 5;
 
 const INTRINSIC_KIND_LEN: i32 = 6;
 
+fn padded_string_len(keyword: [u8; 10]) -> i32 {
+    let capacity: i32 = len(keyword);
+    let mut length: i32 = 0;
+    loop {
+        if length >= capacity {
+            break;
+        };
+        let value: i32 = keyword[length] as i32;
+        if value == 0 {
+            break;
+        };
+        length = length + 1;
+    };
+    length
+}
+
 fn identifier_matches_keyword(
     base: i32,
     source_len: i32,
     start: i32,
     ident_len: i32,
     keyword: [u8; 10],
-    keyword_len: i32,
 ) -> bool {
     if start < 0 || start + ident_len > source_len {
         return false;
     };
-    let keyword_capacity: i32 = len(keyword);
-    if keyword_len < 0 {
-        return false;
-    };
-    if keyword_len > keyword_capacity {
+    let keyword_len: i32 = padded_string_len(keyword);
+    if keyword_len <= 0 {
         return false;
     };
     if ident_len != keyword_len {
@@ -451,139 +274,63 @@ fn identifier_matches_keyword(
     true
 }
 
-fn is_identifier_load_u8(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
-    let keyword: [u8; 10] = [
-        'l' as u8,
-        'o' as u8,
-        'a' as u8,
-        'd' as u8,
-        '_' as u8,
-        'u' as u8,
-        '8' as u8,
-        0 as u8,
-        0 as u8,
-        0 as u8,
-    ];
-    identifier_matches_keyword(base, len, start, ident_len, keyword, 7)
-}
-
-fn is_identifier_store_u8(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
-    let keyword: [u8; 10] = [
-        's' as u8,
-        't' as u8,
-        'o' as u8,
-        'r' as u8,
-        'e' as u8,
-        '_' as u8,
-        'u' as u8,
-        '8' as u8,
-        0 as u8,
-        0 as u8,
-    ];
-    identifier_matches_keyword(base, len, start, ident_len, keyword, 8)
-}
-
-fn is_identifier_load_i32(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
-    let keyword: [u8; 10] = [
-        'l' as u8,
-        'o' as u8,
-        'a' as u8,
-        'd' as u8,
-        '_' as u8,
-        'i' as u8,
-        '3' as u8,
-        '2' as u8,
-        0 as u8,
-        0 as u8,
-    ];
-    identifier_matches_keyword(base, len, start, ident_len, keyword, 8)
-}
-
-fn is_identifier_store_i32(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
-    let keyword: [u8; 10] = [
-        's' as u8,
-        't' as u8,
-        'o' as u8,
-        'r' as u8,
-        'e' as u8,
-        '_' as u8,
-        'i' as u8,
-        '3' as u8,
-        '2' as u8,
-        0 as u8,
-    ];
-    identifier_matches_keyword(base, len, start, ident_len, keyword, 9)
-}
-
-fn is_identifier_load_u16(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
-    let keyword: [u8; 10] = [
-        'l' as u8,
-        'o' as u8,
-        'a' as u8,
-        'd' as u8,
-        '_' as u8,
-        'u' as u8,
-        '1' as u8,
-        '6' as u8,
-        0 as u8,
-        0 as u8,
-    ];
-    identifier_matches_keyword(base, len, start, ident_len, keyword, 8)
-}
-
-fn is_identifier_store_u16(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
-    let keyword: [u8; 10] = [
-        's' as u8,
-        't' as u8,
-        'o' as u8,
-        'r' as u8,
-        'e' as u8,
-        '_' as u8,
-        'u' as u8,
-        '1' as u8,
-        '6' as u8,
-        0 as u8,
-    ];
-    identifier_matches_keyword(base, len, start, ident_len, keyword, 9)
-}
-
-fn is_identifier_len(base: i32, len: i32, start: i32, ident_len: i32) -> bool {
-    let keyword: [u8; 10] = [
-        'l' as u8,
-        'e' as u8,
-        'n' as u8,
-        0 as u8,
-        0 as u8,
-        0 as u8,
-        0 as u8,
-        0 as u8,
-        0 as u8,
-        0 as u8,
-    ];
-    identifier_matches_keyword(base, len, start, ident_len, keyword, 3)
+fn expect_keyword_literal(base: i32, len: i32, offset: i32, keyword: [u8; 10]) -> i32 {
+    let keyword_len: i32 = padded_string_len(keyword);
+    if keyword_len <= 0 {
+        return -1;
+    };
+    if offset < 0 || offset + keyword_len > len {
+        return -1;
+    };
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= keyword_len {
+            break;
+        };
+        if load_u8(base + offset + idx) != keyword[idx] as i32 {
+            return -1;
+        };
+        idx = idx + 1;
+    };
+    let next: i32 = offset + keyword_len;
+    if next < len {
+        let after: i32 = load_u8(base + next);
+        if is_identifier_continue(after) {
+            return -1;
+        };
+    };
+    next
 }
 
 fn identify_intrinsic(base: i32, len: i32, start: i32, ident_len: i32) -> i32 {
-    if is_identifier_load_u8(base, len, start, ident_len) {
-        return INTRINSIC_KIND_LOAD_U8;
-    };
-    if is_identifier_store_u8(base, len, start, ident_len) {
-        return INTRINSIC_KIND_STORE_U8;
-    };
-    if is_identifier_load_i32(base, len, start, ident_len) {
-        return INTRINSIC_KIND_LOAD_I32;
-    };
-    if is_identifier_store_i32(base, len, start, ident_len) {
-        return INTRINSIC_KIND_STORE_I32;
-    };
-    if is_identifier_load_u16(base, len, start, ident_len) {
-        return INTRINSIC_KIND_LOAD_U16;
-    };
-    if is_identifier_store_u16(base, len, start, ident_len) {
-        return INTRINSIC_KIND_STORE_U16;
-    };
-    if is_identifier_len(base, len, start, ident_len) {
-        return INTRINSIC_KIND_LEN;
+    let names: [[u8; 10]; 7] = [
+        "load_u8\0\0\0",
+        "store_u8\0\0",
+        "load_i32\0\0",
+        "store_i32\0",
+        "load_u16\0\0",
+        "store_u16\0",
+        "len\0\0\0\0\0\0\0",
+    ];
+    let kinds: [i32; 7] = [
+        INTRINSIC_KIND_LOAD_U8,
+        INTRINSIC_KIND_STORE_U8,
+        INTRINSIC_KIND_LOAD_I32,
+        INTRINSIC_KIND_STORE_I32,
+        INTRINSIC_KIND_LOAD_U16,
+        INTRINSIC_KIND_STORE_U16,
+        INTRINSIC_KIND_LEN,
+    ];
+    let mut idx: i32 = 0;
+    let count: i32 = len(kinds);
+    loop {
+        if idx >= count {
+            break;
+        };
+        if identifier_matches_keyword(base, len, start, ident_len, names[idx]) {
+            return kinds[idx];
+        };
+        idx = idx + 1;
     };
     INTRINSIC_KIND_NONE
 }
@@ -637,45 +384,11 @@ fn find_parameter_index(
 }
 
 fn expect_keyword_const(base: i32, len: i32, offset: i32) -> i32 {
-    if offset + 4 >= len {
-        return -1;
-    };
-    let c: i32 = load_u8(base + offset);
-    let o: i32 = load_u8(base + offset + 1);
-    let n: i32 = load_u8(base + offset + 2);
-    let s: i32 = load_u8(base + offset + 3);
-    let t: i32 = load_u8(base + offset + 4);
-    if c != 'c' || o != 'o' || n != 'n' || s != 's' || t != 't' {
-        return -1;
-    };
-    let next: i32 = offset + 5;
-    if next < len {
-        let after: i32 = load_u8(base + next);
-        if is_identifier_continue(after) {
-            return -1;
-        };
-    };
-    next
+    expect_keyword_literal(base, len, offset, "const\0\0\0\0\0")
 }
 
 fn expect_keyword_let(base: i32, len: i32, offset: i32) -> i32 {
-    if offset + 2 >= len {
-        return -1;
-    };
-    let l: i32 = load_u8(base + offset);
-    let e: i32 = load_u8(base + offset + 1);
-    let t: i32 = load_u8(base + offset + 2);
-    if l != 'l' || e != 'e' || t != 't' {
-        return -1;
-    };
-    let next: i32 = offset + 3;
-    if next < len {
-        let after: i32 = load_u8(base + next);
-        if is_identifier_continue(after) {
-            return -1;
-        };
-    };
-    next
+    expect_keyword_literal(base, len, offset, "let\0\0\0\0\0\0\0")
 }
 
 const MAX_LOCALS: i32 = 512;
@@ -2148,19 +1861,8 @@ fn parse_type(base: i32, len: i32, offset: i32, ast_base: i32, out_type_ptr: i32
         };
         return next;
     };
-    let bool_keyword: [u8; 10] = [
-        'b' as u8,
-        'o' as u8,
-        'o' as u8,
-        'l' as u8,
-        0 as u8,
-        0 as u8,
-        0 as u8,
-        0 as u8,
-        0 as u8,
-        0 as u8,
-    ];
-    if identifier_matches_keyword(base, len, offset, ident_len, bool_keyword, 4) {
+    let bool_keyword: [u8; 10] = "bool\0\0\0\0\0\0";
+    if identifier_matches_keyword(base, len, offset, ident_len, bool_keyword) {
         if out_type_ptr >= 0 {
             store_i32(out_type_ptr, BUILTIN_TYPE_ID_BOOL);
         };
