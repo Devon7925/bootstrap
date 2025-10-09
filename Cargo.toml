@@ -1,7 +1,0 @@
-[package]
-name = "bootstrap"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-wasmtime = { version = "37.0.2", features = ["gc"] }
