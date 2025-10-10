@@ -1,0 +1,132 @@
+import { expect, test } from "bun:test";
+
+import {
+  expectExportedFunction,
+  expectExportedMemory,
+  instantiateWasmModuleWithGc,
+} from "./helpers";
+
+import { compileToWasm } from "../src/index";
+
+const encoder = new TextEncoder();
+
+const MODULE_STATE_BASE = 1_048_576;
+const MODULE_STORAGE_TOP_OFFSET = 4;
+
+const STAGE2_SOURCE_URL = new URL("../compiler/ast_compiler.bp", import.meta.url);
+
+let stage2WasmPromise: Promise<Uint8Array> | undefined;
+
+async function getStage2Wasm(): Promise<Uint8Array> {
+  if (!stage2WasmPromise) {
+    stage2WasmPromise = (async () => {
+      const sourceFile = Bun.file(STAGE2_SOURCE_URL);
+      const source = await sourceFile.text();
+      return compileToWasm(source);
+    })();
+  }
+  return stage2WasmPromise;
+}
+
+interface Stage2Compiler {
+  readonly memory: WebAssembly.Memory;
+  readonly loadModuleFromSource: (pathPtr: number, contentPtr: number) => number;
+  readonly compileFromPath: (pathPtr: number) => number;
+}
+
+async function instantiateStage2Compiler(): Promise<Stage2Compiler> {
+  const wasmBytes = await getStage2Wasm();
+  const { instance } = await WebAssembly.instantiate(wasmBytes, {});
+  const memory = expectExportedMemory(instance);
+  const loadModuleFromSource = expectExportedFunction(instance, "loadModuleFromSource");
+  const compileFromPath = expectExportedFunction(instance, "compileFromPath");
+  return { memory, loadModuleFromSource, compileFromPath };
+}
+
+function ensureCapacity(memory: WebAssembly.Memory, required: number) {
+  const { buffer } = memory;
+  if (buffer.byteLength >= required) {
+    return;
+  }
+  const pageSize = 65_536;
+  const additional = required - buffer.byteLength;
+  const pagesNeeded = Math.ceil(additional / pageSize);
+  memory.grow(pagesNeeded);
+}
+
+function writeString(memory: WebAssembly.Memory, ptr: number, text: string): number {
+  const bytes = encoder.encode(text);
+  ensureCapacity(memory, ptr + bytes.length + 1);
+  const view = new Uint8Array(memory.buffer);
+  view.set(bytes, ptr);
+  view[ptr + bytes.length] = 0;
+  return bytes.length;
+}
+
+function zeroMemory(memory: WebAssembly.Memory, ptr: number, length: number) {
+  if (length <= 0) {
+    return;
+  }
+  ensureCapacity(memory, ptr + length);
+  new Uint8Array(memory.buffer).fill(0, ptr, ptr + length);
+}
+
+function readOutput(memory: WebAssembly.Memory, producedLength: number): Uint8Array {
+  const view = new DataView(memory.buffer);
+  const outputPtr = view.getInt32(MODULE_STATE_BASE + MODULE_STORAGE_TOP_OFFSET, true);
+  expect(outputPtr).toBeGreaterThan(0);
+  expect(producedLength).toBeGreaterThanOrEqual(4);
+  const wasmBytes = new Uint8Array(memory.buffer.slice(outputPtr, outputPtr + producedLength));
+  expect(Array.from(wasmBytes.subarray(0, 4))).toEqual([0x00, 0x61, 0x73, 0x6d]);
+  return wasmBytes;
+}
+
+async function loadAndCompile(
+  compiler: Stage2Compiler,
+  pathPtr: number,
+  contentPtr: number,
+  source: string,
+): Promise<Uint8Array> {
+  const contentLength = writeString(compiler.memory, contentPtr, source);
+  expect(compiler.loadModuleFromSource(pathPtr, contentPtr)).toBe(0);
+  zeroMemory(compiler.memory, contentPtr, contentLength + 1);
+  const producedLength = compiler.compileFromPath(pathPtr);
+  expect(producedLength).toBeGreaterThan(0);
+  return readOutput(compiler.memory, producedLength);
+}
+
+test("loadModuleFromSource persists content for compileFromPath", async () => {
+  const compiler = await instantiateStage2Compiler();
+  const pathPtr = 1_024;
+  writeString(compiler.memory, pathPtr, "/fixtures/module.bp");
+  const contentPtr = 4_096;
+
+  const wasm = await loadAndCompile(compiler, pathPtr, contentPtr, "fn main() -> i32 { 42 }");
+  const instance = await instantiateWasmModuleWithGc(wasm);
+  const main = expectExportedFunction(instance, "main");
+  expect(main()).toBe(42);
+});
+
+test("compileFromPath uses the latest module contents", async () => {
+  const compiler = await instantiateStage2Compiler();
+  const pathPtr = 1_024;
+  writeString(compiler.memory, pathPtr, "/fixtures/module.bp");
+  const contentPtr = 4_096;
+
+  const wasm1 = await loadAndCompile(compiler, pathPtr, contentPtr, "fn main() -> i32 { 1 }");
+  const instance1 = await instantiateWasmModuleWithGc(wasm1);
+  const main1 = expectExportedFunction(instance1, "main");
+  expect(main1()).toBe(1);
+
+  const wasm2 = await loadAndCompile(compiler, pathPtr, contentPtr, "fn main() -> i32 { 7 }");
+  const instance2 = await instantiateWasmModuleWithGc(wasm2);
+  const main2 = expectExportedFunction(instance2, "main");
+  expect(main2()).toBe(7);
+});
+
+test("compileFromPath returns failure for unknown modules", async () => {
+  const compiler = await instantiateStage2Compiler();
+  const pathPtr = 1_024;
+  writeString(compiler.memory, pathPtr, "/fixtures/missing.bp");
+  expect(compiler.compileFromPath(pathPtr)).toBeLessThan(0);
+});
