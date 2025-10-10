@@ -115,7 +115,7 @@ test("const functions can use const function results as parameters", async () =>
 test("const functions can use let bindings", async () => {
   const wasm = await compileWithAstCompiler(`
     const fn base() -> i32 {
-        let x = 40;
+        let x: i32 = 40;
         x + 2
     }
 
