@@ -103,3 +103,56 @@ test("tuple fields can be chained", async () => {
   expect(result).toBe(7);
 });
 
+test("array of tuples can be indexed", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn main() -> i32 {
+      let arr: [(i32, i32); 2] = [(1, 2), (3, 4)];
+      arr[1].0
+    }
+  `);
+
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(3);
+});
+
+test("tuple containing array field can be indexed", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn main() -> i32 {
+      let t: (i32, [i32; 3]) = (5, [10, 20, 30]);
+      t.1[2]
+    }
+  `);
+
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(30);
+});
+
+test("array of tuples can be passed to function", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn sum_first_and_flag(arr: [(i32, bool); 2]) -> i32 {
+      let a = arr[0].0;
+      let b = if arr[1].1 { 1 } else { 0 };
+      a + b
+    }
+
+    fn main() -> i32 {
+      sum_first_and_flag([(7, true), (0, false)])
+    }
+  `);
+
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(8);
+});
+
+test("nested tuple and array fields can be chained", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn main() -> i32 {
+      let t: ((i32, [i32; 2]), i32) = ((1, [2, 3]), 4);
+      t.0.1[1]
+    }
+  `);
+
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(3);
+});
+
