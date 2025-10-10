@@ -1,5 +1,10 @@
 import { fileURLToPath } from "node:url";
 
+import {
+  sourceContainsInlineMemoryIntrinsics,
+  stubMemoryIntrinsicFunctions,
+} from "./bootstrap";
+
 export enum Target {
   Wasm = "wasm",
   Wgsl = "wgsl",
@@ -108,7 +113,8 @@ function ensureCapacity(memory: WebAssembly.Memory, required: number) {
   }
 }
 
-function readStage2Failure(
+function readStageFailure(
+  stage: "stage1" | "stage2",
   memory: WebAssembly.Memory,
   outputPtr: number,
   producedLen: number,
@@ -157,7 +163,7 @@ function readStage2Failure(
     }
   }
 
-  return `stage2 compilation failed (status ${producedLen}, functions=${functions}, instr_offset=${instrOffset}, compiled_functions=${compiledFunctions}${detail})`;
+  return `${stage} compilation failed (status ${producedLen}, functions=${functions}, instr_offset=${instrOffset}, compiled_functions=${compiledFunctions}${detail})`;
 }
 
 export async function compile(source: string, target: Target = DEFAULT_TARGET): Promise<Compilation> {
@@ -201,7 +207,7 @@ export async function compile(source: string, target: Target = DEFAULT_TARGET): 
   memoryView = new Uint8Array(memory.buffer);
 
   if (producedLen <= 0) {
-    throw new CompileError(readStage2Failure(memory, outputPtr, producedLen));
+    throw new CompileError(readStageFailure("stage2", memory, outputPtr, producedLen));
   }
 
   const wasm = memoryView.slice(outputPtr, outputPtr + producedLen);
@@ -209,8 +215,15 @@ export async function compile(source: string, target: Target = DEFAULT_TARGET): 
 }
 
 export async function compileToWasm(source: string): Promise<Uint8Array> {
-  const compilation = await compile(source, Target.Wasm);
-  return compilation.intoWasm();
+  try {
+    const compilation = await compile(source, Target.Wasm);
+    return compilation.intoWasm();
+  } catch (error) {
+    if (error instanceof CompileError && sourceContainsInlineMemoryIntrinsics(source)) {
+      return compileAstCompilerWithFallback(source);
+    }
+    throw error;
+  }
 }
 
 export function parseTarget(value: string): Target {
@@ -222,4 +235,45 @@ export function parseTarget(value: string): Target {
     default:
       throw new CompileError(`unsupported compilation target '${value}'`);
   }
+}
+
+async function compileAstCompilerWithFallback(source: string): Promise<Uint8Array> {
+  const stubbedSource = stubMemoryIntrinsicFunctions(source);
+  const stubCompilation = await compile(stubbedSource, Target.Wasm);
+  const stubWasm = stubCompilation.intoWasm();
+
+  const { instance } = await WebAssembly.instantiate(stubWasm, {});
+  const exports = instance.exports as {
+    memory?: WebAssembly.Memory;
+    compile?: (inputPtr: number, inputLen: number, outputPtr: number) => number | bigint;
+  };
+
+  if (!(exports.memory instanceof WebAssembly.Memory)) {
+    throw new CompileError("stage1 compiler must export memory");
+  }
+  if (typeof exports.compile !== "function") {
+    throw new CompileError("stage1 compiler missing compile export");
+  }
+
+  const memory = exports.memory;
+  const compileExport = exports.compile;
+  const sourceBytes = encoder.encode(source);
+  const outputPtr = sourceBytes.length;
+  const reserved = FUNCTIONS_BASE_OFFSET + STAGE1_MAX_FUNCTIONS * FUNCTION_ENTRY_SIZE;
+
+  ensureCapacity(memory, outputPtr + reserved + 1);
+
+  let memoryView = new Uint8Array(memory.buffer);
+  memoryView.set(sourceBytes, COMPILER_INPUT_PTR);
+
+  const rawProduced = compileExport(COMPILER_INPUT_PTR, sourceBytes.length, outputPtr);
+  const producedLen = typeof rawProduced === "bigint" ? Number(rawProduced) : rawProduced | 0;
+
+  memoryView = new Uint8Array(memory.buffer);
+
+  if (producedLen <= 0) {
+    throw new CompileError(readStageFailure("stage1", memory, outputPtr, producedLen));
+  }
+
+  return memoryView.slice(outputPtr, outputPtr + producedLen);
 }

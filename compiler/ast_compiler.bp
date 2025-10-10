@@ -1,3 +1,27 @@
+fn load_u8(ptr: i32) -> i32 {
+    inline_wasm([0x20, 0x00, 0x2d, 0x00, 0x00])
+}
+
+fn load_u16(ptr: i32) -> i32 {
+    inline_wasm([0x20, 0x00, 0x2f, 0x01, 0x00])
+}
+
+fn load_i32(ptr: i32) -> i32 {
+    inline_wasm([0x20, 0x00, 0x28, 0x02, 0x00])
+}
+
+fn store_u8(ptr: i32, value: i32) -> i32 {
+    inline_wasm([0x20, 0x00, 0x20, 0x01, 0x3a, 0x00, 0x00, 0x41, 0x00])
+}
+
+fn store_u16(ptr: i32, value: i32) -> i32 {
+    inline_wasm([0x20, 0x00, 0x20, 0x01, 0x3b, 0x01, 0x00, 0x41, 0x00])
+}
+
+fn store_i32(ptr: i32, value: i32) -> i32 {
+    inline_wasm([0x20, 0x00, 0x20, 0x01, 0x36, 0x02, 0x00, 0x41, 0x00])
+}
+
 fn write_byte(base: i32, offset: i32, value: i32) -> i32 {
     store_u8(base + offset, value & 255);
     offset + 1
@@ -218,21 +242,9 @@ const MAX_TUPLE_ELEMENTS: i32 = 32;
 
 const INTRINSIC_KIND_NONE: i32 = -1;
 
-const INTRINSIC_KIND_LOAD_U8: i32 = 0;
+const INTRINSIC_KIND_LEN: i32 = 0;
 
-const INTRINSIC_KIND_STORE_U8: i32 = 1;
-
-const INTRINSIC_KIND_LOAD_I32: i32 = 2;
-
-const INTRINSIC_KIND_STORE_I32: i32 = 3;
-
-const INTRINSIC_KIND_LOAD_U16: i32 = 4;
-
-const INTRINSIC_KIND_STORE_U16: i32 = 5;
-
-const INTRINSIC_KIND_LEN: i32 = 6;
-
-const INTRINSIC_KIND_INLINE_WASM: i32 = 7;
+const INTRINSIC_KIND_INLINE_WASM: i32 = 1;
 
 fn padded_string_len(keyword: [u8; 12]) -> i32 {
     let capacity: i32 = len(keyword);
@@ -309,26 +321,11 @@ fn expect_keyword_literal(base: i32, len: i32, offset: i32, keyword: [u8; 12]) -
 }
 
 fn identify_intrinsic(base: i32, len: i32, start: i32, ident_len: i32) -> i32 {
-    let names: [[u8; 12]; 8] = [
-        "load_u8\0\0\0\0\0",
-        "store_u8\0\0\0\0",
-        "load_i32\0\0\0\0",
-        "store_i32\0\0\0",
-        "load_u16\0\0\0\0",
-        "store_u16\0\0\0",
+    let names: [[u8; 12]; 2] = [
         "len\0\0\0\0\0\0\0\0\0",
         "inline_wasm\0",
     ];
-    let kinds: [i32; 8] = [
-        INTRINSIC_KIND_LOAD_U8,
-        INTRINSIC_KIND_STORE_U8,
-        INTRINSIC_KIND_LOAD_I32,
-        INTRINSIC_KIND_STORE_I32,
-        INTRINSIC_KIND_LOAD_U16,
-        INTRINSIC_KIND_STORE_U16,
-        INTRINSIC_KIND_LEN,
-        INTRINSIC_KIND_INLINE_WASM,
-    ];
+    let kinds: [i32; 2] = [INTRINSIC_KIND_LEN, INTRINSIC_KIND_INLINE_WASM];
     let mut idx: i32 = 0;
     let count: i32 = len(kinds);
     loop {
@@ -5835,53 +5832,6 @@ fn parse_basic_expression(
             let intrinsic_kind: i32 =
                 identify_intrinsic(base, len, ident_start, ident_len);
             if intrinsic_kind != INTRINSIC_KIND_NONE {
-                if intrinsic_kind == INTRINSIC_KIND_LOAD_U8
-                    || intrinsic_kind == INTRINSIC_KIND_LOAD_U16
-                    || intrinsic_kind == INTRINSIC_KIND_LOAD_I32
-                {
-                    if arg_count != 1 {
-                        return -1;
-                    };
-                    let arg_index: i32 = load_i32(args_list_ptr);
-                    let expr_index: i32 = if intrinsic_kind == INTRINSIC_KIND_LOAD_U8 {
-                        ast_expr_alloc_load_u8(ast_base, arg_index)
-                    } else if intrinsic_kind == INTRINSIC_KIND_LOAD_U16 {
-                        ast_expr_alloc_load_u16(ast_base, arg_index)
-                    } else {
-                        ast_expr_alloc_load_i32(ast_base, arg_index)
-                    };
-                    if expr_index < 0 {
-                        return -1;
-                    };
-                    store_i32(out_kind_ptr, 29);
-                    store_i32(out_data0_ptr, expr_index);
-                    store_i32(out_data1_ptr, 0);
-                    return skip_whitespace(base, len, call_cursor);
-                };
-                if intrinsic_kind == INTRINSIC_KIND_STORE_U8
-                    || intrinsic_kind == INTRINSIC_KIND_STORE_U16
-                    || intrinsic_kind == INTRINSIC_KIND_STORE_I32
-                {
-                    if arg_count != 2 {
-                        return -1;
-                    };
-                    let ptr_index: i32 = load_i32(args_list_ptr);
-                    let value_index: i32 = load_i32(args_list_ptr + 4);
-                    let expr_index: i32 = if intrinsic_kind == INTRINSIC_KIND_STORE_U8 {
-                        ast_expr_alloc_store_u8(ast_base, ptr_index, value_index)
-                    } else if intrinsic_kind == INTRINSIC_KIND_STORE_U16 {
-                        ast_expr_alloc_store_u16(ast_base, ptr_index, value_index)
-                    } else {
-                        ast_expr_alloc_store_i32(ast_base, ptr_index, value_index)
-                    };
-                    if expr_index < 0 {
-                        return -1;
-                    };
-                    store_i32(out_kind_ptr, 32);
-                    store_i32(out_data0_ptr, expr_index);
-                    store_i32(out_data1_ptr, 0);
-                    return skip_whitespace(base, len, call_cursor);
-                };
                 if intrinsic_kind == INTRINSIC_KIND_LEN {
                     if arg_count != 1 {
                         return -1;
