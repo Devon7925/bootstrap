@@ -2169,7 +2169,7 @@ const AST_FUNCTION_ENTRY_SIZE: i32 = 36;
 
 const FUNCTION_FLAG_CONST: i32 = 1;
 
-const AST_NAMES_CAPACITY: i32 = 65536;
+const AST_NAMES_CAPACITY: i32 = 131072;
 
 const AST_CONSTANTS_CAPACITY: i32 = 1024;
 
@@ -2710,7 +2710,7 @@ fn ast_extra_base(ast_base: i32) -> i32 {
 
 const AST_EXPR_ENTRY_SIZE: i32 = 16;
 
-const AST_EXPR_CAPACITY: i32 = 32768;
+const AST_EXPR_CAPACITY: i32 = 131072;
 
 fn ast_expr_count_ptr(ast_base: i32) -> i32 {
     ast_extra_base(ast_base)
