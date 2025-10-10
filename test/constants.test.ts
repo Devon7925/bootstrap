@@ -129,7 +129,7 @@ test("const functions can use let bindings", async () => {
   expect(result).toBe(42);
 });
 
-test.skip("const functions can use let mut bindings", async () => {
+test("const functions can use let mut bindings", async () => {
   const wasm = await compileWithAstCompiler(`
     const fn base() -> i32 {
         let mut x: i32 = 30;

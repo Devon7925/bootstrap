@@ -3559,6 +3559,118 @@ fn interpret_constant_expression(
         store_i32(scratch_top_ptr, saved_top);
         return 0;
     };
+    if kind == 10 {
+        if param_values_ptr < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        if env_values_count <= 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        let local_index: i32 = load_i32(entry_ptr + 4);
+        if local_index < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        if local_index < param_count {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        if local_index >= env_values_count {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        let value_index: i32 = load_i32(entry_ptr + 8);
+        if value_index < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        let local_ptr: i32 = param_values_ptr + local_index * 8;
+        let local_type_ptr: i32 = local_ptr + 4;
+        let existing_type: i32 = load_i32(local_type_ptr);
+        if existing_type < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        let value_offset: i32 = load_i32(scratch_top_ptr);
+        let value_ptr: i32 = scratch_base + value_offset;
+        let value_type_ptr: i32 = value_ptr + 4;
+        store_i32(scratch_top_ptr, value_offset + 8);
+        if interpret_constant_expression(
+            ast_base,
+            value_index,
+            scratch_base,
+            scratch_top_ptr,
+            value_ptr,
+            value_type_ptr,
+            param_values_ptr,
+            param_count,
+            env_values_count,
+        ) < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        let new_type: i32 = load_i32(value_type_ptr);
+        if new_type != existing_type {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        let new_value: i32 = load_i32(value_ptr);
+        store_i32(local_ptr, new_value);
+        store_i32(local_type_ptr, new_type);
+        store_i32(out_value_ptr, new_value);
+        store_i32(out_type_ptr, new_type);
+        store_i32(scratch_top_ptr, saved_top);
+        return 0;
+    };
+    if kind == 11 {
+        let first_index: i32 = load_i32(entry_ptr + 4);
+        let then_index: i32 = load_i32(entry_ptr + 8);
+        if first_index < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        if then_index < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        let first_offset: i32 = load_i32(scratch_top_ptr);
+        let first_value_ptr: i32 = scratch_base + first_offset;
+        let first_type_ptr: i32 = first_value_ptr + 4;
+        store_i32(scratch_top_ptr, first_offset + 8);
+        if interpret_constant_expression(
+            ast_base,
+            first_index,
+            scratch_base,
+            scratch_top_ptr,
+            first_value_ptr,
+            first_type_ptr,
+            param_values_ptr,
+            param_count,
+            env_values_count,
+        ) < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        store_i32(scratch_top_ptr, first_offset);
+        if interpret_constant_expression(
+            ast_base,
+            then_index,
+            scratch_base,
+            scratch_top_ptr,
+            out_value_ptr,
+            out_type_ptr,
+            param_values_ptr,
+            param_count,
+            env_values_count,
+        ) < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        store_i32(scratch_top_ptr, saved_top);
+        return 0;
+    };
     if kind == 2
         || kind == 3
         || kind == 4
