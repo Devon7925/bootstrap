@@ -37,6 +37,34 @@ test("functions can accept parameters", async () => {
   expect(result).toBe(42);
 });
 
+test("functions can accept const parameters", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn scale(const FACTOR: i32, value: i32) -> i32 {
+        value * FACTOR
+    }
+
+    fn main() -> i32 {
+        scale(6, 7)
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(42);
+});
+
+test("const parameters must receive constant arguments", async () => {
+  const failure = await expectCompileFailure(`
+    fn scale(const FACTOR: i32, value: i32) -> i32 {
+        value * FACTOR
+    }
+
+    fn main() -> i32 {
+        let runtime: i32 = 6;
+        scale(runtime, 7)
+    }
+  `);
+  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+});
+
 test("forward function calls are supported", async () => {
   const wasm = await compileWithAstCompiler(`
     fn main() -> i32 {
