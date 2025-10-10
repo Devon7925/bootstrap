@@ -1,3 +1,5 @@
+import { expect, test } from "bun:test";
+
 import {
   compileWithAstCompiler,
   expectCompileFailure,

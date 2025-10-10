@@ -87,7 +87,7 @@ async function loadCompilerModule(): Promise<WebAssembly.Module> {
 async function instantiateCompiler(): Promise<WebAssembly.Instance> {
   const module = await loadCompilerModule();
   const instance = await WebAssembly.instantiate(module, {});
-  return instance.instance ?? instance;
+  return instance;
 }
 
 function ensureCapacity(memory: WebAssembly.Memory, required: number) {
