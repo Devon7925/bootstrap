@@ -1364,44 +1364,36 @@ const TYPE_ID_KIND_USER_COMPOSITE: i32 = 1;
 
 const TYPE_ID_KIND_USER_ALIAS: i32 = 2;
 
-fn type_id_array_base() -> i32 {
-    TYPE_ID_KIND_USER_COMPOSITE << TYPE_ID_KIND_SHIFT
+const fn type_id_kind_base(kind: i32) -> i32 {
+    kind << TYPE_ID_KIND_SHIFT
 }
 
-fn type_id_array_limit() -> i32 {
-    type_id_array_base() + SCRATCH_TYPES_CAPACITY
-}
+const TYPE_ID_ARRAY_BASE: i32 = type_id_kind_base(TYPE_ID_KIND_USER_COMPOSITE);
 
-fn type_id_alias_base() -> i32 {
-    TYPE_ID_KIND_USER_ALIAS << TYPE_ID_KIND_SHIFT
-}
+const TYPE_ID_ARRAY_LIMIT: i32 = TYPE_ID_ARRAY_BASE + SCRATCH_TYPES_CAPACITY;
 
-fn type_id_alias_limit() -> i32 {
-    type_id_alias_base() + TYPE_ALIAS_CAPACITY
-}
+const TYPE_ID_ALIAS_BASE: i32 = type_id_kind_base(TYPE_ID_KIND_USER_ALIAS);
+
+const TYPE_ID_ALIAS_LIMIT: i32 = TYPE_ID_ALIAS_BASE + TYPE_ALIAS_CAPACITY;
 
 fn type_id_is_builtin(type_id: i32) -> bool {
     type_id >= 0 && type_id <= BUILTIN_TYPE_ID_MAX
 }
 
 fn type_id_is_array(type_id: i32) -> bool {
-    let base: i32 = type_id_array_base();
-    let limit: i32 = type_id_array_limit();
-    type_id >= base && type_id < limit
+    type_id >= TYPE_ID_ARRAY_BASE && type_id < TYPE_ID_ARRAY_LIMIT
 }
 
 fn type_id_is_alias(type_id: i32) -> bool {
-    let base: i32 = type_id_alias_base();
-    let limit: i32 = type_id_alias_limit();
-    type_id >= base && type_id < limit
+    type_id >= TYPE_ID_ALIAS_BASE && type_id < TYPE_ID_ALIAS_LIMIT
 }
 
 fn alias_type_id(index: i32) -> i32 {
-    type_id_alias_base() + index
+    TYPE_ID_ALIAS_BASE + index
 }
 
 fn alias_type_index(type_id: i32) -> i32 {
-    type_id - type_id_alias_base()
+    type_id - TYPE_ID_ALIAS_BASE
 }
 
 fn type_id_is_bool(type_id: i32) -> bool {
@@ -2123,13 +2115,9 @@ const TYPE_ENTRY_NAME_LEN_OFFSET: i32 = 8;
 
 const TYPE_ENTRY_EXTRA_OFFSET: i32 = 12;
 
-fn scratch_types_base_offset() -> i32 {
-    SCRATCH_FN_BASE_OFFSET - SCRATCH_TYPES_CAPACITY * TYPE_ENTRY_SIZE
-}
+const SCRATCH_TYPES_BASE_OFFSET: i32 = SCRATCH_FN_BASE_OFFSET - SCRATCH_TYPES_CAPACITY * TYPE_ENTRY_SIZE;
 
-fn scratch_types_count_offset() -> i32 {
-    scratch_types_base_offset() - WORD_SIZE
-}
+const SCRATCH_TYPES_COUNT_OFFSET: i32 = SCRATCH_TYPES_BASE_OFFSET - WORD_SIZE;
 
 fn scratch_instr_offset_ptr(out_ptr: i32) -> i32 {
     out_ptr + SCRATCH_INSTR_OFFSET
@@ -2152,11 +2140,11 @@ fn scratch_fn_base(out_ptr: i32) -> i32 {
 }
 
 fn scratch_types_count_ptr(out_ptr: i32) -> i32 {
-    out_ptr + scratch_types_count_offset()
+    out_ptr + SCRATCH_TYPES_COUNT_OFFSET
 }
 
 fn scratch_types_base(out_ptr: i32) -> i32 {
-    out_ptr + scratch_types_base_offset()
+    out_ptr + SCRATCH_TYPES_BASE_OFFSET
 }
 
 fn scratch_type_entry_ptr(out_ptr: i32, index: i32) -> i32 {
@@ -2183,9 +2171,15 @@ const FUNCTION_FLAG_CONST: i32 = 1;
 
 const AST_NAMES_CAPACITY: i32 = 65536;
 
-fn ast_call_data_capacity() -> i32 {
-    65536 - ast_constants_section_words()
-}
+const AST_CONSTANTS_CAPACITY: i32 = 1024;
+
+const AST_CONSTANT_ENTRY_SIZE: i32 = 16;
+
+const AST_CONSTANTS_SECTION_SIZE: i32 = WORD_SIZE + AST_CONSTANTS_CAPACITY * AST_CONSTANT_ENTRY_SIZE;
+
+const AST_CONSTANTS_SECTION_WORDS: i32 = AST_CONSTANTS_SECTION_SIZE >> 2;
+
+const AST_CALL_DATA_CAPACITY: i32 = 65536 - AST_CONSTANTS_SECTION_WORDS;
 
 fn ast_output_reserve(input_len: i32) -> i32 {
     let after_output: i32 = input_len + SCRATCH_INSTR_CAPACITY;
@@ -2270,7 +2264,7 @@ fn ast_call_data_alloc(ast_base: i32, word_count: i32) -> i32 {
     };
     let used_ptr: i32 = ast_call_data_len_ptr(ast_base);
     let used: i32 = load_i32(used_ptr);
-    if used + word_count > ast_call_data_capacity() {
+    if used + word_count > AST_CALL_DATA_CAPACITY {
         return -1;
     };
     let entry_ptr: i32 = ast_call_data_base(ast_base) + used * WORD_SIZE;
@@ -2323,20 +2317,8 @@ fn ast_write_function_entry(
     store_i32(entry_ptr + 32, flags);
 }
 
-const AST_CONSTANTS_CAPACITY: i32 = 1024;
-
-const AST_CONSTANT_ENTRY_SIZE: i32 = 16;
-
-fn ast_constants_section_size() -> i32 {
-    WORD_SIZE + AST_CONSTANTS_CAPACITY * AST_CONSTANT_ENTRY_SIZE
-}
-
-fn ast_constants_section_words() -> i32 {
-    ast_constants_section_size() / WORD_SIZE
-}
-
 fn ast_constants_count_ptr(ast_base: i32) -> i32 {
-    ast_call_data_base(ast_base) + ast_call_data_capacity() * WORD_SIZE
+    ast_call_data_base(ast_base) + AST_CALL_DATA_CAPACITY * WORD_SIZE
 }
 
 fn ast_constant_entry_ptr(ast_base: i32, index: i32) -> i32 {
@@ -2361,12 +2343,10 @@ const AST_ARRAY_TYPE_LENGTH_OFFSET: i32 = 4;
 
 const AST_ARRAY_TYPE_CACHE_OFFSET: i32 = 8;
 
-fn ast_array_types_section_size() -> i32 {
-    WORD_SIZE + AST_ARRAY_TYPES_CAPACITY * AST_ARRAY_TYPE_ENTRY_SIZE
-}
+const AST_ARRAY_TYPES_SECTION_SIZE: i32 = WORD_SIZE + AST_ARRAY_TYPES_CAPACITY * AST_ARRAY_TYPE_ENTRY_SIZE;
 
 fn ast_array_types_count_ptr(ast_base: i32) -> i32 {
-    ast_constants_count_ptr(ast_base) + ast_constants_section_size()
+    ast_constants_count_ptr(ast_base) + AST_CONSTANTS_SECTION_SIZE
 }
 
 fn ast_array_type_entry_ptr(ast_base: i32, index: i32) -> i32 {
@@ -2417,12 +2397,11 @@ const AST_TYPE_DEFINITION_TARGET_TYPE_OFFSET: i32 = 8;
 
 const AST_TYPE_DEFINITION_NAME_PTR_OFFSET: i32 = 12;
 
-fn ast_type_definitions_section_size() -> i32 {
-    WORD_SIZE + AST_TYPE_DEFINITIONS_CAPACITY * AST_TYPE_DEFINITION_ENTRY_SIZE
-}
+const AST_TYPE_DEFINITIONS_SECTION_SIZE: i32 =
+    WORD_SIZE + AST_TYPE_DEFINITIONS_CAPACITY * AST_TYPE_DEFINITION_ENTRY_SIZE;
 
 fn ast_type_definitions_count_ptr(ast_base: i32) -> i32 {
-    ast_array_types_count_ptr(ast_base) + ast_array_types_section_size()
+    ast_array_types_count_ptr(ast_base) + AST_ARRAY_TYPES_SECTION_SIZE
 }
 
 fn ast_type_definition_entry_ptr(ast_base: i32, index: i32) -> i32 {
@@ -2514,11 +2493,11 @@ fn find_type_definition_target_type(
 }
 
 fn array_type_id(index: i32) -> i32 {
-    type_id_array_base() + index
+    TYPE_ID_ARRAY_BASE + index
 }
 
 fn array_type_index(type_id: i32) -> i32 {
-    type_id - type_id_array_base()
+    type_id - TYPE_ID_ARRAY_BASE
 }
 
 fn array_type_element_type(ast_base: i32, type_id: i32) -> i32 {
@@ -2726,7 +2705,7 @@ fn resolve_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
 }
 
 fn ast_extra_base(ast_base: i32) -> i32 {
-    ast_type_definitions_count_ptr(ast_base) + ast_type_definitions_section_size()
+    ast_type_definitions_count_ptr(ast_base) + AST_TYPE_DEFINITIONS_SECTION_SIZE
 }
 
 const AST_EXPR_ENTRY_SIZE: i32 = 16;
