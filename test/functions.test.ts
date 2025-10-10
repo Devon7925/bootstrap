@@ -298,3 +298,43 @@ test("const parameter calls specialize helper functions", async () => {
   const main = expectExportedFunction(instance, "main");
   expect(main()).toBe(4);
 });
+
+test("const parameter specialization reuses existing instantiations", async () => {
+  const compiler = await instantiateAstCompiler();
+  const inputPtr = COMPILER_INPUT_PTR;
+  const outputPtr = DEFAULT_OUTPUT_STRIDE;
+  const wasm = compiler.compileWithLayout(
+    inputPtr,
+    outputPtr,
+    `
+      fn helper(const COUNT: i32) -> i32 {
+          COUNT * 2
+      }
+
+      fn main() -> i32 {
+          helper(2) + helper(2)
+      }
+    `,
+  );
+
+  const functions = countFunctionsInWasm(wasm);
+  expect(functions).toBe(3);
+
+  const instance = await instantiateWasmModuleWithGc(wasm);
+  const main = expectExportedFunction(instance, "main");
+  expect(main()).toBe(8);
+});
+
+test("array lengths can reference const bindings", async () => {
+  const wasm = await compileWithAstCompiler(`
+    const LENGTH: i32 = 4;
+
+    fn main() -> i32 {
+        let values: [i32; LENGTH] = [1, 2, 3, 4];
+        values[0] + values[3]
+    }
+  `);
+
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(5);
+});
