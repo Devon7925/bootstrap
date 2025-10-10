@@ -3200,6 +3200,7 @@ fn interpret_constant_expression(
     out_type_ptr: i32,
     param_values_ptr: i32,
     param_count: i32,
+    env_values_count: i32,
 ) -> i32 {
     if expr_index < 0 {
         return -1;
@@ -3240,9 +3241,56 @@ fn interpret_constant_expression(
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         };
+        if param_index >= env_values_count {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
         let env_ptr: i32 = param_values_ptr + param_index * 8;
         let value: i32 = load_i32(env_ptr);
         let value_type: i32 = load_i32(env_ptr + 4);
+        if value_type < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        if expr_type < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        if value_type != expr_type {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        store_i32(out_value_ptr, value);
+        store_i32(out_type_ptr, value_type);
+        store_i32(scratch_top_ptr, saved_top);
+        return 0;
+    };
+    if kind == 8 {
+        if param_values_ptr < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        if env_values_count <= 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        let local_index: i32 = load_i32(entry_ptr + 4);
+        if local_index < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        if local_index < param_count {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        if local_index >= env_values_count {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        let slot_ptr: i32 = param_values_ptr + local_index * 8;
+        let value: i32 = load_i32(slot_ptr);
+        let value_type: i32 = load_i32(slot_ptr + 4);
         if value_type < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
@@ -3327,6 +3375,7 @@ fn interpret_constant_expression(
                 arg_type_ptr,
                 param_values_ptr,
                 param_count,
+                env_values_count,
             ) < 0 {
                 store_i32(scratch_top_ptr, saved_top);
                 return -1;
@@ -3349,12 +3398,31 @@ fn interpret_constant_expression(
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         };
-        let env_ptr: i32 = if arg_count > 0 {
+        let locals_count: i32 = load_i32(callee_entry_ptr + 20);
+        if locals_count < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        let env_total: i32 = callee_param_count + locals_count;
+        let env_ptr: i32 = if env_total > 0 {
             scratch_base + saved_top
         } else {
             0
         };
-        let env_count: i32 = callee_param_count;
+        if locals_count > 0 {
+            let after_args_offset: i32 = load_i32(scratch_top_ptr);
+            store_i32(scratch_top_ptr, after_args_offset + locals_count * 8);
+            let mut local_fill_idx: i32 = 0;
+            loop {
+                if local_fill_idx >= locals_count {
+                    break;
+                };
+                let slot_ptr: i32 = env_ptr + (callee_param_count + local_fill_idx) * 8;
+                store_i32(slot_ptr, 0);
+                store_i32(slot_ptr + 4, -1);
+                local_fill_idx = local_fill_idx + 1;
+            };
+        };
         if interpret_constant_expression(
             ast_base,
             body_expr_index,
@@ -3363,7 +3431,8 @@ fn interpret_constant_expression(
             out_value_ptr,
             out_type_ptr,
             env_ptr,
-            env_count,
+            callee_param_count,
+            env_total,
         ) < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
@@ -3375,6 +3444,72 @@ fn interpret_constant_expression(
                 store_i32(scratch_top_ptr, saved_top);
                 return -1;
             };
+        };
+        store_i32(scratch_top_ptr, saved_top);
+        return 0;
+    };
+    if kind == 9 {
+        if param_values_ptr < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        if env_values_count <= 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        let local_index: i32 = load_i32(entry_ptr + 4);
+        if local_index < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        if local_index < param_count {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        if local_index >= env_values_count {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        let init_index: i32 = load_i32(entry_ptr + 8);
+        let body_index: i32 = load_i32(entry_ptr + 12);
+        if init_index < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        if body_index < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        let local_ptr: i32 = param_values_ptr + local_index * 8;
+        let local_type_ptr: i32 = local_ptr + 4;
+        if interpret_constant_expression(
+            ast_base,
+            init_index,
+            scratch_base,
+            scratch_top_ptr,
+            local_ptr,
+            local_type_ptr,
+            param_values_ptr,
+            param_count,
+            env_values_count,
+        ) < 0 {
+            store_i32(local_type_ptr, -1);
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        if interpret_constant_expression(
+            ast_base,
+            body_index,
+            scratch_base,
+            scratch_top_ptr,
+            out_value_ptr,
+            out_type_ptr,
+            param_values_ptr,
+            param_count,
+            env_values_count,
+        ) < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
         };
         store_i32(scratch_top_ptr, saved_top);
         return 0;
@@ -3410,6 +3545,7 @@ fn interpret_constant_expression(
             left_type_ptr,
             param_values_ptr,
             param_count,
+            env_values_count,
         ) < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
@@ -3427,6 +3563,7 @@ fn interpret_constant_expression(
             right_type_ptr,
             param_values_ptr,
             param_count,
+            env_values_count,
         ) < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
@@ -3510,6 +3647,7 @@ fn interpret_constant_expression(
             left_type_ptr,
             param_values_ptr,
             param_count,
+            env_values_count,
         ) < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
@@ -3527,6 +3665,7 @@ fn interpret_constant_expression(
             right_type_ptr,
             param_values_ptr,
             param_count,
+            env_values_count,
         ) < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
@@ -3605,6 +3744,7 @@ fn interpret_constant_expression(
             left_type_ptr,
             param_values_ptr,
             param_count,
+            env_values_count,
         ) < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
@@ -3642,6 +3782,7 @@ fn interpret_constant_expression(
             right_type_ptr,
             param_values_ptr,
             param_count,
+            env_values_count,
         ) < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
@@ -3676,6 +3817,7 @@ fn interpret_constant_expression(
             value_type_ptr,
             param_values_ptr,
             param_count,
+            env_values_count,
         ) < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
@@ -3710,6 +3852,7 @@ fn interpret_constant_expression(
             value_type_ptr,
             param_values_ptr,
             param_count,
+            env_values_count,
         ) < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
@@ -6239,6 +6382,7 @@ fn parse_constant_declaration(
             eval_stack_top_ptr,
             eval_value_ptr,
             eval_type_ptr,
+            0,
             0,
             0,
         ) < 0 {
