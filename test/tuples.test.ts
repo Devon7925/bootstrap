@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 
-import { compileWithAstCompiler, runWasmMainWithGc } from "./helpers";
+import {
+  compileWithAstCompiler,
+  expectCompileFailure,
+  runWasmMainWithGc,
+} from "./helpers";
 
 function containsSequence(haystack: Uint8Array, needle: readonly number[]): boolean {
   if (needle.length === 0) {
@@ -56,5 +60,46 @@ test("tuple literal can be passed to function arguments", async () => {
 
   const result = await runWasmMainWithGc(wasm);
   expect(result).toBe(0);
+});
+
+test("tuple field access emits struct.get", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn first(pair: (i32, bool)) -> i32 {
+        pair.0
+    }
+
+    fn main() -> i32 {
+        first((42, true))
+    }
+  `);
+
+  expect(containsSequence(wasm, [0xfb, 0x02])).toBe(true);
+
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(42);
+});
+
+test("tuple field indices must exist", async () => {
+  const failure = await expectCompileFailure(`
+    fn main() -> i32 {
+        let pair: (i32, bool) = (1, true);
+        pair.2;
+        0
+    }
+  `);
+
+  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+});
+
+test("tuple fields can be chained", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn main() -> i32 {
+        let nested: ((i32, i32), i32) = ((5, 7), 9);
+        nested.0.1
+    }
+  `);
+
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(7);
 });
 
