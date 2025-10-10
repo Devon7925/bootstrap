@@ -3245,6 +3245,72 @@ fn interpret_constant_expression(
         store_i32(scratch_top_ptr, saved_top);
         return 0;
     };
+    if kind == 7 {
+        let condition_index: i32 = load_i32(entry_ptr + 4);
+        let then_index: i32 = load_i32(entry_ptr + 8);
+        let else_index: i32 = load_i32(entry_ptr + 12);
+        if condition_index < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        if then_index < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        if else_index < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        let cond_offset: i32 = load_i32(scratch_top_ptr);
+        let cond_value_ptr: i32 = scratch_base + cond_offset;
+        let cond_type_ptr: i32 = cond_value_ptr + 4;
+        store_i32(scratch_top_ptr, cond_offset + 8);
+        if interpret_constant_expression(
+            ast_base,
+            condition_index,
+            scratch_base,
+            scratch_top_ptr,
+            cond_value_ptr,
+            cond_type_ptr,
+            param_values_ptr,
+            param_count,
+            env_values_count,
+        ) < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        if load_i32(cond_type_ptr) != BUILTIN_TYPE_ID_BOOL {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        let cond_bool: i32 = if load_i32(cond_value_ptr) != 0 { 1 } else { 0 };
+        store_i32(scratch_top_ptr, cond_offset);
+        let branch_index: i32 = if cond_bool != 0 { then_index } else { else_index };
+        if interpret_constant_expression(
+            ast_base,
+            branch_index,
+            scratch_base,
+            scratch_top_ptr,
+            out_value_ptr,
+            out_type_ptr,
+            param_values_ptr,
+            param_count,
+            env_values_count,
+        ) < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        let branch_type: i32 = load_i32(out_type_ptr);
+        if expr_type >= 0 && branch_type >= 0 {
+            if expr_type != branch_type {
+                store_i32(scratch_top_ptr, saved_top);
+                return -1;
+            };
+        };
+        store_i32(scratch_top_ptr, saved_top);
+        return 0;
+    };
     if kind == 8 {
         if param_values_ptr < 0 {
             store_i32(scratch_top_ptr, saved_top);
