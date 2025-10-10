@@ -147,7 +147,7 @@ test("const functions can use let mut bindings", async () => {
   expect(result).toBe(42);
 });
 
-test.skip("const functions can conditionally assign", async () => {
+test("const functions can conditionally assign", async () => {
   const wasm = await compileWithAstCompiler(`
     const fn base(cond: bool) -> i32 {
         let mut x: i32 = 30;
@@ -165,6 +165,31 @@ test.skip("const functions can conditionally assign", async () => {
   `);
   const result = await runWasmMainWithGc(wasm);
   expect(result).toBe(42);
+});
+
+test.skip("const functions can use loops", async () => {
+  const wasm = await compileWithAstCompiler(`
+    const fn loop_sum(limit: i32) -> i32 {
+        let mut acc: i32 = 0;
+        let mut i: i32 = 0;
+        loop {
+            if i == limit {
+                break;
+            };
+            acc = acc + i;
+            i = i + 1;
+        }
+        acc
+    }
+
+    const VALUE: i32 = loop_sum(5);
+
+    fn main() -> i32 {
+        VALUE
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(10);
 });
 
 test("const expressions can use if expressions", async () => {
