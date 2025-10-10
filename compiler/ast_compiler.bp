@@ -6337,7 +6337,13 @@ fn identifiers_match(ptr_a: i32, len_a: i32, ptr_b: i32, len_b: i32) -> bool {
     true
 }
 
-fn resolve_call_metadata(out_ptr: i32, ast_base: i32, metadata_ptr: i32, func_count: i32) -> i32 {
+fn resolve_call_metadata(
+    out_ptr: i32,
+    ast_base: i32,
+    metadata_ptr: i32,
+    func_count: i32,
+    caller_is_const: bool,
+) -> i32 {
     if metadata_ptr < 0 {
         return -1;
     };
@@ -6349,7 +6355,7 @@ fn resolve_call_metadata(out_ptr: i32, ast_base: i32, metadata_ptr: i32, func_co
             break;
         };
         let arg_expr_index: i32 = load_i32(args_base + arg_idx * 4);
-        if resolve_expression(out_ptr, ast_base, arg_expr_index, func_count) < 0 {
+        if resolve_expression(out_ptr, ast_base, arg_expr_index, func_count, caller_is_const) < 0 {
             return -1;
         };
         arg_idx = arg_idx + 1;
@@ -6375,6 +6381,11 @@ fn resolve_call_metadata(out_ptr: i32, ast_base: i32, metadata_ptr: i32, func_co
                 let param_types_ptr: i32 = load_i32(target_entry_ptr + 24);
                 if arg_count > 0 {
                     if param_types_ptr < 0 {
+                        return -1;
+                    };
+                };
+                if caller_is_const {
+                    if !ast_function_is_const(ast_base, target_idx) {
                         return -1;
                     };
                 };
@@ -6466,6 +6477,7 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
         let name_len: i32 = load_i32(entry_ptr + 4);
         let param_count: i32 = load_i32(entry_ptr + 8);
         let body_kind: i32 = load_i32(entry_ptr + 12);
+        let caller_is_const: bool = ast_function_is_const(ast_base, idx);
         store_u8(main_name_ptr + 0, 'm');
         store_u8(main_name_ptr + 1, 'a');
         store_u8(main_name_ptr + 2, 'i');
@@ -6531,12 +6543,12 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
 
         if body_kind == 1 {
             let metadata_ptr: i32 = load_i32(entry_ptr + 16);
-            if resolve_call_metadata(out_ptr, ast_base, metadata_ptr, func_count) < 0 {
+            if resolve_call_metadata(out_ptr, ast_base, metadata_ptr, func_count, caller_is_const) < 0 {
                 return -1;
             };
         } else if body_kind == 2 {
             let expr_index: i32 = load_i32(entry_ptr + 16);
-            if resolve_expression(out_ptr, ast_base, expr_index, func_count) < 0 {
+            if resolve_expression(out_ptr, ast_base, expr_index, func_count, caller_is_const) < 0 {
                 return -1;
             };
             if fn_return_type >= 0 {
@@ -6575,6 +6587,7 @@ fn resolve_expression_internal(
     control_stack_count_ptr: i32,
     loop_stack_base: i32,
     loop_stack_count_ptr: i32,
+    caller_is_const: bool,
 ) -> i32 {
     if expr_index < 0 {
         return -1;
@@ -6592,7 +6605,7 @@ fn resolve_expression_internal(
         if metadata_ptr < 0 {
             return -1;
         };
-        if resolve_call_metadata(out_ptr, ast_base, metadata_ptr, func_count) < 0 {
+        if resolve_call_metadata(out_ptr, ast_base, metadata_ptr, func_count, caller_is_const) < 0 {
             return -1;
         };
         let callee_index: i32 = load_i32(call_metadata_callee_index_ptr(metadata_ptr));
@@ -6652,6 +6665,7 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            caller_is_const,
         ) < 0 {
             return -1;
         };
@@ -6702,6 +6716,7 @@ fn resolve_expression_internal(
                 control_stack_count_ptr,
                 loop_stack_base,
                 loop_stack_count_ptr,
+                caller_is_const,
             ) < 0 {
                 return -1;
             };
@@ -6749,6 +6764,7 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            caller_is_const,
         ) < 0 {
             return -1;
         };
@@ -6761,6 +6777,7 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            caller_is_const,
         ) < 0 {
             return -1;
         };
@@ -6804,6 +6821,7 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            caller_is_const,
         ) < 0 {
             return -1;
         };
@@ -6837,6 +6855,7 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            caller_is_const,
         ) < 0 {
             return -1;
         };
@@ -6856,6 +6875,7 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            caller_is_const,
         ) < 0 {
             return -1;
         };
@@ -6870,6 +6890,7 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            caller_is_const,
         ) < 0 {
             return -1;
         };
@@ -6889,6 +6910,7 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            caller_is_const,
         ) < 0 {
             return -1;
         };
@@ -6942,6 +6964,7 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            caller_is_const,
         ) < 0 {
             return -1;
         };
@@ -6952,6 +6975,7 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            caller_is_const,
         ) < 0 {
             return -1;
         };
@@ -7027,6 +7051,7 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            caller_is_const,
         ) < 0 {
             return -1;
         };
@@ -7046,6 +7071,7 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            caller_is_const,
         ) < 0 {
             return -1;
         };
@@ -7063,6 +7089,7 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            caller_is_const,
         ) < 0 {
             return -1;
         };
@@ -7079,6 +7106,7 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            caller_is_const,
         ) < 0 {
             store_i32(control_stack_count_ptr, control_count);
             return -1;
@@ -7090,6 +7118,7 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            caller_is_const,
         ) < 0 {
             store_i32(control_stack_count_ptr, control_count);
             return -1;
@@ -7132,6 +7161,7 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            caller_is_const,
         ) < 0 {
             return -1;
         };
@@ -7142,6 +7172,7 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            caller_is_const,
         ) < 0 {
             return -1;
         };
@@ -7157,6 +7188,7 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            caller_is_const,
         ) < 0 {
             return -1;
         };
@@ -7173,6 +7205,7 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            caller_is_const,
         ) < 0 {
             return -1;
         };
@@ -7183,6 +7216,7 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            caller_is_const,
         ) < 0 {
             return -1;
         };
@@ -7214,6 +7248,7 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            caller_is_const,
         );
         store_i32(loop_stack_count_ptr, loop_count);
         store_i32(control_stack_count_ptr, control_count);
@@ -7244,6 +7279,7 @@ fn resolve_expression_internal(
                 control_stack_count_ptr,
                 loop_stack_base,
                 loop_stack_count_ptr,
+                caller_is_const,
             ) < 0 {
                 return -1;
             };
@@ -7271,7 +7307,7 @@ fn resolve_expression_internal(
     -1
 }
 
-fn resolve_expression(out_ptr: i32, ast_base: i32, expr_index: i32, func_count: i32) -> i32 {
+fn resolve_expression(out_ptr: i32, ast_base: i32, expr_index: i32, func_count: i32, caller_is_const: bool) -> i32 {
     let temp_base: i32 = ast_temp_base(ast_base);
     let control_count_ptr: i32 = temp_base;
     let loop_count_ptr: i32 = temp_base + 4;
@@ -7291,6 +7327,7 @@ fn resolve_expression(out_ptr: i32, ast_base: i32, expr_index: i32, func_count: 
         control_count_ptr,
         loop_stack_base,
         loop_count_ptr,
+        caller_is_const,
     );
     store_i32(control_count_ptr, saved_control_count);
     store_i32(loop_count_ptr, saved_loop_count);
