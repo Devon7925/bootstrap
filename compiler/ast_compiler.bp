@@ -1341,9 +1341,7 @@ fn parse_block_expression_body(
         };
     };
 
-    store_i32(out_kind_ptr, 2);
-    store_i32(out_data0_ptr, final_index);
-    store_i32(out_data1_ptr, 0);
+    store_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr, (2, final_index, 0));
     idx
 }
 
@@ -3814,6 +3812,29 @@ fn expression_node_from_parts(ast_base: i32, kind: i32, data0: i32, data1: i32) 
     data0
 }
 
+fn load_expression_parts(kind_ptr: i32, data0_ptr: i32, data1_ptr: i32) -> (i32, i32, i32) {
+    (
+        load_i32(kind_ptr),
+        load_i32(data0_ptr),
+        load_i32(data1_ptr),
+    )
+}
+
+fn store_expression_parts(
+    kind_ptr: i32,
+    data0_ptr: i32,
+    data1_ptr: i32,
+    parts: (i32, i32, i32),
+) {
+    store_i32(kind_ptr, parts.0);
+    store_i32(data0_ptr, parts.1);
+    store_i32(data1_ptr, parts.2);
+}
+
+fn expression_index_from_parts(ast_base: i32, parts: (i32, i32, i32)) -> i32 {
+    expression_node_from_parts(ast_base, parts.0, parts.1, parts.2)
+}
+
 const CONST_EVAL_STATUS_OK: i32 = 0;
 const CONST_EVAL_STATUS_BREAK: i32 = 1;
 const CONST_EVAL_STATUS_CONTINUE: i32 = 2;
@@ -5094,19 +5115,15 @@ fn parse_basic_expression(
             if cond_index < 0 {
                 return -1;
             };
-            let then_kind: i32 = load_i32(then_kind_ptr);
-            let then_data0: i32 = load_i32(then_data0_ptr);
-            let then_data1: i32 = load_i32(then_data1_ptr);
-            let then_index: i32 =
-                expression_node_from_parts(ast_base, then_kind, then_data0, then_data1);
+            let then_parts: (i32, i32, i32) =
+                load_expression_parts(then_kind_ptr, then_data0_ptr, then_data1_ptr);
+            let then_index: i32 = expression_index_from_parts(ast_base, then_parts);
             if then_index < 0 {
                 return -1;
             };
-            let else_kind: i32 = load_i32(else_kind_ptr);
-            let else_data0: i32 = load_i32(else_data0_ptr);
-            let else_data1: i32 = load_i32(else_data1_ptr);
-            let else_index: i32 =
-                expression_node_from_parts(ast_base, else_kind, else_data0, else_data1);
+            let else_parts: (i32, i32, i32) =
+                load_expression_parts(else_kind_ptr, else_data0_ptr, else_data1_ptr);
+            let else_index: i32 = expression_index_from_parts(ast_base, else_parts);
             if else_index < 0 {
                 return -1;
             };
@@ -5121,8 +5138,7 @@ fn parse_basic_expression(
             if if_index < 0 {
                 return -1;
             };
-            store_i32(out_kind_ptr, 2);
-            store_i32(out_data0_ptr, if_index);
+            store_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr, (2, if_index, 0));
             let both_have_values: i32 = if then_has_value != 0 && else_has_value != 0 {
                 0
             } else {
@@ -5881,20 +5897,16 @@ fn parse_unary_expression(
                 return -1;
             };
 
-            let array_kind: i32 = load_i32(out_kind_ptr);
-            let array_data0: i32 = load_i32(out_data0_ptr);
-            let array_data1: i32 = load_i32(out_data1_ptr);
-            let array_expr_index: i32 =
-                expression_node_from_parts(ast_base, array_kind, array_data0, array_data1);
+            let array_parts: (i32, i32, i32) =
+                load_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr);
+            let array_expr_index: i32 = expression_index_from_parts(ast_base, array_parts);
             if array_expr_index < 0 {
                 return -1;
             };
 
-            let idx_kind: i32 = load_i32(index_kind_ptr);
-            let idx_data0: i32 = load_i32(index_data0_ptr);
-            let idx_data1: i32 = load_i32(index_data1_ptr);
-            let idx_expr_index: i32 =
-                expression_node_from_parts(ast_base, idx_kind, idx_data0, idx_data1);
+            let idx_parts: (i32, i32, i32) =
+                load_expression_parts(index_kind_ptr, index_data0_ptr, index_data1_ptr);
+            let idx_expr_index: i32 = expression_index_from_parts(ast_base, idx_parts);
             if idx_expr_index < 0 {
                 return -1;
             };
@@ -5914,9 +5926,7 @@ fn parse_unary_expression(
                 };
             };
 
-            store_i32(out_kind_ptr, 2);
-            store_i32(out_data0_ptr, get_index);
-            store_i32(out_data1_ptr, 0);
+            store_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr, (2, get_index, 0));
 
             resolved_cursor = skip_whitespace(base, len, index_cursor);
             continue;
@@ -5946,11 +5956,9 @@ fn parse_unary_expression(
             return -1;
         };
 
-        let tuple_kind: i32 = load_i32(out_kind_ptr);
-        let tuple_data0: i32 = load_i32(out_data0_ptr);
-        let tuple_data1: i32 = load_i32(out_data1_ptr);
-        let tuple_expr_index: i32 =
-            expression_node_from_parts(ast_base, tuple_kind, tuple_data0, tuple_data1);
+        let tuple_parts: (i32, i32, i32) =
+            load_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr);
+        let tuple_expr_index: i32 = expression_index_from_parts(ast_base, tuple_parts);
         if tuple_expr_index < 0 {
             return -1;
         };
@@ -5979,19 +5987,15 @@ fn parse_unary_expression(
             };
         };
 
-        store_i32(out_kind_ptr, 2);
-        store_i32(out_data0_ptr, get_index);
-        store_i32(out_data1_ptr, 0);
+        store_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr, (2, get_index, 0));
 
         resolved_cursor = skip_whitespace(base, len, field_cursor);
     };
 
     if (not_count & 1) != 0 {
-        let value_kind: i32 = load_i32(out_kind_ptr);
-        let value_data0: i32 = load_i32(out_data0_ptr);
-        let value_data1: i32 = load_i32(out_data1_ptr);
-        let value_index: i32 =
-            expression_node_from_parts(ast_base, value_kind, value_data0, value_data1);
+        let value_parts: (i32, i32, i32) =
+            load_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr);
+        let value_index: i32 = expression_index_from_parts(ast_base, value_parts);
         if value_index < 0 {
             return -1;
         };
@@ -5999,9 +6003,7 @@ fn parse_unary_expression(
         if not_index < 0 {
             return -1;
         };
-        store_i32(out_kind_ptr, 2);
-        store_i32(out_data0_ptr, not_index);
-        store_i32(out_data1_ptr, 0);
+        store_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr, (2, not_index, 0));
     };
 
     loop {
@@ -6016,11 +6018,9 @@ fn parse_unary_expression(
             return -1;
         };
         let target_type_id: i32 = load_i32(literal_ptr);
-        let value_kind: i32 = load_i32(out_kind_ptr);
-        let value_data0: i32 = load_i32(out_data0_ptr);
-        let value_data1: i32 = load_i32(out_data1_ptr);
-        let value_index: i32 =
-            expression_node_from_parts(ast_base, value_kind, value_data0, value_data1);
+        let value_parts: (i32, i32, i32) =
+            load_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr);
+        let value_index: i32 = expression_index_from_parts(ast_base, value_parts);
         if value_index < 0 {
             return -1;
         };
@@ -6028,9 +6028,7 @@ fn parse_unary_expression(
         if cast_index < 0 {
             return -1;
         };
-        store_i32(out_kind_ptr, 2);
-        store_i32(out_data0_ptr, cast_index);
-        store_i32(out_data1_ptr, 0);
+        store_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr, (2, cast_index, 0));
         resolved_cursor = type_cursor;
     };
 
@@ -6118,18 +6116,16 @@ fn parse_multiplicative_expression(
             return -1;
         };
 
-        let current_kind: i32 = load_i32(out_kind_ptr);
-        let current_data0: i32 = load_i32(out_data0_ptr);
-        let current_data1: i32 = load_i32(out_data1_ptr);
-        let left_index: i32 = expression_node_from_parts(ast_base, current_kind, current_data0, current_data1);
+        let left_parts: (i32, i32, i32) =
+            load_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr);
+        let left_index: i32 = expression_index_from_parts(ast_base, left_parts);
         if left_index < 0 {
             return -1;
         };
 
-        let right_kind: i32 = load_i32(next_kind_ptr);
-        let right_data0: i32 = load_i32(next_data0_ptr);
-        let right_data1: i32 = load_i32(next_data1_ptr);
-        let right_index: i32 = expression_node_from_parts(ast_base, right_kind, right_data0, right_data1);
+        let right_parts: (i32, i32, i32) =
+            load_expression_parts(next_kind_ptr, next_data0_ptr, next_data1_ptr);
+        let right_index: i32 = expression_index_from_parts(ast_base, right_parts);
         if right_index < 0 {
             return -1;
         };
@@ -6143,9 +6139,7 @@ fn parse_multiplicative_expression(
             return -1;
         };
 
-        store_i32(out_kind_ptr, 2);
-        store_i32(out_data0_ptr, new_index);
-        store_i32(out_data1_ptr, 0);
+        store_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr, (2, new_index, 0));
     };
 
     current_cursor
@@ -6223,18 +6217,16 @@ fn parse_additive_expression(
             return -1;
         };
 
-        let current_kind: i32 = load_i32(out_kind_ptr);
-        let current_data0: i32 = load_i32(out_data0_ptr);
-        let current_data1: i32 = load_i32(out_data1_ptr);
-        let left_index: i32 = expression_node_from_parts(ast_base, current_kind, current_data0, current_data1);
+        let left_parts: (i32, i32, i32) =
+            load_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr);
+        let left_index: i32 = expression_index_from_parts(ast_base, left_parts);
         if left_index < 0 {
             return -1;
         };
 
-        let right_kind: i32 = load_i32(next_kind_ptr);
-        let right_data0: i32 = load_i32(next_data0_ptr);
-        let right_data1: i32 = load_i32(next_data1_ptr);
-        let right_index: i32 = expression_node_from_parts(ast_base, right_kind, right_data0, right_data1);
+        let right_parts: (i32, i32, i32) =
+            load_expression_parts(next_kind_ptr, next_data0_ptr, next_data1_ptr);
+        let right_index: i32 = expression_index_from_parts(ast_base, right_parts);
         if right_index < 0 {
             return -1;
         };
@@ -6248,9 +6240,7 @@ fn parse_additive_expression(
             return -1;
         };
 
-        store_i32(out_kind_ptr, 2);
-        store_i32(out_data0_ptr, new_index);
-        store_i32(out_data1_ptr, 0);
+        store_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr, (2, new_index, 0));
     };
 
     current_cursor
@@ -6333,20 +6323,16 @@ fn parse_shift_expression(
             return -1;
         };
 
-        let current_kind: i32 = load_i32(out_kind_ptr);
-        let current_data0: i32 = load_i32(out_data0_ptr);
-        let current_data1: i32 = load_i32(out_data1_ptr);
-        let left_index: i32 =
-            expression_node_from_parts(ast_base, current_kind, current_data0, current_data1);
+        let left_parts: (i32, i32, i32) =
+            load_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr);
+        let left_index: i32 = expression_index_from_parts(ast_base, left_parts);
         if left_index < 0 {
             return -1;
         };
 
-        let right_kind: i32 = load_i32(next_kind_ptr);
-        let right_data0: i32 = load_i32(next_data0_ptr);
-        let right_data1: i32 = load_i32(next_data1_ptr);
-        let right_index: i32 =
-            expression_node_from_parts(ast_base, right_kind, right_data0, right_data1);
+        let right_parts: (i32, i32, i32) =
+            load_expression_parts(next_kind_ptr, next_data0_ptr, next_data1_ptr);
+        let right_index: i32 = expression_index_from_parts(ast_base, right_parts);
         if right_index < 0 {
             return -1;
         };
@@ -6360,9 +6346,7 @@ fn parse_shift_expression(
             return -1;
         };
 
-        store_i32(out_kind_ptr, 2);
-        store_i32(out_data0_ptr, new_index);
-        store_i32(out_data1_ptr, 0);
+        store_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr, (2, new_index, 0));
     };
 
     current_cursor
@@ -6472,18 +6456,16 @@ fn parse_relational_expression(
             return -1;
         };
 
-        let current_kind: i32 = load_i32(out_kind_ptr);
-        let current_data0: i32 = load_i32(out_data0_ptr);
-        let current_data1: i32 = load_i32(out_data1_ptr);
-        let left_index: i32 = expression_node_from_parts(ast_base, current_kind, current_data0, current_data1);
+        let left_parts: (i32, i32, i32) =
+            load_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr);
+        let left_index: i32 = expression_index_from_parts(ast_base, left_parts);
         if left_index < 0 {
             return -1;
         };
 
-        let right_kind: i32 = load_i32(next_kind_ptr);
-        let right_data0: i32 = load_i32(next_data0_ptr);
-        let right_data1: i32 = load_i32(next_data1_ptr);
-        let right_index: i32 = expression_node_from_parts(ast_base, right_kind, right_data0, right_data1);
+        let right_parts: (i32, i32, i32) =
+            load_expression_parts(next_kind_ptr, next_data0_ptr, next_data1_ptr);
+        let right_index: i32 = expression_index_from_parts(ast_base, right_parts);
         if right_index < 0 {
             return -1;
         };
@@ -6501,9 +6483,7 @@ fn parse_relational_expression(
             return -1;
         };
 
-        store_i32(out_kind_ptr, 2);
-        store_i32(out_data0_ptr, new_index);
-        store_i32(out_data1_ptr, 0);
+        store_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr, (2, new_index, 0));
     };
 
     current_cursor
@@ -6593,18 +6573,16 @@ fn parse_equality_expression(
             return -1;
         };
 
-        let current_kind: i32 = load_i32(out_kind_ptr);
-        let current_data0: i32 = load_i32(out_data0_ptr);
-        let current_data1: i32 = load_i32(out_data1_ptr);
-        let left_index: i32 = expression_node_from_parts(ast_base, current_kind, current_data0, current_data1);
+        let left_parts: (i32, i32, i32) =
+            load_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr);
+        let left_index: i32 = expression_index_from_parts(ast_base, left_parts);
         if left_index < 0 {
             return -1;
         };
 
-        let right_kind: i32 = load_i32(next_kind_ptr);
-        let right_data0: i32 = load_i32(next_data0_ptr);
-        let right_data1: i32 = load_i32(next_data1_ptr);
-        let right_index: i32 = expression_node_from_parts(ast_base, right_kind, right_data0, right_data1);
+        let right_parts: (i32, i32, i32) =
+            load_expression_parts(next_kind_ptr, next_data0_ptr, next_data1_ptr);
+        let right_index: i32 = expression_index_from_parts(ast_base, right_parts);
         if right_index < 0 {
             return -1;
         };
@@ -6618,9 +6596,7 @@ fn parse_equality_expression(
             return -1;
         };
 
-        store_i32(out_kind_ptr, 2);
-        store_i32(out_data0_ptr, new_index);
-        store_i32(out_data1_ptr, 0);
+        store_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr, (2, new_index, 0));
     };
 
     current_cursor
@@ -6703,20 +6679,16 @@ fn parse_bitwise_and_expression(
             return -1;
         };
 
-        let current_kind: i32 = load_i32(out_kind_ptr);
-        let current_data0: i32 = load_i32(out_data0_ptr);
-        let current_data1: i32 = load_i32(out_data1_ptr);
-        let left_index: i32 =
-            expression_node_from_parts(ast_base, current_kind, current_data0, current_data1);
+        let left_parts: (i32, i32, i32) =
+            load_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr);
+        let left_index: i32 = expression_index_from_parts(ast_base, left_parts);
         if left_index < 0 {
             return -1;
         };
 
-        let right_kind: i32 = load_i32(next_kind_ptr);
-        let right_data0: i32 = load_i32(next_data0_ptr);
-        let right_data1: i32 = load_i32(next_data1_ptr);
-        let right_index: i32 =
-            expression_node_from_parts(ast_base, right_kind, right_data0, right_data1);
+        let right_parts: (i32, i32, i32) =
+            load_expression_parts(next_kind_ptr, next_data0_ptr, next_data1_ptr);
+        let right_index: i32 = expression_index_from_parts(ast_base, right_parts);
         if right_index < 0 {
             return -1;
         };
@@ -6726,9 +6698,7 @@ fn parse_bitwise_and_expression(
             return -1;
         };
 
-        store_i32(out_kind_ptr, 2);
-        store_i32(out_data0_ptr, new_index);
-        store_i32(out_data1_ptr, 0);
+        store_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr, (2, new_index, 0));
     };
 
     current_cursor
@@ -6811,20 +6781,16 @@ fn parse_bitwise_or_expression(
             return -1;
         };
 
-        let current_kind: i32 = load_i32(out_kind_ptr);
-        let current_data0: i32 = load_i32(out_data0_ptr);
-        let current_data1: i32 = load_i32(out_data1_ptr);
-        let left_index: i32 =
-            expression_node_from_parts(ast_base, current_kind, current_data0, current_data1);
+        let left_parts: (i32, i32, i32) =
+            load_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr);
+        let left_index: i32 = expression_index_from_parts(ast_base, left_parts);
         if left_index < 0 {
             return -1;
         };
 
-        let right_kind: i32 = load_i32(next_kind_ptr);
-        let right_data0: i32 = load_i32(next_data0_ptr);
-        let right_data1: i32 = load_i32(next_data1_ptr);
-        let right_index: i32 =
-            expression_node_from_parts(ast_base, right_kind, right_data0, right_data1);
+        let right_parts: (i32, i32, i32) =
+            load_expression_parts(next_kind_ptr, next_data0_ptr, next_data1_ptr);
+        let right_index: i32 = expression_index_from_parts(ast_base, right_parts);
         if right_index < 0 {
             return -1;
         };
@@ -6834,9 +6800,7 @@ fn parse_bitwise_or_expression(
             return -1;
         };
 
-        store_i32(out_kind_ptr, 2);
-        store_i32(out_data0_ptr, new_index);
-        store_i32(out_data1_ptr, 0);
+        store_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr, (2, new_index, 0));
     };
 
     current_cursor
@@ -6916,20 +6880,16 @@ fn parse_logical_and_expression(
             return -1;
         };
 
-        let current_kind: i32 = load_i32(out_kind_ptr);
-        let current_data0: i32 = load_i32(out_data0_ptr);
-        let current_data1: i32 = load_i32(out_data1_ptr);
-        let left_index: i32 =
-            expression_node_from_parts(ast_base, current_kind, current_data0, current_data1);
+        let left_parts: (i32, i32, i32) =
+            load_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr);
+        let left_index: i32 = expression_index_from_parts(ast_base, left_parts);
         if left_index < 0 {
             return -1;
         };
 
-        let right_kind: i32 = load_i32(next_kind_ptr);
-        let right_data0: i32 = load_i32(next_data0_ptr);
-        let right_data1: i32 = load_i32(next_data1_ptr);
-        let right_index: i32 =
-            expression_node_from_parts(ast_base, right_kind, right_data0, right_data1);
+        let right_parts: (i32, i32, i32) =
+            load_expression_parts(next_kind_ptr, next_data0_ptr, next_data1_ptr);
+        let right_index: i32 = expression_index_from_parts(ast_base, right_parts);
         if right_index < 0 {
             return -1;
         };
@@ -6939,9 +6899,7 @@ fn parse_logical_and_expression(
             return -1;
         };
 
-        store_i32(out_kind_ptr, 2);
-        store_i32(out_data0_ptr, new_index);
-        store_i32(out_data1_ptr, 0);
+        store_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr, (2, new_index, 0));
     };
 
     current_cursor
@@ -7021,20 +6979,16 @@ fn parse_logical_or_expression(
             return -1;
         };
 
-        let current_kind: i32 = load_i32(out_kind_ptr);
-        let current_data0: i32 = load_i32(out_data0_ptr);
-        let current_data1: i32 = load_i32(out_data1_ptr);
-        let left_index: i32 =
-            expression_node_from_parts(ast_base, current_kind, current_data0, current_data1);
+        let left_parts: (i32, i32, i32) =
+            load_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr);
+        let left_index: i32 = expression_index_from_parts(ast_base, left_parts);
         if left_index < 0 {
             return -1;
         };
 
-        let right_kind: i32 = load_i32(next_kind_ptr);
-        let right_data0: i32 = load_i32(next_data0_ptr);
-        let right_data1: i32 = load_i32(next_data1_ptr);
-        let right_index: i32 =
-            expression_node_from_parts(ast_base, right_kind, right_data0, right_data1);
+        let right_parts: (i32, i32, i32) =
+            load_expression_parts(next_kind_ptr, next_data0_ptr, next_data1_ptr);
+        let right_index: i32 = expression_index_from_parts(ast_base, right_parts);
         if right_index < 0 {
             return -1;
         };
@@ -7044,9 +6998,7 @@ fn parse_logical_or_expression(
             return -1;
         };
 
-        store_i32(out_kind_ptr, 2);
-        store_i32(out_data0_ptr, new_index);
-        store_i32(out_data1_ptr, 0);
+        store_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr, (2, new_index, 0));
     };
 
     current_cursor
