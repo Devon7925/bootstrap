@@ -22,6 +22,10 @@ const MODULE_STATE_BASE = 1_048_576;
 const MODULE_STORAGE_TOP_OFFSET = 4;
 const MODULE_PATH_PTR = 1_024;
 const MODULE_CONTENT_PTR = 4_096;
+const DEFAULT_ENTRY_MODULE_PATH = "/entry.bp";
+const MEMORY_INTRINSICS_MODULE_PATH = "/stdlib/memory.bp";
+
+const memoryIntrinsicsSourceUrl = new URL("../stdlib/memory.bp", import.meta.url);
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -113,17 +117,20 @@ export class CompilerInstance {
   #compile: (inputPtr: number, inputLen: number, outputPtr: number) => number | bigint;
   #loadModuleFromSource: ((pathPtr: number, contentPtr: number) => number | bigint) | null;
   #compileFromPath: ((pathPtr: number) => number | bigint) | null;
+  #memoryIntrinsicsSource: string | null;
 
   private constructor(
     memory: WebAssembly.Memory,
     compile: (inputPtr: number, inputLen: number, outputPtr: number) => number | bigint,
     loadModuleFromSource: ((pathPtr: number, contentPtr: number) => number | bigint) | undefined,
     compileFromPath: ((pathPtr: number) => number | bigint) | undefined,
+    memoryIntrinsicsSource: string | null,
   ) {
     this.#memory = memory;
     this.#compile = compile;
     this.#loadModuleFromSource = loadModuleFromSource ?? null;
     this.#compileFromPath = compileFromPath ?? null;
+    this.#memoryIntrinsicsSource = memoryIntrinsicsSource;
   }
 
   static async create(wasm: Uint8Array): Promise<CompilerInstance> {
@@ -135,11 +142,16 @@ export class CompilerInstance {
     if (typeof exports.compile !== "function") {
       throw new CompileError("stage1 compiler missing compile export");
     }
+    const supportsModules =
+      typeof exports.loadModuleFromSource === "function" && typeof exports.compileFromPath === "function";
+    const memoryIntrinsicsSource = supportsModules ? await loadMemoryIntrinsicsSource() : null;
+
     return new CompilerInstance(
       exports.memory,
       exports.compile,
       typeof exports.loadModuleFromSource === "function" ? exports.loadModuleFromSource : undefined,
       typeof exports.compileFromPath === "function" ? exports.compileFromPath : undefined,
+      memoryIntrinsicsSource,
     );
   }
 
@@ -148,6 +160,10 @@ export class CompilerInstance {
   }
 
   compileAt(inputPtr: number, outputPtr: number, source: string): Uint8Array {
+    if (this.#loadModuleFromSource && this.#compileFromPath) {
+      return this.#compileUsingModules(DEFAULT_ENTRY_MODULE_PATH, source, []);
+    }
+
     const sourceBytes = encoder.encode(source);
     let view = new Uint8Array(this.#memory.buffer);
     if (inputPtr + sourceBytes.length > view.length) {
@@ -215,6 +231,52 @@ export class CompilerInstance {
     if (!this.#loadModuleFromSource || !this.#compileFromPath) {
       throw new Error("stage1 compiler missing module loading exports");
     }
+
+    return this.#compileUsingModules(entryPath, source, modules);
+  }
+
+  readTypesCount(outputPtr: number): number {
+    const view = new DataView(this.#memory.buffer);
+    return safeReadI32(view, outputPtr + TYPES_COUNT_PTR_OFFSET);
+  }
+
+  readTypeEntry(outputPtr: number, index: number): TypeEntry {
+    const entryPtr = outputPtr + TYPES_BASE_OFFSET + index * TYPE_ENTRY_SIZE;
+    const view = new DataView(this.#memory.buffer, entryPtr, TYPE_ENTRY_SIZE);
+    return {
+      nameStart: view.getInt32(0, true),
+      nameLength: view.getInt32(4, true),
+      valueStart: view.getInt32(8, true),
+      valueLength: view.getInt32(12, true),
+    };
+  }
+
+  #failure(outputPtr: number, producedLength: number, cause?: unknown): Stage1CompileFailure {
+    const failure = this.#readFailure(outputPtr, producedLength);
+    const detail = failure.detail ? `, detail=\"${failure.detail}\"` : "";
+    return new Stage1CompileFailure(
+      `stage1 compilation failed (status ${failure.producedLength}, functions=${failure.functions}, instr_offset=${failure.instructionOffset}, compiled_functions=${failure.compiledFunctions}${detail})`,
+      failure,
+      cause ? { cause } : undefined,
+    );
+  }
+
+  #compileUsingModules(
+    entryPath: string,
+    source: string,
+    extraModules: ReadonlyArray<CompilerModuleSource>,
+  ): Uint8Array {
+    if (!this.#loadModuleFromSource || !this.#compileFromPath) {
+      throw new Error("stage1 compiler missing module loading exports");
+    }
+    if (!this.#memoryIntrinsicsSource) {
+      throw new Error("memory intrinsics source not loaded");
+    }
+
+    const modules: CompilerModuleSource[] = [
+      { path: MEMORY_INTRINSICS_MODULE_PATH, source: this.#memoryIntrinsicsSource },
+      ...extraModules.filter((module) => module.path !== MEMORY_INTRINSICS_MODULE_PATH),
+    ];
 
     const loadModule = this.#loadModuleFromSource;
     const compileFromPath = this.#compileFromPath;
@@ -301,39 +363,21 @@ export class CompilerInstance {
     return view.slice(outputPtr, outputPtr + producedLength);
   }
 
-  readTypesCount(outputPtr: number): number {
-    const view = new DataView(this.#memory.buffer);
-    return safeReadI32(view, outputPtr + TYPES_COUNT_PTR_OFFSET);
-  }
-
-  readTypeEntry(outputPtr: number, index: number): TypeEntry {
-    const entryPtr = outputPtr + TYPES_BASE_OFFSET + index * TYPE_ENTRY_SIZE;
-    const view = new DataView(this.#memory.buffer, entryPtr, TYPE_ENTRY_SIZE);
-    return {
-      nameStart: view.getInt32(0, true),
-      nameLength: view.getInt32(4, true),
-      valueStart: view.getInt32(8, true),
-      valueLength: view.getInt32(12, true),
-    };
-  }
-
-  #failure(outputPtr: number, producedLength: number, cause?: unknown): Stage1CompileFailure {
-    const failure = this.#readFailure(outputPtr, producedLength);
-    const detail = failure.detail ? `, detail=\"${failure.detail}\"` : "";
-    return new Stage1CompileFailure(
-      `stage1 compilation failed (status ${failure.producedLength}, functions=${failure.functions}, instr_offset=${failure.instructionOffset}, compiled_functions=${failure.compiledFunctions}${detail})`,
-      failure,
-      cause ? { cause } : undefined,
-    );
-  }
-
   #readFailure(outputPtr: number, producedLength: number): CompileFailureDetails {
     return describeCompilationFailure(this.#memory, outputPtr, producedLength);
   }
 }
 
+let memoryIntrinsicsSourcePromise: Promise<string> | null = null;
 let astCompilerSourcePromise: Promise<string> | null = null;
 let astCompilerWasmPromise: Promise<Uint8Array> | null = null;
+
+async function loadMemoryIntrinsicsSource(): Promise<string> {
+  if (!memoryIntrinsicsSourcePromise) {
+    memoryIntrinsicsSourcePromise = Bun.file(memoryIntrinsicsSourceUrl).text();
+  }
+  return memoryIntrinsicsSourcePromise;
+}
 
 async function loadAstCompilerSource(): Promise<string> {
   if (!astCompilerSourcePromise) {
