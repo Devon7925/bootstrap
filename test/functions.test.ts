@@ -7,7 +7,42 @@ import {
   readAstCompilerSource,
   runWasmMainWithGc,
   DEFAULT_OUTPUT_STRIDE,
+  COMPILER_INPUT_PTR,
+  instantiateWasmModuleWithGc,
+  expectExportedFunction,
 } from "./helpers";
+
+function readU32Leb(bytes: Uint8Array, start: number): [number, number] {
+  let result = 0;
+  let shift = 0;
+  let offset = start;
+  while (true) {
+    const byte = bytes[offset];
+    offset += 1;
+    result |= (byte & 0x7f) << shift;
+    if ((byte & 0x80) === 0) {
+      break;
+    }
+    shift += 7;
+  }
+  return [result >>> 0, offset];
+}
+
+function countFunctionsInWasm(wasm: Uint8Array): number {
+  let offset = 8; // skip header and version
+  while (offset < wasm.length) {
+    const id = wasm[offset];
+    offset += 1;
+    const [payloadLen, payloadStart] = readU32Leb(wasm, offset);
+    offset = payloadStart;
+    if (id === 3) {
+      const [count] = readU32Leb(wasm, offset);
+      return count;
+    }
+    offset += payloadLen;
+  }
+  return 0;
+}
 
 test("functions can call other functions", async () => {
   const wasm = await compileWithAstCompiler(`
@@ -236,4 +271,30 @@ test("ast compiler source can be compiled once", async () => {
   const source = await readAstCompilerSource();
   const wasm = compiler.compileAt(0, source.length, source);
   expect(wasm.length).toBeGreaterThan(DEFAULT_OUTPUT_STRIDE);
+});
+
+test("const parameter calls specialize helper functions", async () => {
+  const compiler = await instantiateAstCompiler();
+  const inputPtr = COMPILER_INPUT_PTR;
+  const outputPtr = DEFAULT_OUTPUT_STRIDE;
+  const wasm = compiler.compileWithLayout(
+    inputPtr,
+    outputPtr,
+    `
+      fn helper(const COUNT: i32) -> i32 {
+          COUNT
+      }
+
+      fn main() -> i32 {
+          helper(1) + helper(3)
+      }
+    `,
+  );
+
+  const functions = countFunctionsInWasm(wasm);
+  expect(functions).toBeGreaterThan(2);
+
+  const instance = await instantiateWasmModuleWithGc(wasm);
+  const main = expectExportedFunction(instance, "main");
+  expect(main()).toBe(4);
 });

@@ -146,6 +146,11 @@ export class CompilerInstance {
     return safeReadI32(view, outputPtr + TYPES_COUNT_PTR_OFFSET);
   }
 
+  readFunctionsCount(outputPtr: number): number {
+    const view = new DataView(this.#memory.buffer);
+    return safeReadI32(view, outputPtr + FUNCTIONS_COUNT_PTR_OFFSET);
+  }
+
   readTypeEntry(outputPtr: number, index: number): TypeEntry {
     const entryPtr = outputPtr + TYPES_BASE_OFFSET + index * TYPE_ENTRY_SIZE;
     const view = new DataView(this.#memory.buffer, entryPtr, TYPE_ENTRY_SIZE);
