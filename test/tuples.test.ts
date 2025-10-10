@@ -156,3 +156,15 @@ test("nested tuple and array fields can be chained", async () => {
   expect(result).toBe(3);
 });
 
+test("nested tuple and arrays can be deeply nested", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn main() -> i32 {
+      let t: [(i32, [(i32, [(i32, i32); 1]); 1]); 1] = [(1, [(2, [(3, 4)])])];
+      t[0].1[0].1[0].0
+    }
+  `);
+
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(3);
+});
+
