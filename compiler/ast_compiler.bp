@@ -145,47 +145,47 @@ fn is_identifier_continue(byte: i32) -> bool {
 }
 
 fn expect_keyword_fn(base: i32, len: i32, offset: i32) -> i32 {
-    expect_keyword_literal(base, len, offset, "fn\0\0\0\0\0\0\0\0")
+    expect_keyword_literal(base, len, offset, "fn\0\0\0\0\0\0\0\0\0\0")
 }
 
 fn expect_keyword_type(base: i32, len: i32, offset: i32) -> i32 {
-    expect_keyword_literal(base, len, offset, "type\0\0\0\0\0\0")
+    expect_keyword_literal(base, len, offset, "type\0\0\0\0\0\0\0\0")
 }
 
 fn expect_keyword_if(base: i32, len: i32, offset: i32) -> i32 {
-    expect_keyword_literal(base, len, offset, "if\0\0\0\0\0\0\0\0")
+    expect_keyword_literal(base, len, offset, "if\0\0\0\0\0\0\0\0\0\0")
 }
 
 fn expect_keyword_as(base: i32, len: i32, offset: i32) -> i32 {
-    expect_keyword_literal(base, len, offset, "as\0\0\0\0\0\0\0\0")
+    expect_keyword_literal(base, len, offset, "as\0\0\0\0\0\0\0\0\0\0")
 }
 
 fn expect_keyword_true(base: i32, len: i32, offset: i32) -> i32 {
-    expect_keyword_literal(base, len, offset, "true\0\0\0\0\0\0")
+    expect_keyword_literal(base, len, offset, "true\0\0\0\0\0\0\0\0")
 }
 
 fn expect_keyword_false(base: i32, len: i32, offset: i32) -> i32 {
-    expect_keyword_literal(base, len, offset, "false\0\0\0\0\0")
+    expect_keyword_literal(base, len, offset, "false\0\0\0\0\0\0\0")
 }
 
 fn expect_keyword_else(base: i32, len: i32, offset: i32) -> i32 {
-    expect_keyword_literal(base, len, offset, "else\0\0\0\0\0\0")
+    expect_keyword_literal(base, len, offset, "else\0\0\0\0\0\0\0\0")
 }
 
 fn expect_keyword_loop(base: i32, len: i32, offset: i32) -> i32 {
-    expect_keyword_literal(base, len, offset, "loop\0\0\0\0\0\0")
+    expect_keyword_literal(base, len, offset, "loop\0\0\0\0\0\0\0\0")
 }
 
 fn expect_keyword_break(base: i32, len: i32, offset: i32) -> i32 {
-    expect_keyword_literal(base, len, offset, "break\0\0\0\0\0")
+    expect_keyword_literal(base, len, offset, "break\0\0\0\0\0\0\0")
 }
 
 fn expect_keyword_continue(base: i32, len: i32, offset: i32) -> i32 {
-    expect_keyword_literal(base, len, offset, "continue\0\0")
+    expect_keyword_literal(base, len, offset, "continue\0\0\0\0")
 }
 
 fn expect_keyword_return(base: i32, len: i32, offset: i32) -> i32 {
-    expect_keyword_literal(base, len, offset, "return\0\0\0\0")
+    expect_keyword_literal(base, len, offset, "return\0\0\0\0\0\0")
 }
 
 fn parse_identifier(base: i32, len: i32, offset: i32) -> (i32, i32, i32) {
@@ -232,7 +232,9 @@ const INTRINSIC_KIND_STORE_U16: i32 = 5;
 
 const INTRINSIC_KIND_LEN: i32 = 6;
 
-fn padded_string_len(keyword: [u8; 10]) -> i32 {
+const INTRINSIC_KIND_INLINE_WASM: i32 = 7;
+
+fn padded_string_len(keyword: [u8; 12]) -> i32 {
     let capacity: i32 = len(keyword);
     let mut length: i32 = 0;
     loop {
@@ -253,7 +255,7 @@ fn identifier_matches_keyword(
     source_len: i32,
     start: i32,
     ident_len: i32,
-    keyword: [u8; 10],
+    keyword: [u8; 12],
 ) -> bool {
     if start < 0 || start + ident_len > source_len {
         return false;
@@ -278,7 +280,7 @@ fn identifier_matches_keyword(
     true
 }
 
-fn expect_keyword_literal(base: i32, len: i32, offset: i32, keyword: [u8; 10]) -> i32 {
+fn expect_keyword_literal(base: i32, len: i32, offset: i32, keyword: [u8; 12]) -> i32 {
     let keyword_len: i32 = padded_string_len(keyword);
     if keyword_len <= 0 {
         return -1;
@@ -307,16 +309,17 @@ fn expect_keyword_literal(base: i32, len: i32, offset: i32, keyword: [u8; 10]) -
 }
 
 fn identify_intrinsic(base: i32, len: i32, start: i32, ident_len: i32) -> i32 {
-    let names: [[u8; 10]; 7] = [
-        "load_u8\0\0\0",
-        "store_u8\0\0",
-        "load_i32\0\0",
-        "store_i32\0",
-        "load_u16\0\0",
-        "store_u16\0",
-        "len\0\0\0\0\0\0\0",
+    let names: [[u8; 12]; 8] = [
+        "load_u8\0\0\0\0\0",
+        "store_u8\0\0\0\0",
+        "load_i32\0\0\0\0",
+        "store_i32\0\0\0",
+        "load_u16\0\0\0\0",
+        "store_u16\0\0\0",
+        "len\0\0\0\0\0\0\0\0\0",
+        "inline_wasm\0",
     ];
-    let kinds: [i32; 7] = [
+    let kinds: [i32; 8] = [
         INTRINSIC_KIND_LOAD_U8,
         INTRINSIC_KIND_STORE_U8,
         INTRINSIC_KIND_LOAD_I32,
@@ -324,6 +327,7 @@ fn identify_intrinsic(base: i32, len: i32, start: i32, ident_len: i32) -> i32 {
         INTRINSIC_KIND_LOAD_U16,
         INTRINSIC_KIND_STORE_U16,
         INTRINSIC_KIND_LEN,
+        INTRINSIC_KIND_INLINE_WASM,
     ];
     let mut idx: i32 = 0;
     let count: i32 = len(kinds);
@@ -388,11 +392,11 @@ fn find_parameter_index(
 }
 
 fn expect_keyword_const(base: i32, len: i32, offset: i32) -> i32 {
-    expect_keyword_literal(base, len, offset, "const\0\0\0\0\0")
+    expect_keyword_literal(base, len, offset, "const\0\0\0\0\0\0\0")
 }
 
 fn expect_keyword_let(base: i32, len: i32, offset: i32) -> i32 {
-    expect_keyword_literal(base, len, offset, "let\0\0\0\0\0\0\0")
+    expect_keyword_literal(base, len, offset, "let\0\0\0\0\0\0\0\0\0")
 }
 
 const MAX_LOCALS: i32 = 512;
@@ -2113,7 +2117,7 @@ fn parse_type(base: i32, len: i32, offset: i32, ast_base: i32, out_type_ptr: i32
         };
         return next;
     };
-    let bool_keyword: [u8; 10] = "bool\0\0\0\0\0\0";
+    let bool_keyword: [u8; 12] = "bool\0\0\0\0\0\0\0\0";
     if identifier_matches_keyword(base, len, offset, ident_len, bool_keyword) {
         if out_type_ptr >= 0 {
             store_i32(out_type_ptr, BUILTIN_TYPE_ID_BOOL);
@@ -2147,6 +2151,41 @@ fn parse_i32_literal(base: i32, len: i32, offset: i32, out_value_ptr: i32) -> i3
         idx = idx + 1;
         if idx >= len {
             return -1;
+        };
+    };
+    if idx + 1 < len {
+        let leading: i32 = load_u8(base + idx);
+        let prefix: i32 = load_u8(base + idx + 1);
+        if leading == '0' && (prefix == 'x' || prefix == 'X') {
+            idx = idx + 2;
+            let mut digits: i32 = 0;
+            let mut value: i32 = 0;
+            loop {
+                if idx >= len {
+                    break;
+                };
+                let byte: i32 = load_u8(base + idx);
+                let hex: i32 = if byte >= '0' && byte <= '9' {
+                    byte - '0'
+                } else if byte >= 'a' && byte <= 'f' {
+                    byte - 'a' + 10
+                } else if byte >= 'A' && byte <= 'F' {
+                    byte - 'A' + 10
+                } else {
+                    -1
+                };
+                if hex < 0 {
+                    break;
+                };
+                value = value * 16 + hex;
+                idx = idx + 1;
+                digits = digits + 1;
+            };
+            if digits == 0 {
+                return -1;
+            };
+            store_i32(out_value_ptr, value * sign);
+            return idx;
         };
     };
     let mut digits: i32 = 0;
@@ -2399,6 +2438,130 @@ fn ast_call_data_alloc(ast_base: i32, word_count: i32) -> i32 {
     let entry_ptr: i32 = ast_call_data_base(ast_base) + used * WORD_SIZE;
     store_i32(used_ptr, used + word_count);
     entry_ptr
+}
+
+fn inline_wasm_literal_byte(ast_base: i32, expr_index: i32) -> i32 {
+    if expr_index < 0 {
+        return -1;
+    };
+    if expr_index >= ast_expr_count(ast_base) {
+        return -1;
+    };
+    let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+    let kind: i32 = load_i32(entry_ptr);
+    if kind != 0 {
+        return -1;
+    };
+    let literal_type: i32 = ast_expr_type(ast_base, expr_index);
+    if literal_type < 0 {
+        return -1;
+    };
+    if !type_id_is_integer(literal_type) {
+        return -1;
+    };
+    let value: i32 = load_i32(entry_ptr + 4);
+    let normalized: i32 = normalize_integer_value(value, literal_type);
+    if normalized < 0 {
+        return -1;
+    };
+    if normalized > 255 {
+        return -1;
+    };
+    normalized
+}
+
+fn inline_wasm_collect_bytes(
+    ast_base: i32,
+    expr_index: i32,
+    out_ptr_ptr: i32,
+    out_len_ptr: i32,
+) -> i32 {
+    if out_ptr_ptr < 0 {
+        return -1;
+    };
+    if out_len_ptr < 0 {
+        return -1;
+    };
+    store_i32(out_ptr_ptr, 0);
+    store_i32(out_len_ptr, 0);
+    if expr_index < 0 {
+        return -1;
+    };
+    if expr_index >= ast_expr_count(ast_base) {
+        return -1;
+    };
+    let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+    let kind: i32 = load_i32(entry_ptr);
+    if kind == 35 {
+        let element_index: i32 = load_i32(entry_ptr + 4);
+        let length: i32 = load_i32(entry_ptr + 8);
+        if length < 0 {
+            return -1;
+        };
+        if length == 0 {
+            return 0;
+        };
+        let byte_value: i32 = inline_wasm_literal_byte(ast_base, element_index);
+        if byte_value < 0 {
+            return -1;
+        };
+        let call_data_used_ptr: i32 = ast_call_data_len_ptr(ast_base);
+        let saved_used: i32 = load_i32(call_data_used_ptr);
+        let bytes_ptr: i32 = ast_call_data_alloc(ast_base, length);
+        if bytes_ptr < 0 {
+            store_i32(call_data_used_ptr, saved_used);
+            return -1;
+        };
+        let mut idx: i32 = 0;
+        loop {
+            if idx >= length {
+                break;
+            };
+            store_i32(bytes_ptr + idx * WORD_SIZE, byte_value);
+            idx = idx + 1;
+        };
+        store_i32(out_ptr_ptr, bytes_ptr);
+        store_i32(out_len_ptr, length);
+        return 0;
+    };
+    if kind == 37 {
+        let values_ptr: i32 = load_i32(entry_ptr + 4);
+        let element_count: i32 = load_i32(entry_ptr + 8);
+        if element_count < 0 {
+            return -1;
+        };
+        if element_count == 0 {
+            return 0;
+        };
+        if values_ptr < 0 {
+            return -1;
+        };
+        let call_data_used_ptr: i32 = ast_call_data_len_ptr(ast_base);
+        let saved_used: i32 = load_i32(call_data_used_ptr);
+        let bytes_ptr: i32 = ast_call_data_alloc(ast_base, element_count);
+        if bytes_ptr < 0 {
+            store_i32(call_data_used_ptr, saved_used);
+            return -1;
+        };
+        let mut idx: i32 = 0;
+        loop {
+            if idx >= element_count {
+                break;
+            };
+            let element_index: i32 = load_i32(values_ptr + idx * WORD_SIZE);
+            let byte_value: i32 = inline_wasm_literal_byte(ast_base, element_index);
+            if byte_value < 0 {
+                store_i32(call_data_used_ptr, saved_used);
+                return -1;
+            };
+            store_i32(bytes_ptr + idx * WORD_SIZE, byte_value);
+            idx = idx + 1;
+        };
+        store_i32(out_ptr_ptr, bytes_ptr);
+        store_i32(out_len_ptr, element_count);
+        return 0;
+    };
+    -1
 }
 
 fn call_metadata_name_ptr(metadata_ptr: i32) -> i32 {
@@ -3495,6 +3658,21 @@ fn ast_expr_alloc_store_u16(ast_base: i32, ptr_index: i32, value_index: i32) -> 
 
 fn ast_expr_alloc_store_i32(ast_base: i32, ptr_index: i32, value_index: i32) -> i32 {
     let index: i32 = ast_expr_alloc(ast_base, 34, ptr_index, value_index, 0);
+    if index < 0 {
+        return -1;
+    };
+    ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_I32);
+    index
+}
+
+fn ast_expr_alloc_inline_wasm(ast_base: i32, bytes_ptr: i32, byte_count: i32) -> i32 {
+    if byte_count < 0 {
+        return -1;
+    };
+    if byte_count > 0 && bytes_ptr < 0 {
+        return -1;
+    };
+    let index: i32 = ast_expr_alloc(ast_base, 42, bytes_ptr, byte_count, 0);
     if index < 0 {
         return -1;
     };
@@ -5654,7 +5832,8 @@ fn parse_basic_expression(
             } else {
                 return -1;
             };
-            let intrinsic_kind: i32 = identify_intrinsic(base, len, ident_start, ident_len);
+            let intrinsic_kind: i32 =
+                identify_intrinsic(base, len, ident_start, ident_len);
             if intrinsic_kind != INTRINSIC_KIND_NONE {
                 if intrinsic_kind == INTRINSIC_KIND_LOAD_U8
                     || intrinsic_kind == INTRINSIC_KIND_LOAD_U16
@@ -5713,6 +5892,33 @@ fn parse_basic_expression(
                         return -1;
                     };
                     store_i32(out_kind_ptr, 38);
+                    store_i32(out_data0_ptr, expr_index);
+                    store_i32(out_data1_ptr, 0);
+                    return skip_whitespace(base, len, call_cursor);
+                };
+                if intrinsic_kind == INTRINSIC_KIND_INLINE_WASM {
+                    if arg_count != 1 {
+                        return -1;
+                    };
+                    let arg_index: i32 = load_i32(args_list_ptr);
+                    let bytes_ptr_ptr: i32 = arg_nested_base;
+                    let byte_count_ptr: i32 = arg_nested_base + 4;
+                    if inline_wasm_collect_bytes(
+                        ast_base,
+                        arg_index,
+                        bytes_ptr_ptr,
+                        byte_count_ptr,
+                    ) < 0 {
+                        return -1;
+                    };
+                    let bytes_ptr: i32 = load_i32(bytes_ptr_ptr);
+                    let byte_count: i32 = load_i32(byte_count_ptr);
+                    let expr_index: i32 =
+                        ast_expr_alloc_inline_wasm(ast_base, bytes_ptr, byte_count);
+                    if expr_index < 0 {
+                        return -1;
+                    };
+                    store_i32(out_kind_ptr, 42);
                     store_i32(out_data0_ptr, expr_index);
                     store_i32(out_data1_ptr, 0);
                     return skip_whitespace(base, len, call_cursor);
@@ -7538,13 +7744,16 @@ fn parse_constant_declaration(
     } else {
         return -1;
     };
-    if literal_type != type_id {
+    if literal_type == type_id {
+        if type_id_is_integer(type_id) {
+            literal_value = normalize_integer_value(literal_value, type_id);
+        } else if type_id == BUILTIN_TYPE_ID_BOOL {
+            literal_value = if literal_value != 0 { 1 } else { 0 };
+        };
+    } else if type_id_is_integer(literal_type) && type_id_is_integer(type_id) {
+        literal_value = normalize_integer_value(literal_value, type_id);
+    } else {
         return -1;
-    };
-    if type_id_is_integer(literal_type) {
-        literal_value = normalize_integer_value(literal_value, literal_type);
-    } else if literal_type == BUILTIN_TYPE_ID_BOOL {
-        literal_value = if literal_value != 0 { 1 } else { 0 };
     };
 
     idx = skip_whitespace(base, len, idx);
@@ -8284,6 +8493,17 @@ fn resolve_expression_internal(
             return -1;
         };
         ast_expr_set_type(ast_base, expr_index, resolved_tuple);
+        return 0;
+    };
+    if kind == 42 {
+        let bytes_ptr: i32 = load_i32(entry_ptr + 4);
+        let byte_count: i32 = load_i32(entry_ptr + 8);
+        if byte_count < 0 {
+            return -1;
+        };
+        if byte_count > 0 && bytes_ptr < 0 {
+            return -1;
+        };
         return 0;
     };
     if kind == 29 || kind == 30 || kind == 31 {
@@ -9196,6 +9416,8 @@ fn collect_local_counts_from_expression(
             idx = idx + 1;
         };
         total
+    } else if kind == 42 {
+        0
     } else if kind == 29 || kind == 30 || kind == 31 {
         let ptr_index: i32 = load_i32(entry_ptr + 4);
         return collect_local_counts_from_expression(
@@ -9516,6 +9738,17 @@ fn expression_code_size(ast_base: i32, expr_index: i32) -> i32 {
             return -1;
         };
         return total + 2 + leb_u32_len(type_index);
+    };
+    if kind == 42 {
+        let bytes_ptr: i32 = load_i32(entry_ptr + 4);
+        let byte_count: i32 = load_i32(entry_ptr + 8);
+        if byte_count < 0 {
+            return -1;
+        };
+        if byte_count > 0 && bytes_ptr < 0 {
+            return -1;
+        };
+        return byte_count;
     };
     if kind == 29 || kind == 30 || kind == 31 {
         let ptr_index: i32 = load_i32(entry_ptr + 4);
@@ -9939,6 +10172,33 @@ fn emit_expression(base: i32, offset: i32, ast_base: i32, expr_index: i32) -> i3
         out = write_byte(base, out, 251);
         out = write_byte(base, out, 0);
         out = write_u32_leb(base, out, type_index);
+        return out;
+    };
+    if kind == 42 {
+        let bytes_ptr: i32 = load_i32(entry_ptr + 4);
+        let byte_count: i32 = load_i32(entry_ptr + 8);
+        if byte_count < 0 {
+            return -1;
+        };
+        if byte_count == 0 {
+            return offset;
+        };
+        if bytes_ptr < 0 {
+            return -1;
+        };
+        let mut out: i32 = offset;
+        let mut idx: i32 = 0;
+        loop {
+            if idx >= byte_count {
+                break;
+            };
+            let byte_value: i32 = load_i32(bytes_ptr + idx * WORD_SIZE);
+            if byte_value < 0 || byte_value > 255 {
+                return -1;
+            };
+            out = write_byte(base, out, byte_value);
+            idx = idx + 1;
+        };
         return out;
     };
     if kind == 29 || kind == 30 || kind == 31 {
