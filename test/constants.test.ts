@@ -129,7 +129,7 @@ test("const functions can use let bindings", async () => {
   expect(result).toBe(42);
 });
 
-test.skip("const expressions can use if expressions", async () => {
+test("const expressions can use if expressions", async () => {
   const wasm = await compileWithAstCompiler(`
     const VALUE: i32 = if true {
         40
