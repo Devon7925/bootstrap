@@ -2,6 +2,7 @@
 import { fileURLToPath } from "node:url";
 import { dirname, extname } from "node:path";
 import { mkdir } from "node:fs/promises";
+import process from "node:process";
 
 import { Target, compile, parseTarget, DEFAULT_TARGET, CompileError } from "./index";
 
@@ -62,14 +63,14 @@ async function main() {
       } else {
         console.error(error);
       }
-      Bun.exit(1);
+      process.exit(1);
     }
   }
 
   const inputPath = args.shift();
   if (!inputPath) {
     printUsage(program);
-    Bun.exit(1);
+    process.exit(1);
   }
 
   let outputPath: string | null = null;
@@ -85,33 +86,33 @@ async function main() {
 
     if (arg === "-o") {
       const next = args.shift();
-      if (!next) {
+      if (next === undefined) {
         console.error("error: expected path after -o");
-        Bun.exit(1);
+        process.exit(1);
       }
       outputPath = next;
     } else if (arg === "--emit") {
       const next = args.shift();
-      if (!next) {
+      if (next === undefined) {
         console.error("error: expected format after --emit");
-        Bun.exit(1);
+        process.exit(1);
       }
       if (next === "wasm") {
         emitFlag = true;
       } else if (next === "wat") {
         console.error("error: WAT output is no longer supported");
-        Bun.exit(1);
+        process.exit(1);
       } else {
         console.error(`error: unsupported emit target '${next}'`);
-        Bun.exit(1);
+        process.exit(1);
       }
     } else if (arg === "--run") {
       run = true;
     } else if (arg === "--target") {
       const next = args.shift();
-      if (!next) {
+      if (next === undefined) {
         console.error("error: expected value after --target");
-        Bun.exit(1);
+        process.exit(1);
       }
       try {
         target = parseTarget(next);
@@ -121,23 +122,23 @@ async function main() {
         } else {
           console.error(error);
         }
-        Bun.exit(1);
+        process.exit(1);
       }
     } else {
       console.error(`error: unexpected argument '${arg}'`);
       printUsage(program);
-      Bun.exit(1);
+      process.exit(1);
     }
   }
 
   if (run && target !== Target.Wasm) {
     console.error(`error: target '${target}' cannot be executed with --run`);
-    Bun.exit(1);
+    process.exit(1);
   }
 
   if (target !== Target.Wasm && !outputPath && (emitFlag ?? true)) {
     console.error(`error: target '${target}' cannot be emitted to stdout as WebAssembly`);
-    Bun.exit(1);
+    process.exit(1);
   }
 
   let source: string;
@@ -145,7 +146,7 @@ async function main() {
     source = await Bun.file(inputPath).text();
   } catch (error) {
     console.error(`error: failed to read '${inputPath}': ${error}`);
-    Bun.exit(1);
+    process.exit(1);
   }
 
   let compilation;
@@ -157,7 +158,7 @@ async function main() {
     } else {
       console.error(error);
     }
-    Bun.exit(1);
+    process.exit(1);
   }
 
   let wasmBytes: Uint8Array;
@@ -169,7 +170,7 @@ async function main() {
     } else {
       console.error(error);
     }
-    Bun.exit(1);
+    process.exit(1);
   }
 
   if (outputPath) {
@@ -177,19 +178,19 @@ async function main() {
     const ext = extname(resolved).toLowerCase();
     if (ext === ".wasm" && target !== Target.Wasm) {
       console.error(`error: target '${target}' cannot be written to '.wasm' files`);
-      Bun.exit(1);
+      process.exit(1);
     }
     if (ext === ".wat") {
       console.error("error: WAT output is no longer supported");
-      Bun.exit(1);
+      process.exit(1);
     }
     if (ext === ".wgsl" && target !== Target.Wgsl) {
       console.error(`error: target '${target}' cannot be written to '.wgsl' files`);
-      Bun.exit(1);
+      process.exit(1);
     }
     if (ext && ext !== ".wasm" && ext !== ".wgsl" && ext !== "") {
       console.error(`error: unsupported output extension '${ext}'`);
-      Bun.exit(1);
+      process.exit(1);
     }
 
     try {
@@ -197,7 +198,7 @@ async function main() {
       await Bun.write(resolved, wasmBytes);
     } catch (error) {
       console.error(`error: failed to write '${resolved}': ${error}`);
-      Bun.exit(1);
+      process.exit(1);
     }
   } else {
     const emitToStdout = emitFlag ?? true;
@@ -206,7 +207,7 @@ async function main() {
         await Bun.write(Bun.stdout, wasmBytes);
       } catch (error) {
         console.error(`error: failed to write wasm to stdout: ${error}`);
-        Bun.exit(1);
+        process.exit(1);
       }
     }
   }
@@ -220,7 +221,7 @@ async function main() {
       } else {
         console.error(error);
       }
-      Bun.exit(1);
+      process.exit(1);
     }
   }
 }
