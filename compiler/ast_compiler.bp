@@ -22,6 +22,103 @@ fn store_i32(ptr: i32, value: i32) -> i32 {
     inline_wasm([0x20, 0x00, 0x20, 0x01, 0x36, 0x02, 0x00, 0x41, 0x00])
 }
 
+fn memory_size_pages() -> i32 {
+    inline_wasm([0x3f, 0x00])
+}
+
+fn memory_grow_pages(pages: i32) -> i32 {
+    inline_wasm([0x20, 0x00, 0x40, 0x00])
+}
+
+fn ensure_memory_capacity(required: i32) -> i32 {
+    if required <= 0 {
+        return 0;
+    };
+    let mut current_pages: i32 = memory_size_pages();
+    if current_pages < 0 {
+        return -1;
+    };
+    let mut current_bytes: i32 = current_pages << 16;
+    if current_bytes >= required {
+        return 0;
+    };
+    loop {
+        let additional_bytes: i32 = required - current_bytes;
+        if additional_bytes <= 0 {
+            break;
+        };
+        let mut additional_pages: i32 = additional_bytes >> 16;
+        if (additional_bytes & 65535) != 0 {
+            additional_pages = additional_pages + 1;
+        };
+        if additional_pages <= 0 {
+            additional_pages = 1;
+        };
+        let previous_pages: i32 = memory_grow_pages(additional_pages);
+        if previous_pages < 0 {
+            return -1;
+        };
+        current_pages = previous_pages + additional_pages;
+        current_bytes = current_pages << 16;
+        if current_bytes >= required {
+            break;
+        };
+    };
+    0
+}
+
+fn string_length(ptr: i32) -> i32 {
+    if ptr <= 0 {
+        return -1;
+    };
+    let mut len: i32 = 0;
+    loop {
+        let byte: i32 = load_u8(ptr + len);
+        if byte == 0 {
+            break;
+        };
+        len = len + 1;
+    };
+    len
+}
+
+fn copy_bytes(dest: i32, src: i32, len: i32) {
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= len {
+            break;
+        };
+        let byte: i32 = load_u8(src + idx);
+        store_u8(dest + idx, byte);
+        idx = idx + 1;
+    };
+}
+
+fn memory_equal(a_ptr: i32, b_ptr: i32, len: i32) -> bool {
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= len {
+            break;
+        };
+        let a_byte: i32 = load_u8(a_ptr + idx);
+        let b_byte: i32 = load_u8(b_ptr + idx);
+        if a_byte != b_byte {
+            return false;
+        };
+        idx = idx + 1;
+    };
+    true
+}
+
+fn align_to(value: i32, alignment: i32) -> i32 {
+    if alignment <= 0 {
+        return value;
+    };
+    let mut adjusted: i32 = value + alignment - 1;
+    adjusted = adjusted / alignment * alignment;
+    adjusted
+}
+
 fn write_byte(base: i32, offset: i32, value: i32) -> i32 {
     store_u8(base + offset, value & 255);
     offset + 1
@@ -2282,6 +2379,161 @@ const TYPE_ENTRY_EXTRA_OFFSET: i32 = 12;
 const SCRATCH_TYPES_BASE_OFFSET: i32 = SCRATCH_FN_BASE_OFFSET - SCRATCH_TYPES_CAPACITY * TYPE_ENTRY_SIZE;
 
 const SCRATCH_TYPES_COUNT_OFFSET: i32 = SCRATCH_TYPES_BASE_OFFSET - WORD_SIZE;
+
+const MODULE_STATE_BASE: i32 = 1048576;
+
+const MODULE_COUNT_OFFSET: i32 = 0;
+
+const MODULE_STORAGE_TOP_OFFSET: i32 = 4;
+
+const MODULE_TABLE_OFFSET: i32 = 8;
+
+const MODULE_MAX_COUNT: i32 = 256;
+
+const MODULE_ENTRY_SIZE: i32 = 16;
+
+const MODULE_PATH_PTR_OFFSET: i32 = 0;
+
+const MODULE_PATH_LEN_OFFSET: i32 = 4;
+
+const MODULE_CONTENT_PTR_OFFSET: i32 = 8;
+
+const MODULE_CONTENT_LEN_OFFSET: i32 = 12;
+
+const MODULE_CONTENT_BASE_OFFSET: i32 = MODULE_TABLE_OFFSET + MODULE_MAX_COUNT * MODULE_ENTRY_SIZE;
+
+fn module_count_ptr() -> i32 {
+    MODULE_STATE_BASE + MODULE_COUNT_OFFSET
+}
+
+fn module_storage_top_ptr() -> i32 {
+    MODULE_STATE_BASE + MODULE_STORAGE_TOP_OFFSET
+}
+
+fn module_table_base() -> i32 {
+    MODULE_STATE_BASE + MODULE_TABLE_OFFSET
+}
+
+fn module_entry_ptr(index: i32) -> i32 {
+    module_table_base() + index * MODULE_ENTRY_SIZE
+}
+
+fn module_entry_path_ptr(entry_ptr: i32) -> i32 {
+    entry_ptr + MODULE_PATH_PTR_OFFSET
+}
+
+fn module_entry_path_len_ptr(entry_ptr: i32) -> i32 {
+    entry_ptr + MODULE_PATH_LEN_OFFSET
+}
+
+fn module_entry_content_ptr_ptr(entry_ptr: i32) -> i32 {
+    entry_ptr + MODULE_CONTENT_PTR_OFFSET
+}
+
+fn module_entry_content_len_ptr(entry_ptr: i32) -> i32 {
+    entry_ptr + MODULE_CONTENT_LEN_OFFSET
+}
+
+fn module_content_base() -> i32 {
+    MODULE_STATE_BASE + MODULE_CONTENT_BASE_OFFSET
+}
+
+fn module_count() -> i32 {
+    load_i32(module_count_ptr())
+}
+
+fn module_set_count(count: i32) {
+    store_i32(module_count_ptr(), count);
+}
+
+fn module_storage_top() -> i32 {
+    load_i32(module_storage_top_ptr())
+}
+
+fn module_set_storage_top(value: i32) {
+    store_i32(module_storage_top_ptr(), value);
+}
+
+fn module_ensure_state_initialized() {
+    let top: i32 = module_storage_top();
+    if top == 0 {
+        module_set_storage_top(module_content_base());
+        module_set_count(0);
+    };
+}
+
+fn module_allocate_bytes(len: i32) -> i32 {
+    module_ensure_state_initialized();
+    if len < 0 {
+        return -1;
+    };
+    let mut top: i32 = module_storage_top();
+    if top <= 0 {
+        return -1;
+    };
+    top = align_to(top, WORD_SIZE);
+    let start: i32 = top;
+    let mut end: i32 = start + len;
+    if len == 0 {
+        end = start;
+    };
+    if ensure_memory_capacity(end + 1) < 0 {
+        return -1;
+    };
+    module_set_storage_top(end);
+    start
+}
+
+fn module_find_index(path_ptr: i32, path_len: i32) -> i32 {
+    let count: i32 = module_count();
+    if count <= 0 {
+        return -1;
+    };
+    let mut index: i32 = 0;
+    loop {
+        if index >= count {
+            break;
+        };
+        let entry_ptr: i32 = module_entry_ptr(index);
+        let stored_len: i32 = load_i32(module_entry_path_len_ptr(entry_ptr));
+        if stored_len == path_len {
+            let stored_ptr: i32 = load_i32(module_entry_path_ptr(entry_ptr));
+            if stored_ptr > 0 && memory_equal(stored_ptr, path_ptr, path_len) {
+                return index;
+            };
+        };
+        index = index + 1;
+    };
+    -1
+}
+
+fn module_entry_path(index: i32) -> i32 {
+    let entry_ptr: i32 = module_entry_ptr(index);
+    load_i32(module_entry_path_ptr(entry_ptr))
+}
+
+fn module_entry_path_len(index: i32) -> i32 {
+    let entry_ptr: i32 = module_entry_ptr(index);
+    load_i32(module_entry_path_len_ptr(entry_ptr))
+}
+
+fn module_entry_content(index: i32) -> i32 {
+    let entry_ptr: i32 = module_entry_ptr(index);
+    load_i32(module_entry_content_ptr_ptr(entry_ptr))
+}
+
+fn module_entry_content_len(index: i32) -> i32 {
+    let entry_ptr: i32 = module_entry_ptr(index);
+    load_i32(module_entry_content_len_ptr(entry_ptr))
+}
+
+fn module_write_entry(index: i32, path_ptr: i32, path_len: i32, content_ptr: i32, content_len: i32) {
+    let entry_ptr: i32 = module_entry_ptr(index);
+    store_i32(module_entry_path_ptr(entry_ptr), path_ptr);
+    store_i32(module_entry_path_len_ptr(entry_ptr), path_len);
+    store_i32(module_entry_content_ptr_ptr(entry_ptr), content_ptr);
+    store_i32(module_entry_content_len_ptr(entry_ptr), content_len);
+}
 
 fn scratch_instr_offset_ptr(out_ptr: i32) -> i32 {
     out_ptr + SCRATCH_INSTR_OFFSET
@@ -11273,7 +11525,7 @@ fn initialize_layout(out_ptr: i32) {
     store_i32(scratch_types_count_ptr(out_ptr), 0);
 }
 
-fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
+fn compile_impl(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
     if input_len <= 0 {
         return -1;
     };
@@ -11299,6 +11551,86 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
         return -1;
     };
     produced_len
+}
+
+fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
+    compile_impl(input_ptr, input_len, out_ptr)
+}
+
+fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
+    if path_ptr <= 0 || content_ptr <= 0 {
+        return -1;
+    };
+    module_ensure_state_initialized();
+    let path_len: i32 = string_length(path_ptr);
+    if path_len <= 0 {
+        return -1;
+    };
+    let content_len: i32 = string_length(content_ptr);
+    if content_len < 0 {
+        return -1;
+    };
+    let existing_index: i32 = module_find_index(path_ptr, path_len);
+    let mut stored_path_ptr: i32 = 0;
+    if existing_index >= 0 {
+        stored_path_ptr = module_entry_path(existing_index);
+    } else {
+        if module_count() >= MODULE_MAX_COUNT {
+            return -1;
+        };
+        let allocated_path_ptr: i32 = module_allocate_bytes(path_len + 1);
+        if allocated_path_ptr <= 0 {
+            return -1;
+        };
+        copy_bytes(allocated_path_ptr, path_ptr, path_len);
+        store_u8(allocated_path_ptr + path_len, 0);
+        stored_path_ptr = allocated_path_ptr;
+    };
+    let allocated_content_ptr: i32 = module_allocate_bytes(content_len + 1);
+    if allocated_content_ptr <= 0 {
+        return -1;
+    };
+    copy_bytes(allocated_content_ptr, content_ptr, content_len);
+    store_u8(allocated_content_ptr + content_len, 0);
+    let mut store_index: i32 = existing_index;
+    if store_index < 0 {
+        store_index = module_count();
+        module_set_count(store_index + 1);
+    };
+    module_write_entry(store_index, stored_path_ptr, path_len, allocated_content_ptr, content_len);
+    0
+}
+
+fn compileFromPath(path_ptr: i32) -> i32 {
+    if path_ptr <= 0 {
+        return -1;
+    };
+    module_ensure_state_initialized();
+    let path_len: i32 = string_length(path_ptr);
+    if path_len <= 0 {
+        return -1;
+    };
+    let index: i32 = module_find_index(path_ptr, path_len);
+    if index < 0 {
+        return -1;
+    };
+    let input_ptr: i32 = module_entry_content(index);
+    let input_len: i32 = module_entry_content_len(index);
+    if input_ptr <= 0 || input_len <= 0 {
+        return -1;
+    };
+    let mut out_ptr: i32 = module_storage_top();
+    if out_ptr <= 0 {
+        module_ensure_state_initialized();
+        out_ptr = module_storage_top();
+    };
+    out_ptr = align_to(out_ptr, WORD_SIZE);
+    module_set_storage_top(out_ptr);
+    let required: i32 = out_ptr + ast_output_reserve(input_len);
+    if ensure_memory_capacity(required) < 0 {
+        return -1;
+    };
+    compile_impl(input_ptr, input_len, out_ptr)
 }
 
 fn main() -> i32 {
