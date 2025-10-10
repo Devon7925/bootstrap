@@ -95,6 +95,19 @@ async function loadAndCompile(
   return readOutput(compiler.memory, producedLength);
 }
 
+async function loadModuleSource(
+  compiler: Stage2Compiler,
+  pathPtr: number,
+  contentPtr: number,
+  path: string,
+  source: string,
+): Promise<void> {
+  writeString(compiler.memory, pathPtr, path);
+  const contentLength = writeString(compiler.memory, contentPtr, source);
+  expect(compiler.loadModuleFromSource(pathPtr, contentPtr)).toBe(0);
+  zeroMemory(compiler.memory, contentPtr, contentLength + 1);
+}
+
 test("loadModuleFromSource persists content for compileFromPath", async () => {
   const compiler = await instantiateStage2Compiler();
   const pathPtr = 1_024;
@@ -129,4 +142,94 @@ test("compileFromPath returns failure for unknown modules", async () => {
   const pathPtr = 1_024;
   writeString(compiler.memory, pathPtr, "/fixtures/missing.bp");
   expect(compiler.compileFromPath(pathPtr)).toBeLessThan(0);
+});
+
+test("compileFromPath resolves use imports relative to module", async () => {
+  const compiler = await instantiateStage2Compiler();
+  const pathPtr = 1_024;
+  const contentPtr = 4_096;
+
+  await loadModuleSource(
+    compiler,
+    pathPtr,
+    contentPtr,
+    "/fixtures/lib.bp",
+    `
+    fn provide() -> i32 { 7 }
+  `,
+  );
+
+  writeString(compiler.memory, pathPtr, "/fixtures/main.bp");
+  const wasm = await loadAndCompile(
+    compiler,
+    pathPtr,
+    contentPtr,
+    `
+    use "./lib.bp";
+
+    fn main() -> i32 {
+        provide()
+    }
+  `,
+  );
+  const instance = await instantiateWasmModuleWithGc(wasm);
+  const main = expectExportedFunction(instance, "main");
+  expect(main()).toBe(7);
+});
+
+test("compileFromPath resolves use imports with parent segments", async () => {
+  const compiler = await instantiateStage2Compiler();
+  const pathPtr = 1_024;
+  const contentPtr = 4_096;
+
+  await loadModuleSource(
+    compiler,
+    pathPtr,
+    contentPtr,
+    "/fixtures/lib.bp",
+    `
+    fn provide() -> i32 { 11 }
+  `,
+  );
+
+  writeString(compiler.memory, pathPtr, "/fixtures/nested/main.bp");
+  const wasm = await loadAndCompile(
+    compiler,
+    pathPtr,
+    contentPtr,
+    `
+    use "../lib.bp";
+
+    fn main() -> i32 {
+        provide()
+    }
+  `,
+  );
+  const instance = await instantiateWasmModuleWithGc(wasm);
+  const main = expectExportedFunction(instance, "main");
+  expect(main()).toBe(11);
+});
+
+test("compileFromPath fails when use import is missing", async () => {
+  const compiler = await instantiateStage2Compiler();
+  const pathPtr = 1_024;
+  const contentPtr = 4_096;
+
+  writeString(compiler.memory, pathPtr, "/fixtures/main.bp");
+  const contentLength = writeString(
+    compiler.memory,
+    contentPtr,
+    `
+    use "./missing.bp";
+
+    fn main() -> i32 {
+        0
+    }
+  `,
+  );
+  expect(compiler.loadModuleFromSource(pathPtr, contentPtr)).toBe(0);
+  zeroMemory(compiler.memory, contentPtr, contentLength + 1);
+
+  const producedLength = compiler.compileFromPath(pathPtr);
+  expect(producedLength).toBeLessThan(0);
 });
