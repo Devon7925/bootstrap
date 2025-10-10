@@ -129,6 +129,22 @@ test("const functions can use let bindings", async () => {
   expect(result).toBe(42);
 });
 
+test.skip("const expressions can use if expressions", async () => {
+  const wasm = await compileWithAstCompiler(`
+    const VALUE: i32 = if true {
+        40
+    } else {
+        0
+    } + 2;
+
+    fn main() -> i32 {
+        VALUE
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(42);
+});
+
 test("const functions can call other const functions", async () => {
   const wasm = await compileWithAstCompiler(`
     const fn base() -> i32 {
