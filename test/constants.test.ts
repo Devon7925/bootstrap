@@ -167,7 +167,7 @@ test("const functions can conditionally assign", async () => {
   expect(result).toBe(42);
 });
 
-test.skip("const functions can use loops", async () => {
+test("const functions can use loops", async () => {
   const wasm = await compileWithAstCompiler(`
     const fn loop_sum(limit: i32) -> i32 {
         let mut acc: i32 = 0;

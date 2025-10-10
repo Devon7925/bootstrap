@@ -3170,6 +3170,12 @@ fn expression_node_from_parts(ast_base: i32, kind: i32, data0: i32, data1: i32) 
     data0
 }
 
+const CONST_EVAL_STATUS_OK: i32 = 0;
+const CONST_EVAL_STATUS_BREAK: i32 = 1;
+const CONST_EVAL_STATUS_CONTINUE: i32 = 2;
+const CONST_EVAL_STATUS_RETURN: i32 = 3;
+const CONST_EVAL_LOOP_LIMIT: i32 = 1048576;
+
 fn interpret_constant_expression(
     ast_base: i32,
     expr_index: i32,
@@ -3200,7 +3206,7 @@ fn interpret_constant_expression(
         store_i32(out_value_ptr, value);
         store_i32(out_type_ptr, expr_type);
         store_i32(scratch_top_ptr, saved_top);
-        return 0;
+        return CONST_EVAL_STATUS_OK;
     };
     if kind == 6 {
         if param_count <= 0 {
@@ -3243,7 +3249,7 @@ fn interpret_constant_expression(
         store_i32(out_value_ptr, value);
         store_i32(out_type_ptr, value_type);
         store_i32(scratch_top_ptr, saved_top);
-        return 0;
+        return CONST_EVAL_STATUS_OK;
     };
     if kind == 7 {
         let condition_index: i32 = load_i32(entry_ptr + 4);
@@ -3265,7 +3271,7 @@ fn interpret_constant_expression(
         let cond_value_ptr: i32 = scratch_base + cond_offset;
         let cond_type_ptr: i32 = cond_value_ptr + 4;
         store_i32(scratch_top_ptr, cond_offset + 8);
-        if interpret_constant_expression(
+        let cond_status: i32 = interpret_constant_expression(
             ast_base,
             condition_index,
             scratch_base,
@@ -3275,7 +3281,12 @@ fn interpret_constant_expression(
             param_values_ptr,
             param_count,
             env_values_count,
-        ) < 0 {
+        );
+        if cond_status < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        if cond_status != CONST_EVAL_STATUS_OK {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         };
@@ -3286,7 +3297,7 @@ fn interpret_constant_expression(
         let cond_bool: i32 = if load_i32(cond_value_ptr) != 0 { 1 } else { 0 };
         store_i32(scratch_top_ptr, cond_offset);
         let branch_index: i32 = if cond_bool != 0 { then_index } else { else_index };
-        if interpret_constant_expression(
+        let branch_status: i32 = interpret_constant_expression(
             ast_base,
             branch_index,
             scratch_base,
@@ -3296,9 +3307,14 @@ fn interpret_constant_expression(
             param_values_ptr,
             param_count,
             env_values_count,
-        ) < 0 {
+        );
+        if branch_status < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
+        };
+        if branch_status != CONST_EVAL_STATUS_OK {
+            store_i32(scratch_top_ptr, saved_top);
+            return branch_status;
         };
         let expr_type: i32 = ast_expr_type(ast_base, expr_index);
         let branch_type: i32 = load_i32(out_type_ptr);
@@ -3309,7 +3325,7 @@ fn interpret_constant_expression(
             };
         };
         store_i32(scratch_top_ptr, saved_top);
-        return 0;
+        return CONST_EVAL_STATUS_OK;
     };
     if kind == 8 {
         if param_values_ptr < 0 {
@@ -3352,7 +3368,7 @@ fn interpret_constant_expression(
         store_i32(out_value_ptr, value);
         store_i32(out_type_ptr, value_type);
         store_i32(scratch_top_ptr, saved_top);
-        return 0;
+        return CONST_EVAL_STATUS_OK;
     };
     if kind == 1 {
         let metadata_ptr: i32 = load_i32(entry_ptr + 4);
@@ -3411,7 +3427,7 @@ fn interpret_constant_expression(
             let arg_type_ptr: i32 = arg_value_ptr + 4;
             store_i32(scratch_top_ptr, current_offset + 8);
             let arg_expr_index: i32 = load_i32(args_base + arg_idx * 4);
-            if interpret_constant_expression(
+            let arg_status: i32 = interpret_constant_expression(
                 ast_base,
                 arg_expr_index,
                 scratch_base,
@@ -3421,9 +3437,14 @@ fn interpret_constant_expression(
                 param_values_ptr,
                 param_count,
                 env_values_count,
-            ) < 0 {
+            );
+            if arg_status < 0 {
                 store_i32(scratch_top_ptr, saved_top);
                 return -1;
+            };
+            if arg_status != CONST_EVAL_STATUS_OK {
+                store_i32(scratch_top_ptr, saved_top);
+                return arg_status;
             };
             arg_idx = arg_idx + 1;
         };
@@ -3468,7 +3489,7 @@ fn interpret_constant_expression(
                 local_fill_idx = local_fill_idx + 1;
             };
         };
-        if interpret_constant_expression(
+        let body_status: i32 = interpret_constant_expression(
             ast_base,
             body_expr_index,
             scratch_base,
@@ -3478,7 +3499,14 @@ fn interpret_constant_expression(
             env_ptr,
             callee_param_count,
             env_total,
-        ) < 0 {
+        );
+        if body_status < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        if body_status == CONST_EVAL_STATUS_BREAK
+            || body_status == CONST_EVAL_STATUS_CONTINUE
+        {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         };
@@ -3491,7 +3519,10 @@ fn interpret_constant_expression(
             };
         };
         store_i32(scratch_top_ptr, saved_top);
-        return 0;
+        if body_status == CONST_EVAL_STATUS_RETURN {
+            return CONST_EVAL_STATUS_OK;
+        };
+        return CONST_EVAL_STATUS_OK;
     };
     if kind == 9 {
         if param_values_ptr < 0 {
@@ -3527,7 +3558,7 @@ fn interpret_constant_expression(
         };
         let local_ptr: i32 = param_values_ptr + local_index * 8;
         let local_type_ptr: i32 = local_ptr + 4;
-        if interpret_constant_expression(
+        let init_status: i32 = interpret_constant_expression(
             ast_base,
             init_index,
             scratch_base,
@@ -3537,12 +3568,18 @@ fn interpret_constant_expression(
             param_values_ptr,
             param_count,
             env_values_count,
-        ) < 0 {
+        );
+        if init_status < 0 {
             store_i32(local_type_ptr, -1);
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         };
-        if interpret_constant_expression(
+        if init_status != CONST_EVAL_STATUS_OK {
+            store_i32(local_type_ptr, -1);
+            store_i32(scratch_top_ptr, saved_top);
+            return init_status;
+        };
+        let body_status: i32 = interpret_constant_expression(
             ast_base,
             body_index,
             scratch_base,
@@ -3552,12 +3589,17 @@ fn interpret_constant_expression(
             param_values_ptr,
             param_count,
             env_values_count,
-        ) < 0 {
+        );
+        if body_status < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         };
+        if body_status != CONST_EVAL_STATUS_OK {
+            store_i32(scratch_top_ptr, saved_top);
+            return body_status;
+        };
         store_i32(scratch_top_ptr, saved_top);
-        return 0;
+        return CONST_EVAL_STATUS_OK;
     };
     if kind == 10 {
         if param_values_ptr < 0 {
@@ -3597,7 +3639,7 @@ fn interpret_constant_expression(
         let value_ptr: i32 = scratch_base + value_offset;
         let value_type_ptr: i32 = value_ptr + 4;
         store_i32(scratch_top_ptr, value_offset + 8);
-        if interpret_constant_expression(
+        let value_status: i32 = interpret_constant_expression(
             ast_base,
             value_index,
             scratch_base,
@@ -3607,9 +3649,14 @@ fn interpret_constant_expression(
             param_values_ptr,
             param_count,
             env_values_count,
-        ) < 0 {
+        );
+        if value_status < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
+        };
+        if value_status != CONST_EVAL_STATUS_OK {
+            store_i32(scratch_top_ptr, saved_top);
+            return value_status;
         };
         let new_type: i32 = load_i32(value_type_ptr);
         if new_type != existing_type {
@@ -3622,7 +3669,7 @@ fn interpret_constant_expression(
         store_i32(out_value_ptr, new_value);
         store_i32(out_type_ptr, new_type);
         store_i32(scratch_top_ptr, saved_top);
-        return 0;
+        return CONST_EVAL_STATUS_OK;
     };
     if kind == 11 {
         let first_index: i32 = load_i32(entry_ptr + 4);
@@ -3639,7 +3686,7 @@ fn interpret_constant_expression(
         let first_value_ptr: i32 = scratch_base + first_offset;
         let first_type_ptr: i32 = first_value_ptr + 4;
         store_i32(scratch_top_ptr, first_offset + 8);
-        if interpret_constant_expression(
+        let first_status: i32 = interpret_constant_expression(
             ast_base,
             first_index,
             scratch_base,
@@ -3649,12 +3696,17 @@ fn interpret_constant_expression(
             param_values_ptr,
             param_count,
             env_values_count,
-        ) < 0 {
+        );
+        if first_status < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         };
         store_i32(scratch_top_ptr, first_offset);
-        if interpret_constant_expression(
+        if first_status != CONST_EVAL_STATUS_OK {
+            store_i32(scratch_top_ptr, saved_top);
+            return first_status;
+        };
+        let then_status: i32 = interpret_constant_expression(
             ast_base,
             then_index,
             scratch_base,
@@ -3664,12 +3716,72 @@ fn interpret_constant_expression(
             param_values_ptr,
             param_count,
             env_values_count,
-        ) < 0 {
+        );
+        if then_status < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         };
+        if then_status != CONST_EVAL_STATUS_OK {
+            store_i32(scratch_top_ptr, saved_top);
+            return then_status;
+        };
         store_i32(scratch_top_ptr, saved_top);
-        return 0;
+        return CONST_EVAL_STATUS_OK;
+    };
+    if kind == 12 {
+        let body_index: i32 = load_i32(entry_ptr + 4);
+        if body_index < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        let mut iterations: i32 = 0;
+        loop {
+            if iterations >= CONST_EVAL_LOOP_LIMIT {
+                store_i32(scratch_top_ptr, saved_top);
+                return -1;
+            };
+            iterations = iterations + 1;
+            let body_offset: i32 = load_i32(scratch_top_ptr);
+            let body_value_ptr: i32 = scratch_base + body_offset;
+            let body_type_ptr: i32 = body_value_ptr + 4;
+            store_i32(scratch_top_ptr, body_offset + 8);
+            let body_status: i32 = interpret_constant_expression(
+                ast_base,
+                body_index,
+                scratch_base,
+                scratch_top_ptr,
+                body_value_ptr,
+                body_type_ptr,
+                param_values_ptr,
+                param_count,
+                env_values_count,
+            );
+            if body_status < 0 {
+                store_i32(scratch_top_ptr, saved_top);
+                return -1;
+            };
+            store_i32(scratch_top_ptr, body_offset);
+            if body_status == CONST_EVAL_STATUS_OK {
+                continue;
+            };
+            if body_status == CONST_EVAL_STATUS_CONTINUE {
+                continue;
+            };
+            if body_status == CONST_EVAL_STATUS_BREAK {
+                store_i32(out_value_ptr, load_i32(body_value_ptr));
+                store_i32(out_type_ptr, load_i32(body_type_ptr));
+                store_i32(scratch_top_ptr, saved_top);
+                return CONST_EVAL_STATUS_OK;
+            };
+            if body_status == CONST_EVAL_STATUS_RETURN {
+                store_i32(out_value_ptr, load_i32(body_value_ptr));
+                store_i32(out_type_ptr, load_i32(body_type_ptr));
+                store_i32(scratch_top_ptr, saved_top);
+                return CONST_EVAL_STATUS_RETURN;
+            };
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
     };
     if kind == 2
         || kind == 3
@@ -3693,7 +3805,7 @@ fn interpret_constant_expression(
         let left_value_ptr: i32 = scratch_base + left_offset;
         let left_type_ptr: i32 = left_value_ptr + 4;
         store_i32(scratch_top_ptr, left_offset + 8);
-        if interpret_constant_expression(
+        let left_status: i32 = interpret_constant_expression(
             ast_base,
             left_index,
             scratch_base,
@@ -3703,15 +3815,20 @@ fn interpret_constant_expression(
             param_values_ptr,
             param_count,
             env_values_count,
-        ) < 0 {
+        );
+        if left_status < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
+        };
+        if left_status != CONST_EVAL_STATUS_OK {
+            store_i32(scratch_top_ptr, saved_top);
+            return left_status;
         };
         let right_offset: i32 = load_i32(scratch_top_ptr);
         let right_value_ptr: i32 = scratch_base + right_offset;
         let right_type_ptr: i32 = right_value_ptr + 4;
         store_i32(scratch_top_ptr, right_offset + 8);
-        if interpret_constant_expression(
+        let right_status: i32 = interpret_constant_expression(
             ast_base,
             right_index,
             scratch_base,
@@ -3721,9 +3838,14 @@ fn interpret_constant_expression(
             param_values_ptr,
             param_count,
             env_values_count,
-        ) < 0 {
+        );
+        if right_status < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
+        };
+        if right_status != CONST_EVAL_STATUS_OK {
+            store_i32(scratch_top_ptr, saved_top);
+            return right_status;
         };
         let left_type: i32 = load_i32(left_type_ptr);
         let right_type: i32 = load_i32(right_type_ptr);
@@ -3775,7 +3897,7 @@ fn interpret_constant_expression(
         store_i32(out_value_ptr, normalized);
         store_i32(out_type_ptr, target_type);
         store_i32(scratch_top_ptr, saved_top);
-        return 0;
+        return CONST_EVAL_STATUS_OK;
     };
     if kind == 14
         || kind == 15
@@ -3795,7 +3917,7 @@ fn interpret_constant_expression(
         let left_value_ptr: i32 = scratch_base + left_offset;
         let left_type_ptr: i32 = left_value_ptr + 4;
         store_i32(scratch_top_ptr, left_offset + 8);
-        if interpret_constant_expression(
+        let left_status: i32 = interpret_constant_expression(
             ast_base,
             left_index,
             scratch_base,
@@ -3805,15 +3927,20 @@ fn interpret_constant_expression(
             param_values_ptr,
             param_count,
             env_values_count,
-        ) < 0 {
+        );
+        if left_status < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
+        };
+        if left_status != CONST_EVAL_STATUS_OK {
+            store_i32(scratch_top_ptr, saved_top);
+            return left_status;
         };
         let right_offset: i32 = load_i32(scratch_top_ptr);
         let right_value_ptr: i32 = scratch_base + right_offset;
         let right_type_ptr: i32 = right_value_ptr + 4;
         store_i32(scratch_top_ptr, right_offset + 8);
-        if interpret_constant_expression(
+        let right_status: i32 = interpret_constant_expression(
             ast_base,
             right_index,
             scratch_base,
@@ -3823,9 +3950,14 @@ fn interpret_constant_expression(
             param_values_ptr,
             param_count,
             env_values_count,
-        ) < 0 {
+        );
+        if right_status < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
+        };
+        if right_status != CONST_EVAL_STATUS_OK {
+            store_i32(scratch_top_ptr, saved_top);
+            return right_status;
         };
         let value_type: i32 = load_i32(left_type_ptr);
         if value_type != load_i32(right_type_ptr) {
@@ -3878,7 +4010,7 @@ fn interpret_constant_expression(
         store_i32(out_value_ptr, bool_result);
         store_i32(out_type_ptr, BUILTIN_TYPE_ID_BOOL);
         store_i32(scratch_top_ptr, saved_top);
-        return 0;
+        return CONST_EVAL_STATUS_OK;
     };
     if kind == 20 || kind == 21 {
         let result_type: i32 = ast_expr_type(ast_base, expr_index);
@@ -3892,7 +4024,7 @@ fn interpret_constant_expression(
         let left_value_ptr: i32 = scratch_base + left_offset;
         let left_type_ptr: i32 = left_value_ptr + 4;
         store_i32(scratch_top_ptr, left_offset + 8);
-        if interpret_constant_expression(
+        let left_status: i32 = interpret_constant_expression(
             ast_base,
             left_index,
             scratch_base,
@@ -3902,9 +4034,14 @@ fn interpret_constant_expression(
             param_values_ptr,
             param_count,
             env_values_count,
-        ) < 0 {
+        );
+        if left_status < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
+        };
+        if left_status != CONST_EVAL_STATUS_OK {
+            store_i32(scratch_top_ptr, saved_top);
+            return left_status;
         };
         if load_i32(left_type_ptr) != BUILTIN_TYPE_ID_BOOL {
             store_i32(scratch_top_ptr, saved_top);
@@ -3916,21 +4053,21 @@ fn interpret_constant_expression(
                 store_i32(out_value_ptr, 1);
                 store_i32(out_type_ptr, BUILTIN_TYPE_ID_BOOL);
                 store_i32(scratch_top_ptr, saved_top);
-                return 0;
+                return CONST_EVAL_STATUS_OK;
             };
         } else {
             if left_bool == 0 {
                 store_i32(out_value_ptr, 0);
                 store_i32(out_type_ptr, BUILTIN_TYPE_ID_BOOL);
                 store_i32(scratch_top_ptr, saved_top);
-                return 0;
+                return CONST_EVAL_STATUS_OK;
             };
         };
         let right_offset: i32 = load_i32(scratch_top_ptr);
         let right_value_ptr: i32 = scratch_base + right_offset;
         let right_type_ptr: i32 = right_value_ptr + 4;
         store_i32(scratch_top_ptr, right_offset + 8);
-        if interpret_constant_expression(
+        let right_status: i32 = interpret_constant_expression(
             ast_base,
             right_index,
             scratch_base,
@@ -3940,9 +4077,14 @@ fn interpret_constant_expression(
             param_values_ptr,
             param_count,
             env_values_count,
-        ) < 0 {
+        );
+        if right_status < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
+        };
+        if right_status != CONST_EVAL_STATUS_OK {
+            store_i32(scratch_top_ptr, saved_top);
+            return right_status;
         };
         if load_i32(right_type_ptr) != BUILTIN_TYPE_ID_BOOL {
             store_i32(scratch_top_ptr, saved_top);
@@ -3952,7 +4094,7 @@ fn interpret_constant_expression(
         store_i32(out_value_ptr, right_bool);
         store_i32(out_type_ptr, BUILTIN_TYPE_ID_BOOL);
         store_i32(scratch_top_ptr, saved_top);
-        return 0;
+        return CONST_EVAL_STATUS_OK;
     };
     if kind == 22 {
         let result_type: i32 = ast_expr_type(ast_base, expr_index);
@@ -3965,7 +4107,7 @@ fn interpret_constant_expression(
         let value_ptr: i32 = scratch_base + value_offset;
         let value_type_ptr: i32 = value_ptr + 4;
         store_i32(scratch_top_ptr, value_offset + 8);
-        if interpret_constant_expression(
+        let value_status: i32 = interpret_constant_expression(
             ast_base,
             value_index,
             scratch_base,
@@ -3975,9 +4117,14 @@ fn interpret_constant_expression(
             param_values_ptr,
             param_count,
             env_values_count,
-        ) < 0 {
+        );
+        if value_status < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
+        };
+        if value_status != CONST_EVAL_STATUS_OK {
+            store_i32(scratch_top_ptr, saved_top);
+            return value_status;
         };
         if load_i32(value_type_ptr) != BUILTIN_TYPE_ID_BOOL {
             store_i32(scratch_top_ptr, saved_top);
@@ -3987,7 +4134,7 @@ fn interpret_constant_expression(
         store_i32(out_value_ptr, if value_bool == 0 { 1 } else { 0 });
         store_i32(out_type_ptr, BUILTIN_TYPE_ID_BOOL);
         store_i32(scratch_top_ptr, saved_top);
-        return 0;
+        return CONST_EVAL_STATUS_OK;
     };
     if kind == 39 {
         let target_type: i32 = load_i32(entry_ptr + 8);
@@ -4000,7 +4147,7 @@ fn interpret_constant_expression(
         let value_ptr: i32 = scratch_base + value_offset;
         let value_type_ptr: i32 = value_ptr + 4;
         store_i32(scratch_top_ptr, value_offset + 8);
-        if interpret_constant_expression(
+        let value_status: i32 = interpret_constant_expression(
             ast_base,
             value_index,
             scratch_base,
@@ -4010,9 +4157,14 @@ fn interpret_constant_expression(
             param_values_ptr,
             param_count,
             env_values_count,
-        ) < 0 {
+        );
+        if value_status < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
+        };
+        if value_status != CONST_EVAL_STATUS_OK {
+            store_i32(scratch_top_ptr, saved_top);
+            return value_status;
         };
         let source_type: i32 = load_i32(value_type_ptr);
         if !constant_eval_integer_type_supported(source_type) {
@@ -4024,7 +4176,78 @@ fn interpret_constant_expression(
         store_i32(out_value_ptr, cast_value);
         store_i32(out_type_ptr, target_type);
         store_i32(scratch_top_ptr, saved_top);
-        return 0;
+        return CONST_EVAL_STATUS_OK;
+    };
+    if kind == 13 {
+        let value_index: i32 = load_i32(entry_ptr + 8);
+        if value_index >= 0 {
+            let value_offset: i32 = load_i32(scratch_top_ptr);
+            let value_ptr: i32 = scratch_base + value_offset;
+            let value_type_ptr: i32 = value_ptr + 4;
+            store_i32(scratch_top_ptr, value_offset + 8);
+            let value_status: i32 = interpret_constant_expression(
+                ast_base,
+                value_index,
+                scratch_base,
+                scratch_top_ptr,
+                value_ptr,
+                value_type_ptr,
+                param_values_ptr,
+                param_count,
+                env_values_count,
+            );
+            if value_status < 0 {
+                store_i32(scratch_top_ptr, saved_top);
+                return -1;
+            };
+            if value_status != CONST_EVAL_STATUS_OK {
+                store_i32(scratch_top_ptr, saved_top);
+                return value_status;
+            };
+            store_i32(out_value_ptr, load_i32(value_ptr));
+            store_i32(out_type_ptr, load_i32(value_type_ptr));
+        } else {
+            store_i32(out_value_ptr, 0);
+            store_i32(out_type_ptr, -1);
+        };
+        store_i32(scratch_top_ptr, saved_top);
+        return CONST_EVAL_STATUS_BREAK;
+    };
+    if kind == 24 {
+        store_i32(out_value_ptr, 0);
+        store_i32(out_type_ptr, -1);
+        store_i32(scratch_top_ptr, saved_top);
+        return CONST_EVAL_STATUS_CONTINUE;
+    };
+    if kind == 23 {
+        let value_index: i32 = load_i32(entry_ptr + 4);
+        let value_offset: i32 = load_i32(scratch_top_ptr);
+        let value_ptr: i32 = scratch_base + value_offset;
+        let value_type_ptr: i32 = value_ptr + 4;
+        store_i32(scratch_top_ptr, value_offset + 8);
+        let value_status: i32 = interpret_constant_expression(
+            ast_base,
+            value_index,
+            scratch_base,
+            scratch_top_ptr,
+            value_ptr,
+            value_type_ptr,
+            param_values_ptr,
+            param_count,
+            env_values_count,
+        );
+        if value_status < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        if value_status != CONST_EVAL_STATUS_OK {
+            store_i32(scratch_top_ptr, saved_top);
+            return value_status;
+        };
+        store_i32(out_value_ptr, load_i32(value_ptr));
+        store_i32(out_type_ptr, load_i32(value_type_ptr));
+        store_i32(scratch_top_ptr, saved_top);
+        return CONST_EVAL_STATUS_RETURN;
     };
     store_i32(scratch_top_ptr, saved_top);
     -1
