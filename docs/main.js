@@ -31,10 +31,10 @@ const elements = {
 
 elements.editor.value = DEFAULT_PROGRAM;
 
-const stage2ModulePromise = fetch("stage2.wasm")
+const stage2ModulePromise = fetch("compiler.wasm")
   .then((response) => {
     if (!response.ok) {
-      throw new Error(`failed to load stage2.wasm: ${response.status} ${response.statusText}`);
+      throw new Error(`failed to load compiler.wasm: ${response.status} ${response.statusText}`);
     }
     return response.arrayBuffer();
   })
