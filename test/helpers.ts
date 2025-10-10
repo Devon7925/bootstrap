@@ -8,6 +8,7 @@ import {
   INSTR_OFFSET_PTR_OFFSET,
   STAGE1_MAX_FUNCTIONS,
 } from "../src/index";
+import { stubMemoryIntrinsicFunctions } from "../src/bootstrap";
 
 export { COMPILER_INPUT_PTR } from "../src/index";
 
@@ -186,8 +187,10 @@ async function loadAstCompilerWasm(): Promise<Uint8Array> {
   if (!astCompilerWasmPromise) {
     astCompilerWasmPromise = (async () => {
       const source = await loadAstCompilerSource();
-      const wasm = await compileToWasm(source);
-      return wasm;
+      const stubbedSource = stubMemoryIntrinsicFunctions(source);
+      const stage1Wasm = await compileToWasm(stubbedSource);
+      const stage1Compiler = await CompilerInstance.create(stage1Wasm);
+      return stage1Compiler.compileAt(COMPILER_INPUT_PTR, source.length, source);
     })();
   }
   return astCompilerWasmPromise;

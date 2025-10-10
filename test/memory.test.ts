@@ -7,6 +7,32 @@ import {
   instantiateWasmModuleWithGc,
 } from "./helpers";
 
+const MEMORY_INTRINSICS = `
+    fn load_u8(ptr: i32) -> i32 {
+        inline_wasm([0x20, 0x00, 0x2d, 0x00, 0x00])
+    }
+
+    fn load_u16(ptr: i32) -> i32 {
+        inline_wasm([0x20, 0x00, 0x2f, 0x01, 0x00])
+    }
+
+    fn load_i32(ptr: i32) -> i32 {
+        inline_wasm([0x20, 0x00, 0x28, 0x02, 0x00])
+    }
+
+    fn store_u8(ptr: i32, value: i32) -> i32 {
+        inline_wasm([0x20, 0x00, 0x20, 0x01, 0x3a, 0x00, 0x00, 0x41, 0x00])
+    }
+
+    fn store_u16(ptr: i32, value: i32) -> i32 {
+        inline_wasm([0x20, 0x00, 0x20, 0x01, 0x3b, 0x01, 0x00, 0x41, 0x00])
+    }
+
+    fn store_i32(ptr: i32, value: i32) -> i32 {
+        inline_wasm([0x20, 0x00, 0x20, 0x01, 0x36, 0x02, 0x00, 0x41, 0x00])
+    }
+`;
+
 test("exports multi-page memory", async () => {
   const wasm = await compileWithAstCompiler(`
     fn slice_len(_ptr: i32, len: i32) -> i32 {
@@ -27,6 +53,7 @@ test("exports multi-page memory", async () => {
 
 test("reads last byte from input slice", async () => {
   const wasm = await compileWithAstCompiler(`
+${MEMORY_INTRINSICS}
     fn last_byte(ptr: i32, len: i32) -> i32 {
         if len == 0 {
             return -1;
@@ -54,6 +81,7 @@ test("reads last byte from input slice", async () => {
 
 test("writes byte into memory", async () => {
   const wasm = await compileWithAstCompiler(`
+${MEMORY_INTRINSICS}
     fn write_then_read(ptr: i32, value: i32) -> i32 {
         store_u8(ptr, value);
         load_u8(ptr)
@@ -77,6 +105,7 @@ test("writes byte into memory", async () => {
 
 test("stores and loads word values", async () => {
   const wasm = await compileWithAstCompiler(`
+${MEMORY_INTRINSICS}
     fn roundtrip_i32(ptr: i32, value: i32) -> i32 {
         store_i32(ptr, value);
         load_i32(ptr)
@@ -94,6 +123,7 @@ test("stores and loads word values", async () => {
 
 test("stores and loads halfword values", async () => {
   const wasm = await compileWithAstCompiler(`
+${MEMORY_INTRINSICS}
     fn roundtrip_u16(ptr: i32, value: i32) -> i32 {
         store_u16(ptr, value);
         load_u16(ptr)

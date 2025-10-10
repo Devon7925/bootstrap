@@ -8,8 +8,29 @@ import {
   instantiateWasmModuleWithGc,
 } from "./helpers";
 
+const MEMORY_INTRINSICS = `
+    fn load_u8(ptr: i32) -> u8 {
+        let value: i32 = inline_wasm([0x20, 0x00, 0x2d, 0x00, 0x00]);
+        value as u8
+    }
+
+    fn load_u16(ptr: i32) -> u16 {
+        let value: i32 = inline_wasm([0x20, 0x00, 0x2f, 0x01, 0x00]);
+        value as u16
+    }
+
+    fn store_u8(ptr: i32, value: i32) -> i32 {
+        inline_wasm([0x20, 0x00, 0x20, 0x01, 0x3a, 0x00, 0x00, 0x41, 0x00])
+    }
+
+    fn store_u16(ptr: i32, value: i32) -> i32 {
+        inline_wasm([0x20, 0x00, 0x20, 0x01, 0x3b, 0x01, 0x00, 0x41, 0x00])
+    }
+`;
+
 test("integer width programs execute", async () => {
   const wasm = await compileWithAstCompiler(`
+${MEMORY_INTRINSICS}
     fn add_i8(a: i8, b: i8) -> i8 {
         let mut total: i8 = a;
         total = total + b;
@@ -49,7 +70,7 @@ test("integer width programs execute", async () => {
     }
 
     fn roundtrip_u8(ptr: i32, value: u8) -> u8 {
-        store_u8(ptr, value);
+        store_u8(ptr, value as i32);
         load_u8(ptr)
     }
 
@@ -60,7 +81,7 @@ test("integer width programs execute", async () => {
     }
 
     fn roundtrip_u16(ptr: i32, value: u16) -> u16 {
-        store_u16(ptr, value);
+        store_u16(ptr, value as i32);
         load_u16(ptr)
     }
 
