@@ -7,31 +7,17 @@ import {
   instantiateWasmModuleWithGc,
 } from "./helpers";
 
-const MEMORY_INTRINSICS = `
-    fn load_u8(ptr: i32) -> i32 {
-        inline_wasm([0x20, 0x00, 0x2d, 0x00, 0x00])
-    }
+const MEMORY_INTRINSICS_PATH = "/stdlib/memory.bp";
+const memoryIntrinsicsSourceUrl = new URL("../stdlib/memory.bp", import.meta.url);
+const memoryIntrinsicsSourcePromise = Bun.file(memoryIntrinsicsSourceUrl).text();
 
-    fn load_u16(ptr: i32) -> i32 {
-        inline_wasm([0x20, 0x00, 0x2f, 0x01, 0x00])
-    }
-
-    fn load_i32(ptr: i32) -> i32 {
-        inline_wasm([0x20, 0x00, 0x28, 0x02, 0x00])
-    }
-
-    fn store_u8(ptr: i32, value: i32) -> i32 {
-        inline_wasm([0x20, 0x00, 0x20, 0x01, 0x3a, 0x00, 0x00, 0x41, 0x00])
-    }
-
-    fn store_u16(ptr: i32, value: i32) -> i32 {
-        inline_wasm([0x20, 0x00, 0x20, 0x01, 0x3b, 0x01, 0x00, 0x41, 0x00])
-    }
-
-    fn store_i32(ptr: i32, value: i32) -> i32 {
-        inline_wasm([0x20, 0x00, 0x20, 0x01, 0x36, 0x02, 0x00, 0x41, 0x00])
-    }
-`;
+async function compileMemoryProgram(source: string, entryPath: string): Promise<Uint8Array> {
+  const memoryIntrinsicsSource = await memoryIntrinsicsSourcePromise;
+  return compileWithAstCompiler(source, {
+    entryPath,
+    modules: [{ path: MEMORY_INTRINSICS_PATH, source: memoryIntrinsicsSource }],
+  });
+}
 
 test("exports multi-page memory", async () => {
   const wasm = await compileWithAstCompiler(`
@@ -52,8 +38,10 @@ test("exports multi-page memory", async () => {
 });
 
 test("reads last byte from input slice", async () => {
-  const wasm = await compileWithAstCompiler(`
-${MEMORY_INTRINSICS}
+  const wasm = await compileMemoryProgram(
+    `
+    use "/stdlib/memory.bp";
+
     fn last_byte(ptr: i32, len: i32) -> i32 {
         if len == 0 {
             return -1;
@@ -66,7 +54,9 @@ ${MEMORY_INTRINSICS}
     fn main() -> i32 {
         0
     }
-  `);
+  `,
+    "/tests/memory/last_byte.bp",
+  );
   const instance = await instantiateWasmModuleWithGc(wasm);
   const memory = expectExportedMemory(instance);
   const lastByte = expectExportedFunction(instance, "last_byte");
@@ -80,8 +70,10 @@ ${MEMORY_INTRINSICS}
 });
 
 test("writes byte into memory", async () => {
-  const wasm = await compileWithAstCompiler(`
-${MEMORY_INTRINSICS}
+  const wasm = await compileMemoryProgram(
+    `
+    use "/stdlib/memory.bp";
+
     fn write_then_read(ptr: i32, value: i32) -> i32 {
         store_u8(ptr, value);
         load_u8(ptr)
@@ -90,7 +82,9 @@ ${MEMORY_INTRINSICS}
     fn main() -> i32 {
         0
     }
-  `);
+  `,
+    "/tests/memory/write_then_read.bp",
+  );
   const instance = await instantiateWasmModuleWithGc(wasm);
   const memory = expectExportedMemory(instance);
   const writeThenRead = expectExportedFunction(instance, "write_then_read");
@@ -104,8 +98,10 @@ ${MEMORY_INTRINSICS}
 });
 
 test("stores and loads word values", async () => {
-  const wasm = await compileWithAstCompiler(`
-${MEMORY_INTRINSICS}
+  const wasm = await compileMemoryProgram(
+    `
+    use "/stdlib/memory.bp";
+
     fn roundtrip_i32(ptr: i32, value: i32) -> i32 {
         store_i32(ptr, value);
         load_i32(ptr)
@@ -114,7 +110,9 @@ ${MEMORY_INTRINSICS}
     fn main() -> i32 {
         0
     }
-  `);
+  `,
+    "/tests/memory/roundtrip_i32.bp",
+  );
   const instance = await instantiateWasmModuleWithGc(wasm);
   const roundtripI32 = expectExportedFunction(instance, "roundtrip_i32");
 
@@ -122,8 +120,10 @@ ${MEMORY_INTRINSICS}
 });
 
 test("stores and loads halfword values", async () => {
-  const wasm = await compileWithAstCompiler(`
-${MEMORY_INTRINSICS}
+  const wasm = await compileMemoryProgram(
+    `
+    use "/stdlib/memory.bp";
+
     fn roundtrip_u16(ptr: i32, value: i32) -> i32 {
         store_u16(ptr, value);
         load_u16(ptr)
@@ -132,7 +132,9 @@ ${MEMORY_INTRINSICS}
     fn main() -> i32 {
         0
     }
-  `);
+  `,
+    "/tests/memory/roundtrip_u16.bp",
+  );
   const instance = await instantiateWasmModuleWithGc(wasm);
   const memory = expectExportedMemory(instance);
   const roundtripU16 = expectExportedFunction(instance, "roundtrip_u16");
