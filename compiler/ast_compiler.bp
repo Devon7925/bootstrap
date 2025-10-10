@@ -216,6 +216,8 @@ const MAX_PARAMS: i32 = 64;
 
 const MAX_ARRAY_LITERAL_ELEMENTS: i32 = 256;
 
+const MAX_TUPLE_ELEMENTS: i32 = 32;
+
 const INTRINSIC_KIND_NONE: i32 = -1;
 
 const INTRINSIC_KIND_LOAD_U8: i32 = 0;
@@ -1358,6 +1360,10 @@ const BUILTIN_TYPE_ID_MAX: i32 = BUILTIN_TYPE_ID_U64;
 
 const TYPE_ALIAS_CAPACITY: i32 = 256;
 
+const ARRAY_TYPE_CAPACITY: i32 = 256;
+
+const TUPLE_TYPE_CAPACITY: i32 = 256;
+
 const TYPE_ID_KIND_SHIFT: i32 = 24;
 
 const TYPE_ID_KIND_USER_COMPOSITE: i32 = 1;
@@ -1370,7 +1376,11 @@ const fn type_id_kind_base(kind: i32) -> i32 {
 
 const TYPE_ID_ARRAY_BASE: i32 = type_id_kind_base(TYPE_ID_KIND_USER_COMPOSITE);
 
-const TYPE_ID_ARRAY_LIMIT: i32 = TYPE_ID_ARRAY_BASE + SCRATCH_TYPES_CAPACITY;
+const TYPE_ID_TUPLE_BASE: i32 = TYPE_ID_ARRAY_BASE + ARRAY_TYPE_CAPACITY;
+
+const TYPE_ID_ARRAY_LIMIT: i32 = TYPE_ID_TUPLE_BASE;
+
+const TYPE_ID_TUPLE_LIMIT: i32 = TYPE_ID_TUPLE_BASE + TUPLE_TYPE_CAPACITY;
 
 const TYPE_ID_ALIAS_BASE: i32 = type_id_kind_base(TYPE_ID_KIND_USER_ALIAS);
 
@@ -1382,6 +1392,10 @@ fn type_id_is_builtin(type_id: i32) -> bool {
 
 fn type_id_is_array(type_id: i32) -> bool {
     type_id >= TYPE_ID_ARRAY_BASE && type_id < TYPE_ID_ARRAY_LIMIT
+}
+
+fn type_id_is_tuple(type_id: i32) -> bool {
+    type_id >= TYPE_ID_TUPLE_BASE && type_id < TYPE_ID_TUPLE_LIMIT
 }
 
 fn type_id_is_alias(type_id: i32) -> bool {
@@ -1960,6 +1974,114 @@ fn parse_type(base: i32, len: i32, offset: i32, ast_base: i32, out_type_ptr: i32
         };
         return cursor;
     };
+    if first == '(' {
+        let mut cursor: i32 = offset + 1;
+        cursor = skip_whitespace(base, len, cursor);
+        if cursor >= len {
+            return -1;
+        };
+        let next_byte: i32 = load_u8(base + cursor);
+        if next_byte == ')' {
+            let type_id: i32 = ast_register_tuple_type(ast_base, 0, 0);
+            if type_id < 0 {
+                return -1;
+            };
+            if out_type_ptr >= 0 {
+                store_i32(out_type_ptr, type_id);
+            };
+            return cursor + 1;
+        };
+        if out_type_ptr < 0 {
+            return -1;
+        };
+        let call_data_used_ptr: i32 = ast_call_data_len_ptr(ast_base);
+        let saved_used: i32 = load_i32(call_data_used_ptr);
+        let mut element_count: i32 = 0;
+        let mut elements_ptr: i32 = -1;
+        cursor = parse_type(base, len, cursor, ast_base, out_type_ptr);
+        if cursor < 0 {
+            store_i32(call_data_used_ptr, saved_used);
+            return -1;
+        };
+        let first_type_id: i32 = load_i32(out_type_ptr);
+        cursor = skip_whitespace(base, len, cursor);
+        if cursor >= len {
+            store_i32(call_data_used_ptr, saved_used);
+            return -1;
+        };
+        let mut delimiter: i32 = load_u8(base + cursor);
+        if delimiter == ')' {
+            return cursor + 1;
+        };
+        if delimiter != ',' {
+            store_i32(call_data_used_ptr, saved_used);
+            return -1;
+        };
+        elements_ptr = ast_call_data_alloc(ast_base, 1);
+        if elements_ptr < 0 {
+            store_i32(call_data_used_ptr, saved_used);
+            return -1;
+        };
+        store_i32(elements_ptr, first_type_id);
+        element_count = 1;
+        let mut tuple_cursor: i32 = skip_whitespace(base, len, cursor + 1);
+        loop {
+            if tuple_cursor >= len {
+                store_i32(call_data_used_ptr, saved_used);
+                return -1;
+            };
+            let tuple_byte: i32 = load_u8(base + tuple_cursor);
+            if tuple_byte == ')' {
+                tuple_cursor = tuple_cursor + 1;
+                break;
+            };
+            if element_count >= MAX_TUPLE_ELEMENTS {
+                store_i32(call_data_used_ptr, saved_used);
+                return -1;
+            };
+            let element_ptr: i32 = ast_call_data_alloc(ast_base, 1);
+            if element_ptr < 0 {
+                store_i32(call_data_used_ptr, saved_used);
+                return -1;
+            };
+            tuple_cursor = parse_type(base, len, tuple_cursor, ast_base, element_ptr);
+            if tuple_cursor < 0 {
+                store_i32(call_data_used_ptr, saved_used);
+                return -1;
+            };
+            element_count = element_count + 1;
+            tuple_cursor = skip_whitespace(base, len, tuple_cursor);
+            if tuple_cursor >= len {
+                store_i32(call_data_used_ptr, saved_used);
+                return -1;
+            };
+            delimiter = load_u8(base + tuple_cursor);
+            if delimiter == ',' {
+                tuple_cursor = skip_whitespace(base, len, tuple_cursor + 1);
+                continue;
+            };
+            if delimiter == ')' {
+                tuple_cursor = tuple_cursor + 1;
+                break;
+            };
+            store_i32(call_data_used_ptr, saved_used);
+            return -1;
+        };
+        let before_count: i32 = ast_tuple_types_count(ast_base);
+        let type_id: i32 = ast_register_tuple_type(ast_base, elements_ptr, element_count);
+        if type_id < 0 {
+            store_i32(call_data_used_ptr, saved_used);
+            return -1;
+        };
+        let after_count: i32 = ast_tuple_types_count(ast_base);
+        if after_count == before_count {
+            store_i32(call_data_used_ptr, saved_used);
+        };
+        if out_type_ptr >= 0 {
+            store_i32(out_type_ptr, type_id);
+        };
+        return tuple_cursor;
+    };
     if !is_identifier_start(first) {
         return -1;
     };
@@ -2233,6 +2355,7 @@ fn ast_reset(ast_base: i32) {
     store_i32(ast_call_data_len_ptr(ast_base), 0);
     ast_constants_reset(ast_base);
     ast_array_types_reset(ast_base);
+    ast_tuple_types_reset(ast_base);
     ast_type_definitions_reset(ast_base);
     ast_expr_reset(ast_base);
 }
@@ -2333,7 +2456,7 @@ fn ast_constants_reset(ast_base: i32) {
     store_i32(ast_constants_count_ptr(ast_base), 0);
 }
 
-const AST_ARRAY_TYPES_CAPACITY: i32 = 256;
+const AST_ARRAY_TYPES_CAPACITY: i32 = ARRAY_TYPE_CAPACITY;
 
 const AST_ARRAY_TYPE_ENTRY_SIZE: i32 = 12;
 
@@ -2362,7 +2485,11 @@ fn ast_array_type_length(ast_base: i32, index: i32) -> i32 {
 }
 
 fn alias_type_metadata_index(index: i32) -> i32 {
-    AST_ARRAY_TYPES_CAPACITY + index
+    ARRAY_TYPE_CAPACITY + TUPLE_TYPE_CAPACITY + index
+}
+
+fn tuple_type_metadata_index(index: i32) -> i32 {
+    ARRAY_TYPE_CAPACITY + index
 }
 
 fn ast_array_type_payload_ptr(ast_base: i32, index: i32) -> i32 {
@@ -2375,6 +2502,51 @@ fn ast_array_types_count(ast_base: i32) -> i32 {
 
 fn ast_array_types_reset(ast_base: i32) {
     store_i32(ast_array_types_count_ptr(ast_base), 0);
+}
+
+const AST_TUPLE_TYPES_CAPACITY: i32 = TUPLE_TYPE_CAPACITY;
+
+const AST_TUPLE_TYPE_ENTRY_SIZE: i32 = 12;
+
+const AST_TUPLE_TYPE_COUNT_OFFSET: i32 = 0;
+
+const AST_TUPLE_TYPE_ELEMENTS_PTR_OFFSET: i32 = 4;
+
+const AST_TUPLE_TYPE_CACHE_OFFSET: i32 = 8;
+
+const AST_TUPLE_TYPES_SECTION_SIZE: i32 =
+    WORD_SIZE + AST_TUPLE_TYPES_CAPACITY * AST_TUPLE_TYPE_ENTRY_SIZE;
+
+fn ast_tuple_types_count_ptr(ast_base: i32) -> i32 {
+    ast_array_types_count_ptr(ast_base) + AST_ARRAY_TYPES_SECTION_SIZE
+}
+
+fn ast_tuple_type_entry_ptr(ast_base: i32, index: i32) -> i32 {
+    ast_tuple_types_count_ptr(ast_base) + WORD_SIZE + index * AST_TUPLE_TYPE_ENTRY_SIZE
+}
+
+fn ast_tuple_types_count(ast_base: i32) -> i32 {
+    load_i32(ast_tuple_types_count_ptr(ast_base))
+}
+
+fn ast_tuple_types_reset(ast_base: i32) {
+    store_i32(ast_tuple_types_count_ptr(ast_base), 0);
+}
+
+fn ast_tuple_type_element_count(ast_base: i32, index: i32) -> i32 {
+    load_i32(ast_tuple_type_entry_ptr(ast_base, index) + AST_TUPLE_TYPE_COUNT_OFFSET)
+}
+
+fn ast_tuple_type_elements_ptr(ast_base: i32, index: i32) -> i32 {
+    load_i32(ast_tuple_type_entry_ptr(ast_base, index) + AST_TUPLE_TYPE_ELEMENTS_PTR_OFFSET)
+}
+
+fn tuple_type_cached_id(ast_base: i32, index: i32) -> i32 {
+    load_i32(ast_tuple_type_entry_ptr(ast_base, index) + AST_TUPLE_TYPE_CACHE_OFFSET)
+}
+
+fn tuple_type_set_cached_id(ast_base: i32, index: i32, type_id: i32) {
+    store_i32(ast_tuple_type_entry_ptr(ast_base, index) + AST_TUPLE_TYPE_CACHE_OFFSET, type_id);
 }
 
 fn array_type_cached_id(ast_base: i32, index: i32) -> i32 {
@@ -2401,7 +2573,7 @@ const AST_TYPE_DEFINITIONS_SECTION_SIZE: i32 =
     WORD_SIZE + AST_TYPE_DEFINITIONS_CAPACITY * AST_TYPE_DEFINITION_ENTRY_SIZE;
 
 fn ast_type_definitions_count_ptr(ast_base: i32) -> i32 {
-    ast_array_types_count_ptr(ast_base) + AST_ARRAY_TYPES_SECTION_SIZE
+    ast_tuple_types_count_ptr(ast_base) + AST_TUPLE_TYPES_SECTION_SIZE
 }
 
 fn ast_type_definition_entry_ptr(ast_base: i32, index: i32) -> i32 {
@@ -2528,6 +2700,14 @@ fn array_type_length(ast_base: i32, type_id: i32) -> i32 {
     ast_array_type_length(ast_base, index)
 }
 
+fn tuple_type_id(index: i32) -> i32 {
+    TYPE_ID_TUPLE_BASE + index
+}
+
+fn tuple_type_index(type_id: i32) -> i32 {
+    type_id - TYPE_ID_TUPLE_BASE
+}
+
 fn ast_register_array_type(ast_base: i32, element_type_id: i32, length: i32) -> i32 {
     if length < 0 {
         return -1;
@@ -2558,6 +2738,68 @@ fn ast_register_array_type(ast_base: i32, element_type_id: i32, length: i32) -> 
     array_type_id(count)
 }
 
+fn ast_register_tuple_type(ast_base: i32, elements_ptr: i32, element_count: i32) -> i32 {
+    if element_count < 0 {
+        return -1;
+    };
+    if element_count > 0 && elements_ptr < 0 {
+        return -1;
+    };
+    let count_ptr: i32 = ast_tuple_types_count_ptr(ast_base);
+    let count: i32 = load_i32(count_ptr);
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= count {
+            break;
+        };
+        let entry_ptr: i32 = ast_tuple_type_entry_ptr(ast_base, idx);
+        let existing_count: i32 =
+            load_i32(entry_ptr + AST_TUPLE_TYPE_COUNT_OFFSET);
+        if existing_count != element_count {
+            idx = idx + 1;
+            continue;
+        };
+        if element_count == 0 {
+            return tuple_type_id(idx);
+        };
+        let existing_ptr: i32 =
+            load_i32(entry_ptr + AST_TUPLE_TYPE_ELEMENTS_PTR_OFFSET);
+        if existing_ptr < 0 {
+            return -1;
+        };
+        let mut match_idx: i32 = 0;
+        let mut matches: bool = true;
+        loop {
+            if match_idx >= element_count {
+                break;
+            };
+            let existing_type: i32 =
+                load_i32(existing_ptr + match_idx * WORD_SIZE);
+            let new_type: i32 =
+                load_i32(elements_ptr + match_idx * WORD_SIZE);
+            if existing_type != new_type {
+                matches = false;
+                break;
+            };
+            match_idx = match_idx + 1;
+        };
+        if matches {
+            return tuple_type_id(idx);
+        };
+        idx = idx + 1;
+    };
+    if count >= AST_TUPLE_TYPES_CAPACITY {
+        return -1;
+    };
+    let entry_ptr: i32 = ast_tuple_type_entry_ptr(ast_base, count);
+    let stored_ptr: i32 = if element_count == 0 { 0 } else { elements_ptr };
+    store_i32(entry_ptr + AST_TUPLE_TYPE_COUNT_OFFSET, element_count);
+    store_i32(entry_ptr + AST_TUPLE_TYPE_ELEMENTS_PTR_OFFSET, stored_ptr);
+    store_i32(entry_ptr + AST_TUPLE_TYPE_CACHE_OFFSET, 0);
+    store_i32(count_ptr, count + 1);
+    tuple_type_id(count)
+}
+
 fn ensure_array_type_metadata(out_ptr: i32, ast_base: i32, index: i32, type_id: i32) -> i32 {
     if index < 0 {
         return -1;
@@ -2581,6 +2823,37 @@ fn ensure_array_type_metadata(out_ptr: i32, ast_base: i32, index: i32, type_id: 
     let current_count: i32 = scratch_types_count(out_ptr);
     if index + 1 > current_count {
         scratch_types_set_count(out_ptr, index + 1);
+    };
+    0
+}
+
+fn ensure_tuple_type_metadata(out_ptr: i32, ast_base: i32, index: i32, type_id: i32) -> i32 {
+    if index < 0 {
+        return -1;
+    };
+    let metadata_index: i32 = tuple_type_metadata_index(index);
+    if metadata_index < 0 {
+        return -1;
+    };
+    if metadata_index >= SCRATCH_TYPES_CAPACITY {
+        return -1;
+    };
+    let cached: i32 = tuple_type_cached_id(ast_base, index);
+    if cached == type_id {
+        return 0;
+    };
+    let scratch_entry_ptr: i32 = scratch_type_entry_ptr(out_ptr, metadata_index);
+    store_i32(scratch_entry_ptr + TYPE_ENTRY_TYPE_ID_OFFSET, type_id);
+    store_i32(scratch_entry_ptr + TYPE_ENTRY_NAME_PTR_OFFSET, 0);
+    store_i32(scratch_entry_ptr + TYPE_ENTRY_NAME_LEN_OFFSET, 0);
+    store_i32(
+        scratch_entry_ptr + TYPE_ENTRY_EXTRA_OFFSET,
+        ast_tuple_type_entry_ptr(ast_base, index),
+    );
+    tuple_type_set_cached_id(ast_base, index, type_id);
+    let current_count: i32 = scratch_types_count(out_ptr);
+    if metadata_index + 1 > current_count {
+        scratch_types_set_count(out_ptr, metadata_index + 1);
     };
     0
 }
@@ -2651,6 +2924,50 @@ fn resolve_array_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
     type_id
 }
 
+fn resolve_tuple_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
+    if !type_id_is_tuple(type_id) {
+        return -1;
+    };
+    let index: i32 = tuple_type_index(type_id);
+    if index < 0 {
+        return -1;
+    };
+    if index >= ast_tuple_types_count(ast_base) {
+        return -1;
+    };
+    let element_count: i32 = ast_tuple_type_element_count(ast_base, index);
+    if element_count < 0 {
+        return -1;
+    };
+    if element_count > 0 {
+        let elements_ptr: i32 = ast_tuple_type_elements_ptr(ast_base, index);
+        if elements_ptr < 0 {
+            return -1;
+        };
+        let mut elem_idx: i32 = 0;
+        loop {
+            if elem_idx >= element_count {
+                break;
+            };
+            let type_ptr: i32 = elements_ptr + elem_idx * WORD_SIZE;
+            let element_type_id: i32 = load_i32(type_ptr);
+            let resolved_element: i32 =
+                resolve_type_id(out_ptr, ast_base, element_type_id);
+            if resolved_element < 0 {
+                return -1;
+            };
+            if resolved_element != element_type_id {
+                store_i32(type_ptr, resolved_element);
+            };
+            elem_idx = elem_idx + 1;
+        };
+    };
+    if ensure_tuple_type_metadata(out_ptr, ast_base, index, type_id) < 0 {
+        return -1;
+    };
+    type_id
+}
+
 fn resolve_alias_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
     if !type_id_is_alias(type_id) {
         return -1;
@@ -2694,6 +3011,9 @@ fn resolve_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
     };
     if type_id_is_array(type_id) {
         return resolve_array_type_id(out_ptr, ast_base, type_id);
+    };
+    if type_id_is_tuple(type_id) {
+        return resolve_tuple_type_id(out_ptr, ast_base, type_id);
     };
     if type_id_is_alias(type_id) {
         return resolve_alias_type_id(out_ptr, ast_base, type_id);
@@ -2938,6 +3258,21 @@ fn ast_expr_alloc_array_len(ast_base: i32, array_index: i32) -> i32 {
         return -1;
     };
     ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_I32);
+    index
+}
+
+fn ast_expr_alloc_tuple(ast_base: i32, values_ptr: i32, count: i32) -> i32 {
+    if count < 0 {
+        return -1;
+    };
+    if count > 0 && values_ptr < 0 {
+        return -1;
+    };
+    let index: i32 = ast_expr_alloc(ast_base, 40, values_ptr, count, 0);
+    if index < 0 {
+        return -1;
+    };
+    ast_expr_set_type(ast_base, index, -1);
     index
 }
 
@@ -4421,6 +4756,26 @@ fn parse_basic_expression(
     if first_byte == '(' {
         let mut paren_cursor: i32 = cursor + 1;
         paren_cursor = skip_whitespace(base, len, paren_cursor);
+        if paren_cursor >= len {
+            return -1;
+        };
+        let maybe_close: i32 = load_u8(base + paren_cursor);
+        if maybe_close == ')' {
+            let expr_index: i32 = ast_expr_alloc_tuple(ast_base, 0, 0);
+            if expr_index < 0 {
+                return -1;
+            };
+            store_i32(out_kind_ptr, 40);
+            store_i32(out_data0_ptr, expr_index);
+            store_i32(out_data1_ptr, 0);
+            return skip_whitespace(base, len, paren_cursor + 1);
+        };
+        let first_kind_ptr: i32 = nested_temp_base;
+        let first_data0_ptr: i32 = nested_temp_base + 4;
+        let first_data1_ptr: i32 = nested_temp_base + 8;
+        let values_list_ptr: i32 = nested_temp_base + 16;
+        let element_temp_base: i32 =
+            nested_temp_base + 16 + MAX_TUPLE_ELEMENTS * WORD_SIZE + 64;
         paren_cursor = parse_expression(
             base,
             len,
@@ -4431,21 +4786,131 @@ fn parse_basic_expression(
             locals_table_ptr,
             locals_stack_count_ptr,
             locals_next_index_ptr,
-            nested_temp_base,
+            element_temp_base,
             loop_depth_ptr,
-            out_kind_ptr,
-            out_data0_ptr,
-            out_data1_ptr,
+            first_kind_ptr,
+            first_data0_ptr,
+            first_data1_ptr,
         );
         if paren_cursor < 0 {
             return -1;
         };
         paren_cursor = skip_whitespace(base, len, paren_cursor);
-        paren_cursor = expect_char(base, len, paren_cursor, ')');
-        if paren_cursor < 0 {
+        if paren_cursor >= len {
             return -1;
         };
-        return skip_whitespace(base, len, paren_cursor);
+        let mut delimiter: i32 = load_u8(base + paren_cursor);
+        if delimiter != ',' {
+            if delimiter != ')' {
+                return -1;
+            };
+            let first_kind: i32 = load_i32(first_kind_ptr);
+            let first_data0: i32 = load_i32(first_data0_ptr);
+            let first_data1: i32 = load_i32(first_data1_ptr);
+            store_i32(out_kind_ptr, first_kind);
+            store_i32(out_data0_ptr, first_data0);
+            store_i32(out_data1_ptr, first_data1);
+            return skip_whitespace(base, len, paren_cursor + 1);
+        };
+        let first_kind: i32 = load_i32(first_kind_ptr);
+        let first_data0: i32 = load_i32(first_data0_ptr);
+        let first_data1: i32 = load_i32(first_data1_ptr);
+        let first_index: i32 =
+            expression_node_from_parts(ast_base, first_kind, first_data0, first_data1);
+        if first_index < 0 {
+            return -1;
+        };
+        store_i32(values_list_ptr, first_index);
+        let mut element_count: i32 = 1;
+        let mut tuple_cursor: i32 = skip_whitespace(base, len, paren_cursor + 1);
+        loop {
+            if tuple_cursor >= len {
+                return -1;
+            };
+            let tuple_byte: i32 = load_u8(base + tuple_cursor);
+            if tuple_byte == ')' {
+                tuple_cursor = tuple_cursor + 1;
+                break;
+            };
+            if element_count >= MAX_TUPLE_ELEMENTS {
+                return -1;
+            };
+            tuple_cursor = parse_expression(
+                base,
+                len,
+                tuple_cursor,
+                ast_base,
+                params_table_ptr,
+                params_count,
+                locals_table_ptr,
+                locals_stack_count_ptr,
+                locals_next_index_ptr,
+                element_temp_base,
+                loop_depth_ptr,
+                first_kind_ptr,
+                first_data0_ptr,
+                first_data1_ptr,
+            );
+            if tuple_cursor < 0 {
+                return -1;
+            };
+            let value_kind: i32 = load_i32(first_kind_ptr);
+            let value_data0: i32 = load_i32(first_data0_ptr);
+            let value_data1: i32 = load_i32(first_data1_ptr);
+            let value_index: i32 = expression_node_from_parts(
+                ast_base,
+                value_kind,
+                value_data0,
+                value_data1,
+            );
+            if value_index < 0 {
+                return -1;
+            };
+            store_i32(values_list_ptr + element_count * WORD_SIZE, value_index);
+            element_count = element_count + 1;
+            tuple_cursor = skip_whitespace(base, len, tuple_cursor);
+            if tuple_cursor >= len {
+                return -1;
+            };
+            delimiter = load_u8(base + tuple_cursor);
+            if delimiter == ',' {
+                tuple_cursor = skip_whitespace(base, len, tuple_cursor + 1);
+                continue;
+            };
+            if delimiter == ')' {
+                tuple_cursor = tuple_cursor + 1;
+                break;
+            };
+            return -1;
+        };
+        let metadata_ptr: i32 = if element_count == 0 {
+            0
+        } else {
+            ast_call_data_alloc(ast_base, element_count)
+        };
+        if element_count > 0 && metadata_ptr < 0 {
+            return -1;
+        };
+        if element_count > 0 {
+            let mut copy_idx: i32 = 0;
+            loop {
+                if copy_idx >= element_count {
+                    break;
+                };
+                let value_index: i32 =
+                    load_i32(values_list_ptr + copy_idx * WORD_SIZE);
+                store_i32(metadata_ptr + copy_idx * WORD_SIZE, value_index);
+                copy_idx = copy_idx + 1;
+            };
+        };
+        let expr_index: i32 = ast_expr_alloc_tuple(ast_base, metadata_ptr, element_count);
+        if expr_index < 0 {
+            return -1;
+        };
+        store_i32(out_kind_ptr, 40);
+        store_i32(out_data0_ptr, expr_index);
+        store_i32(out_data1_ptr, 0);
+        return skip_whitespace(base, len, tuple_cursor);
     };
     if first_byte == '"' {
         let values_list_ptr: i32 = nested_temp_base;
