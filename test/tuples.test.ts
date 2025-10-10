@@ -136,7 +136,7 @@ test("array of tuples can be passed to function", async () => {
     }
 
     fn main() -> i32 {
-      sum_first_and_flag([(7, true), (0, false)])
+      sum_first_and_flag([(7, false), (0, true)])
     }
   `);
 
