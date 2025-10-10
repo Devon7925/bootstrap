@@ -18,6 +18,10 @@ export const DEFAULT_OUTPUT_STRIDE = 4_096;
 const TYPES_COUNT_PTR_OFFSET = 819_196;
 const TYPES_BASE_OFFSET = 819_200;
 const TYPE_ENTRY_SIZE = 16;
+const MODULE_STATE_BASE = 1_048_576;
+const MODULE_STORAGE_TOP_OFFSET = 4;
+const MODULE_PATH_PTR = 1_024;
+const MODULE_CONTENT_PTR = 4_096;
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -37,6 +41,56 @@ export interface CompileFailureDetails {
   readonly detail?: string;
 }
 
+export interface CompilerModuleSource {
+  readonly path: string;
+  readonly source: string;
+}
+
+export interface CompileWithAstCompilerOptions {
+  readonly entryPath?: string;
+  readonly modules?: ReadonlyArray<CompilerModuleSource>;
+}
+
+function ensureModuleMemoryCapacity(memory: WebAssembly.Memory, required: number) {
+  if (required <= memory.buffer.byteLength) {
+    return;
+  }
+  const pageSize = 65_536;
+  const additional = required - memory.buffer.byteLength;
+  const pagesNeeded = Math.ceil(additional / pageSize);
+  memory.grow(pagesNeeded);
+}
+
+function writeModuleString(memory: WebAssembly.Memory, ptr: number, text: string): number {
+  const bytes = encoder.encode(text);
+  ensureModuleMemoryCapacity(memory, ptr + bytes.length + 1);
+  const view = new Uint8Array(memory.buffer);
+  view.set(bytes, ptr);
+  view[ptr + bytes.length] = 0;
+  return bytes.length;
+}
+
+function zeroModuleMemory(memory: WebAssembly.Memory, ptr: number, length: number) {
+  if (length <= 0) {
+    return;
+  }
+  ensureModuleMemoryCapacity(memory, ptr + length);
+  new Uint8Array(memory.buffer).fill(0, ptr, ptr + length);
+}
+
+function readModuleStorageTop(memory: WebAssembly.Memory): number {
+  try {
+    const view = new DataView(memory.buffer);
+    return view.getInt32(MODULE_STATE_BASE + MODULE_STORAGE_TOP_OFFSET, true);
+  } catch {
+    return -1;
+  }
+}
+
+function coerceToI32(value: number | bigint): number {
+  return typeof value === "bigint" ? Number(value) : (value as number) | 0;
+}
+
 export class Stage1CompileFailure extends Error {
   readonly failure: CompileFailureDetails;
 
@@ -50,15 +104,26 @@ export class Stage1CompileFailure extends Error {
 interface CompilerExports {
   readonly memory?: WebAssembly.Memory;
   readonly compile?: (inputPtr: number, inputLen: number, outputPtr: number) => number | bigint;
+  readonly loadModuleFromSource?: (pathPtr: number, contentPtr: number) => number | bigint;
+  readonly compileFromPath?: (pathPtr: number) => number | bigint;
 }
 
 export class CompilerInstance {
   #memory: WebAssembly.Memory;
   #compile: (inputPtr: number, inputLen: number, outputPtr: number) => number | bigint;
+  #loadModuleFromSource: ((pathPtr: number, contentPtr: number) => number | bigint) | null;
+  #compileFromPath: ((pathPtr: number) => number | bigint) | null;
 
-  private constructor(memory: WebAssembly.Memory, compile: (inputPtr: number, inputLen: number, outputPtr: number) => number | bigint) {
+  private constructor(
+    memory: WebAssembly.Memory,
+    compile: (inputPtr: number, inputLen: number, outputPtr: number) => number | bigint,
+    loadModuleFromSource: ((pathPtr: number, contentPtr: number) => number | bigint) | undefined,
+    compileFromPath: ((pathPtr: number) => number | bigint) | undefined,
+  ) {
     this.#memory = memory;
     this.#compile = compile;
+    this.#loadModuleFromSource = loadModuleFromSource ?? null;
+    this.#compileFromPath = compileFromPath ?? null;
   }
 
   static async create(wasm: Uint8Array): Promise<CompilerInstance> {
@@ -70,7 +135,12 @@ export class CompilerInstance {
     if (typeof exports.compile !== "function") {
       throw new CompileError("stage1 compiler missing compile export");
     }
-    return new CompilerInstance(exports.memory, exports.compile);
+    return new CompilerInstance(
+      exports.memory,
+      exports.compile,
+      typeof exports.loadModuleFromSource === "function" ? exports.loadModuleFromSource : undefined,
+      typeof exports.compileFromPath === "function" ? exports.compileFromPath : undefined,
+    );
   }
 
   get memory(): WebAssembly.Memory {
@@ -102,7 +172,7 @@ export class CompilerInstance {
     let producedLength: number;
     try {
       const result = this.#compile(inputPtr, sourceBytes.length, outputPtr);
-      producedLength = typeof result === "bigint" ? Number(result) : result | 0;
+      producedLength = coerceToI32(result);
     } catch (cause) {
       throw this.#failure(outputPtr, -1, cause);
     }
@@ -139,6 +209,96 @@ export class CompilerInstance {
 
   compileWithLayout(inputPtr: number, outputPtr: number, source: string): Uint8Array {
     return this.compileWithStride(inputPtr, outputPtr, DEFAULT_INPUT_STRIDE, DEFAULT_OUTPUT_STRIDE, source);
+  }
+
+  compileModule(entryPath: string, source: string, modules: ReadonlyArray<CompilerModuleSource>): Uint8Array {
+    if (!this.#loadModuleFromSource || !this.#compileFromPath) {
+      throw new Error("stage1 compiler missing module loading exports");
+    }
+
+    const loadModule = this.#loadModuleFromSource;
+    const compileFromPath = this.#compileFromPath;
+
+    for (const module of modules) {
+      let contentLength: number;
+      try {
+        writeModuleString(this.#memory, MODULE_PATH_PTR, module.path);
+        contentLength = writeModuleString(this.#memory, MODULE_CONTENT_PTR, module.source);
+      } catch (cause) {
+        throw this.#failure(readModuleStorageTop(this.#memory), -1, cause);
+      }
+
+      let loadResult: number | bigint;
+      try {
+        loadResult = loadModule(MODULE_PATH_PTR, MODULE_CONTENT_PTR);
+      } catch (cause) {
+        throw this.#failure(readModuleStorageTop(this.#memory), -1, cause);
+      }
+
+      const status = coerceToI32(loadResult);
+      if (!Number.isFinite(status)) {
+        throw this.#failure(readModuleStorageTop(this.#memory), -1);
+      }
+      if (status < 0) {
+        throw this.#failure(readModuleStorageTop(this.#memory), status);
+      }
+
+      try {
+        zeroModuleMemory(this.#memory, MODULE_CONTENT_PTR, contentLength + 1);
+      } catch (cause) {
+        throw this.#failure(readModuleStorageTop(this.#memory), -1, cause);
+      }
+    }
+
+    let entryContentLength: number;
+    try {
+      writeModuleString(this.#memory, MODULE_PATH_PTR, entryPath);
+      entryContentLength = writeModuleString(this.#memory, MODULE_CONTENT_PTR, source);
+    } catch (cause) {
+      throw this.#failure(readModuleStorageTop(this.#memory), -1, cause);
+    }
+
+    let loadEntryResult: number | bigint;
+    try {
+      loadEntryResult = loadModule(MODULE_PATH_PTR, MODULE_CONTENT_PTR);
+    } catch (cause) {
+      throw this.#failure(readModuleStorageTop(this.#memory), -1, cause);
+    }
+
+    const entryStatus = coerceToI32(loadEntryResult);
+    if (!Number.isFinite(entryStatus)) {
+      throw this.#failure(readModuleStorageTop(this.#memory), -1);
+    }
+    if (entryStatus < 0) {
+      throw this.#failure(readModuleStorageTop(this.#memory), entryStatus);
+    }
+
+    try {
+      zeroModuleMemory(this.#memory, MODULE_CONTENT_PTR, entryContentLength + 1);
+    } catch (cause) {
+      throw this.#failure(readModuleStorageTop(this.#memory), -1, cause);
+    }
+
+    let producedLength: number;
+    try {
+      const result = compileFromPath(MODULE_PATH_PTR);
+      producedLength = coerceToI32(result);
+    } catch (cause) {
+      throw this.#failure(readModuleStorageTop(this.#memory), -1, cause);
+    }
+
+    const outputPtr = readModuleStorageTop(this.#memory);
+
+    if (!Number.isFinite(producedLength)) {
+      throw this.#failure(outputPtr, -1);
+    }
+
+    if (producedLength <= 0) {
+      throw this.#failure(outputPtr, producedLength);
+    }
+
+    const view = new Uint8Array(this.#memory.buffer);
+    return view.slice(outputPtr, outputPtr + producedLength);
   }
 
   readTypesCount(outputPtr: number): number {
@@ -202,17 +362,28 @@ export async function instantiateAstCompiler(): Promise<CompilerInstance> {
   return CompilerInstance.create(wasm);
 }
 
-export async function tryCompileWithAstCompiler(source: string): Promise<Uint8Array> {
+export async function tryCompileWithAstCompiler(
+  source: string,
+  options: CompileWithAstCompilerOptions = {},
+): Promise<Uint8Array> {
   const wasm = await loadAstCompilerWasm();
   const compiler = await CompilerInstance.create(wasm);
+  const modules = options.modules ?? [];
+  if (modules.length > 0) {
+    const entryPath = options.entryPath ?? "/tests/main.bp";
+    return compiler.compileModule(entryPath, source, modules);
+  }
   const inputPtr = COMPILER_INPUT_PTR;
   const outputPtr = DEFAULT_OUTPUT_STRIDE;
   return compiler.compileWithLayout(inputPtr, outputPtr, source);
 }
 
-export async function compileWithAstCompiler(source: string): Promise<Uint8Array> {
+export async function compileWithAstCompiler(
+  source: string,
+  options?: CompileWithAstCompilerOptions,
+): Promise<Uint8Array> {
   try {
-    return await tryCompileWithAstCompiler(source);
+    return await tryCompileWithAstCompiler(source, options);
   } catch (error) {
     if (error instanceof Stage1CompileFailure) {
       throw new Error(`ast compiler failed to compile source: ${error.message}`, { cause: error });
@@ -221,9 +392,12 @@ export async function compileWithAstCompiler(source: string): Promise<Uint8Array
   }
 }
 
-export async function expectCompileFailure(source: string): Promise<Stage1CompileFailure> {
+export async function expectCompileFailure(
+  source: string,
+  options?: CompileWithAstCompilerOptions,
+): Promise<Stage1CompileFailure> {
   try {
-    await tryCompileWithAstCompiler(source);
+    await tryCompileWithAstCompiler(source, options);
   } catch (error) {
     if (error instanceof Stage1CompileFailure) {
       return error;
