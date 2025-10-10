@@ -188,13 +188,13 @@ fn expect_keyword_return(base: i32, len: i32, offset: i32) -> i32 {
     expect_keyword_literal(base, len, offset, "return\0\0\0\0")
 }
 
-fn parse_identifier(base: i32, len: i32, offset: i32, out_start_ptr: i32, out_len_ptr: i32) -> i32 {
+fn parse_identifier(base: i32, len: i32, offset: i32) -> (i32, i32, i32) {
     if offset >= len {
-        return -1;
+        return (-1, 0, 0);
     };
     let first: i32 = load_u8(base + offset);
     if !is_identifier_start(first) {
-        return -1;
+        return (-1, 0, 0);
     };
     let mut idx: i32 = offset + 1;
     loop {
@@ -207,9 +207,7 @@ fn parse_identifier(base: i32, len: i32, offset: i32, out_start_ptr: i32, out_le
         };
         idx = idx + 1;
     };
-    store_i32(out_start_ptr, offset);
-    store_i32(out_len_ptr, idx - offset);
-    idx
+    (idx, offset, idx - offset)
 }
 
 const MAX_PARAMS: i32 = 64;
@@ -551,8 +549,6 @@ fn parse_block_expression_body(
     locals_stack_count_ptr: i32,
     locals_next_index_ptr: i32,
     literal_ptr: i32,
-    ident_start_ptr: i32,
-    ident_len_ptr: i32,
     temp_base: i32,
     allow_empty_final_expr: i32,
     loop_depth_ptr: i32,
@@ -673,14 +669,16 @@ fn parse_block_expression_body(
                 };
             };
 
-            idx = parse_identifier(base, len, idx, ident_start_ptr, ident_len_ptr);
-            if idx < 0 {
+            let ident: (i32, i32, i32) = parse_identifier(base, len, idx);
+            let next_idx: i32 = ident.0;
+            if next_idx < 0 {
                 store_i32(locals_stack_count_ptr, saved_stack_count);
                 store_i32(locals_next_index_ptr, saved_next_index);
                 return -1;
             };
-            let name_start: i32 = load_i32(ident_start_ptr);
-            let name_len: i32 = load_i32(ident_len_ptr);
+            let name_start: i32 = ident.1;
+            let name_len: i32 = ident.2;
+            idx = next_idx;
 
             let current_stack: i32 = load_i32(locals_stack_count_ptr);
             let existing: i32 = find_local_entry_index_in_scope(
@@ -1023,8 +1021,6 @@ fn parse_block_expression_body(
                 locals_stack_count_ptr,
                 locals_next_index_ptr,
                 literal_ptr,
-                ident_start_ptr,
-                ident_len_ptr,
                 stmt_nested_temp_base,
                 1,
                 loop_depth_ptr,
@@ -1073,16 +1069,11 @@ fn parse_block_expression_body(
         let mut assignment_cursor: i32 = idx;
         if !expression_parsed {
             if is_identifier_start(next_byte) {
-                assignment_cursor = parse_identifier(
-                    base,
-                    len,
-                    idx,
-                    ident_start_ptr,
-                    ident_len_ptr,
-                );
+                let assignment_ident: (i32, i32, i32) = parse_identifier(base, len, idx);
+                assignment_cursor = assignment_ident.0;
                 if assignment_cursor >= 0 {
-                    let name_start: i32 = load_i32(ident_start_ptr);
-                    let name_len: i32 = load_i32(ident_len_ptr);
+                    let name_start: i32 = assignment_ident.1;
+                    let name_len: i32 = assignment_ident.2;
                     let mut after_ident: i32 = skip_whitespace(base, len, assignment_cursor);
                     if after_ident < len {
                         let assign_byte: i32 = load_u8(base + after_ident);
@@ -4908,8 +4899,6 @@ fn parse_basic_expression(
     locals_stack_count_ptr: i32,
     locals_next_index_ptr: i32,
     literal_ptr: i32,
-    ident_start_ptr: i32,
-    ident_len_ptr: i32,
     loop_depth_ptr: i32,
     out_kind_ptr: i32,
     out_data0_ptr: i32,
@@ -4933,8 +4922,6 @@ fn parse_basic_expression(
             locals_stack_count_ptr,
             locals_next_index_ptr,
             literal_ptr,
-            ident_start_ptr,
-            ident_len_ptr,
             nested_temp_base,
             0,
             loop_depth_ptr,
@@ -5001,8 +4988,6 @@ fn parse_basic_expression(
                 locals_stack_count_ptr,
                 locals_next_index_ptr,
                 literal_ptr,
-                ident_start_ptr,
-                ident_len_ptr,
                 then_nested_base,
                 1,
                 loop_depth_ptr,
@@ -5042,8 +5027,6 @@ fn parse_basic_expression(
                         locals_stack_count_ptr,
                         locals_next_index_ptr,
                         literal_ptr,
-                        ident_start_ptr,
-                        ident_len_ptr,
                         else_nested_base,
                         1,
                         loop_depth_ptr,
@@ -5570,12 +5553,13 @@ fn parse_basic_expression(
     if !is_identifier_start(first_byte) {
         return -1;
     };
-    let mut next_cursor: i32 = parse_identifier(base, len, cursor, ident_start_ptr, ident_len_ptr);
+    let ident: (i32, i32, i32) = parse_identifier(base, len, cursor);
+    let mut next_cursor: i32 = ident.0;
     if next_cursor < 0 {
         return -1;
     };
-    let ident_start: i32 = load_i32(ident_start_ptr);
-    let ident_len: i32 = load_i32(ident_len_ptr);
+    let ident_start: i32 = ident.1;
+    let ident_len: i32 = ident.2;
     next_cursor = skip_whitespace(base, len, next_cursor);
     if next_cursor < len {
         let next_byte: i32 = load_u8(base + next_cursor);
@@ -5799,8 +5783,6 @@ fn parse_unary_expression(
     locals_stack_count_ptr: i32,
     locals_next_index_ptr: i32,
     literal_ptr: i32,
-    ident_start_ptr: i32,
-    ident_len_ptr: i32,
     loop_depth_ptr: i32,
     out_kind_ptr: i32,
     out_data0_ptr: i32,
@@ -5832,8 +5814,6 @@ fn parse_unary_expression(
         locals_stack_count_ptr,
         locals_next_index_ptr,
         literal_ptr,
-        ident_start_ptr,
-        ident_len_ptr,
         loop_depth_ptr,
         out_kind_ptr,
         out_data0_ptr,
@@ -6054,11 +6034,9 @@ fn parse_multiplicative_expression(
     out_data1_ptr: i32,
 ) -> i32 {
     let literal_ptr: i32 = temp_base;
-    let ident_start_ptr: i32 = temp_base + 4;
-    let ident_len_ptr: i32 = temp_base + 8;
-    let next_kind_ptr: i32 = temp_base + 12;
-    let next_data0_ptr: i32 = temp_base + 16;
-    let next_data1_ptr: i32 = temp_base + 20;
+    let next_kind_ptr: i32 = temp_base + 4;
+    let next_data0_ptr: i32 = temp_base + 8;
+    let next_data1_ptr: i32 = temp_base + 12;
     let nested_temp_base: i32 = temp_base + 32;
 
     let mut current_cursor: i32 = parse_unary_expression(
@@ -6072,8 +6050,6 @@ fn parse_multiplicative_expression(
         locals_stack_count_ptr,
         locals_next_index_ptr,
         literal_ptr,
-        ident_start_ptr,
-        ident_len_ptr,
         loop_depth_ptr,
         out_kind_ptr,
         out_data0_ptr,
@@ -6106,8 +6082,6 @@ fn parse_multiplicative_expression(
             locals_stack_count_ptr,
             locals_next_index_ptr,
             literal_ptr,
-            ident_start_ptr,
-            ident_len_ptr,
             loop_depth_ptr,
             next_kind_ptr,
             next_data0_ptr,
@@ -7108,15 +7082,11 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     cursor = skip_whitespace(base, len, cursor);
 
     let temp_base: i32 = ast_temp_base(ast_base);
-    let name_start_ptr: i32 = temp_base;
-    let name_len_ptr: i32 = temp_base + 4;
-    let params_count_ptr: i32 = temp_base + 8;
-    let params_table_ptr: i32 = temp_base + 12;
+    let params_count_ptr: i32 = temp_base;
+    let params_table_ptr: i32 = temp_base + 4;
     let params_table_end: i32 = params_table_ptr + MAX_PARAMS * 8;
     let param_types_table_ptr: i32 = params_table_end;
-    let param_name_start_ptr: i32 = param_types_table_ptr + MAX_PARAMS * 4;
-    let param_name_len_ptr: i32 = param_name_start_ptr + 4;
-    let param_type_temp_ptr: i32 = param_name_len_ptr + 4;
+    let param_type_temp_ptr: i32 = param_types_table_ptr + MAX_PARAMS * 4;
     let expr_kind_ptr: i32 = param_type_temp_ptr + 4;
     let expr_data0_ptr: i32 = expr_kind_ptr + 4;
     let expr_data1_ptr: i32 = expr_kind_ptr + 8;
@@ -7124,12 +7094,13 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     let locals_table_ptr: i32 = locals_stack_count_ptr + 4;
     let locals_next_index_ptr: i32 = locals_table_ptr + MAX_LOCALS * LOCALS_ENTRY_SIZE;
     let expr_temp_base: i32 = locals_next_index_ptr + 4;
-    cursor = parse_identifier(base, len, cursor, name_start_ptr, name_len_ptr);
+    let name_ident: (i32, i32, i32) = parse_identifier(base, len, cursor);
+    cursor = name_ident.0;
     if cursor < 0 {
         return -1;
     };
-    let name_start: i32 = load_i32(name_start_ptr);
-    let name_len: i32 = load_i32(name_len_ptr);
+    let name_start: i32 = name_ident.1;
+    let name_len: i32 = name_ident.2;
 
     if find_type_definition_entry_index(base, ast_base, name_start, name_len) >= 0 {
         return -1;
@@ -7170,12 +7141,13 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
         if param_count >= MAX_PARAMS {
             return -1;
         };
-        cursor = parse_identifier(base, len, cursor, param_name_start_ptr, param_name_len_ptr);
+        let param_ident: (i32, i32, i32) = parse_identifier(base, len, cursor);
+        cursor = param_ident.0;
         if cursor < 0 {
             return -1;
         };
-        let param_start: i32 = load_i32(param_name_start_ptr);
-        let param_len: i32 = load_i32(param_name_len_ptr);
+        let param_start: i32 = param_ident.1;
+        let param_len: i32 = param_ident.2;
         let mut existing_idx: i32 = 0;
         loop {
             if existing_idx >= param_count {
@@ -7267,8 +7239,6 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     };
 
     let block_literal_ptr: i32 = expr_temp_base;
-    let block_ident_start_ptr: i32 = expr_temp_base + 4;
-    let block_ident_len_ptr: i32 = expr_temp_base + 8;
     let block_value_status_ptr: i32 = expr_temp_base + 12;
     let loop_depth_ptr: i32 = expr_temp_base + 16;
     let block_temp_base: i32 = expr_temp_base + 48;
@@ -7285,8 +7255,6 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
         locals_stack_count_ptr,
         locals_next_index_ptr,
         block_literal_ptr,
-        block_ident_start_ptr,
-        block_ident_len_ptr,
         block_temp_base,
         block_allow_empty,
         loop_depth_ptr,
@@ -7367,16 +7335,15 @@ fn parse_type_declaration(
     idx = skip_whitespace(base, len, type_cursor);
 
     let temp_base: i32 = ast_temp_base(ast_base);
-    let ident_start_ptr: i32 = temp_base;
-    let ident_len_ptr: i32 = ident_start_ptr + 4;
-    let type_ptr: i32 = ident_len_ptr + 4;
+    let type_ptr: i32 = temp_base;
 
-    idx = parse_identifier(base, len, idx, ident_start_ptr, ident_len_ptr);
+    let ident: (i32, i32, i32) = parse_identifier(base, len, idx);
+    idx = ident.0;
     if idx < 0 {
         return -1;
     };
-    let name_start: i32 = load_i32(ident_start_ptr);
-    let name_len: i32 = load_i32(ident_len_ptr);
+    let name_start: i32 = ident.1;
+    let name_len: i32 = ident.2;
 
     if find_type_definition_entry_index(base, ast_base, name_start, name_len) >= 0 {
         return -1;
@@ -7476,9 +7443,7 @@ fn parse_constant_declaration(
 
     let temp_base: i32 = ast_temp_base(ast_base);
     let params_table_ptr: i32 = temp_base;
-    let ident_start_ptr: i32 = params_table_ptr + MAX_PARAMS * 8;
-    let ident_len_ptr: i32 = ident_start_ptr + 4;
-    let type_ptr: i32 = ident_len_ptr + 4;
+    let type_ptr: i32 = params_table_ptr + MAX_PARAMS * 8;
     let expr_kind_ptr: i32 = type_ptr + 4;
     let expr_data0_ptr: i32 = expr_kind_ptr + 4;
     let expr_data1_ptr: i32 = expr_kind_ptr + 8;
@@ -7492,12 +7457,13 @@ fn parse_constant_declaration(
     store_i32(locals_next_index_ptr, 0);
     store_i32(loop_depth_ptr, 0);
 
-    idx = parse_identifier(base, len, idx, ident_start_ptr, ident_len_ptr);
+    let ident: (i32, i32, i32) = parse_identifier(base, len, idx);
+    idx = ident.0;
     if idx < 0 {
         return -1;
     };
-    let name_start: i32 = load_i32(ident_start_ptr);
-    let name_len: i32 = load_i32(ident_len_ptr);
+    let name_start: i32 = ident.1;
+    let name_len: i32 = ident.2;
 
     if find_type_definition_entry_index(base, ast_base, name_start, name_len) >= 0 {
         return -1;
