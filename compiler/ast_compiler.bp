@@ -800,7 +800,17 @@ fn parse_block_expression_body(
                 if next_char == ':' {
                     has_type_annotation = true;
                     idx = skip_whitespace(base, len, idx + 1);
-                    idx = parse_type(base, len, idx, ast_base, stmt_local_type_ptr);
+                    idx = parse_type(
+                        base,
+                        len,
+                        idx,
+                        ast_base,
+                        stmt_local_type_ptr,
+                        -1,
+                        0,
+                        -1,
+                        -1,
+                    );
                     if idx < 0 {
                         store_i32(locals_stack_count_ptr, saved_stack_count);
                         store_i32(locals_next_index_ptr, saved_next_index);
@@ -2034,18 +2044,44 @@ fn alias_definition_chain_is_valid(ast_base: i32, alias_index: i32) -> bool {
     };
 }
 
-fn parse_type(base: i32, len: i32, offset: i32, ast_base: i32, out_type_ptr: i32) -> i32 {
+fn parse_type(
+    base: i32,
+    len: i32,
+    offset: i32,
+    ast_base: i32,
+    out_type_ptr: i32,
+    params_table_ptr: i32,
+    params_count: i32,
+    param_const_table_ptr: i32,
+    template_out_ptr: i32,
+) -> i32 {
     if offset >= len {
         return -1;
     };
     let first: i32 = load_u8(base + offset);
+    if template_out_ptr >= 0 {
+        store_i32(template_out_ptr + 0 * WORD_SIZE, 0);
+        store_i32(template_out_ptr + 1 * WORD_SIZE, 0);
+        store_i32(template_out_ptr + 2 * WORD_SIZE, 0);
+        store_i32(template_out_ptr + 3 * WORD_SIZE, 0);
+    };
     if first == '[' {
         if out_type_ptr < 0 {
             return -1;
         };
         let mut cursor: i32 = offset + 1;
         cursor = skip_whitespace(base, len, cursor);
-        cursor = parse_type(base, len, cursor, ast_base, out_type_ptr);
+        cursor = parse_type(
+            base,
+            len,
+            cursor,
+            ast_base,
+            out_type_ptr,
+            params_table_ptr,
+            params_count,
+            param_const_table_ptr,
+            -1,
+        );
         if cursor < 0 {
             return -1;
         };
@@ -2074,18 +2110,54 @@ fn parse_type(base: i32, len: i32, offset: i32, ast_base: i32, out_type_ptr: i32
             let name_len: i32 = ident.2;
             let const_index: i32 =
                 find_constant_entry_index(base, ast_base, name_start, name_len);
-            if const_index < 0 {
-                return -1;
+            if const_index >= 0 {
+                let const_entry_ptr: i32 = ast_constant_entry_ptr(ast_base, const_index);
+                let const_value: i32 = load_i32(const_entry_ptr + 8);
+                let const_type: i32 = load_i32(const_entry_ptr + 12);
+                if !constant_eval_integer_type_supported(const_type) {
+                    return -1;
+                };
+                length = normalize_integer_value(const_value, const_type);
+                store_i32(out_type_ptr, length);
+                cursor = length_cursor;
+            } else {
+                if params_table_ptr < 0 {
+                    return -1;
+                };
+                if param_const_table_ptr < 0 {
+                    return -1;
+                };
+                if template_out_ptr < 0 {
+                    return -1;
+                };
+                let mut param_idx: i32 = 0;
+                let mut found_param: i32 = -1;
+                loop {
+                    if param_idx >= params_count {
+                        break;
+                    };
+                    let entry_ptr: i32 = params_table_ptr + param_idx * 8;
+                    let param_start: i32 = load_i32(entry_ptr);
+                    let param_len: i32 = load_i32(entry_ptr + 4);
+                    if identifiers_match_source(base, param_start, param_len, name_start, name_len) {
+                        found_param = param_idx;
+                        break;
+                    };
+                    param_idx = param_idx + 1;
+                };
+                if found_param < 0 {
+                    return -1;
+                };
+                if load_i32(param_const_table_ptr + found_param * WORD_SIZE) == 0 {
+                    return -1;
+                };
+                length = 0;
+                store_i32(template_out_ptr, 1);
+                store_i32(template_out_ptr + WORD_SIZE, element_type_id);
+                store_i32(template_out_ptr + 2 * WORD_SIZE, found_param);
+                store_i32(template_out_ptr + 3 * WORD_SIZE, 0);
+                cursor = length_cursor;
             };
-            let const_entry_ptr: i32 = ast_constant_entry_ptr(ast_base, const_index);
-            let const_value: i32 = load_i32(const_entry_ptr + 8);
-            let const_type: i32 = load_i32(const_entry_ptr + 12);
-            if !constant_eval_integer_type_supported(const_type) {
-                return -1;
-            };
-            length = normalize_integer_value(const_value, const_type);
-            store_i32(out_type_ptr, length);
-            cursor = length_cursor;
         };
         if length < 0 {
             return -1;
@@ -2128,7 +2200,17 @@ fn parse_type(base: i32, len: i32, offset: i32, ast_base: i32, out_type_ptr: i32
         let saved_used: i32 = load_i32(call_data_used_ptr);
         let mut element_count: i32 = 0;
         let mut elements_ptr: i32 = -1;
-        cursor = parse_type(base, len, cursor, ast_base, out_type_ptr);
+        cursor = parse_type(
+            base,
+            len,
+            cursor,
+            ast_base,
+            out_type_ptr,
+            params_table_ptr,
+            params_count,
+            param_const_table_ptr,
+            -1,
+        );
         if cursor < 0 {
             store_i32(call_data_used_ptr, saved_used);
             return -1;
@@ -2174,7 +2256,17 @@ fn parse_type(base: i32, len: i32, offset: i32, ast_base: i32, out_type_ptr: i32
                 store_i32(call_data_used_ptr, saved_used);
                 return -1;
             };
-            tuple_cursor = parse_type(base, len, tuple_cursor, ast_base, element_ptr);
+            tuple_cursor = parse_type(
+                base,
+                len,
+                tuple_cursor,
+                ast_base,
+                element_ptr,
+                params_table_ptr,
+                params_count,
+                param_const_table_ptr,
+                -1,
+            );
             if tuple_cursor < 0 {
                 store_i32(call_data_used_ptr, saved_used);
                 return -1;
@@ -6665,7 +6757,17 @@ fn parse_unary_expression(
             break;
         };
         let mut type_cursor: i32 = skip_whitespace(base, len, as_cursor);
-        type_cursor = parse_type(base, len, type_cursor, ast_base, literal_ptr);
+        type_cursor = parse_type(
+            base,
+            len,
+            type_cursor,
+            ast_base,
+            literal_ptr,
+            -1,
+            0,
+            -1,
+            -1,
+        );
         if type_cursor < 0 {
             return -1;
         };
@@ -7711,7 +7813,10 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     let params_table_end: i32 = params_table_ptr + MAX_PARAMS * 8;
     let param_types_table_ptr: i32 = params_table_end;
     let param_const_table_ptr: i32 = param_types_table_ptr + MAX_PARAMS * WORD_SIZE;
-    let param_type_temp_ptr: i32 = param_const_table_ptr + MAX_PARAMS * WORD_SIZE;
+    let param_templates_table_ptr: i32 = param_const_table_ptr + MAX_PARAMS * WORD_SIZE;
+    let return_template_temp_ptr: i32 =
+        param_templates_table_ptr + MAX_PARAMS * 4 * WORD_SIZE;
+    let param_type_temp_ptr: i32 = return_template_temp_ptr + 4 * WORD_SIZE;
     let expr_kind_ptr: i32 = param_type_temp_ptr + 4;
     let expr_data0_ptr: i32 = expr_kind_ptr + 4;
     let expr_data1_ptr: i32 = expr_kind_ptr + 8;
@@ -7719,6 +7824,10 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     let locals_table_ptr: i32 = locals_stack_count_ptr + 4;
     let locals_next_index_ptr: i32 = locals_table_ptr + MAX_LOCALS * LOCALS_ENTRY_SIZE;
     let expr_temp_base: i32 = locals_next_index_ptr + 4;
+    store_i32(return_template_temp_ptr + 0 * WORD_SIZE, 0);
+    store_i32(return_template_temp_ptr + 1 * WORD_SIZE, 0);
+    store_i32(return_template_temp_ptr + 2 * WORD_SIZE, 0);
+    store_i32(return_template_temp_ptr + 3 * WORD_SIZE, 0);
     let name_ident: (i32, i32, i32) = parse_identifier(base, len, cursor);
     cursor = name_ident.0;
     if cursor < 0 {
@@ -7807,7 +7916,19 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
             return -1;
         };
         cursor = skip_whitespace(base, len, cursor);
-        cursor = parse_type(base, len, cursor, ast_base, param_type_temp_ptr);
+        let template_entry_ptr: i32 =
+            param_templates_table_ptr + param_count * 4 * WORD_SIZE;
+        cursor = parse_type(
+            base,
+            len,
+            cursor,
+            ast_base,
+            param_type_temp_ptr,
+            params_table_ptr,
+            param_count,
+            param_const_table_ptr,
+            template_entry_ptr,
+        );
         if cursor < 0 {
             return -1;
         };
@@ -7864,7 +7985,17 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
                 return -1;
             };
             cursor = skip_whitespace(base, len, cursor);
-            cursor = parse_type(base, len, cursor, ast_base, param_type_temp_ptr);
+            cursor = parse_type(
+                base,
+                len,
+                cursor,
+                ast_base,
+                param_type_temp_ptr,
+                params_table_ptr,
+                param_count,
+                param_const_table_ptr,
+                return_template_temp_ptr,
+            );
             if cursor < 0 {
                 return -1;
             };
@@ -8067,7 +8198,17 @@ fn parse_type_declaration(
         return -1;
     };
     idx = skip_whitespace(base, len, idx);
-    idx = parse_type(base, len, idx, ast_base, type_ptr);
+    idx = parse_type(
+        base,
+        len,
+        idx,
+        ast_base,
+        type_ptr,
+        -1,
+        0,
+        -1,
+        -1,
+    );
     if idx < 0 {
         return -1;
     };
@@ -8189,7 +8330,17 @@ fn parse_constant_declaration(
         return -1;
     };
     idx = skip_whitespace(base, len, idx);
-    idx = parse_type(base, len, idx, ast_base, type_ptr);
+    idx = parse_type(
+        base,
+        len,
+        idx,
+        ast_base,
+        type_ptr,
+        -1,
+        0,
+        -1,
+        -1,
+    );
     if idx < 0 {
         return -1;
     };
