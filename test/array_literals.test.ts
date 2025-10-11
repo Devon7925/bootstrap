@@ -101,6 +101,23 @@ test("array literal can be passed to function arguments", async () => {
   expect(result).toBe(0);
 });
 
+test("array literal length accepts constant expressions", async () => {
+  const wasm = await compileWithAstCompiler(`
+    const BASE: i32 = 2;
+
+    const fn compute(value: i32) -> i32 {
+        value + 1
+    }
+
+    fn main() -> i32 {
+        len([5; compute(BASE) * 2])
+    }
+  `);
+
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(6);
+});
+
 test("array list literal can be passed to function arguments", async () => {
   const wasm = await compileWithAstCompiler(`
     fn take(arg: [i32; 4]) -> i32 {
@@ -150,6 +167,18 @@ test("array literal rejects negative length", async () => {
 
     fn main() -> i32 {
         0
+    }
+  `);
+
+  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+});
+
+test("array literal rejects constant expressions with negative length", async () => {
+  const failure = await expectCompileFailure(`
+    const SHIFT: i32 = 5;
+
+    fn main() -> i32 {
+        len([1; 3 - SHIFT])
     }
   `);
 
