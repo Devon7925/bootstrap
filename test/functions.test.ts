@@ -28,6 +28,121 @@ function readU32Leb(bytes: Uint8Array, start: number): [number, number] {
   return [result >>> 0, offset];
 }
 
+function readI32Leb(bytes: Uint8Array, start: number): [number, number] {
+  let result = 0;
+  let shift = 0;
+  let offset = start;
+  let byte = 0;
+  while (true) {
+    byte = bytes[offset];
+    offset += 1;
+    result |= (byte & 0x7f) << shift;
+    shift += 7;
+    if ((byte & 0x80) === 0) {
+      break;
+    }
+  }
+  if (shift < 32 && (byte & 0x40) !== 0) {
+    result |= -1 << shift;
+  }
+  return [result | 0, offset];
+}
+
+const WASM_COMPOSITE_TYPE_STRUCT = -33;
+const WASM_COMPOSITE_TYPE_ARRAY = -34;
+const WASM_REF_TYPE_REF = -28;
+
+function skipValueType(bytes: Uint8Array, start: number): number {
+  const byte = bytes[start];
+  if (byte === 0x7f || byte === 0x7e || byte === 0x7d || byte === 0x7c) {
+    return start + 1;
+  }
+  const [type, afterType] = readI32Leb(bytes, start);
+  if (type === WASM_REF_TYPE_REF) {
+    const [, next] = readU32Leb(bytes, afterType);
+    return next;
+  }
+  return afterType;
+}
+
+function readFunctionParamCounts(wasm: Uint8Array): number[] {
+  let offset = 8;
+  const readSection = (id: number) => {
+    let cursor = 8;
+    while (cursor < wasm.length) {
+      const sectionId = wasm[cursor];
+      cursor += 1;
+      const [payloadLen, payloadStart] = readU32Leb(wasm, cursor);
+      const payloadEnd = payloadStart + payloadLen;
+      if (sectionId === id) {
+        return { start: payloadStart, end: payloadEnd };
+      }
+      cursor = payloadEnd;
+    }
+    return undefined;
+  };
+
+  const typeSection = readSection(1);
+  const funcSection = readSection(3);
+  if (!typeSection || !funcSection) {
+    return [];
+  }
+
+  const [typeCount, afterCount] = readU32Leb(wasm, typeSection.start);
+  let typeCursor = afterCount;
+  const typeParamCounts: number[] = [];
+  for (let idx = 0; idx < typeCount; idx += 1) {
+    const tag = wasm[typeCursor];
+    if (tag === 0x60) {
+      typeCursor += 1;
+      const [paramCount, afterParamsCount] = readU32Leb(wasm, typeCursor);
+      typeCursor = afterParamsCount;
+      for (let param = 0; param < paramCount; param += 1) {
+        typeCursor = skipValueType(wasm, typeCursor);
+      }
+      const [resultCount, afterResultCount] = readU32Leb(wasm, typeCursor);
+      typeCursor = afterResultCount;
+      for (let result = 0; result < resultCount; result += 1) {
+        typeCursor = skipValueType(wasm, typeCursor);
+      }
+      typeParamCounts.push(paramCount);
+      continue;
+    }
+
+    const [kind, afterKind] = readI32Leb(wasm, typeCursor);
+    typeCursor = afterKind;
+    if (kind === WASM_COMPOSITE_TYPE_ARRAY) {
+      typeCursor = skipValueType(wasm, typeCursor);
+      typeCursor += 1; // mutability byte
+      typeParamCounts.push(-1);
+      continue;
+    }
+    if (kind === WASM_COMPOSITE_TYPE_STRUCT) {
+      const [fieldCount, afterFieldCount] = readU32Leb(wasm, typeCursor);
+      typeCursor = afterFieldCount;
+      for (let field = 0; field < fieldCount; field += 1) {
+        typeCursor = skipValueType(wasm, typeCursor);
+        typeCursor += 1; // mutability byte
+      }
+      typeParamCounts.push(-1);
+      continue;
+    }
+    throw new Error(`unknown type entry tag: ${kind}`);
+  }
+
+  const [funcCount, afterFuncCount] = readU32Leb(wasm, funcSection.start);
+  let funcCursor = afterFuncCount;
+  const paramCounts: number[] = [];
+  for (let funcIdx = 0; funcIdx < funcCount; funcIdx += 1) {
+    const [typeIndex, next] = readU32Leb(wasm, funcCursor);
+    funcCursor = next;
+    const paramCount = typeParamCounts[typeIndex];
+    paramCounts.push(paramCount >= 0 ? paramCount : 0);
+  }
+
+  return paramCounts;
+}
+
 function countFunctionsInWasm(wasm: Uint8Array): number {
   let offset = 8; // skip header and version
   while (offset < wasm.length) {
@@ -323,6 +438,34 @@ test("const parameter specialization reuses existing instantiations", async () =
   const instance = await instantiateWasmModuleWithGc(wasm);
   const main = expectExportedFunction(instance, "main");
   expect(main()).toBe(8);
+});
+
+test("const parameter specializations erase const parameters at runtime", async () => {
+  const compiler = await instantiateAstCompiler();
+  const inputPtr = COMPILER_INPUT_PTR;
+  const outputPtr = DEFAULT_OUTPUT_STRIDE;
+  const wasm = compiler.compileWithLayout(
+    inputPtr,
+    outputPtr,
+    `
+      fn helper(const COUNT: i32, value: i32) -> i32 {
+          value + COUNT
+      }
+
+      fn main() -> i32 {
+          helper(4, 7)
+      }
+    `,
+  );
+
+  const paramCounts = readFunctionParamCounts(wasm);
+  expect(paramCounts.length).toBeGreaterThanOrEqual(3);
+  expect(paramCounts[0]).toBe(2);
+  expect(paramCounts[paramCounts.length - 1]).toBe(1);
+
+  const instance = await instantiateWasmModuleWithGc(wasm);
+  const main = expectExportedFunction(instance, "main");
+  expect(main()).toBe(11);
 });
 
 test("array lengths can reference const bindings", async () => {
