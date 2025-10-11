@@ -2580,6 +2580,20 @@ fn scratch_fn_base(out_ptr: i32) -> i32 {
     out_ptr + SCRATCH_FN_BASE_OFFSET
 }
 
+const SPECIALIZATION_ENTRY_SIZE: i32 = 16;
+
+const SPECIALIZATION_BASE_INDEX_OFFSET: i32 = 0;
+
+const SPECIALIZATION_CONST_COUNT_OFFSET: i32 = 4;
+
+const SPECIALIZATION_DATA_PTR_OFFSET: i32 = 8;
+
+const SPECIALIZATION_WRAPPER_INDEX_OFFSET: i32 = 12;
+
+fn scratch_specialization_entry_ptr(out_ptr: i32, index: i32) -> i32 {
+    scratch_fn_base(out_ptr) + index * SPECIALIZATION_ENTRY_SIZE
+}
+
 fn scratch_types_count_ptr(out_ptr: i32) -> i32 {
     out_ptr + SCRATCH_TYPES_COUNT_OFFSET
 }
@@ -8628,6 +8642,298 @@ fn resolve_call_metadata(
     0
 }
 
+fn function_has_const_params(ast_base: i32, index: i32) -> bool {
+    if index < 0 {
+        return false;
+    };
+    let entry_ptr: i32 = ast_function_entry_ptr(ast_base, index);
+    let param_count: i32 = load_i32(entry_ptr + 8);
+    if param_count <= 0 {
+        return false;
+    };
+    let param_types_ptr: i32 = load_i32(entry_ptr + 24);
+    if param_types_ptr < 0 {
+        return false;
+    };
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= param_count {
+            break;
+        };
+        let param_entry_ptr: i32 = param_types_ptr + idx * PARAM_TYPE_ENTRY_SIZE;
+        let flags: i32 = load_i32(param_entry_ptr + PARAM_TYPE_FLAGS_OFFSET);
+        if (flags & PARAM_TYPE_FLAG_CONST) != 0 {
+            return true;
+        };
+        idx = idx + 1;
+    };
+    false
+}
+
+fn build_param_mapping(param_types_ptr: i32, param_count: i32, mapping_ptr: i32) -> (i32, i32) {
+    if param_count <= 0 {
+        return (0, 0);
+    };
+    let mut runtime_count: i32 = 0;
+    let mut const_count: i32 = 0;
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= param_count {
+            break;
+        };
+        let param_entry_ptr: i32 = param_types_ptr + idx * PARAM_TYPE_ENTRY_SIZE;
+        let flags: i32 = load_i32(param_entry_ptr + PARAM_TYPE_FLAGS_OFFSET);
+        if (flags & PARAM_TYPE_FLAG_CONST) != 0 {
+            store_i32(mapping_ptr + idx * 4, -1);
+            const_count = const_count + 1;
+        } else {
+            store_i32(mapping_ptr + idx * 4, runtime_count);
+            runtime_count = runtime_count + 1;
+        };
+        idx = idx + 1;
+    };
+    (runtime_count, const_count)
+}
+
+fn decimal_digit_count(value: i32) -> i32 {
+    if value <= 0 {
+        return 1;
+    };
+    let mut remaining: i32 = value;
+    let mut count: i32 = 0;
+    loop {
+        count = count + 1;
+        remaining = remaining / 10;
+        if remaining <= 0 {
+            break;
+        };
+    };
+    count
+}
+
+fn write_decimal_string(value: i32, ptr: i32, length: i32) {
+    let mut remaining: i32 = value;
+    let mut idx: i32 = length - 1;
+    loop {
+        let next: i32 = remaining / 10;
+        let digit: i32 = remaining - next * 10;
+        store_u8(ptr + idx, digit + '0');
+        remaining = next;
+        if idx <= 0 {
+            break;
+        };
+        idx = idx - 1;
+    };
+}
+
+fn ast_store_specialized_function_name(
+    ast_base: i32,
+    base_name_ptr: i32,
+    base_name_len: i32,
+    suffix: i32,
+) -> (i32, i32) {
+    if base_name_ptr <= 0 {
+        return (-1, -1);
+    };
+    if base_name_len < 0 {
+        return (-1, -1);
+    };
+    if suffix < 0 {
+        return (-1, -1);
+    };
+    let names_len_ptr: i32 = ast_names_len_ptr(ast_base);
+    let used: i32 = load_i32(names_len_ptr);
+    let digits: i32 = decimal_digit_count(suffix);
+    let total_len: i32 = base_name_len + 1 + digits;
+    if used + total_len > AST_NAMES_CAPACITY {
+        return (-1, -1);
+    };
+    let dest_ptr: i32 = ast_names_base(ast_base) + used;
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= base_name_len {
+            break;
+        };
+        let byte: i32 = load_u8(base_name_ptr + idx);
+        store_u8(dest_ptr + idx, byte);
+        idx = idx + 1;
+    };
+    store_u8(dest_ptr + base_name_len, '#');
+    write_decimal_string(suffix, dest_ptr + base_name_len + 1, digits);
+    store_i32(names_len_ptr, used + total_len);
+    (dest_ptr, total_len)
+}
+
+fn create_specialized_call_metadata(
+    ast_base: i32,
+    old_metadata_ptr: i32,
+    mapping_ptr: i32,
+    param_count: i32,
+    wrapper_index: i32,
+    wrapper_param_count: i32,
+    wrapper_name_ptr: i32,
+    wrapper_name_len: i32,
+) -> i32 {
+    let arg_count: i32 = wrapper_param_count;
+    let metadata_words: i32 = 4 + arg_count + arg_count * 2;
+    let words: i32 = if metadata_words > 0 { metadata_words } else { 4 };
+    let new_metadata_ptr: i32 = ast_call_data_alloc(ast_base, words);
+    if new_metadata_ptr < 0 {
+        return -1;
+    };
+    store_i32(new_metadata_ptr, wrapper_name_ptr);
+    store_i32(new_metadata_ptr + 4, wrapper_name_len);
+    store_i32(new_metadata_ptr + 8, arg_count);
+    store_i32(new_metadata_ptr + 12, wrapper_index);
+    let old_args_base: i32 = call_metadata_args_base(old_metadata_ptr);
+    let new_args_base: i32 = call_metadata_args_base(new_metadata_ptr);
+    let new_const_base: i32 = call_metadata_const_data_base(new_metadata_ptr);
+    let mut idx: i32 = 0;
+    let mut new_idx: i32 = 0;
+    loop {
+        if idx >= param_count {
+            break;
+        };
+        let mapped: i32 = load_i32(mapping_ptr + idx * 4);
+        if mapped >= 0 {
+            let arg_expr_index: i32 = load_i32(old_args_base + idx * 4);
+            store_i32(new_args_base + new_idx * 4, arg_expr_index);
+            store_i32(new_const_base + new_idx * 8, 0);
+            store_i32(new_const_base + new_idx * 8 + 4, -1);
+            new_idx = new_idx + 1;
+        };
+        idx = idx + 1;
+    };
+    if new_idx != arg_count {
+        return -1;
+    };
+    new_metadata_ptr
+}
+
+fn create_specialized_wrapper(
+    out_ptr: i32,
+    ast_base: i32,
+    base_index: i32,
+    mapping_ptr: i32,
+    param_count: i32,
+    runtime_count: i32,
+    original_metadata_ptr: i32,
+    suffix: i32,
+) -> i32 {
+    -1
+}
+
+fn ensure_specialization(
+    out_ptr: i32,
+    ast_base: i32,
+    base_index: i32,
+    mapping_ptr: i32,
+    param_count: i32,
+    runtime_count: i32,
+    const_count: i32,
+    original_metadata_ptr: i32,
+    const_values_ptr: i32,
+) -> i32 {
+    -1
+}
+
+fn specialize_call_metadata(out_ptr: i32, ast_base: i32, metadata_addr: i32) -> i32 {
+    if metadata_addr <= 0 {
+        return 0;
+    };
+    let metadata_ptr: i32 = load_i32(metadata_addr);
+    if metadata_ptr <= 0 {
+        return 0;
+    };
+    let callee_index: i32 = load_i32(call_metadata_callee_index_ptr(metadata_ptr));
+    if !function_has_const_params(ast_base, callee_index) {
+        return 0;
+    };
+    let callee_entry_ptr: i32 = ast_function_entry_ptr(ast_base, callee_index);
+    let param_count: i32 = load_i32(callee_entry_ptr + 8);
+    if param_count <= 0 {
+        return 0;
+    };
+    let param_types_ptr: i32 = load_i32(callee_entry_ptr + 24);
+    if param_types_ptr < 0 {
+        return -1;
+    };
+    let mapping_ptr: i32 = ast_temp_base(ast_base);
+    let mapping_result: (i32, i32) = build_param_mapping(param_types_ptr, param_count, mapping_ptr);
+    let runtime_count: i32 = mapping_result.0;
+    let const_count: i32 = mapping_result.1;
+    if const_count <= 0 {
+        return 0;
+    };
+    let const_values_ptr: i32 = mapping_ptr + param_count * 4;
+    let const_base: i32 = call_metadata_const_data_base(metadata_ptr);
+    let mut const_idx: i32 = 0;
+    let mut param_idx: i32 = 0;
+    loop {
+        if param_idx >= param_count {
+            break;
+        };
+        let mapped: i32 = load_i32(mapping_ptr + param_idx * 4);
+        if mapped < 0 {
+            let entry_ptr: i32 = const_base + param_idx * 8;
+            let value: i32 = load_i32(entry_ptr);
+            let ty: i32 = load_i32(entry_ptr + 4);
+            if ty < 0 {
+                return -1;
+            };
+            store_i32(const_values_ptr + const_idx * 8, value);
+            store_i32(const_values_ptr + const_idx * 8 + 4, ty);
+            const_idx = const_idx + 1;
+        };
+        param_idx = param_idx + 1;
+    };
+    if const_idx != const_count {
+        return -1;
+    };
+    let wrapper_index: i32 = ensure_specialization(
+        out_ptr,
+        ast_base,
+        callee_index,
+        mapping_ptr,
+        param_count,
+        runtime_count,
+        const_count,
+        metadata_ptr,
+        const_values_ptr,
+    );
+    if wrapper_index < 0 {
+        return -1;
+    };
+    let wrapper_entry_ptr: i32 = ast_function_entry_ptr(ast_base, wrapper_index);
+    let wrapper_name_ptr: i32 = load_i32(wrapper_entry_ptr);
+    let wrapper_name_len: i32 = load_i32(wrapper_entry_ptr + 4);
+    let wrapper_param_count: i32 = load_i32(wrapper_entry_ptr + 8);
+    let new_metadata_ptr: i32 = create_specialized_call_metadata(
+        ast_base,
+        metadata_ptr,
+        mapping_ptr,
+        param_count,
+        wrapper_index,
+        wrapper_param_count,
+        wrapper_name_ptr,
+        wrapper_name_len,
+    );
+    if new_metadata_ptr < 0 {
+        return -1;
+    };
+    store_i32(metadata_addr, new_metadata_ptr);
+    0
+}
+
+
+fn specialize_const_functions(
+    out_ptr: i32,
+    ast_base: i32,
+    initial_func_count: i32,
+) -> i32 {
+    initial_func_count
+}
+
 fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
     if func_count <= 0 {
         return -1;
@@ -12035,7 +12341,7 @@ fn compile_impl(
     let ast_base: i32 = ast_program_base(out_ptr, input_len);
     ast_reset(ast_base);
 
-    let func_count: i32 = parse_program(
+    let mut func_count: i32 = parse_program(
         input_ptr,
         input_len,
         ast_base,
@@ -12048,6 +12354,12 @@ fn compile_impl(
     if validate_program(out_ptr, ast_base, func_count) < 0 {
         return -1;
     };
+
+    let specialized_count: i32 = specialize_const_functions(out_ptr, ast_base, func_count);
+    if specialized_count < 0 {
+        return -1;
+    };
+    func_count = specialized_count;
 
     if write_type_metadata(out_ptr, ast_base) < 0 {
         return -1;
