@@ -1,5 +1,5 @@
 use "/stdlib/memory.bp";
-use "./testing_utils.bp";
+use "./utils.bp";
 use "./wasm_output.bp";
 
 fn memory_size_pages() -> i32 {
@@ -45,46 +45,6 @@ fn ensure_memory_capacity(required: i32) -> i32 {
         };
     };
     0
-}
-
-fn string_length(ptr: i32) -> i32 {
-    if ptr <= 0 {
-        return -1;
-    };
-    let mut len: i32 = 0;
-    loop {
-        let byte: i32 = load_u8(ptr + len);
-        if byte == 0 {
-            break;
-        };
-        len = len + 1;
-    };
-    len
-}
-
-fn copy_bytes(dest: i32, src: i32, len: i32) {
-    let mut idx: i32 = 0;
-    loop {
-        if idx >= len {
-            break;
-        };
-        let byte: i32 = load_u8(src + idx);
-        store_u8(dest + idx, byte);
-        idx = idx + 1;
-    };
-}
-
-fn align_to(value: i32, alignment: i32) -> i32 {
-    if alignment <= 0 {
-        return value;
-    };
-    let mut adjusted: i32 = value + alignment - 1;
-    adjusted = adjusted / alignment * alignment;
-    adjusted
-}
-
-fn is_whitespace(byte: i32) -> bool {
-    byte == ' ' || byte == '\t' || byte == '\n' || byte == '\r'
 }
 
 fn skip_whitespace(base: i32, len: i32, offset: i32) -> i32 {
