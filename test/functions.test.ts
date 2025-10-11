@@ -4,9 +4,11 @@ import {
   compileWithAstCompiler,
   expectCompileFailure,
   instantiateAstCompiler,
+  readAstCompilerModules,
   readAstCompilerSource,
   runWasmMainWithGc,
   DEFAULT_OUTPUT_STRIDE,
+  AST_COMPILER_ENTRY_PATH,
 } from "./helpers";
 
 test("functions can call other functions", async () => {
@@ -233,7 +235,12 @@ test("function section handles multibyte type indices", async () => {
 
 test("ast compiler source can be compiled once", async () => {
   const compiler = await instantiateAstCompiler();
-  const source = await readAstCompilerSource();
-  const wasm = compiler.compileAt(0, source.length, source);
+  const modules = await readAstCompilerModules();
+  const entry = modules.find((module) => module.path === AST_COMPILER_ENTRY_PATH);
+  if (!entry) {
+    throw new Error("ast compiler entry module not found");
+  }
+  const extraModules = modules.filter((module) => module.path !== AST_COMPILER_ENTRY_PATH);
+  const wasm = compiler.compileModule(AST_COMPILER_ENTRY_PATH, entry.source, extraModules);
   expect(wasm.length).toBeGreaterThan(DEFAULT_OUTPUT_STRIDE);
 });

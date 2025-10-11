@@ -4,26 +4,19 @@ import {
   expectExportedFunction,
   expectExportedMemory,
   instantiateWasmModuleWithGc,
+  loadAstCompilerWasm,
 } from "./helpers";
-
-import { compileToWasm } from "../src/index";
 
 const encoder = new TextEncoder();
 
 const MODULE_STATE_BASE = 1_048_576;
 const MODULE_STORAGE_TOP_OFFSET = 4;
 
-const STAGE2_SOURCE_URL = new URL("../compiler/ast_compiler.bp", import.meta.url);
-
 let stage2WasmPromise: Promise<Uint8Array> | undefined;
 
 async function getStage2Wasm(): Promise<Uint8Array> {
   if (!stage2WasmPromise) {
-    stage2WasmPromise = (async () => {
-      const sourceFile = Bun.file(STAGE2_SOURCE_URL);
-      const source = await sourceFile.text();
-      return compileToWasm(source);
-    })();
+    stage2WasmPromise = loadAstCompilerWasm();
   }
   return stage2WasmPromise;
 }

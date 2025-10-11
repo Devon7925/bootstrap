@@ -28,6 +28,16 @@ const MODULE_PATH_PTR = 1_024;
 const MODULE_CONTENT_PTR = 4_096;
 const DEFAULT_ENTRY_MODULE_PATH = "/entry.bp";
 
+export interface CompilerModuleSource {
+  readonly path: string;
+  readonly source: string;
+}
+
+export interface CompileOptions {
+  readonly modules?: ReadonlyArray<CompilerModuleSource>;
+  readonly entryPath?: string;
+}
+
 export class CompileError extends Error {
   override readonly name = "CompileError";
 
@@ -219,7 +229,11 @@ function readStageFailure(
   return `${stage} compilation failed (status ${producedLen}, functions=${functions}, instr_offset=${instrOffset}, compiled_functions=${compiledFunctions}${detail})`;
 }
 
-export async function compile(source: string, target: Target = DEFAULT_TARGET): Promise<Compilation> {
+export async function compile(
+  source: string,
+  target: Target = DEFAULT_TARGET,
+  options: CompileOptions = {},
+): Promise<Compilation> {
   if (!source) {
     throw new CompileError("source must not be empty");
   }
@@ -227,6 +241,9 @@ export async function compile(source: string, target: Target = DEFAULT_TARGET): 
   if (target !== Target.Wasm) {
     throw new CompileError(`target '${target}' is not supported yet`);
   }
+
+  const entryPath = options.entryPath ?? DEFAULT_ENTRY_MODULE_PATH;
+  const extraModules = options.modules ?? [];
 
   const instance = await instantiateCompiler();
   const memory = instance.exports.memory as WebAssembly.Memory | undefined;
@@ -273,8 +290,24 @@ export async function compile(source: string, target: Target = DEFAULT_TARGET): 
       zeroModuleMemory(memory, MODULE_CONTENT_PTR, contentLength + 1);
     };
 
-    loadModule(MEMORY_INTRINSICS_MODULE_PATH, memoryIntrinsicsSource);
-    loadModule(DEFAULT_ENTRY_MODULE_PATH, source);
+    const moduleSources: CompilerModuleSource[] = [
+      { path: MEMORY_INTRINSICS_MODULE_PATH, source: memoryIntrinsicsSource },
+      ...extraModules.filter((module) => {
+        if (module.path === MEMORY_INTRINSICS_MODULE_PATH) {
+          return false;
+        }
+        if (module.path === entryPath) {
+          return false;
+        }
+        return true;
+      }),
+    ];
+
+    for (const module of moduleSources) {
+      loadModule(module.path, module.source);
+    }
+
+    loadModule(entryPath, source);
 
     let producedLen: number;
     try {
@@ -321,8 +354,11 @@ export async function compile(source: string, target: Target = DEFAULT_TARGET): 
   return new Compilation(target, wasm);
 }
 
-export async function compileToWasm(source: string): Promise<Uint8Array> {
-  const compilation = await compile(source, Target.Wasm);
+export async function compileToWasm(
+  source: string,
+  options?: CompileOptions,
+): Promise<Uint8Array> {
+  const compilation = await compile(source, Target.Wasm, options ?? {});
   return compilation.intoWasm();
 }
 
