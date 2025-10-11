@@ -484,6 +484,23 @@ test("const parameter specializations erase const parameters at runtime", async 
   expect(main()).toBe(11);
 });
 
+test("const parameter array types specialize per instantiation", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn last_value(const COUNT: i32, values: [i32; COUNT]) -> i32 {
+        values[COUNT - 1]
+    }
+
+    fn main() -> i32 {
+        let four: [i32; 4] = [1, 2, 3, 4];
+        let five: [i32; 5] = [3, 1, 4, 1, 5];
+        last_value(4, four) + last_value(5, five)
+    }
+  `);
+
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(9);
+});
+
 test("array lengths can reference const bindings", async () => {
   const wasm = await compileWithAstCompiler(`
     const LENGTH: i32 = 4;
