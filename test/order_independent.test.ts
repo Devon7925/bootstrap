@@ -38,7 +38,7 @@ test("Const can depend on const out of order", async () => {
     const UTIL1: i32 = 7;
 
     fn main() -> i32 {
-        UTIL
+        UTIL1
     }
 
   `);
