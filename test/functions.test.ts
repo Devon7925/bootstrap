@@ -440,6 +440,22 @@ test("const parameter specialization reuses existing instantiations", async () =
   expect(main()).toBe(8);
 });
 
+test("const parameter functions are not exported", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn helper(const COUNT: i32) -> i32 {
+        COUNT
+    }
+
+    fn main() -> i32 {
+        helper(2)
+    }
+  `);
+
+  const instance = await instantiateWasmModuleWithGc(wasm);
+  const exports = instance.exports as Record<string, unknown>;
+  expect(Object.prototype.hasOwnProperty.call(exports, "helper")).toBe(false);
+});
+
 test("const parameter specializations erase const parameters at runtime", async () => {
   const compiler = await instantiateAstCompiler();
   const inputPtr = COMPILER_INPUT_PTR;
