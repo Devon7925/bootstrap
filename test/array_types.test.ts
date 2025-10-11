@@ -3,7 +3,9 @@ import { expect, test } from "bun:test";
 import {
   COMPILER_INPUT_PTR,
   DEFAULT_OUTPUT_STRIDE,
+  compileWithAstCompiler,
   instantiateAstCompiler,
+  runWasmMainWithGc,
 } from "./helpers";
 
 type ValueType =
@@ -159,4 +161,25 @@ test("array types emit gc entries", async () => {
   const mainTypeIndex = readU32Leb(functionSection!, funcCursor);
   expect(mainTypeIndex).toBe(2);
   expect(funcCursor.index).toBe(functionSection!.length);
+});
+
+test("array type length accepts constant expressions", async () => {
+  const wasm = await compileWithAstCompiler(`
+    const BASE: i32 = 2;
+
+    const fn compute() -> i32 {
+        (BASE + 1) * 2
+    }
+
+    fn take(values: [i32; compute()]) -> i32 {
+        len(values)
+    }
+
+    fn main() -> i32 {
+        take([3; compute()])
+    }
+  `);
+
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(6);
 });
