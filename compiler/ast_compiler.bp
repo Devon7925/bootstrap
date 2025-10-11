@@ -315,6 +315,14 @@ fn parse_identifier(base: i32, len: i32, offset: i32) -> (i32, i32, i32) {
 
 const MAX_PARAMS: i32 = 64;
 
+const PARAM_TYPE_ENTRY_SIZE: i32 = 8;
+
+const PARAM_TYPE_TYPE_OFFSET: i32 = 0;
+
+const PARAM_TYPE_FLAGS_OFFSET: i32 = 4;
+
+const PARAM_TYPE_FLAG_CONST: i32 = 1;
+
 const MAX_ARRAY_LITERAL_ELEMENTS: i32 = 256;
 
 const MAX_TUPLE_ELEMENTS: i32 = 32;
@@ -2848,6 +2856,23 @@ fn call_metadata_callee_index_ptr(metadata_ptr: i32) -> i32 {
 
 fn call_metadata_args_base(metadata_ptr: i32) -> i32 {
     metadata_ptr + 16
+}
+
+fn call_metadata_const_data_base(metadata_ptr: i32) -> i32 {
+    let arg_count: i32 = call_metadata_arg_count(metadata_ptr);
+    metadata_ptr + 16 + arg_count * WORD_SIZE
+}
+
+fn function_param_entry_ptr(param_types_ptr: i32, index: i32) -> i32 {
+    param_types_ptr + index * PARAM_TYPE_ENTRY_SIZE
+}
+
+fn function_param_type(param_types_ptr: i32, index: i32) -> i32 {
+    load_i32(function_param_entry_ptr(param_types_ptr, index) + PARAM_TYPE_TYPE_OFFSET)
+}
+
+fn function_param_flags(param_types_ptr: i32, index: i32) -> i32 {
+    load_i32(function_param_entry_ptr(param_types_ptr, index) + PARAM_TYPE_FLAGS_OFFSET)
 }
 
 fn ast_write_function_entry(
@@ -6148,7 +6173,7 @@ fn parse_basic_expression(
             if name_ptr < 0 {
                 return -1;
             };
-            let metadata_words: i32 = 4 + arg_count;
+            let metadata_words: i32 = 4 + arg_count + arg_count * 2;
             let metadata_ptr: i32 = ast_call_data_alloc(ast_base, metadata_words);
             if metadata_ptr < 0 {
                 return -1;
@@ -6166,6 +6191,17 @@ fn parse_basic_expression(
                 store_i32(metadata_ptr + 16 + arg_idx * 4, arg_value);
                 arg_idx = arg_idx + 1;
             };
+            let const_data_base: i32 = call_metadata_const_data_base(metadata_ptr);
+            let mut const_idx: i32 = 0;
+            loop {
+                if const_idx >= arg_count {
+                    break;
+                };
+                let entry_ptr: i32 = const_data_base + const_idx * 8;
+                store_i32(entry_ptr, 0);
+                store_i32(entry_ptr + 4, -1);
+                const_idx = const_idx + 1;
+            };
             store_i32(out_kind_ptr, 1);
             store_i32(out_data0_ptr, metadata_ptr);
             store_i32(out_data1_ptr, 0);
@@ -6175,8 +6211,9 @@ fn parse_basic_expression(
     let param_index: i32 =
         find_parameter_index(base, params_table_ptr, params_count, ident_start, ident_len);
     if param_index >= 0 {
-        let param_types_table_ptr: i32 = params_table_ptr + MAX_PARAMS * 8;
-        let param_type_id: i32 = load_i32(param_types_table_ptr + param_index * 4);
+    let param_info_table_ptr: i32 = params_table_ptr + MAX_PARAMS * 8;
+    let param_entry_ptr: i32 = param_info_table_ptr + param_index * PARAM_TYPE_ENTRY_SIZE;
+    let param_type_id: i32 = load_i32(param_entry_ptr + PARAM_TYPE_TYPE_OFFSET);
         store_i32(out_kind_ptr, 6);
         store_i32(out_data0_ptr, param_index);
         store_i32(out_data1_ptr, param_type_id);
@@ -7462,8 +7499,8 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     let params_count_ptr: i32 = temp_base;
     let params_table_ptr: i32 = temp_base + 4;
     let params_table_end: i32 = params_table_ptr + MAX_PARAMS * 8;
-    let param_types_table_ptr: i32 = params_table_end;
-    let param_type_temp_ptr: i32 = param_types_table_ptr + MAX_PARAMS * 4;
+    let param_info_table_ptr: i32 = params_table_end;
+    let param_type_temp_ptr: i32 = param_info_table_ptr + MAX_PARAMS * PARAM_TYPE_ENTRY_SIZE;
     let expr_kind_ptr: i32 = param_type_temp_ptr + 4;
     let expr_data0_ptr: i32 = expr_kind_ptr + 4;
     let expr_data1_ptr: i32 = expr_kind_ptr + 8;
@@ -7518,6 +7555,19 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
         if param_count >= MAX_PARAMS {
             return -1;
         };
+        let mut is_const_param: i32 = 0;
+        let maybe_param_const: i32 = expect_keyword_const(base, len, cursor);
+        if maybe_param_const >= 0 {
+            if maybe_param_const >= len {
+                return -1;
+            };
+            let after_const: i32 = load_u8(base + maybe_param_const);
+            if !is_whitespace(after_const) {
+                return -1;
+            };
+            is_const_param = 1;
+            cursor = skip_whitespace(base, len, maybe_param_const);
+        };
         let param_ident: (i32, i32, i32) = parse_identifier(base, len, cursor);
         cursor = param_ident.0;
         if cursor < 0 {
@@ -7551,7 +7601,10 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
         let param_type_id: i32 = load_i32(param_type_temp_ptr);
         store_i32(params_table_ptr + param_count * 8, param_start);
         store_i32(params_table_ptr + param_count * 8 + 4, param_len);
-        store_i32(param_types_table_ptr + param_count * 4, param_type_id);
+        let param_entry_ptr: i32 = param_info_table_ptr + param_count * PARAM_TYPE_ENTRY_SIZE;
+        store_i32(param_entry_ptr + PARAM_TYPE_TYPE_OFFSET, param_type_id);
+        let param_flags: i32 = if is_const_param != 0 { PARAM_TYPE_FLAG_CONST } else { 0 };
+        store_i32(param_entry_ptr + PARAM_TYPE_FLAGS_OFFSET, param_flags);
         param_count = param_count + 1;
         cursor = skip_whitespace(base, len, cursor);
         if cursor >= len {
@@ -7656,7 +7709,7 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     let locals_total: i32 = load_i32(locals_next_index_ptr);
     let mut param_types_ptr: i32 = -1;
     if param_count > 0 {
-        param_types_ptr = ast_call_data_alloc(ast_base, param_count);
+        param_types_ptr = ast_call_data_alloc(ast_base, param_count * 2);
         if param_types_ptr < 0 {
             return -1;
         };
@@ -7665,8 +7718,16 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
             if copy_idx >= param_count {
                 break;
             };
-            let type_id: i32 = load_i32(param_types_table_ptr + copy_idx * 4);
-            store_i32(param_types_ptr + copy_idx * 4, type_id);
+            let source_entry_ptr: i32 =
+                param_info_table_ptr + copy_idx * PARAM_TYPE_ENTRY_SIZE;
+            let type_id: i32 =
+                load_i32(source_entry_ptr + PARAM_TYPE_TYPE_OFFSET);
+            let flags: i32 =
+                load_i32(source_entry_ptr + PARAM_TYPE_FLAGS_OFFSET);
+            let dest_entry_ptr: i32 =
+                param_types_ptr + copy_idx * PARAM_TYPE_ENTRY_SIZE;
+            store_i32(dest_entry_ptr + PARAM_TYPE_TYPE_OFFSET, type_id);
+            store_i32(dest_entry_ptr + PARAM_TYPE_FLAGS_OFFSET, flags);
             copy_idx = copy_idx + 1;
         };
     };
@@ -8481,10 +8542,13 @@ fn resolve_call_metadata(
                     if verify_idx >= arg_count {
                         break;
                     };
-                    let expected_type: i32 = if param_types_ptr >= 0 {
-                        load_i32(param_types_ptr + verify_idx * 4)
-                    } else {
-                        -1
+                    let mut expected_type: i32 = -1;
+                    let mut param_flags: i32 = 0;
+                    if param_types_ptr >= 0 {
+                        expected_type =
+                            function_param_type(param_types_ptr, verify_idx);
+                        param_flags =
+                            function_param_flags(param_types_ptr, verify_idx);
                     };
                     if expected_type < 0 {
                         return -1;
@@ -8495,7 +8559,12 @@ fn resolve_call_metadata(
                         return -1;
                     };
                     if param_types_ptr >= 0 {
-                        store_i32(param_types_ptr + verify_idx * 4, resolved_expected);
+                        let entry_ptr: i32 =
+                            function_param_entry_ptr(param_types_ptr, verify_idx);
+                        store_i32(
+                            entry_ptr + PARAM_TYPE_TYPE_OFFSET,
+                            resolved_expected,
+                        );
                     };
                     let arg_expr_index: i32 = load_i32(args_base + verify_idx * 4);
                     let arg_type: i32 = ast_expr_type(ast_base, arg_expr_index);
@@ -8510,6 +8579,39 @@ fn resolve_call_metadata(
                     ast_expr_set_type(ast_base, arg_expr_index, resolved_arg);
                     if resolved_expected != resolved_arg {
                         return -1;
+                    };
+                    let const_data_base: i32 = call_metadata_const_data_base(metadata_ptr);
+                    let const_entry_ptr: i32 = const_data_base + verify_idx * 8;
+                    if (param_flags & PARAM_TYPE_FLAG_CONST) != 0 {
+                        let temp_base: i32 = ast_temp_base(ast_base);
+                        let value_ptr: i32 = temp_base;
+                        let type_ptr: i32 = value_ptr + 4;
+                        let stack_top_ptr: i32 = type_ptr + 4;
+                        let stack_base: i32 = stack_top_ptr + 4;
+                        store_i32(stack_top_ptr, 0);
+                        let eval_status: i32 = interpret_constant_expression(
+                            ast_base,
+                            arg_expr_index,
+                            stack_base,
+                            stack_top_ptr,
+                            value_ptr,
+                            type_ptr,
+                            0,
+                            0,
+                            0,
+                        );
+                        if eval_status != CONST_EVAL_STATUS_OK {
+                            return -1;
+                        };
+                        let const_type: i32 = load_i32(type_ptr);
+                        if const_type != resolved_expected {
+                            return -1;
+                        };
+                        store_i32(const_entry_ptr, load_i32(value_ptr));
+                        store_i32(const_entry_ptr + 4, const_type);
+                    } else {
+                        store_i32(const_entry_ptr, 0);
+                        store_i32(const_entry_ptr + 4, -1);
                     };
                     verify_idx = verify_idx + 1;
                 };
@@ -8603,15 +8705,20 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
                 if param_idx >= param_count {
                     break;
                 };
-                let param_type_ptr: i32 = param_types_ptr + param_idx * 4;
-                let param_type_id: i32 = load_i32(param_type_ptr);
+                let param_entry_ptr: i32 =
+                    function_param_entry_ptr(param_types_ptr, param_idx);
+                let param_type_id: i32 =
+                    load_i32(param_entry_ptr + PARAM_TYPE_TYPE_OFFSET);
                 let resolved_param_type: i32 =
                     resolve_type_id(out_ptr, ast_base, param_type_id);
                 if resolved_param_type < 0 {
                     return -1;
                 };
                 if resolved_param_type != param_type_id {
-                    store_i32(param_type_ptr, resolved_param_type);
+                    store_i32(
+                        param_entry_ptr + PARAM_TYPE_TYPE_OFFSET,
+                        resolved_param_type,
+                    );
                 };
                 param_idx = param_idx + 1;
             };
@@ -11250,7 +11357,8 @@ fn emit_type_section(
             if param_idx >= param_count {
                 break;
             };
-            let param_type_id: i32 = load_i32(param_types_ptr + param_idx * 4);
+            let param_type_id: i32 =
+                function_param_type(param_types_ptr, param_idx);
             let param_size: i32 = type_id_wasm_value_type_len(ast_base, param_type_id);
             if param_size < 0 {
                 return -1;
@@ -11376,7 +11484,8 @@ fn emit_type_section(
             if param_idx >= param_count {
                 break;
             };
-            let param_type_id: i32 = load_i32(param_types_ptr + param_idx * 4);
+            let param_type_id: i32 =
+                function_param_type(param_types_ptr, param_idx);
             let next: i32 = write_type_id_as_wasm_value_type(
                 base,
                 out,
