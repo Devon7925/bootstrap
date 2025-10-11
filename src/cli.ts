@@ -1,14 +1,23 @@
 #!/usr/bin/env bun
 import { fileURLToPath } from "node:url";
 import { dirname, extname } from "node:path";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readdir } from "node:fs/promises";
 
 import process from "node:process";
 
-import { Target, compile, parseTarget, DEFAULT_TARGET, CompileError, Compilation } from "./index";
+import {
+  Target,
+  compile,
+  parseTarget,
+  DEFAULT_TARGET,
+  CompileError,
+  Compilation,
+  CompilerModuleSource,
+} from "./index";
 
-const COMPILER_SOURCE_PATH = new URL("../compiler/ast_compiler.bp", import.meta.url);
 const COMPILER_OUTPUT_PATH = new URL("../compiler.wasm", import.meta.url);
+const COMPILER_DIR_URL = new URL("../compiler/", import.meta.url);
+const COMPILER_ENTRY_PATH = "/compiler/ast_compiler.bp";
 
 function printUsage(program: string) {
   console.error(`Usage: ${program} <input.bp> [options]`);
@@ -35,11 +44,35 @@ async function runWithBun(wasm: Uint8Array) {
 }
 
 async function buildStage2Wasm() {
-  const source = await Bun.file(COMPILER_SOURCE_PATH).text();
-  const compilation = await compile(source, Target.Wasm);
+  const modules = await readCompilerModules();
+  const entry = modules.find((module) => module.path === COMPILER_ENTRY_PATH);
+  if (!entry) {
+    throw new CompileError("stage1 compiler entry module not found");
+  }
+  const extraModules = modules.filter((module) => module.path !== COMPILER_ENTRY_PATH);
+  const compilation = await compile(entry.source, Target.Wasm, {
+    entryPath: COMPILER_ENTRY_PATH,
+    modules: extraModules,
+  });
   const wasm = compilation.intoWasm();
   await Bun.write(COMPILER_OUTPUT_PATH, wasm);
   console.log(`wrote stage2 wasm to ${fileURLToPath(COMPILER_OUTPUT_PATH)}`);
+}
+
+async function readCompilerModules(): Promise<CompilerModuleSource[]> {
+  const directoryPath = fileURLToPath(COMPILER_DIR_URL);
+  const entries = await readdir(directoryPath, { withFileTypes: true });
+  const modules: CompilerModuleSource[] = [];
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".bp")) {
+      continue;
+    }
+    const fileUrl = new URL(entry.name, COMPILER_DIR_URL);
+    const source = await Bun.file(fileUrl).text();
+    modules.push({ path: `/compiler/${entry.name}`, source });
+  }
+  modules.sort((a, b) => a.path.localeCompare(b.path));
+  return modules;
 }
 
 async function ensureParentDirectory(path: string) {

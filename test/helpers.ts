@@ -1,3 +1,6 @@
+import { readdir } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+
 import {
   compileToWasm,
   CompileError,
@@ -8,10 +11,14 @@ import {
   INSTR_OFFSET_PTR_OFFSET,
   STAGE1_MAX_FUNCTIONS,
 } from "../src/index";
+import type { CompilerModuleSource } from "../src/index";
+
+export type { CompilerModuleSource } from "../src/index";
 
 export { COMPILER_INPUT_PTR } from "../src/index";
 
-const AST_COMPILER_SOURCE_PATH = new URL("../compiler/ast_compiler.bp", import.meta.url);
+export const AST_COMPILER_ENTRY_PATH = "/compiler/ast_compiler.bp";
+const AST_COMPILER_DIR_URL = new URL("../compiler/", import.meta.url);
 
 const DEFAULT_INPUT_STRIDE = 256;
 export const DEFAULT_OUTPUT_STRIDE = 4_096;
@@ -43,11 +50,6 @@ export interface CompileFailureDetails {
   readonly instructionOffset: number;
   readonly compiledFunctions: number;
   readonly detail?: string;
-}
-
-export interface CompilerModuleSource {
-  readonly path: string;
-  readonly source: string;
 }
 
 export interface CompileWithAstCompilerOptions {
@@ -369,6 +371,7 @@ export class CompilerInstance {
 }
 
 let memoryIntrinsicsSourcePromise: Promise<string> | null = null;
+let astCompilerModuleSourcesPromise: Promise<CompilerModuleSource[]> | null = null;
 let astCompilerSourcePromise: Promise<string> | null = null;
 let astCompilerWasmPromise: Promise<Uint8Array> | null = null;
 
@@ -379,18 +382,57 @@ async function loadMemoryIntrinsicsSource(): Promise<string> {
   return memoryIntrinsicsSourcePromise;
 }
 
+async function loadAstCompilerModuleSources(): Promise<CompilerModuleSource[]> {
+  if (!astCompilerModuleSourcesPromise) {
+    astCompilerModuleSourcesPromise = (async () => {
+      const directoryPath = fileURLToPath(AST_COMPILER_DIR_URL);
+      const entries = await readdir(directoryPath, { withFileTypes: true });
+      const modules: CompilerModuleSource[] = [];
+      for (const entry of entries) {
+        if (!entry.isFile()) {
+          continue;
+        }
+        if (!entry.name.endsWith(".bp")) {
+          continue;
+        }
+        const fileUrl = new URL(entry.name, AST_COMPILER_DIR_URL);
+        const source = await Bun.file(fileUrl).text();
+        modules.push({ path: `/compiler/${entry.name}`, source });
+      }
+      modules.sort((a, b) => a.path.localeCompare(b.path));
+      return modules;
+    })();
+  }
+  return astCompilerModuleSourcesPromise;
+}
+
 async function loadAstCompilerSource(): Promise<string> {
   if (!astCompilerSourcePromise) {
-    astCompilerSourcePromise = Bun.file(AST_COMPILER_SOURCE_PATH).text();
+    astCompilerSourcePromise = (async () => {
+      const modules = await loadAstCompilerModuleSources();
+      const entry = modules.find((module) => module.path === AST_COMPILER_ENTRY_PATH);
+      if (!entry) {
+        throw new Error("ast compiler entry module not found");
+      }
+      return entry.source;
+    })();
   }
   return astCompilerSourcePromise;
 }
 
-async function loadAstCompilerWasm(): Promise<Uint8Array> {
+export async function loadAstCompilerWasm(): Promise<Uint8Array> {
   if (!astCompilerWasmPromise) {
     astCompilerWasmPromise = (async () => {
-      const source = await loadAstCompilerSource();
-      const wasm = await compileToWasm(source);
+      const modules = await loadAstCompilerModuleSources();
+      const entry = modules.find((module) => module.path === AST_COMPILER_ENTRY_PATH);
+      if (!entry) {
+        throw new Error("ast compiler entry module not found");
+      }
+      const extraModules = modules.filter((module) => module.path !== AST_COMPILER_ENTRY_PATH);
+      const wasm = await compileToWasm(entry.source, {
+        entryPath: AST_COMPILER_ENTRY_PATH,
+        modules: extraModules,
+      });
       return wasm;
     })();
   }
@@ -399,6 +441,11 @@ async function loadAstCompilerWasm(): Promise<Uint8Array> {
 
 export async function readAstCompilerSource(): Promise<string> {
   return loadAstCompilerSource();
+}
+
+export async function readAstCompilerModules(): Promise<CompilerModuleSource[]> {
+  const modules = await loadAstCompilerModuleSources();
+  return modules.map((module) => ({ ...module }));
 }
 
 export async function instantiateAstCompiler(): Promise<CompilerInstance> {

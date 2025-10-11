@@ -2,15 +2,19 @@ import { expect, test } from "bun:test";
 
 import { compileToWasm } from "../src/index";
 
-const COMPILER_SOURCE_PATH = new URL("../compiler/ast_compiler.bp", import.meta.url);
-
-function loadFixture(path: URL) {
-  return Bun.file(path).text();
-}
+import { AST_COMPILER_ENTRY_PATH, readAstCompilerModules } from "./helpers";
 
 test("compiles the stage1 compiler to wasm", async () => {
-  const source = await loadFixture(COMPILER_SOURCE_PATH);
-  const wasm = await compileToWasm(source);
+  const modules = await readAstCompilerModules();
+  const entry = modules.find((module) => module.path === AST_COMPILER_ENTRY_PATH);
+  if (!entry) {
+    throw new Error("ast compiler entry module not found");
+  }
+  const extraModules = modules.filter((module) => module.path !== AST_COMPILER_ENTRY_PATH);
+  const wasm = await compileToWasm(entry.source, {
+    entryPath: AST_COMPILER_ENTRY_PATH,
+    modules: extraModules,
+  });
   expect(wasm.byteLength).toBeGreaterThan(0);
 });
 
