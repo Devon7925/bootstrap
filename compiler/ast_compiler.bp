@@ -2681,11 +2681,7 @@ fn function_has_const_params(ast_base: i32, index: i32) -> bool {
     false
 }
 
-fn function_specialization_values_ptr(ast_base: i32, index: i32) -> i32 {
-    let flags: i32 = ast_function_flags(ast_base, index);
-    if (flags & FUNCTION_FLAG_SPECIALIZATION) == 0 {
-        return -1;
-    };
+fn function_const_values_ptr(ast_base: i32, index: i32) -> i32 {
     let entry_ptr: i32 = ast_function_entry_ptr(ast_base, index);
     let param_count: i32 = load_i32(entry_ptr + 8);
     if param_count <= 0 {
@@ -2698,8 +2694,8 @@ fn function_specialization_values_ptr(ast_base: i32, index: i32) -> i32 {
     const_ptr + param_count * WORD_SIZE
 }
 
-fn function_specialization_base_index(ast_base: i32, index: i32) -> i32 {
-    let values_ptr: i32 = function_specialization_values_ptr(ast_base, index);
+fn function_const_base_index_ptr(ast_base: i32, index: i32) -> i32 {
+    let values_ptr: i32 = function_const_values_ptr(ast_base, index);
     if values_ptr < 0 {
         return -1;
     };
@@ -2708,7 +2704,38 @@ fn function_specialization_base_index(ast_base: i32, index: i32) -> i32 {
     if param_count < 0 {
         return -1;
     };
-    let base_ptr: i32 = values_ptr + param_count * 8;
+    values_ptr + param_count * 8
+}
+
+fn function_const_param_templates_ptr(ast_base: i32, index: i32) -> i32 {
+    let base_ptr: i32 = function_const_base_index_ptr(ast_base, index);
+    if base_ptr < 0 {
+        return -1;
+    };
+    base_ptr + WORD_SIZE
+}
+
+fn function_const_return_template_ptr(ast_base: i32, index: i32) -> i32 {
+    let templates_ptr: i32 = function_const_param_templates_ptr(ast_base, index);
+    if templates_ptr < 0 {
+        return -1;
+    };
+    templates_ptr + WORD_SIZE
+}
+
+fn function_specialization_values_ptr(ast_base: i32, index: i32) -> i32 {
+    let flags: i32 = ast_function_flags(ast_base, index);
+    if (flags & FUNCTION_FLAG_SPECIALIZATION) == 0 {
+        return -1;
+    };
+    function_const_values_ptr(ast_base, index)
+}
+
+fn function_specialization_base_index(ast_base: i32, index: i32) -> i32 {
+    let base_ptr: i32 = function_const_base_index_ptr(ast_base, index);
+    if base_ptr < 0 {
+        return -1;
+    };
     load_i32(base_ptr)
 }
 
@@ -7911,7 +7938,8 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
             copy_idx = copy_idx + 1;
         };
         if const_param_count > 0 {
-            param_const_ptr = ast_call_data_alloc(ast_base, param_count);
+            let allocation_words: i32 = param_count * 3 + 3;
+            param_const_ptr = ast_call_data_alloc(ast_base, allocation_words);
             if param_const_ptr < 0 {
                 return -1;
             };
@@ -7924,6 +7952,21 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
                 store_i32(param_const_ptr + const_idx * WORD_SIZE, flag);
                 const_idx = const_idx + 1;
             };
+            let values_ptr: i32 = param_const_ptr + param_count * WORD_SIZE;
+            let mut value_idx: i32 = 0;
+            loop {
+                if value_idx >= param_count {
+                    break;
+                };
+                let slot: i32 = values_ptr + value_idx * 8;
+                store_i32(slot, 0);
+                store_i32(slot + 4, -1);
+                value_idx = value_idx + 1;
+            };
+            let base_ptr: i32 = values_ptr + param_count * 8;
+            store_i32(base_ptr, -1);
+            store_i32(base_ptr + WORD_SIZE, 0);
+            store_i32(base_ptr + 2 * WORD_SIZE, 0);
         };
     };
     let mut flags: i32 = 0;
@@ -8566,7 +8609,7 @@ fn ensure_const_function_specialization(
 
     let mut new_const_ptr: i32 = -1;
     if param_count > 0 {
-        let allocation_words: i32 = param_count * 3 + 1;
+        let allocation_words: i32 = param_count * 3 + 3;
         new_const_ptr = ast_call_data_alloc(ast_base, allocation_words);
         if new_const_ptr < 0 {
             return -1;
@@ -8603,6 +8646,18 @@ fn ensure_const_function_specialization(
         };
         let base_ptr: i32 = values_ptr + param_count * 8;
         store_i32(base_ptr, callee_index);
+        let templates_slot: i32 = function_const_param_templates_ptr(ast_base, callee_index);
+        let return_slot: i32 = function_const_return_template_ptr(ast_base, callee_index);
+        let mut param_template_ptr: i32 = 0;
+        let mut return_template_ptr: i32 = 0;
+        if templates_slot >= 0 {
+            param_template_ptr = load_i32(templates_slot);
+        };
+        if return_slot >= 0 {
+            return_template_ptr = load_i32(return_slot);
+        };
+        store_i32(base_ptr + WORD_SIZE, param_template_ptr);
+        store_i32(base_ptr + 2 * WORD_SIZE, return_template_ptr);
     };
 
     if param_count > 0 && param_types_ptr >= 0 {
