@@ -7930,6 +7930,9 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     if is_const_fn {
         flags = FUNCTION_FLAG_CONST;
     };
+    if const_param_count > 0 {
+        flags = flags | FUNCTION_FLAG_INTERNAL;
+    };
     ast_write_function_entry(
         ast_base,
         func_index,
