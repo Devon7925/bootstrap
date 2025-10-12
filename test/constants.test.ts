@@ -289,3 +289,33 @@ test("const values from use imports are propagated", async () => {
   expect(result).toBe(42);
 });
 
+test("constants duplicated after use import cause stage2 compile failure", async () => {
+  const failure = await expectCompileFailure(
+    `
+    use "./shared.bp";
+
+    const WORD_SIZE: i32 = 4;
+
+    fn main() -> i32 {
+        WORD_SIZE
+    }
+  `,
+    {
+      entryPath: "/tests/main.bp",
+      modules: [
+        {
+          path: "/tests/shared.bp",
+          source: `
+            const WORD_SIZE: i32 = 8;
+
+            fn provide() -> i32 {
+                WORD_SIZE
+            }
+          `,
+        },
+      ],
+    },
+  );
+  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+});
+
