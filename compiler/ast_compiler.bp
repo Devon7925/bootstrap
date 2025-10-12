@@ -8214,9 +8214,6 @@ fn interpret_program_constants(ast_base: i32, func_count: i32) -> i32 {
 }
 
 fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
-    if func_count <= 0 {
-        return -1;
-    };
     let constants_count: i32 = ast_constants_count(ast_base);
     let mut const_idx: i32 = 0;
     loop {
@@ -8235,12 +8232,6 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
         };
         const_idx = const_idx + 1;
     };
-    let mut main_count: i32 = 0;
-    let main_name_ptr: i32 = ast_temp_base(ast_base);
-    store_u8(main_name_ptr + 0, 'm');
-    store_u8(main_name_ptr + 1, 'a');
-    store_u8(main_name_ptr + 2, 'i');
-    store_u8(main_name_ptr + 3, 'n');
     let mut idx: i32 = 0;
     loop {
         if idx >= func_count {
@@ -8252,18 +8243,6 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
         let param_count: i32 = load_i32(entry_ptr + 8);
         let body_kind: i32 = load_i32(entry_ptr + 12);
         let caller_is_const: bool = ast_function_is_const(ast_base, idx);
-        store_u8(main_name_ptr + 0, 'm');
-        store_u8(main_name_ptr + 1, 'a');
-        store_u8(main_name_ptr + 2, 'i');
-        store_u8(main_name_ptr + 3, 'n');
-        if name_len == 4 {
-            if identifiers_match(name_ptr, name_len, main_name_ptr, 4) {
-                main_count = main_count + 1;
-                if param_count != 0 {
-                    return -1;
-                };
-            };
-        };
         let mut other_idx: i32 = idx + 1;
         loop {
             if other_idx >= func_count {
@@ -8341,9 +8320,6 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
             };
         };
         idx = idx + 1;
-    };
-    if main_count != 1 {
-        return -1;
     };
     0
 }

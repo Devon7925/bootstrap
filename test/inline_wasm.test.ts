@@ -31,7 +31,7 @@ test("inline_wasm supports const elements", async () => {
 
 test("inline_wasm requires literal u8 array", async () => {
   const failure = await expectCompileFailure(`
-    fn main() -> i32 {
+    fn build_with_variable() -> i32 {
         let value: i32 = 0x2a;
         inline_wasm([value])
     }
@@ -41,7 +41,7 @@ test("inline_wasm requires literal u8 array", async () => {
 
 test("inline_wasm enforces u8 range", async () => {
   const failure = await expectCompileFailure(`
-    fn main() -> i32 {
+    fn build_with_large_byte() -> i32 {
         inline_wasm([256])
     }
   `);

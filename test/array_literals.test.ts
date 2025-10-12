@@ -164,10 +164,6 @@ test("array literal rejects negative length", async () => {
     fn build() -> [i32; 4] {
         [2; -1]
     }
-
-    fn main() -> i32 {
-        0
-    }
   `);
 
   expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
@@ -177,7 +173,7 @@ test("array literal rejects constant expressions with negative length", async ()
   const failure = await expectCompileFailure(`
     const SHIFT: i32 = 5;
 
-    fn main() -> i32 {
+    fn invalid_length() -> i32 {
         len([1; 3 - SHIFT])
     }
   `);
@@ -190,10 +186,6 @@ test("array literal length must match declared type", async () => {
     fn build() -> [i32; 4] {
         [2; 3]
     }
-
-    fn main() -> i32 {
-        0
-    }
   `);
 
   expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
@@ -204,10 +196,6 @@ test("array list literal length must match declared type", async () => {
     fn build() -> [i32; 4] {
         [1, 2, 3]
     }
-
-    fn main() -> i32 {
-        0
-    }
   `);
 
   expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
@@ -217,10 +205,6 @@ test("array list literal requires uniform element types", async () => {
   const failure = await expectCompileFailure(`
     fn build() -> [i32; 3] {
         [1, true, 3]
-    }
-
-    fn main() -> i32 {
-        0
     }
   `);
 

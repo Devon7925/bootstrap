@@ -55,7 +55,7 @@ test("forward function calls are supported", async () => {
 
 test("unknown function calls are rejected", async () => {
   const failure = await expectCompileFailure(`
-    fn main() -> i32 {
+    fn call_missing() -> i32 {
         missing()
     }
   `);
@@ -68,7 +68,7 @@ test("call argument counts must match function signature", async () => {
         a + b
     }
 
-    fn main() -> i32 {
+    fn call_add() -> i32 {
         add(1)
     }
   `);
@@ -83,10 +83,6 @@ test("duplicate function names are rejected", async () => {
 
     fn helper() -> i32 {
         2
-    }
-
-    fn main() -> i32 {
-        3
     }
   `);
   expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
