@@ -124,10 +124,6 @@ fn expect_keyword_use(base: i32, len: i32, offset: i32) -> i32 {
     expect_keyword_literal(base, len, offset, "use\0\0\0\0\0\0\0\0\0")
 }
 
-fn expect_keyword_type(base: i32, len: i32, offset: i32) -> i32 {
-    expect_keyword_literal(base, len, offset, "type\0\0\0\0\0\0\0\0")
-}
-
 fn expect_keyword_if(base: i32, len: i32, offset: i32) -> i32 {
     expect_keyword_literal(base, len, offset, "if\0\0\0\0\0\0\0\0\0\0")
 }
@@ -1313,8 +1309,6 @@ const SCRATCH_TYPES_CAPACITY: i32 = 2048;
 
 const BUILTIN_TYPE_ID_MAX: i32 = BUILTIN_TYPE_ID_U64;
 
-const TYPE_ALIAS_CAPACITY: i32 = 256;
-
 const ARRAY_TYPE_CAPACITY: i32 = 256;
 
 const TUPLE_TYPE_CAPACITY: i32 = 256;
@@ -1322,8 +1316,6 @@ const TUPLE_TYPE_CAPACITY: i32 = 256;
 const TYPE_ID_KIND_SHIFT: i32 = 24;
 
 const TYPE_ID_KIND_USER_COMPOSITE: i32 = 1;
-
-const TYPE_ID_KIND_USER_ALIAS: i32 = 2;
 
 const fn type_id_kind_base(kind: i32) -> i32 {
     kind << TYPE_ID_KIND_SHIFT
@@ -1337,10 +1329,6 @@ const TYPE_ID_ARRAY_LIMIT: i32 = TYPE_ID_TUPLE_BASE;
 
 const TYPE_ID_TUPLE_LIMIT: i32 = TYPE_ID_TUPLE_BASE + TUPLE_TYPE_CAPACITY;
 
-const TYPE_ID_ALIAS_BASE: i32 = type_id_kind_base(TYPE_ID_KIND_USER_ALIAS);
-
-const TYPE_ID_ALIAS_LIMIT: i32 = TYPE_ID_ALIAS_BASE + TYPE_ALIAS_CAPACITY;
-
 fn type_id_is_builtin(type_id: i32) -> bool {
     type_id >= 0 && type_id <= BUILTIN_TYPE_ID_MAX
 }
@@ -1351,18 +1339,6 @@ fn type_id_is_array(type_id: i32) -> bool {
 
 fn type_id_is_tuple(type_id: i32) -> bool {
     type_id >= TYPE_ID_TUPLE_BASE && type_id < TYPE_ID_TUPLE_LIMIT
-}
-
-fn type_id_is_alias(type_id: i32) -> bool {
-    type_id >= TYPE_ID_ALIAS_BASE && type_id < TYPE_ID_ALIAS_LIMIT
-}
-
-fn alias_type_id(index: i32) -> i32 {
-    TYPE_ID_ALIAS_BASE + index
-}
-
-fn alias_type_index(type_id: i32) -> i32 {
-    type_id - TYPE_ID_ALIAS_BASE
 }
 
 fn type_id_is_bool(type_id: i32) -> bool {
@@ -1612,39 +1588,6 @@ fn builtin_integer_type_keyword_to_id(base: i32, start: i32, ident_len: i32) -> 
     -1
 }
 
-fn alias_definition_chain_is_valid(ast_base: i32, alias_index: i32) -> bool {
-    if alias_index < 0 {
-        return false;
-    };
-    let count: i32 = ast_type_definitions_count(ast_base);
-    if alias_index >= count {
-        return false;
-    };
-    let mut guard: i32 = 0;
-    let mut current_index: i32 = alias_index;
-    loop {
-        if guard >= TYPE_ALIAS_CAPACITY {
-            return false;
-        };
-        guard = guard + 1;
-        let target_type_id: i32 = ast_type_definition_target_type(ast_base, current_index);
-        if target_type_id < 0 {
-            return false;
-        };
-        if !type_id_is_alias(target_type_id) {
-            return true;
-        };
-        let next_index: i32 = alias_type_index(target_type_id);
-        if next_index < 0 {
-            return false;
-        };
-        if next_index >= count {
-            return false;
-        };
-        current_index = next_index;
-    };
-}
-
 fn parse_type(base: i32, len: i32, offset: i32, ast_base: i32, out_type_ptr: i32) -> i32 {
     if offset >= len {
         return -1;
@@ -1888,18 +1831,6 @@ fn parse_type(base: i32, len: i32, offset: i32, ast_base: i32, out_type_ptr: i32
     if identifier_matches_keyword(base, len, offset, ident_len, bool_keyword) {
         if out_type_ptr >= 0 {
             store_i32(out_type_ptr, BUILTIN_TYPE_ID_BOOL);
-        };
-        return next;
-    };
-    let alias_index: i32 =
-        find_type_definition_entry_index(base, ast_base, offset, ident_len);
-    if alias_index >= 0 {
-        if !alias_definition_chain_is_valid(ast_base, alias_index) {
-            return -1;
-        };
-        let type_id: i32 = alias_type_id(alias_index);
-        if out_type_ptr >= 0 {
-            store_i32(out_type_ptr, type_id);
         };
         return next;
     };
@@ -2370,7 +2301,6 @@ fn ast_reset(ast_base: i32) {
     ast_constants_reset(ast_base);
     ast_array_types_reset(ast_base);
     ast_tuple_types_reset(ast_base);
-    ast_type_definitions_reset(ast_base);
     ast_expr_reset(ast_base);
 }
 
@@ -2694,10 +2624,6 @@ fn ast_array_type_length(ast_base: i32, index: i32) -> i32 {
     load_i32(ast_array_type_entry_ptr(ast_base, index) + AST_ARRAY_TYPE_LENGTH_OFFSET)
 }
 
-fn alias_type_metadata_index(index: i32) -> i32 {
-    ARRAY_TYPE_CAPACITY + TUPLE_TYPE_CAPACITY + index
-}
-
 fn tuple_type_metadata_index(index: i32) -> i32 {
     ARRAY_TYPE_CAPACITY + index
 }
@@ -2801,113 +2727,6 @@ fn array_type_cached_id(ast_base: i32, index: i32) -> i32 {
 
 fn array_type_set_cached_id(ast_base: i32, index: i32, type_id: i32) {
     store_i32(ast_array_type_entry_ptr(ast_base, index) + AST_ARRAY_TYPE_CACHE_OFFSET, type_id);
-}
-
-const AST_TYPE_DEFINITIONS_CAPACITY: i32 = TYPE_ALIAS_CAPACITY;
-
-const AST_TYPE_DEFINITION_ENTRY_SIZE: i32 = 16;
-
-const AST_TYPE_DEFINITION_NAME_START_OFFSET: i32 = 0;
-
-const AST_TYPE_DEFINITION_NAME_LEN_OFFSET: i32 = 4;
-
-const AST_TYPE_DEFINITION_TARGET_TYPE_OFFSET: i32 = 8;
-
-const AST_TYPE_DEFINITION_NAME_PTR_OFFSET: i32 = 12;
-
-const AST_TYPE_DEFINITIONS_SECTION_SIZE: i32 =
-    WORD_SIZE + AST_TYPE_DEFINITIONS_CAPACITY * AST_TYPE_DEFINITION_ENTRY_SIZE;
-
-fn ast_type_definitions_count_ptr(ast_base: i32) -> i32 {
-    ast_tuple_heap_indices_base(ast_base) + AST_TUPLE_HEAP_INDEX_SECTION_SIZE
-}
-
-fn ast_type_definition_entry_ptr(ast_base: i32, index: i32) -> i32 {
-    ast_type_definitions_count_ptr(ast_base) + WORD_SIZE + index * AST_TYPE_DEFINITION_ENTRY_SIZE
-}
-
-fn ast_type_definitions_count(ast_base: i32) -> i32 {
-    load_i32(ast_type_definitions_count_ptr(ast_base))
-}
-
-fn ast_type_definitions_reset(ast_base: i32) {
-    store_i32(ast_type_definitions_count_ptr(ast_base), 0);
-}
-
-fn ast_type_definition_name_start(ast_base: i32, index: i32) -> i32 {
-    load_i32(ast_type_definition_entry_ptr(ast_base, index) + AST_TYPE_DEFINITION_NAME_START_OFFSET)
-}
-
-fn ast_type_definition_name_len(ast_base: i32, index: i32) -> i32 {
-    load_i32(ast_type_definition_entry_ptr(ast_base, index) + AST_TYPE_DEFINITION_NAME_LEN_OFFSET)
-}
-
-fn ast_type_definition_target_type(ast_base: i32, index: i32) -> i32 {
-    load_i32(ast_type_definition_entry_ptr(ast_base, index) + AST_TYPE_DEFINITION_TARGET_TYPE_OFFSET)
-}
-
-fn ast_type_definition_name_ptr(ast_base: i32, index: i32) -> i32 {
-    load_i32(ast_type_definition_entry_ptr(ast_base, index) + AST_TYPE_DEFINITION_NAME_PTR_OFFSET)
-}
-
-fn ast_type_definition_append(
-    ast_base: i32,
-    name_start: i32,
-    name_len: i32,
-    name_ptr: i32,
-    target_type_id: i32,
-) -> i32 {
-    let count_ptr: i32 = ast_type_definitions_count_ptr(ast_base);
-    let count: i32 = load_i32(count_ptr);
-    if count >= AST_TYPE_DEFINITIONS_CAPACITY {
-        return -1;
-    };
-    let entry_ptr: i32 = ast_type_definition_entry_ptr(ast_base, count);
-    store_i32(entry_ptr + AST_TYPE_DEFINITION_NAME_START_OFFSET, name_start);
-    store_i32(entry_ptr + AST_TYPE_DEFINITION_NAME_LEN_OFFSET, name_len);
-    store_i32(entry_ptr + AST_TYPE_DEFINITION_TARGET_TYPE_OFFSET, target_type_id);
-    store_i32(entry_ptr + AST_TYPE_DEFINITION_NAME_PTR_OFFSET, name_ptr);
-    store_i32(count_ptr, count + 1);
-    count
-}
-
-fn find_type_definition_entry_index(
-    base: i32,
-    ast_base: i32,
-    ident_start: i32,
-    ident_len: i32,
-) -> i32 {
-    let count: i32 = ast_type_definitions_count(ast_base);
-    if count <= 0 {
-        return -1;
-    };
-    let mut idx: i32 = 0;
-    loop {
-        if idx >= count {
-            break;
-        };
-        let entry_ptr: i32 = ast_type_definition_entry_ptr(ast_base, idx);
-        let def_start: i32 = load_i32(entry_ptr + AST_TYPE_DEFINITION_NAME_START_OFFSET);
-        let def_len: i32 = load_i32(entry_ptr + AST_TYPE_DEFINITION_NAME_LEN_OFFSET);
-        if identifiers_match_source(base, def_start, def_len, ident_start, ident_len) {
-            return idx;
-        };
-        idx = idx + 1;
-    };
-    -1
-}
-
-fn find_type_definition_target_type(
-    base: i32,
-    ast_base: i32,
-    ident_start: i32,
-    ident_len: i32,
-) -> i32 {
-    let index: i32 = find_type_definition_entry_index(base, ast_base, ident_start, ident_len);
-    if index < 0 {
-        return -1;
-    };
-    ast_type_definition_target_type(ast_base, index)
 }
 
 fn array_type_id(index: i32) -> i32 {
@@ -3348,41 +3167,6 @@ fn ensure_tuple_type_metadata(out_ptr: i32, ast_base: i32, index: i32, type_id: 
     0
 }
 
-fn ensure_alias_type_metadata(out_ptr: i32, ast_base: i32, index: i32, type_id: i32) -> i32 {
-    if index < 0 {
-        return -1;
-    };
-    if index >= TYPE_ALIAS_CAPACITY {
-        return -1;
-    };
-    let metadata_index: i32 = alias_type_metadata_index(index);
-    if metadata_index < 0 {
-        return -1;
-    };
-    if metadata_index >= SCRATCH_TYPES_CAPACITY {
-        return -1;
-    };
-    let scratch_entry_ptr: i32 = scratch_type_entry_ptr(out_ptr, metadata_index);
-    let cached_type_id: i32 = load_i32(scratch_entry_ptr + TYPE_ENTRY_TYPE_ID_OFFSET);
-    if cached_type_id == type_id {
-        return 0;
-    };
-    let name_ptr: i32 = ast_type_definition_name_ptr(ast_base, index);
-    let name_len: i32 = ast_type_definition_name_len(ast_base, index);
-    store_i32(scratch_entry_ptr + TYPE_ENTRY_TYPE_ID_OFFSET, type_id);
-    store_i32(scratch_entry_ptr + TYPE_ENTRY_NAME_PTR_OFFSET, name_ptr);
-    store_i32(scratch_entry_ptr + TYPE_ENTRY_NAME_LEN_OFFSET, name_len);
-    store_i32(
-        scratch_entry_ptr + TYPE_ENTRY_EXTRA_OFFSET,
-        ast_type_definition_entry_ptr(ast_base, index),
-    );
-    let current_count: i32 = scratch_types_count(out_ptr);
-    if metadata_index + 1 > current_count {
-        scratch_types_set_count(out_ptr, metadata_index + 1);
-    };
-    0
-}
-
 fn resolve_array_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
     if !type_id_is_array(type_id) {
         return -1;
@@ -3458,43 +3242,6 @@ fn resolve_tuple_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
     type_id
 }
 
-fn resolve_alias_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
-    if !type_id_is_alias(type_id) {
-        return -1;
-    };
-    let mut guard: i32 = 0;
-    let mut current_type_id: i32 = type_id;
-    loop {
-        if guard >= TYPE_ALIAS_CAPACITY {
-            return -1;
-        };
-        guard = guard + 1;
-        let index: i32 = alias_type_index(current_type_id);
-        if index < 0 {
-            return -1;
-        };
-        if index >= ast_type_definitions_count(ast_base) {
-            return -1;
-        };
-        if ensure_alias_type_metadata(out_ptr, ast_base, index, current_type_id) < 0 {
-            return -1;
-        };
-        let target_type_id: i32 = ast_type_definition_target_type(ast_base, index);
-        if target_type_id < 0 {
-            return -1;
-        };
-        if type_id_is_alias(target_type_id) {
-            current_type_id = target_type_id;
-            continue;
-        };
-        let resolved: i32 = resolve_type_id(out_ptr, ast_base, target_type_id);
-        if resolved < 0 {
-            return -1;
-        };
-        return resolved;
-    };
-}
-
 fn resolve_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
     if type_id < 0 {
         return -1;
@@ -3505,9 +3252,6 @@ fn resolve_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
     if type_id_is_tuple(type_id) {
         return resolve_tuple_type_id(out_ptr, ast_base, type_id);
     };
-    if type_id_is_alias(type_id) {
-        return resolve_alias_type_id(out_ptr, ast_base, type_id);
-    };
     if type_id_is_builtin(type_id) {
         return type_id;
     };
@@ -3515,7 +3259,7 @@ fn resolve_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
 }
 
 fn ast_extra_base(ast_base: i32) -> i32 {
-    ast_type_definitions_count_ptr(ast_base) + AST_TYPE_DEFINITIONS_SECTION_SIZE
+    ast_tuple_heap_indices_base(ast_base) + AST_TUPLE_HEAP_INDEX_SECTION_SIZE
 }
 
 const AST_EXPR_ENTRY_SIZE: i32 = 16;
@@ -7376,10 +7120,6 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     let name_start: i32 = name_ident.1;
     let name_len: i32 = name_ident.2;
 
-    if find_type_definition_entry_index(base, ast_base, name_start, name_len) >= 0 {
-        return -1;
-    };
-
     let constants_count: i32 = ast_constants_count(ast_base);
     let mut const_idx: i32 = 0;
     loop {
@@ -7587,108 +7327,6 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     cursor
 }
 
-fn parse_type_declaration(
-    base: i32,
-    len: i32,
-    cursor: i32,
-    ast_base: i32,
-    func_count: i32,
-) -> i32 {
-    let mut idx: i32 = skip_whitespace(base, len, cursor);
-    let mut type_cursor: i32 = expect_keyword_type(base, len, idx);
-    if type_cursor < 0 {
-        return -2;
-    };
-    if type_cursor >= len {
-        return -1;
-    };
-    let after_keyword: i32 = load_u8(base + type_cursor);
-    if !is_whitespace(after_keyword) {
-        return -1;
-    };
-    idx = skip_whitespace(base, len, type_cursor);
-
-    let temp_base: i32 = ast_temp_base(ast_base);
-    let type_ptr: i32 = temp_base;
-
-    let ident: (i32, i32, i32) = parse_identifier(base, len, idx);
-    idx = ident.0;
-    if idx < 0 {
-        return -1;
-    };
-    let name_start: i32 = ident.1;
-    let name_len: i32 = ident.2;
-
-    if find_type_definition_entry_index(base, ast_base, name_start, name_len) >= 0 {
-        return -1;
-    };
-    if find_constant_entry_index(base, ast_base, name_start, name_len) >= 0 {
-        return -1;
-    };
-    let mut func_idx: i32 = 0;
-    loop {
-        if func_idx >= func_count {
-            break;
-        };
-        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, func_idx);
-        let func_name_ptr: i32 = load_i32(entry_ptr);
-        let func_name_len: i32 = load_i32(entry_ptr + 4);
-        if func_name_len == name_len {
-            let mut match_idx: i32 = 0;
-            let mut matches: bool = true;
-            loop {
-                if match_idx >= name_len {
-                    break;
-                };
-                let func_byte: i32 = load_u8(func_name_ptr + match_idx);
-                let type_byte: i32 = load_u8(base + name_start + match_idx);
-                if func_byte != type_byte {
-                    matches = false;
-                    break;
-                };
-                match_idx = match_idx + 1;
-            };
-            if matches {
-                return -1;
-            };
-        };
-        func_idx = func_idx + 1;
-    };
-
-    idx = skip_whitespace(base, len, idx);
-    idx = expect_char(base, len, idx, '=');
-    if idx < 0 {
-        return -1;
-    };
-    idx = skip_whitespace(base, len, idx);
-    idx = parse_type(base, len, idx, ast_base, type_ptr);
-    if idx < 0 {
-        return -1;
-    };
-    let target_type_id: i32 = load_i32(type_ptr);
-    if target_type_id < 0 {
-        return -1;
-    };
-
-    idx = skip_whitespace(base, len, idx);
-    idx = expect_char(base, len, idx, ';');
-    if idx < 0 {
-        return -1;
-    };
-    idx = skip_whitespace(base, len, idx);
-
-    let name_ptr: i32 = ast_store_name(ast_base, base, name_start, name_len);
-    if name_ptr < 0 {
-        return -1;
-    };
-
-    if ast_type_definition_append(ast_base, name_start, name_len, name_ptr, target_type_id) < 0 {
-        return -1;
-    };
-
-    idx
-}
-
 fn evaluate_expression_literal(
     ast_base: i32,
     value_kind_ptr: i32,
@@ -7796,10 +7434,6 @@ fn parse_constant_declaration(
     };
     let name_start: i32 = ident.1;
     let name_len: i32 = ident.2;
-
-    if find_type_definition_entry_index(base, ast_base, name_start, name_len) >= 0 {
-        return -1;
-    };
 
     if find_constant_entry_index(base, ast_base, name_start, name_len) >= 0 {
         return -1;
@@ -8286,14 +7920,6 @@ fn parse_program(
             store_i32(ast_functions_count_ptr(ast_base), count);
             cursor = skip_whitespace(base, len, use_cursor);
             continue;
-        };
-        let type_cursor: i32 = parse_type_declaration(base, len, cursor, ast_base, count);
-        if type_cursor >= 0 {
-            cursor = skip_whitespace(base, len, type_cursor);
-            continue;
-        };
-        if type_cursor == -1 {
-            return -1;
         };
         let const_cursor: i32 = parse_constant_declaration(base, len, cursor, ast_base, count);
         if const_cursor >= 0 {
