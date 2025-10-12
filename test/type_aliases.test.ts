@@ -62,7 +62,7 @@ test("type aliases can chain", async () => {
   expect(result).toBe(42);
 });
 
-test.skip("type aliases can chain backwards", async () => {
+test("type aliases can chain backwards", async () => {
   const wasm = await compileWithAstCompiler(`
         type Wrapper = Base;
         type Base = i32;

@@ -1627,6 +1627,10 @@ fn alias_definition_chain_is_valid(ast_base: i32, alias_index: i32) -> bool {
             return false;
         };
         guard = guard + 1;
+        let name_ptr: i32 = ast_type_definition_name_ptr(ast_base, current_index);
+        if name_ptr == 0 {
+            return true;
+        };
         let target_type_id: i32 = ast_type_definition_target_type(ast_base, current_index);
         if target_type_id < 0 {
             return false;
@@ -1903,7 +1907,15 @@ fn parse_type(base: i32, len: i32, offset: i32, ast_base: i32, out_type_ptr: i32
         };
         return next;
     };
-    -1
+    let placeholder_index: i32 =
+        ensure_type_definition_entry(base, ast_base, offset, ident_len);
+    if placeholder_index < 0 {
+        return -1;
+    };
+    if out_type_ptr >= 0 {
+        store_i32(out_type_ptr, alias_type_id(placeholder_index));
+    };
+    return next;
 }
 
 fn parse_i32_literal(base: i32, len: i32, offset: i32, out_value_ptr: i32) -> i32 {
@@ -2850,6 +2862,24 @@ fn ast_type_definition_name_ptr(ast_base: i32, index: i32) -> i32 {
     load_i32(ast_type_definition_entry_ptr(ast_base, index) + AST_TYPE_DEFINITION_NAME_PTR_OFFSET)
 }
 
+fn ast_type_definition_set_name_info(
+    ast_base: i32,
+    index: i32,
+    name_start: i32,
+    name_len: i32,
+    name_ptr: i32,
+) {
+    let entry_ptr: i32 = ast_type_definition_entry_ptr(ast_base, index);
+    store_i32(entry_ptr + AST_TYPE_DEFINITION_NAME_START_OFFSET, name_start);
+    store_i32(entry_ptr + AST_TYPE_DEFINITION_NAME_LEN_OFFSET, name_len);
+    store_i32(entry_ptr + AST_TYPE_DEFINITION_NAME_PTR_OFFSET, name_ptr);
+}
+
+fn ast_type_definition_set_target_type(ast_base: i32, index: i32, target_type_id: i32) {
+    let entry_ptr: i32 = ast_type_definition_entry_ptr(ast_base, index);
+    store_i32(entry_ptr + AST_TYPE_DEFINITION_TARGET_TYPE_OFFSET, target_type_id);
+}
+
 fn ast_type_definition_append(
     ast_base: i32,
     name_start: i32,
@@ -2869,6 +2899,20 @@ fn ast_type_definition_append(
     store_i32(entry_ptr + AST_TYPE_DEFINITION_NAME_PTR_OFFSET, name_ptr);
     store_i32(count_ptr, count + 1);
     count
+}
+
+fn ensure_type_definition_entry(
+    base: i32,
+    ast_base: i32,
+    ident_start: i32,
+    ident_len: i32,
+) -> i32 {
+    let existing_index: i32 =
+        find_type_definition_entry_index(base, ast_base, ident_start, ident_len);
+    if existing_index >= 0 {
+        return existing_index;
+    };
+    ast_type_definition_append(ast_base, ident_start, ident_len, 0, -1)
 }
 
 fn find_type_definition_entry_index(
@@ -7619,8 +7663,12 @@ fn parse_type_declaration(
     let name_start: i32 = ident.1;
     let name_len: i32 = ident.2;
 
-    if find_type_definition_entry_index(base, ast_base, name_start, name_len) >= 0 {
-        return -1;
+    let existing_index: i32 =
+        find_type_definition_entry_index(base, ast_base, name_start, name_len);
+    if existing_index >= 0 {
+        if ast_type_definition_name_ptr(ast_base, existing_index) != 0 {
+            return -1;
+        };
     };
     if find_constant_entry_index(base, ast_base, name_start, name_len) >= 0 {
         return -1;
@@ -7682,7 +7730,10 @@ fn parse_type_declaration(
         return -1;
     };
 
-    if ast_type_definition_append(ast_base, name_start, name_len, name_ptr, target_type_id) < 0 {
+    if existing_index >= 0 {
+        ast_type_definition_set_name_info(ast_base, existing_index, name_start, name_len, name_ptr);
+        ast_type_definition_set_target_type(ast_base, existing_index, target_type_id);
+    } else if ast_type_definition_append(ast_base, name_start, name_len, name_ptr, target_type_id) < 0 {
         return -1;
     };
 
