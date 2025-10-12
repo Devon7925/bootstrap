@@ -2055,7 +2055,7 @@ fn parse_char_literal(base: i32, len: i32, offset: i32, out_value_ptr: i32) -> i
     idx + 1
 }
 
-const WORD_SIZE: i32 = 4;
+const AST_WORD_SIZE: i32 = 4;
 
 const SCRATCH_INSTR_OFFSET: i32 = 4096;
 
@@ -2081,7 +2081,7 @@ const TYPE_ENTRY_EXTRA_OFFSET: i32 = 12;
 
 const SCRATCH_TYPES_BASE_OFFSET: i32 = SCRATCH_FN_BASE_OFFSET - SCRATCH_TYPES_CAPACITY * TYPE_ENTRY_SIZE;
 
-const SCRATCH_TYPES_COUNT_OFFSET: i32 = SCRATCH_TYPES_BASE_OFFSET - WORD_SIZE;
+const SCRATCH_TYPES_COUNT_OFFSET: i32 = SCRATCH_TYPES_BASE_OFFSET - AST_WORD_SIZE;
 
 const MODULE_STATE_BASE: i32 = 1048576;
 
@@ -2208,7 +2208,7 @@ fn module_allocate_bytes(len: i32) -> i32 {
     if top <= 0 {
         return -1;
     };
-    top = align_to(top, WORD_SIZE);
+    top = align_to(top, AST_WORD_SIZE);
     let start: i32 = top;
     let mut end: i32 = start + len;
     if len == 0 {
@@ -2343,7 +2343,7 @@ const AST_CONSTANT_ENTRY_EXPR_INDEX_OFFSET: i32 = 20;
 
 const AST_CONSTANT_ENTRY_EVAL_STATE_OFFSET: i32 = 24;
 
-const AST_CONSTANTS_SECTION_SIZE: i32 = WORD_SIZE + AST_CONSTANTS_CAPACITY * AST_CONSTANT_ENTRY_SIZE;
+const AST_CONSTANTS_SECTION_SIZE: i32 = AST_WORD_SIZE + AST_CONSTANTS_CAPACITY * AST_CONSTANT_ENTRY_SIZE;
 
 const AST_CONSTANTS_SECTION_WORDS: i32 = AST_CONSTANTS_SECTION_SIZE >> 2;
 
@@ -2364,7 +2364,7 @@ fn ast_functions_count_ptr(ast_base: i32) -> i32 {
 }
 
 fn ast_function_entry_ptr(ast_base: i32, index: i32) -> i32 {
-    ast_base + WORD_SIZE + index * AST_FUNCTION_ENTRY_SIZE
+    ast_base + AST_WORD_SIZE + index * AST_FUNCTION_ENTRY_SIZE
 }
 
 fn ast_function_flags_ptr(ast_base: i32, index: i32) -> i32 {
@@ -2380,11 +2380,11 @@ fn ast_function_is_const(ast_base: i32, index: i32) -> bool {
 }
 
 fn ast_names_len_ptr(ast_base: i32) -> i32 {
-    ast_base + WORD_SIZE + AST_MAX_FUNCTIONS * AST_FUNCTION_ENTRY_SIZE
+    ast_base + AST_WORD_SIZE + AST_MAX_FUNCTIONS * AST_FUNCTION_ENTRY_SIZE
 }
 
 fn ast_names_base(ast_base: i32) -> i32 {
-    ast_names_len_ptr(ast_base) + WORD_SIZE
+    ast_names_len_ptr(ast_base) + AST_WORD_SIZE
 }
 
 fn ast_call_data_len_ptr(ast_base: i32) -> i32 {
@@ -2392,7 +2392,7 @@ fn ast_call_data_len_ptr(ast_base: i32) -> i32 {
 }
 
 fn ast_call_data_base(ast_base: i32) -> i32 {
-    ast_call_data_len_ptr(ast_base) + WORD_SIZE
+    ast_call_data_len_ptr(ast_base) + AST_WORD_SIZE
 }
 
 fn ast_reset(ast_base: i32) {
@@ -2436,7 +2436,7 @@ fn ast_call_data_alloc(ast_base: i32, word_count: i32) -> i32 {
     if used + word_count > AST_CALL_DATA_CAPACITY {
         return -1;
     };
-    let entry_ptr: i32 = ast_call_data_base(ast_base) + used * WORD_SIZE;
+    let entry_ptr: i32 = ast_call_data_base(ast_base) + used * AST_WORD_SIZE;
     store_i32(used_ptr, used + word_count);
     entry_ptr
 }
@@ -2518,7 +2518,7 @@ fn inline_wasm_collect_bytes(
             if idx >= length {
                 break;
             };
-            store_i32(bytes_ptr + idx * WORD_SIZE, byte_value);
+            store_i32(bytes_ptr + idx * AST_WORD_SIZE, byte_value);
             idx = idx + 1;
         };
         store_i32(out_ptr_ptr, bytes_ptr);
@@ -2549,13 +2549,13 @@ fn inline_wasm_collect_bytes(
             if idx >= element_count {
                 break;
             };
-            let element_index: i32 = load_i32(values_ptr + idx * WORD_SIZE);
+            let element_index: i32 = load_i32(values_ptr + idx * AST_WORD_SIZE);
             let byte_value: i32 = inline_wasm_literal_byte(ast_base, element_index);
             if byte_value < 0 {
                 store_i32(call_data_used_ptr, saved_used);
                 return -1;
             };
-            store_i32(bytes_ptr + idx * WORD_SIZE, byte_value);
+            store_i32(bytes_ptr + idx * AST_WORD_SIZE, byte_value);
             idx = idx + 1;
         };
         store_i32(out_ptr_ptr, bytes_ptr);
@@ -2611,11 +2611,11 @@ fn ast_write_function_entry(
 }
 
 fn ast_constants_count_ptr(ast_base: i32) -> i32 {
-    ast_call_data_base(ast_base) + AST_CALL_DATA_CAPACITY * WORD_SIZE
+    ast_call_data_base(ast_base) + AST_CALL_DATA_CAPACITY * AST_WORD_SIZE
 }
 
 fn ast_constant_entry_ptr(ast_base: i32, index: i32) -> i32 {
-    ast_constants_count_ptr(ast_base) + WORD_SIZE + index * AST_CONSTANT_ENTRY_SIZE
+    ast_constants_count_ptr(ast_base) + AST_WORD_SIZE + index * AST_CONSTANT_ENTRY_SIZE
 }
 
 fn ast_constant_entry_name_start_ptr(entry_ptr: i32) -> i32 {
@@ -2715,24 +2715,24 @@ const AST_ARRAY_TYPES_CAPACITY: i32 = ARRAY_TYPE_CAPACITY;
 
 const AST_ARRAY_TYPE_ENTRY_SIZE: i32 = 12;
 
-const AST_ARRAY_TYPE_ELEMENT_OFFSET: i32 = 0;
+const ASTC_ARRAY_TYPE_ELEMENT_OFFSET: i32 = 0;
 
 const AST_ARRAY_TYPE_LENGTH_OFFSET: i32 = 4;
 
 const AST_ARRAY_TYPE_CACHE_OFFSET: i32 = 8;
 
-const AST_ARRAY_TYPES_SECTION_SIZE: i32 = WORD_SIZE + AST_ARRAY_TYPES_CAPACITY * AST_ARRAY_TYPE_ENTRY_SIZE;
+const AST_ARRAY_TYPES_SECTION_SIZE: i32 = AST_WORD_SIZE + AST_ARRAY_TYPES_CAPACITY * AST_ARRAY_TYPE_ENTRY_SIZE;
 
 fn ast_array_types_count_ptr(ast_base: i32) -> i32 {
     ast_constants_count_ptr(ast_base) + AST_CONSTANTS_SECTION_SIZE
 }
 
 fn ast_array_type_entry_ptr(ast_base: i32, index: i32) -> i32 {
-    ast_array_types_count_ptr(ast_base) + WORD_SIZE + index * AST_ARRAY_TYPE_ENTRY_SIZE
+    ast_array_types_count_ptr(ast_base) + AST_WORD_SIZE + index * AST_ARRAY_TYPE_ENTRY_SIZE
 }
 
 fn ast_array_type_element_type(ast_base: i32, index: i32) -> i32 {
-    load_i32(ast_array_type_entry_ptr(ast_base, index) + AST_ARRAY_TYPE_ELEMENT_OFFSET)
+    load_i32(ast_array_type_entry_ptr(ast_base, index) + ASTC_ARRAY_TYPE_ELEMENT_OFFSET)
 }
 
 fn ast_array_type_length(ast_base: i32, index: i32) -> i32 {
@@ -2763,27 +2763,27 @@ const AST_TUPLE_TYPES_CAPACITY: i32 = TUPLE_TYPE_CAPACITY;
 
 const AST_TUPLE_TYPE_ENTRY_SIZE: i32 = 12;
 
-const AST_TUPLE_TYPE_COUNT_OFFSET: i32 = 0;
+const ASTC_TUPLE_TYPE_COUNT_OFFSET: i32 = 0;
 
-const AST_TUPLE_TYPE_ELEMENTS_PTR_OFFSET: i32 = 4;
+const ASTC_TUPLE_TYPE_ELEMENTS_PTR_OFFSET: i32 = 4;
 
 const AST_TUPLE_TYPE_CACHE_OFFSET: i32 = 8;
 
 const AST_TUPLE_TYPES_SECTION_SIZE: i32 =
-    WORD_SIZE + AST_TUPLE_TYPES_CAPACITY * AST_TUPLE_TYPE_ENTRY_SIZE;
+    AST_WORD_SIZE + AST_TUPLE_TYPES_CAPACITY * AST_TUPLE_TYPE_ENTRY_SIZE;
 
 fn ast_tuple_types_count_ptr(ast_base: i32) -> i32 {
     ast_array_types_count_ptr(ast_base) + AST_ARRAY_TYPES_SECTION_SIZE
 }
 
-const AST_ARRAY_HEAP_INDEX_SECTION_SIZE: i32 = ARRAY_TYPE_CAPACITY * WORD_SIZE;
+const AST_ARRAY_HEAP_INDEX_SECTION_SIZE: i32 = ARRAY_TYPE_CAPACITY * AST_WORD_SIZE;
 
 fn ast_array_heap_indices_base(ast_base: i32) -> i32 {
     ast_tuple_types_count_ptr(ast_base) + AST_TUPLE_TYPES_SECTION_SIZE
 }
 
 fn ast_array_heap_index_ptr(ast_base: i32, index: i32) -> i32 {
-    ast_array_heap_indices_base(ast_base) + index * WORD_SIZE
+    ast_array_heap_indices_base(ast_base) + index * AST_WORD_SIZE
 }
 
 fn ast_array_heap_index(ast_base: i32, index: i32) -> i32 {
@@ -2794,14 +2794,14 @@ fn ast_array_heap_index_set(ast_base: i32, index: i32, heap_index: i32) {
     store_i32(ast_array_heap_index_ptr(ast_base, index), heap_index);
 }
 
-const AST_TUPLE_HEAP_INDEX_SECTION_SIZE: i32 = TUPLE_TYPE_CAPACITY * WORD_SIZE;
+const AST_TUPLE_HEAP_INDEX_SECTION_SIZE: i32 = TUPLE_TYPE_CAPACITY * AST_WORD_SIZE;
 
 fn ast_tuple_heap_indices_base(ast_base: i32) -> i32 {
     ast_array_heap_indices_base(ast_base) + AST_ARRAY_HEAP_INDEX_SECTION_SIZE
 }
 
 fn ast_tuple_heap_index_ptr(ast_base: i32, index: i32) -> i32 {
-    ast_tuple_heap_indices_base(ast_base) + index * WORD_SIZE
+    ast_tuple_heap_indices_base(ast_base) + index * AST_WORD_SIZE
 }
 
 fn ast_tuple_heap_index(ast_base: i32, index: i32) -> i32 {
@@ -2813,7 +2813,7 @@ fn ast_tuple_heap_index_set(ast_base: i32, index: i32, heap_index: i32) {
 }
 
 fn ast_tuple_type_entry_ptr(ast_base: i32, index: i32) -> i32 {
-    ast_tuple_types_count_ptr(ast_base) + WORD_SIZE + index * AST_TUPLE_TYPE_ENTRY_SIZE
+    ast_tuple_types_count_ptr(ast_base) + AST_WORD_SIZE + index * AST_TUPLE_TYPE_ENTRY_SIZE
 }
 
 fn ast_tuple_types_count(ast_base: i32) -> i32 {
@@ -2825,11 +2825,11 @@ fn ast_tuple_types_reset(ast_base: i32) {
 }
 
 fn ast_tuple_type_element_count(ast_base: i32, index: i32) -> i32 {
-    load_i32(ast_tuple_type_entry_ptr(ast_base, index) + AST_TUPLE_TYPE_COUNT_OFFSET)
+    load_i32(ast_tuple_type_entry_ptr(ast_base, index) + ASTC_TUPLE_TYPE_COUNT_OFFSET)
 }
 
 fn ast_tuple_type_elements_ptr(ast_base: i32, index: i32) -> i32 {
-    load_i32(ast_tuple_type_entry_ptr(ast_base, index) + AST_TUPLE_TYPE_ELEMENTS_PTR_OFFSET)
+    load_i32(ast_tuple_type_entry_ptr(ast_base, index) + ASTC_TUPLE_TYPE_ELEMENTS_PTR_OFFSET)
 }
 
 fn tuple_type_cached_id(ast_base: i32, index: i32) -> i32 {
@@ -2861,14 +2861,14 @@ const AST_TYPE_DEFINITION_TARGET_TYPE_OFFSET: i32 = 8;
 const AST_TYPE_DEFINITION_NAME_PTR_OFFSET: i32 = 12;
 
 const AST_TYPE_DEFINITIONS_SECTION_SIZE: i32 =
-    WORD_SIZE + AST_TYPE_DEFINITIONS_CAPACITY * AST_TYPE_DEFINITION_ENTRY_SIZE;
+    AST_WORD_SIZE + AST_TYPE_DEFINITIONS_CAPACITY * AST_TYPE_DEFINITION_ENTRY_SIZE;
 
 fn ast_type_definitions_count_ptr(ast_base: i32) -> i32 {
     ast_tuple_heap_indices_base(ast_base) + AST_TUPLE_HEAP_INDEX_SECTION_SIZE
 }
 
 fn ast_type_definition_entry_ptr(ast_base: i32, index: i32) -> i32 {
-    ast_type_definitions_count_ptr(ast_base) + WORD_SIZE + index * AST_TYPE_DEFINITION_ENTRY_SIZE
+    ast_type_definitions_count_ptr(ast_base) + AST_WORD_SIZE + index * AST_TYPE_DEFINITION_ENTRY_SIZE
 }
 
 fn ast_type_definitions_count(ast_base: i32) -> i32 {
@@ -3060,7 +3060,7 @@ fn composite_type_dependency_resolved(
         if dep_index >= array_count {
             return false;
         };
-        let resolved: i32 = load_i32(resolved_ptr + dep_index * WORD_SIZE);
+        let resolved: i32 = load_i32(resolved_ptr + dep_index * AST_WORD_SIZE);
         return resolved != 0;
     };
     if type_id_is_tuple(type_id) {
@@ -3072,7 +3072,7 @@ fn composite_type_dependency_resolved(
             return false;
         };
         let resolved: i32 =
-            load_i32(resolved_ptr + (array_count + dep_index) * WORD_SIZE);
+            load_i32(resolved_ptr + (array_count + dep_index) * AST_WORD_SIZE);
         return resolved != 0;
     };
     true
@@ -3121,7 +3121,7 @@ fn composite_type_dependencies_resolved(
         if field_idx >= element_count {
             break;
         };
-        let field_type_id: i32 = load_i32(elements_ptr + field_idx * WORD_SIZE);
+        let field_type_id: i32 = load_i32(elements_ptr + field_idx * AST_WORD_SIZE);
         if field_type_id < 0 {
             return false;
         };
@@ -3169,14 +3169,14 @@ fn assign_heap_type_indices(out_ptr: i32, ast_base: i32) -> i32 {
         return 0;
     };
     let resolved_ptr: i32 = ast_temp_base(ast_base);
-    let indices_ptr: i32 = resolved_ptr + total * WORD_SIZE;
+    let indices_ptr: i32 = resolved_ptr + total * AST_WORD_SIZE;
     idx = 0;
     loop {
         if idx >= total {
             break;
         };
-        store_i32(resolved_ptr + idx * WORD_SIZE, 0);
-        store_i32(indices_ptr + idx * WORD_SIZE, -1);
+        store_i32(resolved_ptr + idx * AST_WORD_SIZE, 0);
+        store_i32(indices_ptr + idx * AST_WORD_SIZE, -1);
         idx = idx + 1;
     };
     let mut assigned: i32 = 0;
@@ -3191,7 +3191,7 @@ fn assign_heap_type_indices(out_ptr: i32, ast_base: i32) -> i32 {
             if node >= total {
                 break;
             };
-            let resolved: i32 = load_i32(resolved_ptr + node * WORD_SIZE);
+            let resolved: i32 = load_i32(resolved_ptr + node * AST_WORD_SIZE);
             if resolved != 0 {
                 node = node + 1;
                 continue;
@@ -3203,8 +3203,8 @@ fn assign_heap_type_indices(out_ptr: i32, ast_base: i32) -> i32 {
                 resolved_ptr,
                 node,
             ) {
-                store_i32(indices_ptr + node * WORD_SIZE, next_index);
-                store_i32(resolved_ptr + node * WORD_SIZE, 1);
+                store_i32(indices_ptr + node * AST_WORD_SIZE, next_index);
+                store_i32(resolved_ptr + node * AST_WORD_SIZE, 1);
                 next_index = next_index + 1;
                 assigned = assigned + 1;
                 progress = true;
@@ -3220,7 +3220,7 @@ fn assign_heap_type_indices(out_ptr: i32, ast_base: i32) -> i32 {
         if idx >= array_count {
             break;
         };
-        let heap_index: i32 = load_i32(indices_ptr + idx * WORD_SIZE);
+        let heap_index: i32 = load_i32(indices_ptr + idx * AST_WORD_SIZE);
         if heap_index < 0 {
             return -1;
         };
@@ -3233,7 +3233,7 @@ fn assign_heap_type_indices(out_ptr: i32, ast_base: i32) -> i32 {
             break;
         };
         let node: i32 = array_count + idx;
-        let heap_index: i32 = load_i32(indices_ptr + node * WORD_SIZE);
+        let heap_index: i32 = load_i32(indices_ptr + node * AST_WORD_SIZE);
         if heap_index < 0 {
             return -1;
         };
@@ -3266,7 +3266,7 @@ fn ast_register_array_type(ast_base: i32, element_type_id: i32, length: i32) -> 
         return -1;
     };
     let entry_ptr: i32 = ast_array_type_entry_ptr(ast_base, count);
-    store_i32(entry_ptr + AST_ARRAY_TYPE_ELEMENT_OFFSET, element_type_id);
+    store_i32(entry_ptr + ASTC_ARRAY_TYPE_ELEMENT_OFFSET, element_type_id);
     store_i32(entry_ptr + AST_ARRAY_TYPE_LENGTH_OFFSET, length);
     store_i32(entry_ptr + AST_ARRAY_TYPE_CACHE_OFFSET, 0);
     store_i32(count_ptr, count + 1);
@@ -3289,7 +3289,7 @@ fn ast_register_tuple_type(ast_base: i32, elements_ptr: i32, element_count: i32)
         };
         let entry_ptr: i32 = ast_tuple_type_entry_ptr(ast_base, idx);
         let existing_count: i32 =
-            load_i32(entry_ptr + AST_TUPLE_TYPE_COUNT_OFFSET);
+            load_i32(entry_ptr + ASTC_TUPLE_TYPE_COUNT_OFFSET);
         if existing_count != element_count {
             idx = idx + 1;
             continue;
@@ -3298,7 +3298,7 @@ fn ast_register_tuple_type(ast_base: i32, elements_ptr: i32, element_count: i32)
             return tuple_type_id(idx);
         };
         let existing_ptr: i32 =
-            load_i32(entry_ptr + AST_TUPLE_TYPE_ELEMENTS_PTR_OFFSET);
+            load_i32(entry_ptr + ASTC_TUPLE_TYPE_ELEMENTS_PTR_OFFSET);
         if existing_ptr < 0 {
             return -1;
         };
@@ -3309,9 +3309,9 @@ fn ast_register_tuple_type(ast_base: i32, elements_ptr: i32, element_count: i32)
                 break;
             };
             let existing_type: i32 =
-                load_i32(existing_ptr + match_idx * WORD_SIZE);
+                load_i32(existing_ptr + match_idx * AST_WORD_SIZE);
             let new_type: i32 =
-                load_i32(elements_ptr + match_idx * WORD_SIZE);
+                load_i32(elements_ptr + match_idx * AST_WORD_SIZE);
             if existing_type != new_type {
                 matches = false;
                 break;
@@ -3328,8 +3328,8 @@ fn ast_register_tuple_type(ast_base: i32, elements_ptr: i32, element_count: i32)
     };
     let entry_ptr: i32 = ast_tuple_type_entry_ptr(ast_base, count);
     let stored_ptr: i32 = if element_count == 0 { 0 } else { elements_ptr };
-    store_i32(entry_ptr + AST_TUPLE_TYPE_COUNT_OFFSET, element_count);
-    store_i32(entry_ptr + AST_TUPLE_TYPE_ELEMENTS_PTR_OFFSET, stored_ptr);
+    store_i32(entry_ptr + ASTC_TUPLE_TYPE_COUNT_OFFSET, element_count);
+    store_i32(entry_ptr + ASTC_TUPLE_TYPE_ELEMENTS_PTR_OFFSET, stored_ptr);
     store_i32(entry_ptr + AST_TUPLE_TYPE_CACHE_OFFSET, 0);
     store_i32(count_ptr, count + 1);
     tuple_type_id(count)
@@ -3446,7 +3446,7 @@ fn resolve_array_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
     };
     if resolved_element != element_type_id {
         let entry_ptr: i32 = ast_array_type_entry_ptr(ast_base, index);
-        store_i32(entry_ptr + AST_ARRAY_TYPE_ELEMENT_OFFSET, resolved_element);
+        store_i32(entry_ptr + ASTC_ARRAY_TYPE_ELEMENT_OFFSET, resolved_element);
         element_type_id = resolved_element;
     };
     let length: i32 = ast_array_type_length(ast_base, index);
@@ -3484,7 +3484,7 @@ fn resolve_tuple_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
             if elem_idx >= element_count {
                 break;
             };
-            let type_ptr: i32 = elements_ptr + elem_idx * WORD_SIZE;
+            let type_ptr: i32 = elements_ptr + elem_idx * AST_WORD_SIZE;
             let element_type_id: i32 = load_i32(type_ptr);
             let resolved_element: i32 =
                 resolve_type_id(out_ptr, ast_base, element_type_id);
@@ -3572,7 +3572,7 @@ fn ast_expr_count_ptr(ast_base: i32) -> i32 {
 }
 
 fn ast_expr_entry_ptr(ast_base: i32, index: i32) -> i32 {
-    ast_extra_base(ast_base) + WORD_SIZE + index * AST_EXPR_ENTRY_SIZE
+    ast_extra_base(ast_base) + AST_WORD_SIZE + index * AST_EXPR_ENTRY_SIZE
 }
 
 fn ast_expr_types_base(ast_base: i32) -> i32 {
@@ -3580,7 +3580,7 @@ fn ast_expr_types_base(ast_base: i32) -> i32 {
 }
 
 fn ast_expr_type_entry_ptr(ast_base: i32, index: i32) -> i32 {
-    ast_expr_types_base(ast_base) + index * WORD_SIZE
+    ast_expr_types_base(ast_base) + index * AST_WORD_SIZE
 }
 
 fn ast_expr_set_type(ast_base: i32, index: i32, type_id: i32) {
@@ -5456,7 +5456,7 @@ fn parse_basic_expression(
         let element_data1_ptr: i32 = nested_temp_base + 8;
         let values_list_ptr: i32 = nested_temp_base + 16;
         let element_temp_base: i32 =
-            nested_temp_base + 16 + MAX_ARRAY_LITERAL_ELEMENTS * WORD_SIZE + 64;
+            nested_temp_base + 16 + MAX_ARRAY_LITERAL_ELEMENTS * AST_WORD_SIZE + 64;
         let mut array_cursor: i32 = cursor + 1;
         array_cursor = skip_whitespace(base, len, array_cursor);
         array_cursor = parse_expression(
@@ -5624,7 +5624,7 @@ fn parse_basic_expression(
                 if element_count >= MAX_ARRAY_LITERAL_ELEMENTS {
                     return -1;
                 };
-                store_i32(values_list_ptr + element_count * WORD_SIZE, next_index);
+                store_i32(values_list_ptr + element_count * AST_WORD_SIZE, next_index);
                 element_count = element_count + 1;
                 array_cursor = skip_whitespace(base, len, array_cursor);
                 if array_cursor >= len {
@@ -5648,8 +5648,8 @@ fn parse_basic_expression(
             if copy_idx >= element_count {
                 break;
             };
-            let value_index: i32 = load_i32(values_list_ptr + copy_idx * WORD_SIZE);
-            store_i32(metadata_ptr + copy_idx * WORD_SIZE, value_index);
+            let value_index: i32 = load_i32(values_list_ptr + copy_idx * AST_WORD_SIZE);
+            store_i32(metadata_ptr + copy_idx * AST_WORD_SIZE, value_index);
             copy_idx = copy_idx + 1;
         };
         let expr_index: i32 = ast_expr_alloc_array_list(ast_base, metadata_ptr, element_count);
@@ -5683,7 +5683,7 @@ fn parse_basic_expression(
         let first_data1_ptr: i32 = nested_temp_base + 8;
         let values_list_ptr: i32 = nested_temp_base + 16;
         let element_temp_base: i32 =
-            nested_temp_base + 16 + MAX_TUPLE_ELEMENTS * WORD_SIZE + 64;
+            nested_temp_base + 16 + MAX_TUPLE_ELEMENTS * AST_WORD_SIZE + 64;
         paren_cursor = parse_expression(
             base,
             len,
@@ -5774,7 +5774,7 @@ fn parse_basic_expression(
             if value_index < 0 {
                 return -1;
             };
-            store_i32(values_list_ptr + element_count * WORD_SIZE, value_index);
+            store_i32(values_list_ptr + element_count * AST_WORD_SIZE, value_index);
             element_count = element_count + 1;
             tuple_cursor = skip_whitespace(base, len, tuple_cursor);
             if tuple_cursor >= len {
@@ -5806,8 +5806,8 @@ fn parse_basic_expression(
                     break;
                 };
                 let value_index: i32 =
-                    load_i32(values_list_ptr + copy_idx * WORD_SIZE);
-                store_i32(metadata_ptr + copy_idx * WORD_SIZE, value_index);
+                    load_i32(values_list_ptr + copy_idx * AST_WORD_SIZE);
+                store_i32(metadata_ptr + copy_idx * AST_WORD_SIZE, value_index);
                 copy_idx = copy_idx + 1;
             };
         };
@@ -5869,7 +5869,7 @@ fn parse_basic_expression(
             if literal_index < 0 {
                 return -1;
             };
-            store_i32(values_list_ptr + element_count * WORD_SIZE, literal_index);
+            store_i32(values_list_ptr + element_count * AST_WORD_SIZE, literal_index);
             element_count = element_count + 1;
         };
         let expr_index: i32 = if element_count == 0 {
@@ -5889,8 +5889,8 @@ fn parse_basic_expression(
                     break;
                 };
                 let value_index: i32 =
-                    load_i32(values_list_ptr + copy_idx * WORD_SIZE);
-                store_i32(metadata_ptr + copy_idx * WORD_SIZE, value_index);
+                    load_i32(values_list_ptr + copy_idx * AST_WORD_SIZE);
+                store_i32(metadata_ptr + copy_idx * AST_WORD_SIZE, value_index);
                 copy_idx = copy_idx + 1;
             };
             ast_expr_alloc_array_list(ast_base, metadata_ptr, element_count)
@@ -6325,7 +6325,7 @@ fn parse_unary_expression(
                     let elements_ptr: i32 = ast_tuple_type_elements_ptr(ast_base, tuple_idx);
                     if elements_ptr >= 0 {
                         let field_type_id: i32 =
-                            load_i32(elements_ptr + field_index * WORD_SIZE);
+                            load_i32(elements_ptr + field_index * AST_WORD_SIZE);
                         if field_type_id >= 0 {
                             ast_expr_set_type(ast_base, get_index, field_type_id);
                         };
@@ -8515,7 +8515,7 @@ fn interpret_constants_visit_call_metadata(ast_base: i32, metadata_ptr: i32) -> 
         if arg_idx >= arg_count {
             break;
         };
-        let arg_expr_index: i32 = load_i32(args_base + arg_idx * WORD_SIZE);
+        let arg_expr_index: i32 = load_i32(args_base + arg_idx * AST_WORD_SIZE);
         if interpret_constants_visit_expression(ast_base, arg_expr_index) < 0 {
             return -1;
         };
@@ -8904,7 +8904,7 @@ fn resolve_expression_internal(
             if idx >= element_count {
                 break;
             };
-            let element_index: i32 = load_i32(values_ptr + idx * WORD_SIZE);
+            let element_index: i32 = load_i32(values_ptr + idx * AST_WORD_SIZE);
             if resolve_expression_internal(
                 out_ptr,
                 ast_base,
@@ -9098,7 +9098,7 @@ fn resolve_expression_internal(
         if elements_ptr < 0 {
             return -1;
         };
-        let element_type_ptr: i32 = elements_ptr + field_index * WORD_SIZE;
+        let element_type_ptr: i32 = elements_ptr + field_index * AST_WORD_SIZE;
         let element_type: i32 = load_i32(element_type_ptr);
         if element_type < 0 {
             return -1;
@@ -9146,7 +9146,7 @@ fn resolve_expression_internal(
             if idx >= element_count {
                 break;
             };
-            let value_index: i32 = load_i32(values_ptr + idx * WORD_SIZE);
+            let value_index: i32 = load_i32(values_ptr + idx * AST_WORD_SIZE);
             if resolve_expression_internal(
                 out_ptr,
                 ast_base,
@@ -9174,7 +9174,7 @@ fn resolve_expression_internal(
             if resolved_element != element_type {
                 ast_expr_set_type(ast_base, value_index, resolved_element);
             };
-            store_i32(elements_ptr + idx * WORD_SIZE, resolved_element);
+            store_i32(elements_ptr + idx * AST_WORD_SIZE, resolved_element);
             idx = idx + 1;
         };
         let before_count: i32 = ast_tuple_types_count(ast_base);
@@ -9695,7 +9695,7 @@ fn resolve_expression(out_ptr: i32, ast_base: i32, expr_index: i32, func_count: 
 }
 
 
-const COMPILER_MEMORY_PAGES: i32 = 64;
+const ASTC_COMPILER_MEMORY_PAGES: i32 = 64;
 
 fn initialize_layout(out_ptr: i32) {
     store_i32(scratch_instr_offset_ptr(out_ptr), 0);
@@ -9829,7 +9829,7 @@ fn compileFromPath(path_ptr: i32) -> i32 {
         module_ensure_state_initialized();
         out_ptr = module_storage_top();
     };
-    out_ptr = align_to(out_ptr, WORD_SIZE);
+    out_ptr = align_to(out_ptr, AST_WORD_SIZE);
     module_set_storage_top(out_ptr);
     let required: i32 = out_ptr + ast_output_reserve(input_len);
     if ensure_memory_capacity(required) < 0 {
