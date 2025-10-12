@@ -16,18 +16,24 @@ The parser resolves `use` declarations immediately, recursively parsing imported
 modules so that the current compile has a complete view of all available
 functions and types.
 
-## 3. Semantic Validation
+## 3. Constant Interpretation Preparation
+After parsing, `interpret_program_constants` iterates through the AST to gather
+context for constant evaluation. Today the pass is a scaffold that walks
+constants, functions, and expressions without changing behaviour, but it will be
+extended to interpret constant values in a future update.
+
+## 4. Semantic Validation
 Once parsing completes, `validate_program` walks the AST to resolve expression
 types, enforce control-flow invariants, and bind call sites to their targets.
 This pass ensures the emitter can assume the AST is type-safe and structurally
 sound.
 
-## 4. Type Metadata Extraction
+## 5. Type Metadata Extraction
 With a validated AST in place, `write_type_metadata` serialises information about
 composite types (arrays, tuples, and other heap values). The WebAssembly emitter
 uses this metadata when it constructs the module's type and heap sections.
 
-## 5. WebAssembly Emission
+## 6. WebAssembly Emission
 Finally, `emit_program` writes the WebAssembly binary. It emits the module
 header, type section, function bodies, and any additional data segments directly
 into the preallocated output buffer.

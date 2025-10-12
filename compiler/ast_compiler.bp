@@ -8399,6 +8399,94 @@ fn resolve_call_metadata(
 // and that call sites match the signatures they reference.  The output is still
 // an AST, but with all metadata filled in so the emitter can assume invariants
 // hold.
+fn interpret_constants_visit_expression(ast_base: i32, expr_index: i32) -> i32 {
+    if expr_index < 0 {
+        return 0;
+    };
+    if expr_index >= ast_expr_count(ast_base) {
+        return -1;
+    };
+    0
+}
+
+fn interpret_constants_visit_call_metadata(ast_base: i32, metadata_ptr: i32) -> i32 {
+    if metadata_ptr < 0 {
+        return 0;
+    };
+    let arg_count: i32 = call_metadata_arg_count(metadata_ptr);
+    if arg_count <= 0 {
+        return 0;
+    };
+    let args_base: i32 = call_metadata_args_base(metadata_ptr);
+    if args_base < 0 {
+        return -1;
+    };
+    let mut arg_idx: i32 = 0;
+    loop {
+        if arg_idx >= arg_count {
+            break;
+        };
+        let arg_expr_index: i32 = load_i32(args_base + arg_idx * WORD_SIZE);
+        if interpret_constants_visit_expression(ast_base, arg_expr_index) < 0 {
+            return -1;
+        };
+        arg_idx = arg_idx + 1;
+    };
+    0
+}
+
+fn interpret_program_constants(ast_base: i32, func_count: i32) -> i32 {
+    let constants_count: i32 = ast_constants_count(ast_base);
+    let mut const_idx: i32 = 0;
+    loop {
+        if const_idx >= constants_count {
+            break;
+        };
+        let const_entry_ptr: i32 = ast_constant_entry_ptr(ast_base, const_idx);
+        let eval_state: i32 = ast_constant_entry_eval_state(const_entry_ptr);
+        if eval_state == AST_CONSTANT_EVAL_STATE_UNEVALUATED {
+            let expr_index: i32 = ast_constant_entry_expr_index(const_entry_ptr);
+            if interpret_constants_visit_expression(ast_base, expr_index) < 0 {
+                return -1;
+            };
+        };
+        const_idx = const_idx + 1;
+    };
+
+    let mut func_idx: i32 = 0;
+    loop {
+        if func_idx >= func_count {
+            break;
+        };
+        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, func_idx);
+        let body_kind: i32 = load_i32(entry_ptr + 12);
+        if body_kind == 1 {
+            let metadata_ptr: i32 = load_i32(entry_ptr + 16);
+            if interpret_constants_visit_call_metadata(ast_base, metadata_ptr) < 0 {
+                return -1;
+            };
+        } else if body_kind == 2 {
+            let expr_index: i32 = load_i32(entry_ptr + 16);
+            if interpret_constants_visit_expression(ast_base, expr_index) < 0 {
+                return -1;
+            };
+        };
+        func_idx = func_idx + 1;
+    };
+
+    let expr_count: i32 = ast_expr_count(ast_base);
+    let mut expr_idx: i32 = 0;
+    loop {
+        if expr_idx >= expr_count {
+            break;
+        };
+        // Placeholder for future constant interpretation work that may require
+        // inspecting each expression node in order.
+        expr_idx = expr_idx + 1;
+    };
+    0
+}
+
 fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
     if func_count <= 0 {
         return -1;
@@ -9492,6 +9580,9 @@ fn compile_impl(
         current_module_index,
     );
     if func_count <= 0 {
+        return -1;
+    };
+    if interpret_program_constants(ast_base, func_count) < 0 {
         return -1;
     };
     if validate_program(out_ptr, ast_base, func_count) < 0 {
