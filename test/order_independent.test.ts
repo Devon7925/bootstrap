@@ -20,7 +20,7 @@ test("Functions defined out of order still work", async () => {
   expect(result).toBe(7);
 });
 
-test.skip("Const defined out of order still works", async () => {
+test("Const defined out of order still works", async () => {
   const wasm = await compileWithAstCompiler(`
     fn main() -> i32 {
         UTIL
@@ -32,7 +32,7 @@ test.skip("Const defined out of order still works", async () => {
   expect(result).toBe(7);
 });
 
-test.skip("Const can depend on const out of order", async () => {
+test("Const can depend on const out of order", async () => {
   const wasm = await compileWithAstCompiler(`
     const UTIL2: i32 = UTIL1;
     const UTIL1: i32 = 7;
