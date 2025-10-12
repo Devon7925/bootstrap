@@ -81,7 +81,7 @@ test("tuple field access emits struct.get", async () => {
 
 test("tuple field indices must exist", async () => {
   const failure = await expectCompileFailure(`
-    fn main() -> i32 {
+    fn access_missing_field() -> i32 {
         let pair: (i32, bool) = (1, true);
         pair.2;
         0

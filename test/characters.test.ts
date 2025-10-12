@@ -43,7 +43,7 @@ fn main() -> i32 {
 
 test("invalid character literals are rejected", async () => {
   const source = String.raw`
-fn main() -> i32 {
+fn invalid() -> i32 {
     let bad: i32 = 'ab';
     bad
 }

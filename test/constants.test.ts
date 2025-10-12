@@ -41,10 +41,6 @@ test("duplicate constants are rejected", async () => {
   const failure = await expectCompileFailure(`
     const VALUE: i32 = 1;
     const VALUE: i32 = 2;
-
-    fn main() -> i32 {
-        VALUE
-    }
   `);
   expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
 });
@@ -67,10 +63,6 @@ test("non-const function calls in constant initializers are rejected", async () 
 
     fn helper() -> i32 {
         42
-    }
-
-    fn main() -> i32 {
-        VALUE
     }
   `);
   expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
@@ -237,10 +229,6 @@ test("const functions cannot call non-const functions", async () => {
     fn helper() -> i32 {
         7
     }
-
-    fn main() -> i32 {
-        0
-    }
   `);
   expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
 });
@@ -251,10 +239,6 @@ test("function names cannot conflict with constants", async () => {
 
     fn helper() -> i32 {
         0
-    }
-
-    fn main() -> i32 {
-        helper
     }
   `);
   expect(failure.failure.producedLength).toBeLessThanOrEqual(0);

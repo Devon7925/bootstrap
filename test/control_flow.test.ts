@@ -173,14 +173,10 @@ test("loop allows final if without semicolon", async () => {
 
 test("while break cannot carry values", async () => {
   const failure = await expectCompileFailure(`
-    fn bad() {
+    fn break_with_value() {
         while (false) {
             break 1;
         }
-    }
-
-    fn main() -> i32 {
-        0
     }
   `);
   expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
@@ -278,7 +274,7 @@ test("loop breaks can return values", async () => {
 
 test("continue outside loop is rejected", async () => {
   const failure = await expectCompileFailure(`
-    fn main() -> i32 {
+    fn continue_outside_loop() -> i32 {
         continue;
         0
     }
@@ -341,7 +337,7 @@ test("diverging if tail statements are allowed", async () => {
 
 test("break outside loop is rejected", async () => {
   const failure = await expectCompileFailure(`
-    fn main() -> i32 {
+    fn break_outside_loop() -> i32 {
         break;
         0
     }

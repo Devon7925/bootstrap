@@ -175,7 +175,7 @@ test("integer width programs execute", async () => {
 
 test("mixed integer widths are rejected without casts", async () => {
   const error = await expectCompileFailure(`
-    fn main() -> i32 {
+    fn compare_mixed() -> i32 {
         let lhs: i16 = 12;
         let rhs: i64 = 34;
         if lhs < rhs { 0 } else { 1 }
@@ -189,10 +189,6 @@ test("signed and unsigned mixes require casts", async () => {
     fn difference(a: u16, b: i16) -> u16 {
         a - b
     }
-
-    fn main() -> i32 {
-        0
-    }
   `);
   expect(error.failure.producedLength).toBeLessThanOrEqual(0);
 });
@@ -203,10 +199,9 @@ test("integer arguments must match parameter widths", async () => {
         value
     }
 
-    fn main() -> i32 {
+    fn call_take() -> i8 {
         let sample: i16 = 10;
-        let _ = take_i8(sample);
-        0
+        take_i8(sample)
     }
   `);
   expect(error.failure.producedLength).toBeLessThanOrEqual(0);

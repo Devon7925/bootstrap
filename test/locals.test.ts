@@ -36,7 +36,7 @@ test("locals can be shadowed in nested blocks", async () => {
 
 test("using out of scope locals is rejected", async () => {
   const error = await expectCompileFailure(`
-    fn main() -> i32 {
+    fn use_out_of_scope() -> i32 {
         {
             let inner: i32 = 5;
             inner
@@ -49,7 +49,7 @@ test("using out of scope locals is rejected", async () => {
 
 test("assignment to immutable locals is rejected", async () => {
   const error = await expectCompileFailure(`
-    fn main() -> i32 {
+    fn mutate_immutable() -> i32 {
         let value: i32 = 1;
         value = 2;
         value
@@ -60,7 +60,7 @@ test("assignment to immutable locals is rejected", async () => {
 
 test("blocks must end with an expression", async () => {
   const error = await expectCompileFailure(`
-    fn main() -> i32 {
+    fn block_without_expression() -> i32 {
         let value: i32 = 1;
     }
   `);

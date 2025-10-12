@@ -22,7 +22,7 @@ test("array index reads element", async () => {
 
 test("array index requires integer indices", async () => {
   const failure = await expectCompileFailure(`
-    fn main() -> i32 {
+    fn index_with_bool() -> i32 {
         let values: [i32; 2] = [1; 2];
         values[true]
     }

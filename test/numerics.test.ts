@@ -39,10 +39,6 @@ test("float remainder is rejected", async () => {
     fn float_mod() -> f32 {
         5.0f32 % 2.0f32
     }
-
-    fn main() -> i32 {
-        0
-    }
   `);
   expect(error.failure.producedLength).toBeLessThanOrEqual(0);
 });
@@ -156,7 +152,7 @@ test("comparison operators evaluate", async () => {
 
 test("missing function in addition is rejected", async () => {
   const error = await expectCompileFailure(`
-    fn main() -> i32 {
+    fn add_missing() -> i32 {
         missing() + 1
     }
   `);
@@ -189,7 +185,7 @@ test("subtraction with function call executes", async () => {
 
 test("subtraction rejects unknown function calls", async () => {
   const error = await expectCompileFailure(`
-    fn main() -> i32 {
+    fn subtract_missing() -> i32 {
         5 - missing()
     }
   `);
@@ -242,7 +238,7 @@ test("multiplication precedence is respected", async () => {
 
 test("multiplication rejects unknown function calls", async () => {
   const error = await expectCompileFailure(`
-    fn main() -> i32 {
+    fn multiply_missing() -> i32 {
         3 * missing()
     }
   `);

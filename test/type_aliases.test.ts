@@ -81,8 +81,8 @@ test.skip("type aliases can chain backwards", async () => {
 
 test("missing type aliases are rejected", async () => {
   const failure = await expectCompileFailure(`
-        fn main() -> Missing {
-            0
+        fn use_missing(value: Missing) -> Missing {
+            value
         }
   `);
   expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
@@ -92,8 +92,8 @@ test("self type aliases are rejected", async () => {
   const failure = await expectCompileFailure(`
         type Loop = Loop;
 
-        fn main() -> i32 {
-            0
+        fn use_loop(value: Loop) -> Loop {
+            value
         }
   `);
   expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
@@ -105,8 +105,8 @@ test("cyclic type aliases are rejected", async () => {
         type LoopB = LoopC;
         type LoopC = LoopA;
 
-        fn main() -> i32 {
-            0
+        fn use_loop(value: LoopA) -> LoopA {
+            value
         }
   `);
   expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
