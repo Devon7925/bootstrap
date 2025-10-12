@@ -2667,18 +2667,6 @@ fn write_type_metadata(out_ptr: i32, ast_base: i32) -> i32 {
         };
         tuple_idx = tuple_idx + 1;
     };
-    let alias_count: i32 = ast_type_definitions_count(ast_base);
-    let mut alias_idx: i32 = 0;
-    loop {
-        if alias_idx >= alias_count {
-            break;
-        };
-        let alias_id: i32 = alias_type_id(alias_idx);
-        if resolve_type_id(out_ptr, ast_base, alias_id) < 0 {
-            return -1;
-        };
-        alias_idx = alias_idx + 1;
-    };
     if assign_heap_type_indices(out_ptr, ast_base) < 0 {
         return -1;
     };
