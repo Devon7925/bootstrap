@@ -2,6 +2,17 @@ use "/stdlib/memory.bp";
 use "./utils.bp";
 use "./wasm_output.bp";
 
+// The AST compiler is responsible for taking raw source text and transforming it
+// into the intermediate representation that eventually feeds the WebAssembly
+// backend.  The work happens in a few broad stages:
+//   1. Parse the input into an AST stored in linear memory (see parse_* helpers).
+//   2. Resolve names, types, and control-flow invariants (validate_program and
+//      resolve_* helpers).
+//   3. Emit WebAssembly bytes from the validated AST (implemented in
+//      wasm_output.bp).
+// Keeping these phases well documented makes it easier to understand which
+// helpers participate in which portion of the pipeline.
+
 fn memory_size_pages() -> i32 {
     inline_wasm([0x3f, 0x00])
 }
@@ -8114,6 +8125,11 @@ fn parse_use_declaration(
     (idx, new_count)
 }
 
+// Parses a module and appends all discovered declarations to the arena-backed
+// AST.  Each call can either build the initial module (current_module_index < 0)
+// or recursively ingest imports via `use` declarations.  The function returns
+// the total number of functions parsed so far so later phases can iterate over
+// a contiguous function table.
 fn parse_program(
     base: i32,
     len: i32,
@@ -8292,6 +8308,11 @@ fn resolve_call_metadata(
     0
 }
 
+// Performs semantic validation on the parsed AST.  This pass ensures each
+// expression has a resolved type, that control-flow constructs are well-formed,
+// and that call sites match the signatures they reference.  The output is still
+// an AST, but with all metadata filled in so the emitter can assume invariants
+// hold.
 fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
     if func_count <= 0 {
         return -1;
@@ -9359,6 +9380,10 @@ fn initialize_layout(out_ptr: i32) {
     store_i32(scratch_types_count_ptr(out_ptr), 0);
 }
 
+// Entry point for the compiler pipeline.  The function stages the linear-memory
+// layout, parses modules (including recursive imports), validates the resulting
+// AST, and finally hands the fully-resolved program to the WebAssembly emitter.
+// On success it returns the number of bytes written into the output buffer.
 fn compile_impl(
     input_ptr: i32,
     input_len: i32,
@@ -9402,6 +9427,9 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
     compile_impl(input_ptr, input_len, out_ptr, -1)
 }
 
+// Allows the host environment to feed source code for a module into the module
+// cache.  The storage is owned by the compiler runtime so subsequent imports can
+// reuse the content without copying from the host again.
 fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
     if path_ptr <= 0 || content_ptr <= 0 {
         return -1;
@@ -9446,6 +9474,9 @@ fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
     0
 }
 
+// Compiles a module that has previously been registered with
+// `loadModuleFromSource`.  The implementation ensures the module graph is loaded
+// only once and resolves imports transitively before running the main pipeline.
 fn compileFromPath(path_ptr: i32) -> i32 {
     if path_ptr <= 0 {
         return -1;
