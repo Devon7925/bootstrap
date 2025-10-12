@@ -3769,6 +3769,15 @@ fn ast_expr_alloc_tuple_get(ast_base: i32, tuple_index: i32, field_index: i32) -
     index
 }
 
+fn ast_expr_alloc_const_ref(
+    ast_base: i32,
+    source_base: i32,
+    name_start: i32,
+    name_len: i32,
+) -> i32 {
+    ast_expr_alloc(ast_base, 43, name_start, name_len, source_base)
+}
+
 fn ast_expr_alloc_array_len(ast_base: i32, array_index: i32) -> i32 {
     let index: i32 = ast_expr_alloc(ast_base, 38, array_index, 0, 0);
     if index < 0 {
@@ -4045,6 +4054,43 @@ fn expression_index_from_parts(ast_base: i32, parts: (i32, i32, i32)) -> i32 {
     expression_node_from_parts(ast_base, parts.0, parts.1, parts.2)
 }
 
+fn resolve_constant_reference(ast_base: i32, expr_index: i32) -> i32 {
+    if expr_index < 0 {
+        return -1;
+    };
+    if expr_index >= ast_expr_count(ast_base) {
+        return -1;
+    };
+    let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+    let kind: i32 = load_i32(entry_ptr);
+    if kind != 43 {
+        return 0;
+    };
+    let ident_start: i32 = load_i32(entry_ptr + 4);
+    let ident_len: i32 = load_i32(entry_ptr + 8);
+    let source_base: i32 = load_i32(entry_ptr + 12);
+    if ident_len <= 0 {
+        return -1;
+    };
+    let const_index: i32 =
+        find_constant_entry_index(source_base, ast_base, ident_start, ident_len);
+    if const_index < 0 {
+        return -1;
+    };
+    let const_entry_ptr: i32 = ast_constant_entry_ptr(ast_base, const_index);
+    if interpret_constant_entry(ast_base, const_entry_ptr) < 0 {
+        return -1;
+    };
+    let const_value: i32 = ast_constant_entry_value(const_entry_ptr);
+    let const_type: i32 = ast_constant_entry_type(const_entry_ptr);
+    store_i32(entry_ptr, 0);
+    store_i32(entry_ptr + 4, const_value);
+    store_i32(entry_ptr + 8, 0);
+    store_i32(entry_ptr + 12, 0);
+    ast_expr_set_type(ast_base, expr_index, const_type);
+    0
+}
+
 const CONST_EVAL_STATUS_OK: i32 = 0;
 const CONST_EVAL_STATUS_BREAK: i32 = 1;
 const CONST_EVAL_STATUS_CONTINUE: i32 = 2;
@@ -4071,8 +4117,15 @@ fn interpret_constant_expression(
         return -1;
     };
     let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
-    let kind: i32 = load_i32(entry_ptr);
+    let mut kind: i32 = load_i32(entry_ptr);
     let saved_top: i32 = load_i32(scratch_top_ptr);
+    if kind == 43 {
+        if resolve_constant_reference(ast_base, expr_index) < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        kind = load_i32(entry_ptr);
+    };
     if kind == 0 {
         let value: i32 = load_i32(entry_ptr + 4);
         let expr_type: i32 = ast_expr_type(ast_base, expr_index);
@@ -6029,7 +6082,13 @@ fn parse_basic_expression(
         let constant_entry_index: i32 =
             find_constant_entry_index(base, ast_base, ident_start, ident_len);
         if constant_entry_index < 0 {
-            return -1;
+            let const_expr_index: i32 =
+                ast_expr_alloc_const_ref(ast_base, base, ident_start, ident_len);
+            if const_expr_index < 0 {
+                return -1;
+            };
+            store_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr, (2, const_expr_index, 0));
+            return skip_whitespace(base, len, next_cursor);
         };
         let const_entry_ptr: i32 = ast_constant_entry_ptr(ast_base, constant_entry_index);
         if interpret_constant_entry(ast_base, const_entry_ptr) < 0 {
@@ -8685,7 +8744,13 @@ fn resolve_expression_internal(
         return -1;
     };
     let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
-    let kind: i32 = load_i32(entry_ptr);
+    let mut kind: i32 = load_i32(entry_ptr);
+    if kind == 43 {
+        if resolve_constant_reference(ast_base, expr_index) < 0 {
+            return -1;
+        };
+        kind = load_i32(entry_ptr);
+    };
     if kind == 0 {
         return 0;
     };
