@@ -1,3 +1,7 @@
+// Small helper routines that operate on the compiler's linear memory buffers.
+// These are shared by both the parser and the emitter to avoid duplicating
+// low-level pointer math.
+
 fn memory_equal(a_ptr: i32, b_ptr: i32, len: i32) -> bool {
     let mut idx: i32 = 0;
     loop {

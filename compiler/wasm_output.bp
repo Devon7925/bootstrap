@@ -1,5 +1,9 @@
 use "/stdlib/memory.bp";
 
+// This module converts the validated AST produced by ast_compiler.bp into a
+// fully-formed WebAssembly module.  The helpers here operate directly on the
+// compiler's linear memory buffers, writing bytes and sections sequentially.
+
 const WASM_VALUE_TYPE_I32: i32 = 127;
 
 const WASM_VALUE_TYPE_I64: i32 = 126;
@@ -2635,6 +2639,9 @@ fn emit_code_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -> 
 }
 
 
+// Serialises the structural type information for compound values into the
+// output buffer.  The metadata is consumed later by the emitter when describing
+// reference types in the module's type and heap sections.
 fn write_type_metadata(out_ptr: i32, ast_base: i32) -> i32 {
     let array_count: i32 = ast_array_types_count(ast_base);
     let mut idx: i32 = 0;
@@ -2679,6 +2686,9 @@ fn write_type_metadata(out_ptr: i32, ast_base: i32) -> i32 {
 }
 
 
+// Produces the final WebAssembly binary.  The emitter writes the module header
+// and then each section in order, reading resolved data from the AST and the
+// type metadata region prepared earlier in the pipeline.
 fn emit_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
     let mut offset: i32 = 0;
     offset = write_magic(out_ptr, offset);
