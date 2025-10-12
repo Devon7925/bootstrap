@@ -421,6 +421,38 @@ fn locals_entry_is_mut(entry_ptr: i32) -> bool {
     load_i32(entry_ptr + 16) != 0
 }
 
+fn constant_entry_matches_identifier(
+    entry_ptr: i32,
+    identifier_base: i32,
+    ident_start: i32,
+    ident_len: i32,
+) -> bool {
+    if ident_len <= 0 {
+        return false;
+    };
+    let const_len: i32 = ast_constant_entry_name_len(entry_ptr);
+    if const_len != ident_len {
+        return false;
+    };
+    let const_start: i32 = ast_constant_entry_name_start(entry_ptr);
+    let const_base: i32 = ast_constant_entry_source_base(entry_ptr);
+    let ident_ptr: i32 = identifier_base + ident_start;
+    let const_ptr: i32 = const_base + const_start;
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= const_len {
+            break;
+        };
+        let const_byte: i32 = load_u8(const_ptr + idx);
+        let ident_byte: i32 = load_u8(ident_ptr + idx);
+        if const_byte != ident_byte {
+            return false;
+        };
+        idx = idx + 1;
+    };
+    true
+}
+
 fn find_constant_entry_index(
     base: i32,
     ast_base: i32,
@@ -437,9 +469,7 @@ fn find_constant_entry_index(
             break;
         };
         let entry_ptr: i32 = ast_constant_entry_ptr(ast_base, idx);
-        let const_start: i32 = ast_constant_entry_name_start(entry_ptr);
-        let const_len: i32 = ast_constant_entry_name_len(entry_ptr);
-        if identifiers_match_source(base, const_start, const_len, ident_start, ident_len) {
+        if constant_entry_matches_identifier(entry_ptr, base, ident_start, ident_len) {
             return idx;
         };
         idx = idx + 1;
@@ -2297,19 +2327,21 @@ const AST_NAMES_CAPACITY: i32 = 131072;
 
 const AST_CONSTANTS_CAPACITY: i32 = 1024;
 
-const AST_CONSTANT_ENTRY_SIZE: i32 = 24;
+const AST_CONSTANT_ENTRY_SIZE: i32 = 28;
 
 const AST_CONSTANT_ENTRY_NAME_OFFSET: i32 = 0;
 
 const AST_CONSTANT_ENTRY_NAME_LEN_OFFSET: i32 = 4;
 
-const AST_CONSTANT_ENTRY_VALUE_OFFSET: i32 = 8;
+const AST_CONSTANT_ENTRY_SOURCE_BASE_OFFSET: i32 = 8;
 
-const AST_CONSTANT_ENTRY_TYPE_OFFSET: i32 = 12;
+const AST_CONSTANT_ENTRY_VALUE_OFFSET: i32 = 12;
 
-const AST_CONSTANT_ENTRY_EXPR_INDEX_OFFSET: i32 = 16;
+const AST_CONSTANT_ENTRY_TYPE_OFFSET: i32 = 16;
 
-const AST_CONSTANT_ENTRY_EVAL_STATE_OFFSET: i32 = 20;
+const AST_CONSTANT_ENTRY_EXPR_INDEX_OFFSET: i32 = 20;
+
+const AST_CONSTANT_ENTRY_EVAL_STATE_OFFSET: i32 = 24;
 
 const AST_CONSTANTS_SECTION_SIZE: i32 = WORD_SIZE + AST_CONSTANTS_CAPACITY * AST_CONSTANT_ENTRY_SIZE;
 
@@ -2594,6 +2626,18 @@ fn ast_constant_entry_name_len_ptr(entry_ptr: i32) -> i32 {
     entry_ptr + AST_CONSTANT_ENTRY_NAME_LEN_OFFSET
 }
 
+fn ast_constant_entry_source_base_ptr(entry_ptr: i32) -> i32 {
+    entry_ptr + AST_CONSTANT_ENTRY_SOURCE_BASE_OFFSET
+}
+
+fn ast_constant_entry_source_base(entry_ptr: i32) -> i32 {
+    load_i32(ast_constant_entry_source_base_ptr(entry_ptr))
+}
+
+fn ast_constant_entry_set_source_base(entry_ptr: i32, source_base: i32) {
+    store_i32(ast_constant_entry_source_base_ptr(entry_ptr), source_base);
+}
+
 fn ast_constant_entry_value_ptr(entry_ptr: i32) -> i32 {
     entry_ptr + AST_CONSTANT_ENTRY_VALUE_OFFSET
 }
@@ -2660,6 +2704,7 @@ fn ast_constants_reset(ast_base: i32) {
             break;
         };
         let entry_ptr: i32 = ast_constant_entry_ptr(ast_base, idx);
+        ast_constant_entry_set_source_base(entry_ptr, 0);
         ast_constant_entry_set_expr_index(entry_ptr, -1);
         ast_constant_entry_set_eval_state(entry_ptr, AST_CONSTANT_EVAL_STATE_UNEVALUATED);
         idx = idx + 1;
@@ -7387,9 +7432,7 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
             break;
         };
         let entry_ptr: i32 = ast_constant_entry_ptr(ast_base, const_idx);
-        let const_start: i32 = ast_constant_entry_name_start(entry_ptr);
-        let const_len: i32 = ast_constant_entry_name_len(entry_ptr);
-        if identifiers_match_source(base, const_start, const_len, name_start, name_len) {
+        if constant_entry_matches_identifier(entry_ptr, base, name_start, name_len) {
             return -1;
         };
         const_idx = const_idx + 1;
@@ -7896,6 +7939,7 @@ fn parse_constant_declaration(
     let entry_ptr: i32 = ast_constant_entry_ptr(ast_base, count);
     store_i32(ast_constant_entry_name_start_ptr(entry_ptr), name_start);
     store_i32(ast_constant_entry_name_len_ptr(entry_ptr), name_len);
+    ast_constant_entry_set_source_base(entry_ptr, base);
     store_i32(ast_constant_entry_value_ptr(entry_ptr), 0);
     store_i32(ast_constant_entry_type_ptr(entry_ptr), type_id);
     ast_constant_entry_set_expr_index(entry_ptr, expr_index);

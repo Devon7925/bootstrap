@@ -260,3 +260,32 @@ test("function names cannot conflict with constants", async () => {
   expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
 });
 
+test("const values from use imports are propagated", async () => {
+  const wasm = await compileWithAstCompiler(
+    `
+    use "./lib.bp";
+
+    fn main() -> i32 {
+        ANSWER
+    }
+  `,
+    {
+      entryPath: "/tests/main.bp",
+      modules: [
+        {
+          path: "/tests/lib.bp",
+          source: `
+            const ANSWER: i32 = 42;
+
+            fn provide() -> i32 {
+                ANSWER
+            }
+          `,
+        },
+      ],
+    },
+  );
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(42);
+});
+
