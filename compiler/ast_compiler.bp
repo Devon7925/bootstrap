@@ -417,28 +417,96 @@ fn locals_entry_is_mut(entry_ptr: i32) -> bool {
     load_i32(entry_ptr + 16) != 0
 }
 
+fn constant_entry_name_matches(
+    base: i32,
+    ident_start: i32,
+    ident_len: i32,
+    entry_ptr: i32,
+    current_module_index: i32,
+) -> bool {
+    let const_len: i32 = ast_constant_entry_name_len(entry_ptr);
+    if const_len != ident_len {
+        return false;
+    };
+    let entry_module_index: i32 = ast_constant_entry_module_index(entry_ptr);
+    let const_start: i32 = ast_constant_entry_name_start(entry_ptr);
+    if entry_module_index < 0 {
+        return identifiers_match_source(base, const_start, const_len, ident_start, ident_len);
+    };
+    if entry_module_index == current_module_index {
+        return identifiers_match_source(base, const_start, const_len, ident_start, ident_len);
+    };
+    let module_base: i32 = module_entry_content(entry_module_index);
+    if module_base <= 0 {
+        return false;
+    };
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= const_len {
+            break;
+        };
+        let const_byte: i32 = load_u8(module_base + const_start + idx);
+        let ident_byte: i32 = load_u8(base + ident_start + idx);
+        if const_byte != ident_byte {
+            return false;
+        };
+        idx = idx + 1;
+    };
+    true
+}
+
 fn find_constant_entry_index(
     base: i32,
     ast_base: i32,
     ident_start: i32,
     ident_len: i32,
+    allow_imports: bool,
 ) -> i32 {
     let count: i32 = ast_constants_count(ast_base);
     if count <= 0 {
         return -1;
     };
+    let current_module_index: i32 = module_find_index_by_content_ptr(base);
     let mut idx: i32 = 0;
+    let mut imported_match: i32 = -1;
     loop {
         if idx >= count {
             break;
         };
         let entry_ptr: i32 = ast_constant_entry_ptr(ast_base, idx);
-        let const_start: i32 = ast_constant_entry_name_start(entry_ptr);
-        let const_len: i32 = ast_constant_entry_name_len(entry_ptr);
-        if identifiers_match_source(base, const_start, const_len, ident_start, ident_len) {
-            return idx;
+        let entry_module_index: i32 = ast_constant_entry_module_index(entry_ptr);
+        let same_module: bool = if entry_module_index < 0 {
+            current_module_index < 0
+        } else {
+            entry_module_index == current_module_index
+        };
+        if same_module {
+            if constant_entry_name_matches(
+                base,
+                ident_start,
+                ident_len,
+                entry_ptr,
+                current_module_index,
+            ) {
+                return idx;
+            };
+        } else if allow_imports {
+            if constant_entry_name_matches(
+                base,
+                ident_start,
+                ident_len,
+                entry_ptr,
+                current_module_index,
+            ) {
+                if imported_match < 0 {
+                    imported_match = idx;
+                };
+            };
         };
         idx = idx + 1;
+    };
+    if allow_imports {
+        return imported_match;
     };
     -1
 }
@@ -2145,6 +2213,27 @@ fn module_find_index(path_ptr: i32, path_len: i32) -> i32 {
     -1
 }
 
+fn module_find_index_by_content_ptr(content_ptr: i32) -> i32 {
+    if content_ptr <= 0 {
+        return -1;
+    };
+    let count: i32 = module_count();
+    if count <= 0 {
+        return -1;
+    };
+    let mut index: i32 = 0;
+    loop {
+        if index >= count {
+            break;
+        };
+        if module_entry_content(index) == content_ptr {
+            return index;
+        };
+        index = index + 1;
+    };
+    -1
+}
+
 fn module_entry_path(index: i32) -> i32 {
     let entry_ptr: i32 = module_entry_ptr(index);
     load_i32(module_entry_path_ptr(entry_ptr))
@@ -2228,7 +2317,7 @@ const AST_NAMES_CAPACITY: i32 = 131072;
 
 const AST_CONSTANTS_CAPACITY: i32 = 1024;
 
-const AST_CONSTANT_ENTRY_SIZE: i32 = 24;
+const AST_CONSTANT_ENTRY_SIZE: i32 = 28;
 
 const AST_CONSTANT_ENTRY_NAME_OFFSET: i32 = 0;
 
@@ -2241,6 +2330,8 @@ const AST_CONSTANT_ENTRY_TYPE_OFFSET: i32 = 12;
 const AST_CONSTANT_ENTRY_EXPR_INDEX_OFFSET: i32 = 16;
 
 const AST_CONSTANT_ENTRY_EVAL_STATE_OFFSET: i32 = 20;
+
+const AST_CONSTANT_ENTRY_MODULE_INDEX_OFFSET: i32 = 24;
 
 const AST_CONSTANTS_SECTION_SIZE: i32 = WORD_SIZE + AST_CONSTANTS_CAPACITY * AST_CONSTANT_ENTRY_SIZE;
 
@@ -2540,6 +2631,10 @@ fn ast_constant_entry_eval_state_ptr(entry_ptr: i32) -> i32 {
     entry_ptr + AST_CONSTANT_ENTRY_EVAL_STATE_OFFSET
 }
 
+fn ast_constant_entry_module_index_ptr(entry_ptr: i32) -> i32 {
+    entry_ptr + AST_CONSTANT_ENTRY_MODULE_INDEX_OFFSET
+}
+
 fn ast_constant_entry_name_start(entry_ptr: i32) -> i32 {
     load_i32(ast_constant_entry_name_start_ptr(entry_ptr))
 }
@@ -2564,12 +2659,20 @@ fn ast_constant_entry_eval_state(entry_ptr: i32) -> i32 {
     load_i32(ast_constant_entry_eval_state_ptr(entry_ptr))
 }
 
+fn ast_constant_entry_module_index(entry_ptr: i32) -> i32 {
+    load_i32(ast_constant_entry_module_index_ptr(entry_ptr))
+}
+
 fn ast_constant_entry_set_expr_index(entry_ptr: i32, expr_index: i32) {
     store_i32(ast_constant_entry_expr_index_ptr(entry_ptr), expr_index);
 }
 
 fn ast_constant_entry_set_eval_state(entry_ptr: i32, eval_state: i32) {
     store_i32(ast_constant_entry_eval_state_ptr(entry_ptr), eval_state);
+}
+
+fn ast_constant_entry_set_module_index(entry_ptr: i32, module_index: i32) {
+    store_i32(ast_constant_entry_module_index_ptr(entry_ptr), module_index);
 }
 
 const AST_CONSTANT_EVAL_STATE_UNEVALUATED: i32 = 0;
@@ -2592,6 +2695,7 @@ fn ast_constants_reset(ast_base: i32) {
         let entry_ptr: i32 = ast_constant_entry_ptr(ast_base, idx);
         ast_constant_entry_set_expr_index(entry_ptr, -1);
         ast_constant_entry_set_eval_state(entry_ptr, AST_CONSTANT_EVAL_STATE_UNEVALUATED);
+        ast_constant_entry_set_module_index(entry_ptr, -1);
         idx = idx + 1;
     };
 }
@@ -3816,8 +3920,13 @@ fn resolve_constant_reference(ast_base: i32, expr_index: i32) -> i32 {
     if ident_len <= 0 {
         return -1;
     };
-    let const_index: i32 =
-        find_constant_entry_index(source_base, ast_base, ident_start, ident_len);
+    let const_index: i32 = find_constant_entry_index(
+        source_base,
+        ast_base,
+        ident_start,
+        ident_len,
+        true,
+    );
     if const_index < 0 {
         return -1;
     };
@@ -5823,8 +5932,13 @@ fn parse_basic_expression(
         ident_len,
     );
     if local_entry_index < 0 {
-        let constant_entry_index: i32 =
-            find_constant_entry_index(base, ast_base, ident_start, ident_len);
+        let constant_entry_index: i32 = find_constant_entry_index(
+            base,
+            ast_base,
+            ident_start,
+            ident_len,
+            true,
+        );
         if constant_entry_index < 0 {
             let const_expr_index: i32 =
                 ast_expr_alloc_const_ref(ast_base, base, ident_start, ident_len);
@@ -7100,6 +7214,7 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     cursor = skip_whitespace(base, len, cursor);
 
     let temp_base: i32 = ast_temp_base(ast_base);
+    let current_module_index: i32 = module_find_index_by_content_ptr(base);
     let params_count_ptr: i32 = temp_base;
     let params_table_ptr: i32 = temp_base + 4;
     let params_table_end: i32 = params_table_ptr + MAX_PARAMS * 8;
@@ -7127,10 +7242,22 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
             break;
         };
         let entry_ptr: i32 = ast_constant_entry_ptr(ast_base, const_idx);
-        let const_start: i32 = ast_constant_entry_name_start(entry_ptr);
-        let const_len: i32 = ast_constant_entry_name_len(entry_ptr);
-        if identifiers_match_source(base, const_start, const_len, name_start, name_len) {
-            return -1;
+        let entry_module_index: i32 = ast_constant_entry_module_index(entry_ptr);
+        let same_module: bool = if entry_module_index < 0 {
+            current_module_index < 0
+        } else {
+            entry_module_index == current_module_index
+        };
+        if same_module {
+            if constant_entry_name_matches(
+                base,
+                name_start,
+                name_len,
+                entry_ptr,
+                current_module_index,
+            ) {
+                return -1;
+            };
         };
         const_idx = const_idx + 1;
     };
@@ -7391,6 +7518,7 @@ fn parse_constant_declaration(
     cursor: i32,
     ast_base: i32,
     func_count: i32,
+    current_module_index: i32,
 ) -> i32 {
     let mut idx: i32 = skip_whitespace(base, len, cursor);
     let mut const_cursor: i32 = expect_keyword_const(base, len, idx);
@@ -7435,7 +7563,7 @@ fn parse_constant_declaration(
     let name_start: i32 = ident.1;
     let name_len: i32 = ident.2;
 
-    if find_constant_entry_index(base, ast_base, name_start, name_len) >= 0 {
+    if find_constant_entry_index(base, ast_base, name_start, name_len, false) >= 0 {
         return -1;
     };
 
@@ -7534,6 +7662,7 @@ fn parse_constant_declaration(
     store_i32(ast_constant_entry_type_ptr(entry_ptr), type_id);
     ast_constant_entry_set_expr_index(entry_ptr, expr_index);
     ast_constant_entry_set_eval_state(entry_ptr, AST_CONSTANT_EVAL_STATE_UNEVALUATED);
+    ast_constant_entry_set_module_index(entry_ptr, current_module_index);
     store_i32(count_ptr, count + 1);
 
     idx
@@ -7921,7 +8050,8 @@ fn parse_program(
             cursor = skip_whitespace(base, len, use_cursor);
             continue;
         };
-        let const_cursor: i32 = parse_constant_declaration(base, len, cursor, ast_base, count);
+        let const_cursor: i32 =
+            parse_constant_declaration(base, len, cursor, ast_base, count, current_module_index);
         if const_cursor >= 0 {
             cursor = skip_whitespace(base, len, const_cursor);
             continue;
