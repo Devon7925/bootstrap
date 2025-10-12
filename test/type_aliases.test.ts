@@ -62,6 +62,23 @@ test("type aliases can chain", async () => {
   expect(result).toBe(42);
 });
 
+test.skip("type aliases can chain backwards", async () => {
+  const wasm = await compileWithAstCompiler(`
+        type Wrapper = Base;
+        type Base = i32;
+
+        fn add_one(value: Wrapper) -> Wrapper {
+            value + 1
+        }
+
+        fn main() -> i32 {
+            add_one(41)
+        }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(42);
+});
+
 test("missing type aliases are rejected", async () => {
   const failure = await expectCompileFailure(`
         fn main() -> Missing {
