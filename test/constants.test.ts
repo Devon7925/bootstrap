@@ -159,6 +159,33 @@ test("const functions can conditionally assign", async () => {
   expect(result).toBe(42);
 });
 
+test("constants from imports are propagated", async () => {
+  const wasm = await compileWithAstCompiler(
+    `
+    use "/tests/lib/value.bp";
+
+    const OFFSET: i32 = 5;
+    const TOTAL: i32 = PROVIDED_VALUE + OFFSET;
+
+    fn main() -> i32 {
+        TOTAL
+    }
+  `,
+    {
+      modules: [
+        {
+          path: "/tests/lib/value.bp",
+          source: `
+            const PROVIDED_VALUE: i32 = 37;
+          `,
+        },
+      ],
+    },
+  );
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(42);
+});
+
 test("const functions can use loops", async () => {
   const wasm = await compileWithAstCompiler(`
     const fn loop_sum(limit: i32) -> i32 {
