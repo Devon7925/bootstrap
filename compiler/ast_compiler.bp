@@ -4051,6 +4051,8 @@ const CONST_EVAL_STATUS_CONTINUE: i32 = 2;
 const CONST_EVAL_STATUS_RETURN: i32 = 3;
 const CONST_EVAL_LOOP_LIMIT: i32 = 1048576;
 
+const CONSTANT_EVAL_SCRATCH_OFFSET: i32 = 32768;
+
 fn interpret_constant_expression(
     ast_base: i32,
     expr_index: i32,
@@ -6030,6 +6032,9 @@ fn parse_basic_expression(
             return -1;
         };
         let const_entry_ptr: i32 = ast_constant_entry_ptr(ast_base, constant_entry_index);
+        if interpret_constant_entry(ast_base, const_entry_ptr) < 0 {
+            return -1;
+        };
         let const_value: i32 = ast_constant_entry_value(const_entry_ptr);
         let const_type: i32 = ast_constant_entry_type(const_entry_ptr);
         store_i32(out_kind_ptr, 0);
@@ -7808,40 +7813,21 @@ fn parse_constant_declaration(
     if idx < 0 {
         return -1;
     };
-    let literal_value_ptr: i32 = expr_temp_base;
-    let literal_type_ptr: i32 = literal_value_ptr + 4;
-    let eval_scratch_base: i32 = literal_type_ptr + 4;
-    if evaluate_expression_literal(
-        ast_base,
-        expr_kind_ptr,
-        expr_data0_ptr,
-        expr_data1_ptr,
-        eval_scratch_base,
-        literal_value_ptr,
-        literal_type_ptr,
-    ) < 0 {
-        return -1;
-    };
-    let mut literal_value: i32 = load_i32(literal_value_ptr);
-    let mut literal_type: i32 = load_i32(literal_type_ptr);
-    if literal_type == type_id {
-        if type_id_is_integer(type_id) {
-            literal_value = normalize_integer_value(literal_value, type_id);
-        } else if type_id == BUILTIN_TYPE_ID_BOOL {
-            literal_value = if literal_value != 0 { 1 } else { 0 };
-        };
-    } else if type_id_is_integer(literal_type) && type_id_is_integer(type_id) {
-        literal_value = normalize_integer_value(literal_value, type_id);
-    } else {
-        return -1;
-    };
-
     idx = skip_whitespace(base, len, idx);
     idx = expect_char(base, len, idx, ';');
     if idx < 0 {
         return -1;
     };
     idx = skip_whitespace(base, len, idx);
+
+    let expr_kind: i32 = load_i32(expr_kind_ptr);
+    let expr_data0: i32 = load_i32(expr_data0_ptr);
+    let expr_data1: i32 = load_i32(expr_data1_ptr);
+    let expr_index: i32 =
+        expression_node_from_parts(ast_base, expr_kind, expr_data0, expr_data1);
+    if expr_index < 0 {
+        return -1;
+    };
 
     let count_ptr: i32 = ast_constants_count_ptr(ast_base);
     let count: i32 = load_i32(count_ptr);
@@ -7851,10 +7837,10 @@ fn parse_constant_declaration(
     let entry_ptr: i32 = ast_constant_entry_ptr(ast_base, count);
     store_i32(ast_constant_entry_name_start_ptr(entry_ptr), name_start);
     store_i32(ast_constant_entry_name_len_ptr(entry_ptr), name_len);
-    store_i32(ast_constant_entry_value_ptr(entry_ptr), literal_value);
+    store_i32(ast_constant_entry_value_ptr(entry_ptr), 0);
     store_i32(ast_constant_entry_type_ptr(entry_ptr), type_id);
-    ast_constant_entry_set_expr_index(entry_ptr, -1);
-    ast_constant_entry_set_eval_state(entry_ptr, AST_CONSTANT_EVAL_STATE_EVALUATED);
+    ast_constant_entry_set_expr_index(entry_ptr, expr_index);
+    ast_constant_entry_set_eval_state(entry_ptr, AST_CONSTANT_EVAL_STATE_UNEVALUATED);
     store_i32(count_ptr, count + 1);
 
     idx
@@ -8435,6 +8421,65 @@ fn interpret_constants_visit_call_metadata(ast_base: i32, metadata_ptr: i32) -> 
     0
 }
 
+fn interpret_constant_entry(ast_base: i32, const_entry_ptr: i32) -> i32 {
+    if const_entry_ptr < 0 {
+        return -1;
+    };
+    let eval_state: i32 = ast_constant_entry_eval_state(const_entry_ptr);
+    if eval_state == AST_CONSTANT_EVAL_STATE_EVALUATED {
+        return 0;
+    };
+    if eval_state == AST_CONSTANT_EVAL_STATE_EVALUATING {
+        return -1;
+    };
+    let expr_index: i32 = ast_constant_entry_expr_index(const_entry_ptr);
+    if expr_index < 0 {
+        ast_constant_entry_set_eval_state(const_entry_ptr, AST_CONSTANT_EVAL_STATE_EVALUATED);
+        return 0;
+    };
+    ast_constant_entry_set_eval_state(const_entry_ptr, AST_CONSTANT_EVAL_STATE_EVALUATING);
+    let eval_base: i32 = ast_temp_base(ast_base) + CONSTANT_EVAL_SCRATCH_OFFSET;
+    let eval_value_ptr: i32 = eval_base;
+    let eval_type_ptr: i32 = eval_value_ptr + 4;
+    let eval_stack_top_ptr: i32 = eval_type_ptr + 4;
+    let eval_stack_base: i32 = eval_stack_top_ptr + 4;
+    store_i32(eval_stack_top_ptr, 0);
+    if interpret_constant_expression(
+        ast_base,
+        expr_index,
+        eval_stack_base,
+        eval_stack_top_ptr,
+        eval_value_ptr,
+        eval_type_ptr,
+        0,
+        0,
+        0,
+    ) < 0 {
+        ast_constant_entry_set_eval_state(const_entry_ptr, AST_CONSTANT_EVAL_STATE_UNEVALUATED);
+        return -1;
+    };
+    let mut literal_value: i32 = load_i32(eval_value_ptr);
+    let literal_type: i32 = load_i32(eval_type_ptr);
+    let const_type_ptr: i32 = ast_constant_entry_type_ptr(const_entry_ptr);
+    let target_type: i32 = load_i32(const_type_ptr);
+    if literal_type == target_type {
+        if type_id_is_integer(target_type) {
+            literal_value = normalize_integer_value(literal_value, target_type);
+        } else if target_type == BUILTIN_TYPE_ID_BOOL {
+            literal_value = if literal_value != 0 { 1 } else { 0 };
+        };
+    } else if type_id_is_integer(literal_type) && type_id_is_integer(target_type) {
+        literal_value = normalize_integer_value(literal_value, target_type);
+    } else {
+        ast_constant_entry_set_eval_state(const_entry_ptr, AST_CONSTANT_EVAL_STATE_UNEVALUATED);
+        return -1;
+    };
+    store_i32(ast_constant_entry_value_ptr(const_entry_ptr), literal_value);
+    store_i32(const_type_ptr, target_type);
+    ast_constant_entry_set_eval_state(const_entry_ptr, AST_CONSTANT_EVAL_STATE_EVALUATED);
+    0
+}
+
 fn interpret_program_constants(ast_base: i32, func_count: i32) -> i32 {
     let constants_count: i32 = ast_constants_count(ast_base);
     let mut const_idx: i32 = 0;
@@ -8443,12 +8488,8 @@ fn interpret_program_constants(ast_base: i32, func_count: i32) -> i32 {
             break;
         };
         let const_entry_ptr: i32 = ast_constant_entry_ptr(ast_base, const_idx);
-        let eval_state: i32 = ast_constant_entry_eval_state(const_entry_ptr);
-        if eval_state == AST_CONSTANT_EVAL_STATE_UNEVALUATED {
-            let expr_index: i32 = ast_constant_entry_expr_index(const_entry_ptr);
-            if interpret_constants_visit_expression(ast_base, expr_index) < 0 {
-                return -1;
-            };
+        if interpret_constant_entry(ast_base, const_entry_ptr) < 0 {
+            return -1;
         };
         const_idx = const_idx + 1;
     };
