@@ -2338,7 +2338,7 @@ fn scratch_types_set_count(out_ptr: i32, count: i32) {
 
 const AST_MAX_FUNCTIONS: i32 = 1024;
 
-const AST_FUNCTION_ENTRY_SIZE: i32 = 36;
+const AST_FUNCTION_ENTRY_SIZE: i32 = 44;
 
 const FUNCTION_FLAG_CONST: i32 = 1;
 
@@ -2390,8 +2390,32 @@ fn ast_function_flags_ptr(ast_base: i32, index: i32) -> i32 {
     ast_function_entry_ptr(ast_base, index) + 32
 }
 
+fn ast_function_const_params_ptr_ptr(ast_base: i32, index: i32) -> i32 {
+    ast_function_entry_ptr(ast_base, index) + 36
+}
+
+fn ast_function_template_owner_index_ptr(ast_base: i32, index: i32) -> i32 {
+    ast_function_entry_ptr(ast_base, index) + 40
+}
+
 fn ast_function_flags(ast_base: i32, index: i32) -> i32 {
     load_i32(ast_function_flags_ptr(ast_base, index))
+}
+
+fn ast_function_const_params_ptr(ast_base: i32, index: i32) -> i32 {
+    load_i32(ast_function_const_params_ptr_ptr(ast_base, index))
+}
+
+fn ast_function_template_owner_index(ast_base: i32, index: i32) -> i32 {
+    load_i32(ast_function_template_owner_index_ptr(ast_base, index))
+}
+
+fn ast_function_set_const_params_ptr(ast_base: i32, index: i32, value: i32) {
+    store_i32(ast_function_const_params_ptr_ptr(ast_base, index), value);
+}
+
+fn ast_function_set_template_owner_index(ast_base: i32, index: i32, value: i32) {
+    store_i32(ast_function_template_owner_index_ptr(ast_base, index), value);
 }
 
 fn ast_function_is_const(ast_base: i32, index: i32) -> bool {
@@ -2615,6 +2639,8 @@ fn ast_write_function_entry(
     param_types_ptr: i32,
     return_type_id: i32,
     flags: i32,
+    const_params_ptr: i32,
+    template_owner_index: i32,
 ) {
     let entry_ptr: i32 = ast_function_entry_ptr(ast_base, index);
     store_i32(entry_ptr, name_ptr);
@@ -2626,6 +2652,8 @@ fn ast_write_function_entry(
     store_i32(entry_ptr + 24, param_types_ptr);
     store_i32(entry_ptr + 28, return_type_id);
     store_i32(entry_ptr + 32, flags);
+    store_i32(entry_ptr + 36, const_params_ptr);
+    store_i32(entry_ptr + 40, template_owner_index);
 }
 
 fn ast_constants_count_ptr(ast_base: i32) -> i32 {
