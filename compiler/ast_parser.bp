@@ -2434,6 +2434,8 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
         param_types_ptr,
         return_type_id,
         flags,
+        0,
+        -1,
     );
     cursor
 }
