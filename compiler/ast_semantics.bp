@@ -206,6 +206,8 @@ fn interpret_constant_entry(ast_base: i32, const_entry_ptr: i32) -> i32 {
             literal_value = normalize_integer_value(literal_value, target_type);
         } else if target_type == BUILTIN_TYPE_ID_BOOL {
             literal_value = if literal_value != 0 { 1 } else { 0 };
+        } else if type_id_is_type(target_type) {
+            // Type values already represent resolved type identifiers.
         };
     } else if type_id_is_integer(literal_type) && type_id_is_integer(target_type) {
         literal_value = normalize_integer_value(literal_value, target_type);

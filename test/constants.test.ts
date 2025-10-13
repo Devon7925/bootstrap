@@ -227,6 +227,68 @@ test("const expressions can use if expressions", async () => {
   expect(result).toBe(42);
 });
 
+test("constants can store types and be used in signatures", async () => {
+  const wasm = await compileWithAstCompiler(`
+    const Alias: type = Base;
+    const Base: type = i32;
+
+    fn identity(value: Alias) -> Base {
+        let typed: Alias = value;
+        typed
+    }
+
+    fn main() -> Alias {
+        identity(42)
+    }
+  `);
+
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(42);
+});
+
+test("const type aliases can use const expressions for array lengths", async () => {
+  const wasm = await compileWithAstCompiler(`
+    const BASE: i32 = 2;
+    const LENGTH: i32 = BASE * 2;
+    const Numbers: type = [i32; LENGTH];
+
+    fn main() -> i32 {
+        let values: Numbers = [1, 2, 3, 4];
+        values[3]
+    }
+  `);
+
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(4);
+});
+
+test("const type aliases can reference other const types in array elements", async () => {
+  const wasm = await compileWithAstCompiler(`
+    const Element: type = u8;
+    const Numbers: type = [Element; 4];
+
+    fn main() -> i32 {
+        let values: Numbers = [1 as u8, 2 as u8, 3 as u8, 4 as u8];
+        let second: Element = values[1];
+        second as i32
+    }
+  `);
+
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(2);
+});
+
+test("non-type constants cannot be used as type annotations", async () => {
+  const failure = await expectCompileFailure(`
+    const VALUE: i32 = 1;
+
+    fn invalid(value: VALUE) -> i32 {
+        value
+    }
+  `);
+  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+});
+
 test("const functions can call other const functions", async () => {
   const wasm = await compileWithAstCompiler(`
     const fn base() -> i32 {
