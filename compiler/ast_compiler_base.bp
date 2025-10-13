@@ -2341,6 +2341,7 @@ const AST_MAX_FUNCTIONS: i32 = 1024;
 const AST_FUNCTION_ENTRY_SIZE: i32 = 44;
 
 const FUNCTION_FLAG_CONST: i32 = 1;
+const FUNCTION_FLAG_HAS_CONST_PARAMS: i32 = 2;
 
 const AST_NAMES_CAPACITY: i32 = 131072;
 
@@ -2420,6 +2421,34 @@ fn ast_function_set_template_owner_index(ast_base: i32, index: i32, value: i32) 
 
 fn ast_function_is_const(ast_base: i32, index: i32) -> bool {
     (ast_function_flags(ast_base, index) & FUNCTION_FLAG_CONST) != 0
+}
+
+fn ast_function_has_const_params(ast_base: i32, index: i32) -> bool {
+    (ast_function_flags(ast_base, index) & FUNCTION_FLAG_HAS_CONST_PARAMS) != 0
+}
+
+fn ast_function_const_params_count(ast_base: i32, index: i32) -> i32 {
+    let ptr: i32 = ast_function_const_params_ptr(ast_base, index);
+    if ptr <= 0 {
+        return 0;
+    };
+    load_i32(ptr)
+}
+
+fn ast_function_const_params_mask_ptr(ast_base: i32, index: i32) -> i32 {
+    let ptr: i32 = ast_function_const_params_ptr(ast_base, index);
+    if ptr <= 0 {
+        return 0;
+    };
+    ptr + WORD_SIZE
+}
+
+fn ast_function_const_params_mask_word(ast_base: i32, index: i32, word_index: i32) -> i32 {
+    let mask_ptr: i32 = ast_function_const_params_mask_ptr(ast_base, index);
+    if mask_ptr <= 0 {
+        return 0;
+    };
+    load_i32(mask_ptr + word_index * WORD_SIZE)
 }
 
 fn ast_names_len_ptr(ast_base: i32) -> i32 {
