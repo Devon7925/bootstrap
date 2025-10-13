@@ -166,6 +166,35 @@ fn main() -> i32 {
 
 In `dot`, the compiler emits distinct parameter and return types for each `N`, allowing ergonomic APIs whose calling conventions depend on compile-time constants without requiring separate overloads.
 
+## Implementation Notes
+
+### Parser support
+
+The current parser assumes every parameter appears as `name: Type` and records each identifier inside fixed-width tables during `parse_function`. Supporting `const` parameters requires detecting the keyword before the identifier, tracking which slots are compile-time only, and still storing the ordinary type information for downstream passes.【F:compiler/ast_parser.bp†L2157-L2284】 Identifier expressions presently lower parameter accesses into expression kind `6` with a positional index, so the specialization phase must replace any reads of `const` parameters with literal nodes or other constant-aware constructs to prevent those slots from leaking into the final AST.【F:compiler/ast_parser.bp†L878-L886】
+
+### Specialization pipeline
+
+The main compilation pipeline parses source, interprets global constants, validates semantics, and finally emits Wasm/WGSL.【F:compiler/ast_compiler.bp†L18-L47】 Because const parameter functions can also be marked `const fn`, the interpreter may need to execute them while evaluating top-level constants, so specialization cannot wait until after `interpret_constants` finishes. Instead, the pass should register template functions before constant evaluation begins and expose an API that the constant interpreter and later validation can call to request (or reuse) a specialization when they encounter a call whose arguments fold to constants.【F:compiler/ast_semantics.bp†L20-L119】【F:compiler/ast_compiler_base.bp†L3951-L4210】 This lets const evaluation obtain the specialized body needed for execution while still ensuring the post-specialization AST contains only ordinary parameter lists. The cache for each template function continues to be keyed by the canonicalized const argument vector; when a new combination is encountered, clone the template body, rewrite const uses, and append the specialized function to the AST while updating the global function count.
+
+### Rewriting bodies and metadata
+
+Because locals are indexed relative to the number of parameters (`params_count + offset`), removing const parameters requires renumbering both surviving parameters and every local declaration in the cloned body.【F:compiler/ast_compiler_base.bp†L785-L807】 Cloning also has to duplicate the tree of expression nodes stored in the flat AST arena using helpers such as `ast_expr_alloc`, so the pass needs a worklist that remaps old indices to newly allocated nodes without exceeding the arena capacity.【F:compiler/ast_compiler_base.bp†L3411-L3433】 When rewriting, convert each const parameter read into an evaluated literal (or, for type-valued consts, into the resolved type id) so that semantic validation observes concrete values.
+
+### Call resolution and canonicalization
+
+`resolve_call_metadata` currently matches calls by name and exact parameter count, enforcing type equality against the callee's stored signature.【F:compiler/ast_semantics.bp†L20-L119】 Specialization must update each call site's metadata to reference the concrete specialized function and trim const arguments from the runtime argument list before validation runs. The pass also needs to evaluate const arguments to canonical values (respecting integer widths, booleans, and type identifiers) so that the specialization key is stable; this aligns with the language goal of treating types as first-class constant values that can flow through const parameters.【F:concept.md†L1-L32】
+
+### Code generation considerations
+
+The Wasm emitter derives local allocations by walking expression trees and counting locals relative to the final parameter count, so specialized functions must expose the correct runtime signature and maintain consistent local indices after const parameters are removed.【F:compiler/wasm_output.bp†L418-L510】 Updating call metadata during specialization also avoids touching the emitter, because it already expects each call node to hold the callee index and argument expressions for a fully concrete function body. Template entries that retain const parameters should be excluded from the exported function list so that the embedding environment only sees runnable, fully specialized functions; otherwise the host could observe signatures containing const-only parameters that it cannot instantiate.【F:compiler/wasm_output.bp†L2257-L2305】 Because the compiler cannot specialize calls that originate from an embedding with unknown const values, host-visible APIs must use the generated specializations (or an adapter that dispatches among them) rather than the templates themselves.
+
+### Implementation challenges
+
+* **Template lifetime management:** The template function containing const parameters should remain available for future instantiations but must be skipped during emission to honor the requirement that const parameters disappear from the final AST. One option is to flag template entries so validation and emission ignore them while the specialization pass consults them when needed.
+* **Const evaluation integration:** Constant interpretation invokes user-defined `const fn` bodies, so the specialization cache must be callable from the interpreter to provide the correct instantiation before evaluation proceeds.【F:compiler/ast_semantics.bp†L20-L119】【F:compiler/ast_compiler_base.bp†L3951-L4210】
+* **Cross-module reuse:** When const functions are imported, the specialization cache has to incorporate the module index (or fully qualified name) so that identical const vectors in different modules still resolve to the correct definition.
+* **Diagnostic clarity:** Because specialization happens before validation, error reporting for non-constant arguments or evaluation failures should surface at the call site with the evaluated argument context rather than deep inside the cloning logic.
+
 ## Alternatives Considered
 
 * **Generic Type Parameters:** Traditional generics introduce additional syntax (angle brackets, explicit instantiation rules) and require a more complex type system. Const parameters offer a lighter-weight path that leverages the existing constant evaluation infrastructure.
