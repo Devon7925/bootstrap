@@ -894,6 +894,28 @@ fn parse_basic_expression(
         ident_len,
     );
     if local_entry_index < 0 {
+        let builtin_type_id: i32 =
+            builtin_integer_type_keyword_to_id(base, ident_start, ident_len);
+        if builtin_type_id >= 0 {
+            store_i32(out_kind_ptr, 0);
+            store_i32(out_data0_ptr, builtin_type_id);
+            store_i32(out_data1_ptr, BUILTIN_TYPE_ID_TYPE);
+            return skip_whitespace(base, len, next_cursor);
+        };
+        let bool_keyword: [u8; 12] = "bool\0\0\0\0\0\0\0\0";
+        if identifier_matches_keyword(base, len, ident_start, ident_len, bool_keyword) {
+            store_i32(out_kind_ptr, 0);
+            store_i32(out_data0_ptr, BUILTIN_TYPE_ID_BOOL);
+            store_i32(out_data1_ptr, BUILTIN_TYPE_ID_TYPE);
+            return skip_whitespace(base, len, next_cursor);
+        };
+        let type_keyword: [u8; 12] = "type\0\0\0\0\0\0\0\0";
+        if identifier_matches_keyword(base, len, ident_start, ident_len, type_keyword) {
+            store_i32(out_kind_ptr, 0);
+            store_i32(out_data0_ptr, BUILTIN_TYPE_ID_TYPE);
+            store_i32(out_data1_ptr, BUILTIN_TYPE_ID_TYPE);
+            return skip_whitespace(base, len, next_cursor);
+        };
         let constant_entry_index: i32 = find_constant_entry_index(
             base,
             ast_base,
@@ -2577,39 +2599,71 @@ fn parse_constant_declaration(
         return -1;
     };
     idx = skip_whitespace(base, len, idx);
-    idx = parse_expression(
-        base,
-        len,
-        idx,
-        ast_base,
-        params_table_ptr,
-        0,
-        locals_table_ptr,
-        locals_stack_count_ptr,
-        locals_next_index_ptr,
-        expr_temp_base,
-        loop_depth_ptr,
-        expr_kind_ptr,
-        expr_data0_ptr,
-        expr_data1_ptr,
-    );
-    if idx < 0 {
-        return -1;
+    let initializer_start: i32 = idx;
+    let mut expr_index: i32 = -1;
+    let mut parsed_type_initializer: bool = false;
+    if type_id == BUILTIN_TYPE_ID_TYPE {
+        let initializer_type_ptr: i32 = expr_temp_base;
+        let type_cursor: i32 = parse_type(
+            base,
+            len,
+            initializer_start,
+            ast_base,
+            initializer_type_ptr,
+        );
+        if type_cursor >= 0 {
+            let after_type: i32 = skip_whitespace(base, len, type_cursor);
+            let semicolon_cursor: i32 = expect_char(base, len, after_type, ';');
+            if semicolon_cursor >= 0 {
+                let literal_type_id: i32 = load_i32(initializer_type_ptr);
+                if literal_type_id < 0 {
+                    return -1;
+                };
+                expr_index =
+                    ast_expr_alloc_literal(ast_base, literal_type_id, BUILTIN_TYPE_ID_TYPE);
+                if expr_index < 0 {
+                    return -1;
+                };
+                idx = skip_whitespace(base, len, semicolon_cursor);
+                parsed_type_initializer = true;
+            };
+        };
     };
-    idx = skip_whitespace(base, len, idx);
-    idx = expect_char(base, len, idx, ';');
-    if idx < 0 {
-        return -1;
-    };
-    idx = skip_whitespace(base, len, idx);
+    if !parsed_type_initializer {
+        idx = parse_expression(
+            base,
+            len,
+            initializer_start,
+            ast_base,
+            params_table_ptr,
+            0,
+            locals_table_ptr,
+            locals_stack_count_ptr,
+            locals_next_index_ptr,
+            expr_temp_base,
+            loop_depth_ptr,
+            expr_kind_ptr,
+            expr_data0_ptr,
+            expr_data1_ptr,
+        );
+        if idx < 0 {
+            return -1;
+        };
+        idx = skip_whitespace(base, len, idx);
+        idx = expect_char(base, len, idx, ';');
+        if idx < 0 {
+            return -1;
+        };
+        idx = skip_whitespace(base, len, idx);
 
-    let expr_kind: i32 = load_i32(expr_kind_ptr);
-    let expr_data0: i32 = load_i32(expr_data0_ptr);
-    let expr_data1: i32 = load_i32(expr_data1_ptr);
-    let expr_index: i32 =
-        expression_node_from_parts(ast_base, expr_kind, expr_data0, expr_data1);
-    if expr_index < 0 {
-        return -1;
+        let expr_kind: i32 = load_i32(expr_kind_ptr);
+        let expr_data0: i32 = load_i32(expr_data0_ptr);
+        let expr_data1: i32 = load_i32(expr_data1_ptr);
+        expr_index =
+            expression_node_from_parts(ast_base, expr_kind, expr_data0, expr_data1);
+        if expr_index < 0 {
+            return -1;
+        };
     };
 
     let count_ptr: i32 = ast_constants_count_ptr(ast_base);
