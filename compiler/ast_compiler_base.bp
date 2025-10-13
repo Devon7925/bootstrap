@@ -558,6 +558,7 @@ fn parse_block_expression_body(
     ast_base: i32,
     params_table_ptr: i32,
     params_count: i32,
+    const_mask_table_ptr: i32,
     locals_table_ptr: i32,
     locals_stack_count_ptr: i32,
     locals_next_index_ptr: i32,
@@ -565,6 +566,7 @@ fn parse_block_expression_body(
     temp_base: i32,
     allow_empty_final_expr: i32,
     loop_depth_ptr: i32,
+    type_template_sink_ptr: i32,
     out_kind_ptr: i32,
     out_data0_ptr: i32,
     out_data1_ptr: i32,
@@ -715,7 +717,17 @@ fn parse_block_expression_body(
                 if next_char == ':' {
                     has_type_annotation = true;
                     idx = skip_whitespace(base, len, idx + 1);
-                    idx = parse_type(base, len, idx, ast_base, stmt_local_type_ptr);
+                    idx = parse_type(
+                        base,
+                        len,
+                        idx,
+                        ast_base,
+                        params_table_ptr,
+                        params_count,
+                        const_mask_table_ptr,
+                        type_template_sink_ptr,
+                        stmt_local_type_ptr,
+                    );
                     if idx < 0 {
                         store_i32(locals_stack_count_ptr, saved_stack_count);
                         store_i32(locals_next_index_ptr, saved_next_index);
@@ -741,11 +753,13 @@ fn parse_block_expression_body(
                 ast_base,
                 params_table_ptr,
                 params_count,
+                const_mask_table_ptr,
                 locals_table_ptr,
                 locals_stack_count_ptr,
                 locals_next_index_ptr,
                 stmt_nested_temp_base,
                 loop_depth_ptr,
+                type_template_sink_ptr,
                 stmt_expr_kind_ptr,
                 stmt_expr_data0_ptr,
                 stmt_expr_data1_ptr,
@@ -849,11 +863,13 @@ fn parse_block_expression_body(
                     ast_base,
                     params_table_ptr,
                     params_count,
+                    const_mask_table_ptr,
                     locals_table_ptr,
                     locals_stack_count_ptr,
                     locals_next_index_ptr,
                     stmt_nested_temp_base,
                     loop_depth_ptr,
+                    type_template_sink_ptr,
                     stmt_expr_kind_ptr,
                     stmt_expr_data0_ptr,
                     stmt_expr_data1_ptr,
@@ -962,11 +978,13 @@ fn parse_block_expression_body(
                 ast_base,
                 params_table_ptr,
                 params_count,
+                const_mask_table_ptr,
                 locals_table_ptr,
                 locals_stack_count_ptr,
                 locals_next_index_ptr,
                 stmt_nested_temp_base,
                 loop_depth_ptr,
+                type_template_sink_ptr,
                 stmt_expr_kind_ptr,
                 stmt_expr_data0_ptr,
                 stmt_expr_data1_ptr,
@@ -1030,6 +1048,7 @@ fn parse_block_expression_body(
                 ast_base,
                 params_table_ptr,
                 params_count,
+                const_mask_table_ptr,
                 locals_table_ptr,
                 locals_stack_count_ptr,
                 locals_next_index_ptr,
@@ -1037,6 +1056,7 @@ fn parse_block_expression_body(
                 stmt_nested_temp_base,
                 1,
                 loop_depth_ptr,
+                type_template_sink_ptr,
                 stmt_expr_kind_ptr,
                 stmt_expr_data0_ptr,
                 stmt_expr_data1_ptr,
@@ -1138,11 +1158,13 @@ fn parse_block_expression_body(
                     ast_base,
                     params_table_ptr,
                     params_count,
+                    const_mask_table_ptr,
                     locals_table_ptr,
                     locals_stack_count_ptr,
                     locals_next_index_ptr,
                     stmt_nested_temp_base,
                     loop_depth_ptr,
+                    type_template_sink_ptr,
                     stmt_expr_kind_ptr,
                     stmt_expr_data0_ptr,
                     stmt_expr_data1_ptr,
@@ -1201,11 +1223,13 @@ fn parse_block_expression_body(
                 ast_base,
                 params_table_ptr,
                 params_count,
+                const_mask_table_ptr,
                 locals_table_ptr,
                 locals_stack_count_ptr,
                 locals_next_index_ptr,
                 stmt_nested_temp_base,
                 loop_depth_ptr,
+                type_template_sink_ptr,
                 stmt_expr_kind_ptr,
                 stmt_expr_data0_ptr,
                 stmt_expr_data1_ptr,
@@ -1658,7 +1682,17 @@ fn builtin_integer_type_keyword_to_id(base: i32, start: i32, ident_len: i32) -> 
     -1
 }
 
-fn parse_type(base: i32, len: i32, offset: i32, ast_base: i32, out_type_ptr: i32) -> i32 {
+fn parse_type(
+    base: i32,
+    len: i32,
+    offset: i32,
+    ast_base: i32,
+    params_table_ptr: i32,
+    params_count: i32,
+    const_mask_table_ptr: i32,
+    type_template_sink_ptr: i32,
+    out_type_ptr: i32,
+) -> i32 {
     if offset >= len {
         return -1;
     };
@@ -1669,7 +1703,17 @@ fn parse_type(base: i32, len: i32, offset: i32, ast_base: i32, out_type_ptr: i32
         };
         let mut cursor: i32 = offset + 1;
         cursor = skip_whitespace(base, len, cursor);
-        cursor = parse_type(base, len, cursor, ast_base, out_type_ptr);
+        cursor = parse_type(
+            base,
+            len,
+            cursor,
+            ast_base,
+            params_table_ptr,
+            params_count,
+            const_mask_table_ptr,
+            type_template_sink_ptr,
+            out_type_ptr,
+        );
         if cursor < 0 {
             return -1;
         };
@@ -1695,8 +1739,7 @@ fn parse_type(base: i32, len: i32, offset: i32, ast_base: i32, out_type_ptr: i32
             cursor = literal_cursor;
         } else {
             let temp_base: i32 = literal_base;
-            let params_table_ptr: i32 = temp_base;
-            let expr_kind_ptr: i32 = params_table_ptr + MAX_PARAMS * 8;
+            let expr_kind_ptr: i32 = temp_base;
             let expr_data0_ptr: i32 = expr_kind_ptr + 4;
             let expr_data1_ptr: i32 = expr_kind_ptr + 8;
             let locals_stack_count_ptr: i32 = expr_kind_ptr + 12;
@@ -1714,12 +1757,14 @@ fn parse_type(base: i32, len: i32, offset: i32, ast_base: i32, out_type_ptr: i32
                 cursor,
                 ast_base,
                 params_table_ptr,
-                0,
+                params_count,
+                const_mask_table_ptr,
                 locals_table_ptr,
                 locals_stack_count_ptr,
                 locals_next_index_ptr,
                 expr_temp_base,
                 loop_depth_ptr,
+                type_template_sink_ptr,
                 expr_kind_ptr,
                 expr_data0_ptr,
                 expr_data1_ptr,
@@ -1788,7 +1833,17 @@ fn parse_type(base: i32, len: i32, offset: i32, ast_base: i32, out_type_ptr: i32
         let saved_used: i32 = load_i32(call_data_used_ptr);
         let mut element_count: i32 = 0;
         let mut elements_ptr: i32 = -1;
-        cursor = parse_type(base, len, cursor, ast_base, out_type_ptr);
+        cursor = parse_type(
+            base,
+            len,
+            cursor,
+            ast_base,
+            params_table_ptr,
+            params_count,
+            const_mask_table_ptr,
+            type_template_sink_ptr,
+            out_type_ptr,
+        );
         if cursor < 0 {
             store_i32(call_data_used_ptr, saved_used);
             return -1;
@@ -1834,7 +1889,17 @@ fn parse_type(base: i32, len: i32, offset: i32, ast_base: i32, out_type_ptr: i32
                 store_i32(call_data_used_ptr, saved_used);
                 return -1;
             };
-            tuple_cursor = parse_type(base, len, tuple_cursor, ast_base, element_ptr);
+            tuple_cursor = parse_type(
+                base,
+                len,
+                tuple_cursor,
+                ast_base,
+                params_table_ptr,
+                params_count,
+                const_mask_table_ptr,
+                type_template_sink_ptr,
+                element_ptr,
+            );
             if tuple_cursor < 0 {
                 store_i32(call_data_used_ptr, saved_used);
                 return -1;
