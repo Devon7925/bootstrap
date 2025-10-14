@@ -27,7 +27,27 @@ test("array index requires integer indices", async () => {
         values[true]
     }
   `);
-  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(failure.failure.detail).toBe("Array index must be i32");
+});
+
+test("array index operand must be array", async () => {
+  const failure = await expectCompileFailure(`
+    fn index_scalar() -> i32 {
+        let value: i32 = 7;
+        value[0]
+    }
+  `);
+  expect(failure.failure.detail).toBe("Indexing non-array value");
+});
+
+test("len intrinsic requires array operand", async () => {
+  const failure = await expectCompileFailure(`
+    fn len_of_scalar() -> i32 {
+        let value: i32 = 7;
+        len(value)
+    }
+  `);
+  expect(failure.failure.detail).toBe("len() requires array operand");
 });
 
 test("len intrinsic returns array length", async () => {
