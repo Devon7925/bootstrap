@@ -182,6 +182,7 @@ const MAX_PARAMS: i32 = 64;
 
 const TYPE_TEMPLATE_KIND_NONE: i32 = 0;
 const TYPE_TEMPLATE_KIND_ARRAY_LENGTH: i32 = 1;
+const TYPE_TEMPLATE_KIND_TYPE_EXPR: i32 = 2;
 
 const TYPE_TEMPLATE_ENTRY_KIND_OFFSET: i32 = 0;
 const TYPE_TEMPLATE_ENTRY_BASE_TYPE_OFFSET: i32 = 4;
@@ -192,6 +193,11 @@ const TYPE_TEMPLATE_ENTRY_PARAM_COUNT_OFFSET: i32 = 16;
 const TYPE_TEMPLATE_ENTRY_WORDS: i32 = 5;
 
 const TYPE_TEMPLATE_TRAVERSAL_STACK_CAPACITY: i32 = 256;
+
+const TYPE_TEMPLATE_PAYLOAD_RETURN_HANDLE_INDEX: i32 = 0;
+const TYPE_TEMPLATE_PAYLOAD_RETURN_BASE_INDEX: i32 = 1;
+const TYPE_TEMPLATE_PAYLOAD_PARAM_BASE_INDEX: i32 = 2;
+const TYPE_TEMPLATE_PAYLOAD_PARAM_STRIDE: i32 = 2;
 
 const MAX_ARRAY_LITERAL_ELEMENTS: i32 = 256;
 
@@ -247,6 +253,368 @@ fn identifier_matches_keyword(
         idx = idx + 1;
     };
     true
+}
+
+fn type_template_record_param_usage(
+    param_index: i32,
+    usage_mask_low_ptr: i32,
+    usage_mask_high_ptr: i32,
+    usage_list_ptr: i32,
+    usage_count_ptr: i32,
+) -> i32 {
+    if param_index < 0 { return -1; };
+    if param_index >= MAX_PARAMS { return -1; };
+    if param_index < 32 {
+        let current_mask: i32 = load_i32(usage_mask_low_ptr);
+        let bit: i32 = 1 << param_index;
+        if (current_mask & bit) != 0 {
+            return 0;
+        };
+        store_i32(usage_mask_low_ptr, current_mask | bit);
+    } else {
+        let bit_index: i32 = param_index - 32;
+        let current_mask: i32 = load_i32(usage_mask_high_ptr);
+        let bit: i32 = 1 << bit_index;
+        if (current_mask & bit) != 0 {
+            return 0;
+        };
+        store_i32(usage_mask_high_ptr, current_mask | bit);
+    };
+    let usage_count: i32 = load_i32(usage_count_ptr);
+    if usage_count < 0 { return -1; };
+    if usage_count >= MAX_PARAMS { return -1; };
+    store_i32(usage_list_ptr + usage_count * WORD_SIZE, param_index);
+    store_i32(usage_count_ptr, usage_count + 1);
+    0
+}
+
+fn type_template_collect_const_params(
+    ast_base: i32,
+    expr_index: i32,
+    params_count: i32,
+    const_mask_table_ptr: i32,
+    usage_mask_low_ptr: i32,
+    usage_mask_high_ptr: i32,
+    usage_list_ptr: i32,
+    usage_count_ptr: i32,
+) -> i32 {
+    if expr_index < 0 { return -1; };
+    if expr_index >= ast_expr_count(ast_base) { return -1; };
+    let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+    let kind: i32 = load_i32(entry_ptr);
+    if kind == 0 { return 0; };
+    if kind == 6 {
+        if params_count <= 0 { return -1; };
+        if const_mask_table_ptr <= 0 { return -1; };
+        let param_index: i32 = load_i32(entry_ptr + 4);
+        if param_index < 0 { return -1; };
+        if param_index >= params_count { return -1; };
+        let mask_word_index: i32 = param_index >> 5;
+        let mask_word_ptr: i32 = const_mask_table_ptr + mask_word_index * WORD_SIZE;
+        let mask_word_value: i32 = load_i32(mask_word_ptr);
+        let mask_bit_index: i32 = param_index & 31;
+        let mask_bit: i32 = 1 << mask_bit_index;
+        if (mask_word_value & mask_bit) == 0 { return -1; };
+        return type_template_record_param_usage(
+            param_index,
+            usage_mask_low_ptr,
+            usage_mask_high_ptr,
+            usage_list_ptr,
+            usage_count_ptr,
+        );
+    };
+    if kind == 22 || kind == 39 {
+        let child_index: i32 = load_i32(entry_ptr + 4);
+        return type_template_collect_const_params(
+            ast_base,
+            child_index,
+            params_count,
+            const_mask_table_ptr,
+            usage_mask_low_ptr,
+            usage_mask_high_ptr,
+            usage_list_ptr,
+            usage_count_ptr,
+        );
+    };
+    if kind == 2
+        || kind == 3
+        || kind == 4
+        || kind == 5
+        || kind == 14
+        || kind == 15
+        || kind == 16
+        || kind == 17
+        || kind == 18
+        || kind == 19
+        || kind == 20
+        || kind == 21
+        || kind == 25
+        || kind == 26
+        || kind == 27
+        || kind == 28
+    {
+        let left_index: i32 = load_i32(entry_ptr + 4);
+        let right_index: i32 = load_i32(entry_ptr + 8);
+        if type_template_collect_const_params(
+            ast_base,
+            left_index,
+            params_count,
+            const_mask_table_ptr,
+            usage_mask_low_ptr,
+            usage_mask_high_ptr,
+            usage_list_ptr,
+            usage_count_ptr,
+        ) < 0 {
+            return -1;
+        };
+        if type_template_collect_const_params(
+            ast_base,
+            right_index,
+            params_count,
+            const_mask_table_ptr,
+            usage_mask_low_ptr,
+            usage_mask_high_ptr,
+            usage_list_ptr,
+            usage_count_ptr,
+        ) < 0 {
+            return -1;
+        };
+        return 0;
+    };
+    -1
+}
+
+fn type_template_capture_expression_template(
+    ast_base: i32,
+    expr_kind_ptr: i32,
+    expr_data0_ptr: i32,
+    expr_data1_ptr: i32,
+    params_count: i32,
+    const_mask_table_ptr: i32,
+    base_type_id: i32,
+    scratch_base: i32,
+    entry_kind: i32,
+) -> i32 {
+    if params_count <= 0 { return -1; };
+    if const_mask_table_ptr <= 0 { return -1; };
+    let expr_kind: i32 = load_i32(expr_kind_ptr);
+    let expr_data0: i32 = load_i32(expr_data0_ptr);
+    let expr_data1: i32 = load_i32(expr_data1_ptr);
+    let mut expr_index: i32 = -1;
+    if expr_kind == 2 {
+        expr_index = expr_data0;
+    } else {
+        expr_index = expression_node_from_parts(ast_base, expr_kind, expr_data0, expr_data1);
+        if expr_index < 0 { return -1; };
+        store_expression_parts(expr_kind_ptr, expr_data0_ptr, expr_data1_ptr, (2, expr_index, 0));
+    };
+    let usage_mask_low_ptr: i32 = scratch_base;
+    let usage_mask_high_ptr: i32 = usage_mask_low_ptr + 4;
+    let usage_count_ptr: i32 = usage_mask_high_ptr + 4;
+    let usage_list_ptr: i32 = usage_count_ptr + 4;
+    store_i32(usage_mask_low_ptr, 0);
+    store_i32(usage_mask_high_ptr, 0);
+    store_i32(usage_count_ptr, 0);
+    if type_template_collect_const_params(
+        ast_base,
+        expr_index,
+        params_count,
+        const_mask_table_ptr,
+        usage_mask_low_ptr,
+        usage_mask_high_ptr,
+        usage_list_ptr,
+        usage_count_ptr,
+    ) < 0 {
+        return -1;
+    };
+    let usage_count: i32 = load_i32(usage_count_ptr);
+    if usage_count <= 0 { return -1; };
+    let call_data_used_ptr: i32 = ast_call_data_len_ptr(ast_base);
+    let saved_call_data_used: i32 = load_i32(call_data_used_ptr);
+    let mut params_ptr: i32 = 0;
+    if usage_count > 0 {
+        params_ptr = ast_call_data_alloc(ast_base, usage_count);
+        if params_ptr < 0 {
+            store_i32(call_data_used_ptr, saved_call_data_used);
+            return -1;
+        };
+        let mut copy_idx: i32 = 0;
+        loop {
+            if copy_idx >= usage_count { break; };
+            let value: i32 = load_i32(usage_list_ptr + copy_idx * WORD_SIZE);
+            store_i32(params_ptr + copy_idx * WORD_SIZE, value);
+            copy_idx = copy_idx + 1;
+        };
+    };
+    let entry_ptr: i32 = ast_call_data_alloc(ast_base, TYPE_TEMPLATE_ENTRY_WORDS);
+    if entry_ptr < 0 {
+        store_i32(call_data_used_ptr, saved_call_data_used);
+        return -1;
+    };
+    store_i32(entry_ptr + TYPE_TEMPLATE_ENTRY_KIND_OFFSET, entry_kind);
+    store_i32(entry_ptr + TYPE_TEMPLATE_ENTRY_BASE_TYPE_OFFSET, base_type_id);
+    store_i32(entry_ptr + TYPE_TEMPLATE_ENTRY_EXPR_OFFSET, expr_index);
+    store_i32(entry_ptr + TYPE_TEMPLATE_ENTRY_PARAM_PTR_OFFSET, params_ptr);
+    store_i32(entry_ptr + TYPE_TEMPLATE_ENTRY_PARAM_COUNT_OFFSET, usage_count);
+    entry_ptr
+}
+
+fn type_template_entry_kind(entry_ptr: i32) -> i32 {
+    if entry_ptr <= 0 {
+        return TYPE_TEMPLATE_KIND_NONE;
+    };
+    load_i32(entry_ptr + TYPE_TEMPLATE_ENTRY_KIND_OFFSET)
+}
+
+fn type_template_entry_base_type(entry_ptr: i32) -> i32 {
+    if entry_ptr <= 0 {
+        return -1;
+    };
+    load_i32(entry_ptr + TYPE_TEMPLATE_ENTRY_BASE_TYPE_OFFSET)
+}
+
+fn type_template_entry_expr_index(entry_ptr: i32) -> i32 {
+    if entry_ptr <= 0 {
+        return -1;
+    };
+    load_i32(entry_ptr + TYPE_TEMPLATE_ENTRY_EXPR_OFFSET)
+}
+
+fn type_template_entry_params_ptr(entry_ptr: i32) -> i32 {
+    if entry_ptr <= 0 {
+        return 0;
+    };
+    load_i32(entry_ptr + TYPE_TEMPLATE_ENTRY_PARAM_PTR_OFFSET)
+}
+
+fn type_template_entry_param_count(entry_ptr: i32) -> i32 {
+    if entry_ptr <= 0 {
+        return 0;
+    };
+    load_i32(entry_ptr + TYPE_TEMPLATE_ENTRY_PARAM_COUNT_OFFSET)
+}
+
+fn type_template_entry_param_index(entry_ptr: i32, index: i32) -> i32 {
+    if index < 0 {
+        return -1;
+    };
+    let params_ptr: i32 = type_template_entry_params_ptr(entry_ptr);
+    if params_ptr <= 0 {
+        return -1;
+    };
+    if index >= type_template_entry_param_count(entry_ptr) {
+        return -1;
+    };
+    load_i32(params_ptr + index * WORD_SIZE)
+}
+
+fn type_template_resolve_type(
+    ast_base: i32,
+    template_handle: i32,
+    param_values_ptr: i32,
+    param_count: i32,
+    scratch_base: i32,
+    scratch_top_ptr: i32,
+    out_value_ptr: i32,
+    out_type_ptr: i32,
+) -> i32 {
+    if template_handle <= 0 {
+        return -1;
+    };
+    if scratch_base <= 0 {
+        return -1;
+    };
+    if scratch_top_ptr <= 0 {
+        return -1;
+    };
+    if out_value_ptr <= 0 {
+        return -1;
+    };
+    if out_type_ptr <= 0 {
+        return -1;
+    };
+    if param_count < 0 {
+        return -1;
+    };
+    if param_count > 0 {
+        if param_values_ptr <= 0 {
+            return -1;
+        };
+    };
+    let expr_index: i32 = type_template_entry_expr_index(template_handle);
+    if expr_index < 0 {
+        return -1;
+    };
+    let saved_top: i32 = load_i32(scratch_top_ptr);
+    store_i32(scratch_top_ptr, 0);
+    let status: i32 = interpret_constant_expression(
+        ast_base,
+        expr_index,
+        scratch_base,
+        scratch_top_ptr,
+        out_value_ptr,
+        out_type_ptr,
+        param_values_ptr,
+        param_count,
+        param_count,
+    );
+    store_i32(scratch_top_ptr, saved_top);
+    if status < 0 {
+        return -1;
+    };
+    if status != CONST_EVAL_STATUS_OK {
+        return -1;
+    };
+    let result_type: i32 = load_i32(out_type_ptr);
+    let result_value: i32 = load_i32(out_value_ptr);
+    let template_kind: i32 = type_template_entry_kind(template_handle);
+    if template_kind == TYPE_TEMPLATE_KIND_ARRAY_LENGTH {
+        if !constant_eval_integer_type_supported(result_type) {
+            return -1;
+        };
+        let length: i32 = normalize_integer_value(result_value, result_type);
+        if length < 0 {
+            return -1;
+        };
+        let element_type_id: i32 = type_template_entry_base_type(template_handle);
+        if element_type_id < 0 {
+            return -1;
+        };
+        ast_register_array_type(ast_base, element_type_id, length)
+    } else if template_kind == TYPE_TEMPLATE_KIND_TYPE_EXPR {
+        if result_type != BUILTIN_TYPE_ID_TYPE {
+            return -1;
+        };
+        if result_value < 0 {
+            return -1;
+        };
+        result_value
+    } else {
+        -1
+    }
+}
+
+fn type_template_capture_array_length(
+    ast_base: i32,
+    expr_kind_ptr: i32,
+    expr_data0_ptr: i32,
+    expr_data1_ptr: i32,
+    params_count: i32,
+    const_mask_table_ptr: i32,
+    element_type_id: i32,
+    scratch_base: i32,
+) -> i32 {
+    type_template_capture_expression_template(
+        ast_base,
+        expr_kind_ptr,
+        expr_data0_ptr,
+        expr_data1_ptr,
+        params_count,
+        const_mask_table_ptr,
+        element_type_id,
+        scratch_base,
+        TYPE_TEMPLATE_KIND_ARRAY_LENGTH,
+    )
 }
 
 fn expect_keyword_literal(base: i32, len: i32, offset: i32, keyword: [u8; 12]) -> i32 {
@@ -1744,6 +2112,8 @@ fn parse_type(
         let literal_ptr: i32 = literal_base;
         let literal_cursor: i32 = parse_i32_literal(base, len, cursor, literal_ptr);
         let mut length: i32 = -1;
+        let mut has_length_template: bool = false;
+        let mut length_template_handle: i32 = 0;
         if literal_cursor >= 0 {
             length = load_i32(literal_ptr);
             if length < 0 {
@@ -1797,21 +2167,50 @@ fn parse_type(
                 length_value_ptr,
                 length_type_ptr,
             ) < 0 {
-                return -1;
-            };
-            let length_type: i32 = load_i32(length_type_ptr);
-            if !constant_eval_integer_type_supported(length_type) {
-                return -1;
-            };
-            length = normalize_integer_value(load_i32(length_value_ptr), length_type);
-            if length < 0 {
-                return -1;
+                let template_handle: i32 = type_template_capture_array_length(
+                    ast_base,
+                    expr_kind_ptr,
+                    expr_data0_ptr,
+                    expr_data1_ptr,
+                    params_count,
+                    const_mask_table_ptr,
+                    element_type_id,
+                    length_scratch_base,
+                );
+                if template_handle < 0 {
+                    return -1;
+                };
+                if type_template_sink_ptr <= 0 {
+                    return -1;
+                };
+                has_length_template = true;
+                length_template_handle = template_handle;
+            } else {
+                let length_type: i32 = load_i32(length_type_ptr);
+                if !constant_eval_integer_type_supported(length_type) {
+                    return -1;
+                };
+                length = normalize_integer_value(load_i32(length_value_ptr), length_type);
+                if length < 0 {
+                    return -1;
+                };
             };
         };
         cursor = skip_whitespace(base, len, cursor);
         cursor = expect_char(base, len, cursor, ']');
         if cursor < 0 {
             return -1;
+        };
+        if has_length_template {
+            if type_template_sink_ptr <= 0 {
+                return -1;
+            };
+            store_i32(type_template_sink_ptr, length_template_handle);
+            store_i32(type_template_sink_ptr + 4, element_type_id);
+            if out_type_ptr >= 0 {
+                store_i32(out_type_ptr, -1);
+            };
+            return cursor;
         };
         let type_id: i32 = ast_register_array_type(ast_base, element_type_id, length);
         if type_id < 0 {
@@ -1988,6 +2387,50 @@ fn parse_type(
             store_i32(out_type_ptr, BUILTIN_TYPE_ID_TYPE);
         };
         return next;
+    };
+    if params_table_ptr > 0 && params_count > 0 {
+        let param_index: i32 =
+            find_parameter_index(base, params_table_ptr, params_count, offset, ident_len);
+        if param_index >= 0 {
+            if const_mask_table_ptr <= 0 { return -1; };
+            if type_template_sink_ptr <= 0 { return -1; };
+            let mask_word_index: i32 = param_index >> 5;
+            let mask_word_ptr: i32 = const_mask_table_ptr + mask_word_index * WORD_SIZE;
+            let mask_word_value: i32 = load_i32(mask_word_ptr);
+            let mask_bit_index: i32 = param_index & 31;
+            let mask_bit: i32 = 1 << mask_bit_index;
+            if (mask_word_value & mask_bit) == 0 { return -1; };
+            let param_types_table_ptr: i32 = params_table_ptr + MAX_PARAMS * 8;
+            let param_type_id: i32 =
+                load_i32(param_types_table_ptr + param_index * WORD_SIZE);
+            if param_type_id != BUILTIN_TYPE_ID_TYPE { return -1; };
+            let scratch_base: i32 = ast_temp_base(ast_base);
+            let expr_kind_ptr: i32 = scratch_base;
+            let expr_data0_ptr: i32 = expr_kind_ptr + 4;
+            let expr_data1_ptr: i32 = expr_kind_ptr + 8;
+            store_i32(expr_kind_ptr, 6);
+            store_i32(expr_data0_ptr, param_index);
+            store_i32(expr_data1_ptr, param_type_id);
+            let capture_scratch_base: i32 = expr_kind_ptr + 12;
+            let template_handle: i32 = type_template_capture_expression_template(
+                ast_base,
+                expr_kind_ptr,
+                expr_data0_ptr,
+                expr_data1_ptr,
+                params_count,
+                const_mask_table_ptr,
+                -1,
+                capture_scratch_base,
+                TYPE_TEMPLATE_KIND_TYPE_EXPR,
+            );
+            if template_handle < 0 { return -1; };
+            store_i32(type_template_sink_ptr, template_handle);
+            store_i32(type_template_sink_ptr + 4, -1);
+            if out_type_ptr >= 0 {
+                store_i32(out_type_ptr, -1);
+            };
+            return next;
+        };
     };
     let const_index: i32 =
         find_constant_entry_index(base, ast_base, offset, ident_len, true);
@@ -2465,6 +2908,10 @@ fn ast_function_entry_ptr(ast_base: i32, index: i32) -> i32 {
     ast_base + WORD_SIZE + index * AST_FUNCTION_ENTRY_SIZE
 }
 
+fn ast_function_param_count(ast_base: i32, index: i32) -> i32 {
+    load_i32(ast_function_entry_ptr(ast_base, index) + 8)
+}
+
 fn ast_function_flags_ptr(ast_base: i32, index: i32) -> i32 {
     ast_function_entry_ptr(ast_base, index) + 32
 }
@@ -2498,7 +2945,8 @@ fn ast_function_set_template_owner_index(ast_base: i32, index: i32, value: i32) 
 }
 
 fn ast_function_type_template_payload_ptr(ast_base: i32, index: i32) -> i32 {
-    ast_function_template_owner_index(ast_base, index)
+    let raw_ptr: i32 = ast_function_template_owner_index(ast_base, index);
+    if raw_ptr > 0 { raw_ptr } else { 0 }
 }
 
 fn ast_function_param_requires_specialization(
@@ -2508,21 +2956,70 @@ fn ast_function_param_requires_specialization(
 ) -> bool {
     if param_index < 0 { return false; };
     let payload_ptr: i32 = ast_function_type_template_payload_ptr(ast_base, index);
-    payload_ptr > 0
+    if payload_ptr <= 0 { return false; };
+    if param_index >= ast_function_param_count(ast_base, index) {
+        return false;
+    };
+    let handle_index: i32 =
+        TYPE_TEMPLATE_PAYLOAD_PARAM_BASE_INDEX
+        + param_index * TYPE_TEMPLATE_PAYLOAD_PARAM_STRIDE;
+    let handle_ptr: i32 = payload_ptr + handle_index * WORD_SIZE;
+    load_i32(handle_ptr) > 0
 }
 
 fn ast_function_param_template_payload(ast_base: i32, index: i32, param_index: i32) -> i32 {
-    if param_index < 0 { return -1; };
-    ast_function_type_template_payload_ptr(ast_base, index)
+    if param_index < 0 { return 0; };
+    let payload_ptr: i32 = ast_function_type_template_payload_ptr(ast_base, index);
+    if payload_ptr <= 0 { return 0; };
+    if param_index >= ast_function_param_count(ast_base, index) {
+        return 0;
+    };
+    let handle_index: i32 =
+        TYPE_TEMPLATE_PAYLOAD_PARAM_BASE_INDEX
+        + param_index * TYPE_TEMPLATE_PAYLOAD_PARAM_STRIDE;
+    load_i32(payload_ptr + handle_index * WORD_SIZE)
+}
+
+fn ast_function_param_template_base_type(ast_base: i32, index: i32, param_index: i32) -> i32 {
+    if param_index < 0 { return 0; };
+    let payload_ptr: i32 = ast_function_type_template_payload_ptr(ast_base, index);
+    if payload_ptr <= 0 { return 0; };
+    if param_index >= ast_function_param_count(ast_base, index) {
+        return 0;
+    };
+    let base_index: i32 =
+        TYPE_TEMPLATE_PAYLOAD_PARAM_BASE_INDEX
+        + param_index * TYPE_TEMPLATE_PAYLOAD_PARAM_STRIDE
+        + 1;
+    load_i32(payload_ptr + base_index * WORD_SIZE)
 }
 
 fn ast_function_return_requires_specialization(ast_base: i32, index: i32) -> bool {
     let payload_ptr: i32 = ast_function_type_template_payload_ptr(ast_base, index);
-    payload_ptr > 0
+    if payload_ptr <= 0 { return false; };
+    load_i32(payload_ptr + TYPE_TEMPLATE_PAYLOAD_RETURN_HANDLE_INDEX * WORD_SIZE) > 0
 }
 
 fn ast_function_return_template_payload(ast_base: i32, index: i32) -> i32 {
-    ast_function_type_template_payload_ptr(ast_base, index)
+    let payload_ptr: i32 = ast_function_type_template_payload_ptr(ast_base, index);
+    if payload_ptr <= 0 { return 0; };
+    load_i32(payload_ptr + TYPE_TEMPLATE_PAYLOAD_RETURN_HANDLE_INDEX * WORD_SIZE)
+}
+
+fn ast_function_return_template_base_type(ast_base: i32, index: i32) -> i32 {
+    let payload_ptr: i32 = ast_function_type_template_payload_ptr(ast_base, index);
+    if payload_ptr <= 0 { return 0; };
+    load_i32(payload_ptr + TYPE_TEMPLATE_PAYLOAD_RETURN_BASE_INDEX * WORD_SIZE)
+}
+
+fn ast_function_param_template_kind(ast_base: i32, index: i32, param_index: i32) -> i32 {
+    let handle: i32 = ast_function_param_template_payload(ast_base, index, param_index);
+    type_template_entry_kind(handle)
+}
+
+fn ast_function_return_template_kind(ast_base: i32, index: i32) -> i32 {
+    let handle: i32 = ast_function_return_template_payload(ast_base, index);
+    type_template_entry_kind(handle)
 }
 
 fn ast_function_is_const(ast_base: i32, index: i32) -> bool {
@@ -2555,6 +3052,37 @@ fn ast_function_const_params_mask_word(ast_base: i32, index: i32, word_index: i3
         return 0;
     };
     load_i32(mask_ptr + word_index * WORD_SIZE)
+}
+
+fn ast_function_param_is_const(ast_base: i32, index: i32, param_index: i32) -> bool {
+    if param_index < 0 {
+        return false;
+    };
+    if !ast_function_has_const_params(ast_base, index) {
+        return false;
+    };
+    let param_count: i32 = ast_function_param_count(ast_base, index);
+    if param_index >= param_count {
+        return false;
+    };
+    let mask_ptr: i32 = ast_function_const_params_mask_ptr(ast_base, index);
+    if mask_ptr <= 0 {
+        return false;
+    };
+    let mut mask_word_count: i32 = (param_count + 31) >> 5;
+    if mask_word_count <= 0 {
+        mask_word_count = 1;
+    };
+    let mask_word_index: i32 = param_index >> 5;
+    if mask_word_index >= mask_word_count {
+        return false;
+    };
+    let mask_word_value: i32 = load_i32(mask_ptr + mask_word_index * WORD_SIZE);
+    if mask_word_value == 0 {
+        return false;
+    };
+    let mask_bit: i32 = 1 << (param_index & 31);
+    (mask_word_value & mask_bit) != 0
 }
 
 fn ast_names_len_ptr(ast_base: i32) -> i32 {
@@ -2760,6 +3288,12 @@ fn call_metadata_callee_index_ptr(metadata_ptr: i32) -> i32 {
 
 fn call_metadata_args_base(metadata_ptr: i32) -> i32 {
     metadata_ptr + 16
+}
+
+fn call_metadata_template_payload_ptr(metadata_ptr: i32) -> i32 {
+    if metadata_ptr <= 0 { return 0; };
+    let arg_count: i32 = call_metadata_arg_count(metadata_ptr);
+    metadata_ptr + 16 + arg_count * WORD_SIZE
 }
 
 fn ast_write_function_entry(
