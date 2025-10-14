@@ -30,6 +30,7 @@ fn compile_impl(
         ast_base,
         0,
         current_module_index,
+        out_ptr,
     );
     if func_count <= 0 {
         return -1;

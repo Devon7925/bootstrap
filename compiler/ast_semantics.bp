@@ -1407,6 +1407,10 @@ fn resolve_expression_internal(
     if kind == 13 {
         let loop_count: i32 = load_i32(loop_stack_count_ptr);
         if loop_count <= 0 {
+            if out_ptr > 0 {
+                let literal: [u8; 32] = "Break outside loop\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
+                let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+            };
             return -1;
         };
         let target_index: i32 = load_i32(loop_stack_base + (loop_count - 1) * 4);
@@ -1438,6 +1442,10 @@ fn resolve_expression_internal(
     if kind == 24 {
         let loop_count: i32 = load_i32(loop_stack_count_ptr);
         if loop_count <= 0 {
+            if out_ptr > 0 {
+                let literal: [u8; 32] = "Continue outside loop\0\0\0\0\0\0\0\0\0\0\0";
+                let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+            };
             return -1;
         };
         let target_index: i32 = load_i32(loop_stack_base + (loop_count - 1) * 4);

@@ -1,3 +1,5 @@
+use "./utils.bp";
+
 fn parse_basic_expression(
     base: i32,
     len: i32,
@@ -2176,7 +2178,14 @@ fn parse_expression(
     )
 }
 
-fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i32) -> i32 {
+fn parse_function(
+    base: i32,
+    len: i32,
+    offset: i32,
+    ast_base: i32,
+    func_index: i32,
+    out_ptr: i32,
+) -> i32 {
     let mut cursor: i32 = skip_whitespace(base, len, offset);
     let mut is_const_fn: bool = false;
     let mut maybe_const: i32 = expect_keyword_const(base, len, cursor);
@@ -2240,6 +2249,10 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
                 entry_ptr,
                 current_module_index,
             ) {
+                if out_ptr > 0 {
+                    let literal: [u8; 32] = "Const conflicts with function\0\0\0";
+                    let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+                };
                 return -1;
             };
         };
@@ -2503,6 +2516,7 @@ fn parse_constant_declaration(
     ast_base: i32,
     func_count: i32,
     current_module_index: i32,
+    out_ptr: i32,
 ) -> i32 {
     let mut idx: i32 = skip_whitespace(base, len, cursor);
     let mut const_cursor: i32 = expect_keyword_const(base, len, idx);
@@ -2548,6 +2562,10 @@ fn parse_constant_declaration(
     let name_len: i32 = ident.2;
 
     if find_constant_entry_index(base, ast_base, name_start, name_len, false) >= 0 {
+        if out_ptr > 0 {
+            let literal: [u8; 32] = "Duplicate constant name\0\0\0\0\0\0\0\0\0";
+            let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+        };
         return -1;
     };
 
@@ -2575,6 +2593,10 @@ fn parse_constant_declaration(
                 match_idx = match_idx + 1;
             };
             if matches {
+                if out_ptr > 0 {
+                    let literal: [u8; 32] = "Const conflicts with function\0\0\0";
+                    let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+                };
                 return -1;
             };
         };
@@ -2937,6 +2959,7 @@ fn parse_use_declaration(
     ast_base: i32,
     func_count: i32,
     current_module_index: i32,
+    out_ptr: i32,
 ) -> (i32, i32) {
     let mut idx: i32 = skip_whitespace(base, len, cursor);
     let mut use_cursor: i32 = expect_keyword_use(base, len, idx);
@@ -3019,6 +3042,7 @@ fn parse_use_declaration(
             ast_base,
             func_count,
             import_index,
+            out_ptr,
         );
         if new_count < 0 {
             module_entry_set_flags(import_index, existing_flags);
@@ -3046,6 +3070,7 @@ fn parse_program(
     ast_base: i32,
     initial_count: i32,
     current_module_index: i32,
+    out_ptr: i32,
 ) -> i32 {
     let mut cursor: i32 = skip_whitespace(base, len, 0);
     let mut count: i32 = initial_count;
@@ -3054,8 +3079,15 @@ fn parse_program(
         if cursor >= len {
             break;
         };
-        let use_result: (i32, i32) =
-            parse_use_declaration(base, len, cursor, ast_base, count, current_module_index);
+        let use_result: (i32, i32) = parse_use_declaration(
+            base,
+            len,
+            cursor,
+            ast_base,
+            count,
+            current_module_index,
+            out_ptr,
+        );
         let use_cursor: i32 = use_result.0;
         if use_cursor == -1 {
             return -1;
@@ -3066,8 +3098,15 @@ fn parse_program(
             cursor = skip_whitespace(base, len, use_cursor);
             continue;
         };
-        let const_cursor: i32 =
-            parse_constant_declaration(base, len, cursor, ast_base, count, current_module_index);
+        let const_cursor: i32 = parse_constant_declaration(
+            base,
+            len,
+            cursor,
+            ast_base,
+            count,
+            current_module_index,
+            out_ptr,
+        );
         if const_cursor >= 0 {
             cursor = skip_whitespace(base, len, const_cursor);
             continue;
@@ -3078,7 +3117,7 @@ fn parse_program(
         if count >= AST_MAX_FUNCTIONS {
             return -1;
         };
-        cursor = parse_function(base, len, cursor, ast_base, count);
+        cursor = parse_function(base, len, cursor, ast_base, count, out_ptr);
         if cursor < 0 {
             return -1;
         };

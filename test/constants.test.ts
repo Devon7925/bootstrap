@@ -42,7 +42,7 @@ test("duplicate constants are rejected", async () => {
     const VALUE: i32 = 1;
     const VALUE: i32 = 2;
   `);
-  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(failure.failure.detail).toBe("Duplicate constant name");
 });
 
 test("non literal constant initializers are evaluated", async () => {
@@ -330,6 +330,6 @@ test("function names cannot conflict with constants", async () => {
         0
     }
   `);
-  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(failure.failure.detail).toBe("Const conflicts with function");
 });
 
