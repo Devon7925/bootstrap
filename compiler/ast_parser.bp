@@ -874,7 +874,7 @@ fn parse_basic_expression(
             if name_ptr < 0 {
                 return -1;
             };
-            let metadata_words: i32 = 4 + arg_count;
+            let metadata_words: i32 = 5 + arg_count;
             let metadata_ptr: i32 = ast_call_data_alloc(ast_base, metadata_words);
             if metadata_ptr < 0 {
                 return -1;
@@ -892,6 +892,7 @@ fn parse_basic_expression(
                 store_i32(metadata_ptr + 16 + arg_idx * 4, arg_value);
                 arg_idx = arg_idx + 1;
             };
+            store_i32(metadata_ptr + 16 + arg_count * 4, 0);
             store_i32(out_kind_ptr, 1);
             store_i32(out_data0_ptr, metadata_ptr);
             store_i32(out_data1_ptr, 0);
@@ -2300,8 +2301,12 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     let params_table_ptr: i32 = temp_base + 4;
     let params_table_end: i32 = params_table_ptr + MAX_PARAMS * 8;
     let param_types_table_ptr: i32 = params_table_end;
+    let param_template_handles_table_ptr: i32 = param_types_table_ptr + MAX_PARAMS * 4;
+    let param_template_bases_table_ptr: i32 =
+        param_template_handles_table_ptr + MAX_PARAMS * 4;
     let const_mask_table_words: i32 = (MAX_PARAMS + 31) >> 5;
-    let const_mask_table_ptr: i32 = param_types_table_ptr + MAX_PARAMS * 4;
+    let const_mask_table_ptr: i32 =
+        param_template_bases_table_ptr + MAX_PARAMS * 4;
     let param_type_temp_ptr: i32 = const_mask_table_ptr + const_mask_table_words * 4;
     let type_template_sink_ptr: i32 = param_type_temp_ptr + 4;
     let expr_kind_ptr: i32 = type_template_sink_ptr + 8;
@@ -2358,6 +2363,15 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     let mut param_count: i32 = 0;
     let mut const_params_count: i32 = 0;
     let mut mask_clear_idx: i32 = 0;
+    let mut template_clear_idx: i32 = 0;
+    loop {
+        if template_clear_idx >= MAX_PARAMS {
+            break;
+        };
+        store_i32(param_template_handles_table_ptr + template_clear_idx * 4, 0);
+        store_i32(param_template_bases_table_ptr + template_clear_idx * 4, 0);
+        template_clear_idx = template_clear_idx + 1;
+    };
     loop {
         if mask_clear_idx >= const_mask_table_words {
             break;
@@ -2365,6 +2379,7 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
         store_i32(const_mask_table_ptr + mask_clear_idx * 4, 0);
         mask_clear_idx = mask_clear_idx + 1;
     };
+    let mut template_handles_needed: bool = false;
     loop {
         if cursor >= len {
             return -1;
@@ -2428,6 +2443,8 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
             return -1;
         };
         cursor = skip_whitespace(base, len, cursor);
+        store_i32(type_template_sink_ptr, 0);
+        store_i32(type_template_sink_ptr + 4, 0);
         cursor = parse_type(
             base,
             len,
@@ -2443,6 +2460,15 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
             return -1;
         };
         let param_type_id: i32 = load_i32(param_type_temp_ptr);
+        let param_template_handle: i32 = load_i32(type_template_sink_ptr);
+        let param_template_base: i32 = load_i32(type_template_sink_ptr + 4);
+        if param_template_handle > 0 {
+            template_handles_needed = true;
+        };
+        store_i32(param_template_handles_table_ptr + param_count * 4, param_template_handle);
+        store_i32(param_template_bases_table_ptr + param_count * 4, param_template_base);
+        store_i32(type_template_sink_ptr, 0);
+        store_i32(type_template_sink_ptr + 4, 0);
         let param_index: i32 = param_count;
         store_i32(params_table_ptr + param_count * 8, param_start);
         store_i32(params_table_ptr + param_count * 8 + 4, param_len);
@@ -2487,6 +2513,8 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     let mut block_allow_empty: i32 = 0;
     let mut has_return_type: bool = false;
     let mut return_type_id: i32 = -1;
+    let mut return_template_handle: i32 = 0;
+    let mut return_template_base: i32 = 0;
     if cursor < len {
         let maybe_arrow: i32 = load_u8(base + cursor);
         if maybe_arrow == '-' {
@@ -2500,6 +2528,8 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
                 return -1;
             };
             cursor = skip_whitespace(base, len, cursor);
+            store_i32(type_template_sink_ptr, 0);
+            store_i32(type_template_sink_ptr + 4, 0);
             cursor = parse_type(
                 base,
                 len,
@@ -2515,6 +2545,13 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
                 return -1;
             };
             return_type_id = load_i32(param_type_temp_ptr);
+            return_template_handle = load_i32(type_template_sink_ptr);
+            return_template_base = load_i32(type_template_sink_ptr + 4);
+            if return_template_handle > 0 {
+                template_handles_needed = true;
+            };
+            store_i32(type_template_sink_ptr, 0);
+            store_i32(type_template_sink_ptr + 4, 0);
         };
     };
     if !has_return_type {
@@ -2570,6 +2607,7 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     };
     let locals_total: i32 = load_i32(locals_next_index_ptr);
     let mut param_types_ptr: i32 = -1;
+    let mut type_template_handles_ptr: i32 = 0;
     let mut const_params_ptr: i32 = 0;
     if param_count > 0 {
         param_types_ptr = ast_call_data_alloc(ast_base, param_count);
@@ -2608,6 +2646,36 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
             };
         };
     };
+    if template_handles_needed {
+        let total_entries: i32 = param_count + 1;
+        let payload_words: i32 = total_entries * 2;
+        type_template_handles_ptr = ast_call_data_alloc(ast_base, payload_words);
+        if type_template_handles_ptr < 0 {
+            return -1;
+        };
+        store_i32(type_template_handles_ptr, return_template_handle);
+        store_i32(type_template_handles_ptr + WORD_SIZE, return_template_base);
+        let mut template_copy_idx: i32 = 0;
+        loop {
+            if template_copy_idx >= param_count {
+                break;
+            };
+            let handle: i32 =
+                load_i32(param_template_handles_table_ptr + template_copy_idx * 4);
+            let base_type: i32 =
+                load_i32(param_template_bases_table_ptr + template_copy_idx * 4);
+            let handle_index: i32 = 2 + template_copy_idx * 2;
+            store_i32(
+                type_template_handles_ptr + handle_index * WORD_SIZE,
+                handle,
+            );
+            store_i32(
+                type_template_handles_ptr + (handle_index + 1) * WORD_SIZE,
+                base_type,
+            );
+            template_copy_idx = template_copy_idx + 1;
+        };
+    };
     let mut flags: i32 = 0;
     if is_const_fn {
         flags = flags | FUNCTION_FLAG_CONST;
@@ -2628,7 +2696,7 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
         return_type_id,
         flags,
         const_params_ptr,
-        -1,
+        type_template_handles_ptr,
     );
     cursor
 }
