@@ -210,6 +210,52 @@ test("functions can use local variables", async () => {
   expect(result).toBe(42);
 });
 
+test("const parameters accept literal arguments", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn add_count(const COUNT: i32, value: i32) -> i32 {
+        value + COUNT
+    }
+
+    fn main() -> i32 {
+        add_count(5, 37)
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(42);
+});
+
+test("const parameters require compile-time constant arguments", async () => {
+  const failure = await expectCompileFailure(`
+    fn scale(const FACTOR: i32, value: i32) -> i32 {
+        value * FACTOR
+    }
+
+    fn main() -> i32 {
+        let runtime: i32 = 6;
+        scale(runtime, 7)
+    }
+  `);
+  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+});
+
+test("const parameters accept const fn results", async () => {
+  const wasm = await compileWithAstCompiler(`
+    const fn three() -> i32 {
+        3
+    }
+
+    fn multiply(const TIMES: i32, value: i32) -> i32 {
+        value * TIMES
+    }
+
+    fn main() -> i32 {
+        multiply(three(), 14)
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(42);
+});
+
 test("function section handles multibyte type indices", async () => {
   const helperCount = (1 << 7) + 2;
   const parts: string[] = [];
