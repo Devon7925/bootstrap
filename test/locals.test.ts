@@ -44,7 +44,6 @@ test("using out of scope locals is rejected", async () => {
         inner
     }
   `);
-  expect(error.failure.producedLength).toBeLessThanOrEqual(0);
   expect(error.failure.detail).toBe('Undefined identifier "inner"');
 });
 

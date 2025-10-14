@@ -188,7 +188,7 @@ test("array literal length must match declared type", async () => {
     }
   `);
 
-  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(failure.failure.detail).toBe("Return array type mismatch");
 });
 
 test("array list literal length must match declared type", async () => {
@@ -198,7 +198,7 @@ test("array list literal length must match declared type", async () => {
     }
   `);
 
-  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(failure.failure.detail).toBe("Return array type mismatch");
 });
 
 test("array list literal requires uniform element types", async () => {
@@ -208,5 +208,5 @@ test("array list literal requires uniform element types", async () => {
     }
   `);
 
-  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(failure.failure.detail).toBe("Array elements must match type");
 });

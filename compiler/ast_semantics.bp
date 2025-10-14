@@ -394,6 +394,11 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
                 if expect_array || expr_is_array {
                     if expr_type >= 0 {
                         if expr_type != fn_return_type {
+                            if out_ptr > 0 {
+                                let literal: [u8; 32] =
+                                    "Return array type mismatch\0\0\0\0\0\0\0\0";
+                                let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+                            };
                             return -1;
                         };
                     } else if !expression_guaranteed_diverges(ast_base, expr_index) {
@@ -522,6 +527,10 @@ fn resolve_expression_internal(
         let element_index: i32 = load_i32(entry_ptr + 4);
         let length: i32 = load_i32(entry_ptr + 8);
         if length < 0 {
+            if out_ptr > 0 {
+                let literal: [u8; 32] = "Array length cannot be negative\0";
+                let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+            };
             return -1;
         };
         if resolve_expression_internal(
@@ -602,6 +611,10 @@ fn resolve_expression_internal(
             if element_type < 0 {
                 element_type = resolved_current;
             } else if resolved_current != element_type {
+                if out_ptr > 0 {
+                    let literal: [u8; 32] = "Array elements must match type\0\0";
+                    let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+                };
                 return -1;
             };
             idx = idx + 1;
@@ -1040,6 +1053,21 @@ fn resolve_expression_internal(
         };
         let resolved_left: i32 = resolve_type_id(out_ptr, ast_base, left_type);
         if resolved_left < 0 {
+            if out_ptr > 0 {
+                if kind == 5 {
+                    let literal: [u8; 32] =
+                        "Remainder requires integers\0\0\0\0\0";
+                    let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+                } else if kind == 20 || kind == 21 {
+                    let literal: [u8; 32] =
+                        "Operands must be bools\0\0\0\0\0\0\0\0\0\0";
+                    let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+                } else {
+                    let literal: [u8; 32] =
+                        "Operands must be integers\0\0\0\0\0\0\0";
+                    let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+                };
+            };
             return -1;
         };
         if resolved_left != left_type {
@@ -1047,6 +1075,21 @@ fn resolve_expression_internal(
         };
         let resolved_right: i32 = resolve_type_id(out_ptr, ast_base, right_type);
         if resolved_right < 0 {
+            if out_ptr > 0 {
+                if kind == 5 {
+                    let literal: [u8; 32] =
+                        "Remainder requires integers\0\0\0\0\0";
+                    let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+                } else if kind == 20 || kind == 21 {
+                    let literal: [u8; 32] =
+                        "Operands must be bools\0\0\0\0\0\0\0\0\0\0";
+                    let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+                } else {
+                    let literal: [u8; 32] =
+                        "Operands must be integers\0\0\0\0\0\0\0";
+                    let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+                };
+            };
             return -1;
         };
         if resolved_right != right_type {
@@ -1054,9 +1097,19 @@ fn resolve_expression_internal(
         };
         if kind == 20 || kind == 21 {
             if !type_id_is_bool(resolved_left) {
+                if out_ptr > 0 {
+                    let literal: [u8; 32] =
+                        "Operands must be bools\0\0\0\0\0\0\0\0\0\0";
+                    let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+                };
                 return -1;
             };
             if !type_id_is_bool(resolved_right) {
+                if out_ptr > 0 {
+                    let literal: [u8; 32] =
+                        "Operands must be bools\0\0\0\0\0\0\0\0\0\0";
+                    let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+                };
                 return -1;
             };
             ast_expr_set_type(ast_base, expr_index, BUILTIN_TYPE_ID_BOOL);
@@ -1070,24 +1123,66 @@ fn resolve_expression_internal(
             || kind == 19
         {
             if !type_id_is_integer(resolved_left) {
+                if out_ptr > 0 {
+                    let literal: [u8; 32] =
+                        "Operands must be integers\0\0\0\0\0\0\0";
+                    let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+                };
                 return -1;
             };
             if !type_id_is_integer(resolved_right) {
+                if out_ptr > 0 {
+                    let literal: [u8; 32] =
+                        "Operands must be integers\0\0\0\0\0\0\0";
+                    let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+                };
                 return -1;
             };
             if resolved_left != resolved_right {
+                if out_ptr > 0 {
+                    let literal: [u8; 32] =
+                        "Integer operands must match\0\0\0\0\0";
+                    let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+                };
                 return -1;
             };
             ast_expr_set_type(ast_base, expr_index, BUILTIN_TYPE_ID_BOOL);
             return 0;
         };
         if !type_id_is_integer(resolved_left) {
+            if out_ptr > 0 {
+                if kind == 5 {
+                    let literal: [u8; 32] =
+                        "Remainder requires integers\0\0\0\0\0";
+                    let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+                } else {
+                    let literal: [u8; 32] =
+                        "Operands must be integers\0\0\0\0\0\0\0";
+                    let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+                };
+            };
             return -1;
         };
         if !type_id_is_integer(resolved_right) {
+            if out_ptr > 0 {
+                if kind == 5 {
+                    let literal: [u8; 32] =
+                        "Remainder requires integers\0\0\0\0\0";
+                    let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+                } else {
+                    let literal: [u8; 32] =
+                        "Operands must be integers\0\0\0\0\0\0\0";
+                    let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+                };
+            };
             return -1;
         };
         if resolved_left != resolved_right {
+            if out_ptr > 0 {
+                let literal: [u8; 32] =
+                    "Integer operands must match\0\0\0\0\0";
+                let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+            };
             return -1;
         };
         ast_expr_set_type(ast_base, expr_index, resolved_left);
