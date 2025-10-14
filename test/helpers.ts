@@ -32,6 +32,32 @@ const MODULE_CONTENT_PTR = 4_096;
 const DEFAULT_ENTRY_MODULE_PATH = "/entry.bp";
 const MEMORY_INTRINSICS_MODULE_PATH = "/stdlib/memory.bp";
 
+const WORD_SIZE = 4;
+const SCRATCH_INSTR_CAPACITY = 65_536;
+const SCRATCH_FN_BASE_OFFSET = 851_968;
+
+const AST_MAX_FUNCTIONS = 1_024;
+const AST_FUNCTION_ENTRY_SIZE = 44;
+const AST_NAMES_CAPACITY = 131_072;
+const AST_CONSTANTS_CAPACITY = 1_024;
+const AST_CONSTANT_ENTRY_SIZE = 28;
+const AST_ARRAY_TYPES_CAPACITY = 256;
+const AST_ARRAY_TYPE_ENTRY_SIZE = 12;
+const AST_TUPLE_TYPES_CAPACITY = 256;
+const AST_TUPLE_TYPE_ENTRY_SIZE = 12;
+const AST_ARRAY_HEAP_INDEX_SECTION_SIZE = AST_ARRAY_TYPES_CAPACITY * WORD_SIZE;
+const AST_TUPLE_HEAP_INDEX_SECTION_SIZE = AST_TUPLE_TYPES_CAPACITY * WORD_SIZE;
+const AST_EXPR_ENTRY_SIZE = 16;
+const AST_EXPR_CAPACITY = 65_536;
+
+const AST_CONSTANTS_SECTION_SIZE =
+  WORD_SIZE + AST_CONSTANTS_CAPACITY * AST_CONSTANT_ENTRY_SIZE;
+const AST_CONSTANTS_SECTION_WORDS = AST_CONSTANTS_SECTION_SIZE >> 2;
+const AST_CALL_DATA_CAPACITY = 65_536 - AST_CONSTANTS_SECTION_WORDS;
+const AST_ARRAY_TYPES_SECTION_SIZE =
+  WORD_SIZE + AST_ARRAY_TYPES_CAPACITY * AST_ARRAY_TYPE_ENTRY_SIZE;
+const AST_TUPLE_TYPES_SECTION_SIZE =
+  WORD_SIZE + AST_TUPLE_TYPES_CAPACITY * AST_TUPLE_TYPE_ENTRY_SIZE;
 const memoryIntrinsicsSourceUrl = new URL("../stdlib/memory.bp", import.meta.url);
 
 const encoder = new TextEncoder();
@@ -84,13 +110,65 @@ function zeroModuleMemory(memory: WebAssembly.Memory, ptr: number, length: numbe
   new Uint8Array(memory.buffer).fill(0, ptr, ptr + length);
 }
 
-function readModuleStorageTop(memory: WebAssembly.Memory): number {
+export function readModuleStorageTop(memory: WebAssembly.Memory): number {
   try {
     const view = new DataView(memory.buffer);
     return view.getInt32(MODULE_STATE_BASE + MODULE_STORAGE_TOP_OFFSET, true);
   } catch {
     return -1;
   }
+}
+
+function astOutputReserve(inputLen: number): number {
+  const optionA = inputLen + SCRATCH_INSTR_CAPACITY;
+  const optionB = SCRATCH_FN_BASE_OFFSET + 16_384;
+  return optionA > optionB ? optionA : optionB;
+}
+
+function astBase(outPtr: number, inputLen: number): number {
+  return outPtr + astOutputReserve(inputLen);
+}
+
+function astConstantsCountPtr(astBasePtr: number): number {
+  const functionsSection = WORD_SIZE + AST_MAX_FUNCTIONS * AST_FUNCTION_ENTRY_SIZE;
+  const namesSection = WORD_SIZE + AST_NAMES_CAPACITY;
+  const callDataSection = WORD_SIZE + AST_CALL_DATA_CAPACITY * WORD_SIZE;
+  return astBasePtr + functionsSection + namesSection + callDataSection;
+}
+
+function astArrayTypesCountPtr(astBasePtr: number): number {
+  return astConstantsCountPtr(astBasePtr) + AST_CONSTANTS_SECTION_SIZE;
+}
+
+function astTupleTypesCountPtr(astBasePtr: number): number {
+  return astArrayTypesCountPtr(astBasePtr) + AST_ARRAY_TYPES_SECTION_SIZE;
+}
+
+function astArrayHeapIndicesBase(astBasePtr: number): number {
+  return astTupleTypesCountPtr(astBasePtr) + AST_TUPLE_TYPES_SECTION_SIZE;
+}
+
+function astTupleHeapIndicesBase(astBasePtr: number): number {
+  return astArrayHeapIndicesBase(astBasePtr) + AST_ARRAY_HEAP_INDEX_SECTION_SIZE;
+}
+
+function astExtraBase(astBasePtr: number): number {
+  return astTupleHeapIndicesBase(astBasePtr) + AST_TUPLE_HEAP_INDEX_SECTION_SIZE;
+}
+
+function astExprCountPtr(astBasePtr: number): number {
+  return astExtraBase(astBasePtr);
+}
+
+export function readExpressionCount(
+  memory: WebAssembly.Memory,
+  outPtr: number,
+  inputLen: number,
+): number {
+  const astBasePtr = astBase(outPtr, inputLen);
+  const exprCountPtr = astExprCountPtr(astBasePtr);
+  const view = new DataView(memory.buffer);
+  return safeReadI32(view, exprCountPtr);
 }
 
 function coerceToI32(value: number | bigint): number {

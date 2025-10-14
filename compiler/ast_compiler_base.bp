@@ -180,6 +180,19 @@ fn parse_identifier(base: i32, len: i32, offset: i32) -> (i32, i32, i32) {
 
 const MAX_PARAMS: i32 = 64;
 
+const TYPE_TEMPLATE_KIND_NONE: i32 = 0;
+const TYPE_TEMPLATE_KIND_ARRAY_LENGTH: i32 = 1;
+
+const TYPE_TEMPLATE_ENTRY_KIND_OFFSET: i32 = 0;
+const TYPE_TEMPLATE_ENTRY_BASE_TYPE_OFFSET: i32 = 4;
+const TYPE_TEMPLATE_ENTRY_EXPR_OFFSET: i32 = 8;
+const TYPE_TEMPLATE_ENTRY_PARAM_PTR_OFFSET: i32 = 12;
+const TYPE_TEMPLATE_ENTRY_PARAM_COUNT_OFFSET: i32 = 16;
+
+const TYPE_TEMPLATE_ENTRY_WORDS: i32 = 5;
+
+const TYPE_TEMPLATE_TRAVERSAL_STACK_CAPACITY: i32 = 256;
+
 const MAX_ARRAY_LITERAL_ELEMENTS: i32 = 256;
 
 const MAX_TUPLE_ELEMENTS: i32 = 32;
@@ -2484,6 +2497,34 @@ fn ast_function_set_template_owner_index(ast_base: i32, index: i32, value: i32) 
     store_i32(ast_function_template_owner_index_ptr(ast_base, index), value);
 }
 
+fn ast_function_type_template_payload_ptr(ast_base: i32, index: i32) -> i32 {
+    ast_function_template_owner_index(ast_base, index)
+}
+
+fn ast_function_param_requires_specialization(
+    ast_base: i32,
+    index: i32,
+    param_index: i32,
+) -> bool {
+    if param_index < 0 { return false; };
+    let payload_ptr: i32 = ast_function_type_template_payload_ptr(ast_base, index);
+    payload_ptr > 0
+}
+
+fn ast_function_param_template_payload(ast_base: i32, index: i32, param_index: i32) -> i32 {
+    if param_index < 0 { return -1; };
+    ast_function_type_template_payload_ptr(ast_base, index)
+}
+
+fn ast_function_return_requires_specialization(ast_base: i32, index: i32) -> bool {
+    let payload_ptr: i32 = ast_function_type_template_payload_ptr(ast_base, index);
+    payload_ptr > 0
+}
+
+fn ast_function_return_template_payload(ast_base: i32, index: i32) -> i32 {
+    ast_function_type_template_payload_ptr(ast_base, index)
+}
+
 fn ast_function_is_const(ast_base: i32, index: i32) -> bool {
     (ast_function_flags(ast_base, index) & FUNCTION_FLAG_CONST) != 0
 }
@@ -3519,7 +3560,7 @@ fn ast_extra_base(ast_base: i32) -> i32 {
 
 const AST_EXPR_ENTRY_SIZE: i32 = 16;
 
-const AST_EXPR_CAPACITY: i32 = 131072;
+const AST_EXPR_CAPACITY: i32 = 65536;
 
 fn ast_expr_count_ptr(ast_base: i32) -> i32 {
     ast_extra_base(ast_base)
@@ -3530,7 +3571,7 @@ fn ast_expr_entry_ptr(ast_base: i32, index: i32) -> i32 {
 }
 
 fn ast_expr_types_base(ast_base: i32) -> i32 {
-    ast_extra_base(ast_base) + 524292
+    ast_extra_base(ast_base) + 1048580
 }
 
 fn ast_expr_type_entry_ptr(ast_base: i32, index: i32) -> i32 {
@@ -3552,7 +3593,7 @@ fn ast_expr_type(ast_base: i32, index: i32) -> i32 {
 }
 
 fn ast_temp_base(ast_base: i32) -> i32 {
-    ast_expr_types_base(ast_base) + 131072
+    ast_expr_types_base(ast_base) + 262144
 }
 
 fn ast_expr_reset(ast_base: i32) {
@@ -5184,6 +5225,18 @@ fn interpret_constant_expression(
         return CONST_EVAL_STATUS_RETURN;
     };
     store_i32(scratch_top_ptr, saved_top);
+    -1
+}
+
+fn collect_expression_const_params(
+    _ast_base: i32,
+    _expr_index: i32,
+    _params_count: i32,
+    _const_mask_table_ptr: i32,
+    _temp_base: i32,
+    _out_list_ptr_ptr: i32,
+    _out_count_ptr: i32,
+) -> i32 {
     -1
 }
 
