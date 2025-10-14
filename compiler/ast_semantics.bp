@@ -17,6 +17,8 @@ fn identifiers_match(ptr_a: i32, len_a: i32, ptr_b: i32, len_b: i32) -> bool {
     true
 }
 
+const FAILURE_DETAIL_CAPACITY: i32 = 64;
+
 fn validate_function_type_template(
     ast_base: i32,
     func_index: i32,
@@ -550,6 +552,21 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
                 if expect_array || expr_is_array {
                     if expr_type >= 0 {
                         if expr_type != fn_return_type {
+                            if out_ptr > 0 {
+                                if load_u8(out_ptr) == 0 {
+                                    let message: [u8; 64] =
+                                        "array expression type does not match expected array type\0\0\0\0\0\0\0\0";
+                                    let detail_capacity: i32 = len(message);
+                                    let mut detail_idx: i32 = 0;
+                                    loop {
+                                        if detail_idx >= detail_capacity {
+                                            break;
+                                        };
+                                        store_u8(out_ptr + detail_idx, message[detail_idx] as i32);
+                                        detail_idx = detail_idx + 1;
+                                    };
+                                };
+                            };
                             return -1;
                         };
                     } else if !expression_guaranteed_diverges(ast_base, expr_index) {
@@ -679,6 +696,21 @@ fn resolve_expression_internal(
         let element_index: i32 = load_i32(entry_ptr + 4);
         let length: i32 = load_i32(entry_ptr + 8);
         if length < 0 {
+            if out_ptr > 0 {
+                if load_u8(out_ptr) == 0 {
+                    let message: [u8; 64] =
+                        "array literal length must be non-negative\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
+                    let detail_capacity: i32 = len(message);
+                    let mut detail_idx: i32 = 0;
+                    loop {
+                        if detail_idx >= detail_capacity {
+                            break;
+                        };
+                        store_u8(out_ptr + detail_idx, message[detail_idx] as i32);
+                        detail_idx = detail_idx + 1;
+                    };
+                };
+            };
             return -1;
         };
         if resolve_expression_internal(
@@ -759,6 +791,21 @@ fn resolve_expression_internal(
             if element_type < 0 {
                 element_type = resolved_current;
             } else if resolved_current != element_type {
+                if out_ptr > 0 {
+                    if load_u8(out_ptr) == 0 {
+                        let message: [u8; 64] =
+                            "array literal elements must have uniform type\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
+                        let detail_capacity: i32 = len(message);
+                        let mut detail_idx: i32 = 0;
+                        loop {
+                            if detail_idx >= detail_capacity {
+                                break;
+                            };
+                            store_u8(out_ptr + detail_idx, message[detail_idx] as i32);
+                            detail_idx = detail_idx + 1;
+                        };
+                    };
+                };
                 return -1;
             };
             idx = idx + 1;
@@ -866,6 +913,21 @@ fn resolve_expression_internal(
         };
         let length: i32 = array_type_length(ast_base, resolved_array_type);
         if length < 0 {
+            if out_ptr > 0 {
+                if load_u8(out_ptr) == 0 {
+                    let message: [u8; 64] =
+                        "array literal length must be non-negative\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
+                    let detail_capacity: i32 = len(message);
+                    let mut detail_idx: i32 = 0;
+                    loop {
+                        if detail_idx >= detail_capacity {
+                            break;
+                        };
+                        store_u8(out_ptr + detail_idx, message[detail_idx] as i32);
+                        detail_idx = detail_idx + 1;
+                    };
+                };
+            };
             return -1;
         };
         ast_expr_set_type(ast_base, expr_index, BUILTIN_TYPE_ID_I32);
@@ -1525,6 +1587,16 @@ fn resolve_expression(out_ptr: i32, ast_base: i32, expr_index: i32, func_count: 
 const COMPILER_MEMORY_PAGES: i32 = 256;
 
 fn initialize_layout(out_ptr: i32) {
+    if out_ptr > 0 {
+        let mut detail_idx: i32 = 0;
+        loop {
+            if detail_idx >= FAILURE_DETAIL_CAPACITY {
+                break;
+            };
+            store_u8(out_ptr + detail_idx, 0);
+            detail_idx = detail_idx + 1;
+        };
+    };
     store_i32(scratch_instr_offset_ptr(out_ptr), 0);
     store_i32(scratch_expr_type_ptr(out_ptr), -1);
     store_i32(scratch_fn_count_ptr(out_ptr), 0);
