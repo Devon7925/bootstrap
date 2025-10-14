@@ -3397,7 +3397,12 @@ fn ast_extra_base(ast_base: i32) -> i32 {
 
 const AST_EXPR_ENTRY_SIZE: i32 = 16;
 
-const AST_EXPR_CAPACITY: i32 = 131072;
+const AST_EXPR_CAPACITY: i32 = 40000;
+
+const AST_EXPR_ENTRIES_SECTION_SIZE: i32 =
+    WORD_SIZE + AST_EXPR_CAPACITY * AST_EXPR_ENTRY_SIZE;
+
+const AST_EXPR_TYPES_SECTION_SIZE: i32 = AST_EXPR_CAPACITY * WORD_SIZE;
 
 fn ast_expr_count_ptr(ast_base: i32) -> i32 {
     ast_extra_base(ast_base)
@@ -3408,7 +3413,7 @@ fn ast_expr_entry_ptr(ast_base: i32, index: i32) -> i32 {
 }
 
 fn ast_expr_types_base(ast_base: i32) -> i32 {
-    ast_extra_base(ast_base) + 524292
+    ast_extra_base(ast_base) + AST_EXPR_ENTRIES_SECTION_SIZE
 }
 
 fn ast_expr_type_entry_ptr(ast_base: i32, index: i32) -> i32 {
@@ -3430,7 +3435,7 @@ fn ast_expr_type(ast_base: i32, index: i32) -> i32 {
 }
 
 fn ast_temp_base(ast_base: i32) -> i32 {
-    ast_expr_types_base(ast_base) + 131072
+    ast_expr_types_base(ast_base) + AST_EXPR_TYPES_SECTION_SIZE
 }
 
 fn ast_expr_reset(ast_base: i32) {
