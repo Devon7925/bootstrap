@@ -491,6 +491,9 @@ export async function expectCompileFailure(
     await tryCompileWithAstCompiler(source, options);
   } catch (error) {
     if (error instanceof Stage1CompileFailure) {
+      if (!error.failure.detail || error.failure.detail.length === 0) {
+        throw new Error(`stage1 compilation failed without diagnostic detail`);
+      }
       return error;
     }
     throw error;

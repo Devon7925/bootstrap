@@ -1,3 +1,5 @@
+use "./utils.bp";
+
 fn identifiers_match(ptr_a: i32, len_a: i32, ptr_b: i32, len_b: i32) -> bool {
     if len_a != len_b {
         return false;
@@ -56,6 +58,8 @@ fn resolve_call_metadata(
             if identifiers_match(call_name_ptr, call_name_len, target_name_ptr, target_name_len) {
                 let expected_params: i32 = load_i32(target_entry_ptr + 8);
                 if expected_params != arg_count {
+                    let literal: [u8; 32] = "Incorrect argument count\0\0\0\0\0\0\0\0";
+                    let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
                     return -1;
                 };
                 let param_types_ptr: i32 = load_i32(target_entry_ptr + 24);
@@ -66,6 +70,8 @@ fn resolve_call_metadata(
                 };
                 if caller_is_const {
                     if !ast_function_is_const(ast_base, target_idx) {
+                        let literal: [u8; 32] = "Const call to non-const\0\0\0\0\0\0\0\0\0";
+                        let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
                         return -1;
                     };
                 };
@@ -80,11 +86,15 @@ fn resolve_call_metadata(
                         -1
                     };
                     if expected_type < 0 {
+                        let literal: [u8; 32] = "Invalid parameter type\0\0\0\0\0\0\0\0\0\0";
+                        let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
                         return -1;
                     };
                     let resolved_expected: i32 =
                         resolve_type_id(out_ptr, ast_base, expected_type);
                     if resolved_expected < 0 {
+                        let literal: [u8; 32] = "Unknown parameter type\0\0\0\0\0\0\0\0\0\0";
+                        let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
                         return -1;
                     };
                     if param_types_ptr >= 0 {
@@ -93,6 +103,8 @@ fn resolve_call_metadata(
                     let arg_expr_index: i32 = load_i32(args_base + verify_idx * 4);
                     let arg_type: i32 = ast_expr_type(ast_base, arg_expr_index);
                     if arg_type < 0 {
+                        let literal: [u8; 32] = "Unresolved argument type\0\0\0\0\0\0\0\0";
+                        let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
                         return -1;
                     };
                     let resolved_arg: i32 =
@@ -113,6 +125,11 @@ fn resolve_call_metadata(
         target_idx = target_idx + 1;
     };
     if found_idx < 0 {
+        if out_ptr > 0 {
+            let literal: [u8; 32] =
+                "Unknown function call\0\0\0\0\0\0\0\0\0\0\0";
+            let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+        };
         return -1;
     };
     store_i32(call_metadata_callee_index_ptr(metadata_ptr), found_idx);
@@ -405,6 +422,35 @@ fn resolve_expression_internal(
     let mut kind: i32 = load_i32(entry_ptr);
     if kind == 43 {
         if resolve_constant_reference(ast_base, expr_index) < 0 {
+            if out_ptr > 0 {
+                let ident_start: i32 = load_i32(entry_ptr + 4);
+                let ident_len: i32 = load_i32(entry_ptr + 8);
+                let source_base: i32 = load_i32(entry_ptr + 12);
+                if source_base > 0 && ident_start >= 0 && ident_len > 0 {
+                    let ident_ptr: i32 = source_base + ident_start;
+                    let mut diag_offset: i32 = 0;
+                    let prefix: [u8; 32] = "Undefined identifier \"\0\0\0\0\0\0\0\0\0\0";
+                    diag_offset = write_ascii_literal(out_ptr, diag_offset, prefix);
+                    let mut remaining: i32 = ident_len;
+                    let max_copy: i32 = 231;
+                    if remaining > max_copy {
+                        remaining = max_copy;
+                    };
+                    let mut copied: i32 = 0;
+                    loop {
+                        if copied >= remaining {
+                            break;
+                        };
+                        let byte: i32 = load_u8(ident_ptr + copied);
+                        store_u8(out_ptr + diag_offset + copied, byte);
+                        copied = copied + 1;
+                    };
+                    diag_offset = diag_offset + remaining;
+                    store_u8(out_ptr + diag_offset, '"');
+                    diag_offset = diag_offset + 1;
+                    store_u8(out_ptr + diag_offset, 0);
+                };
+            };
             return -1;
         };
         kind = load_i32(entry_ptr);

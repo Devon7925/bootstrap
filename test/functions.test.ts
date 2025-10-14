@@ -59,7 +59,7 @@ test("unknown function calls are rejected", async () => {
         missing()
     }
   `);
-  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(failure.failure.detail).toBe("Unknown function call");
 });
 
 test("call argument counts must match function signature", async () => {
@@ -72,7 +72,7 @@ test("call argument counts must match function signature", async () => {
         add(1)
     }
   `);
-  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(failure.failure.detail).toBe("Incorrect argument count");
 });
 
 test("duplicate function names are rejected", async () => {
