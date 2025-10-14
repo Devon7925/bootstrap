@@ -57,3 +57,31 @@ fn align_to(value: i32, alignment: i32) -> i32 {
 fn is_whitespace(byte: i32) -> bool {
     byte == ' ' || byte == '\t' || byte == '\n' || byte == '\r'
 }
+
+fn write_ascii_literal(base: i32, offset: i32, literal: [u8; 32]) -> i32 {
+    let capacity: i32 = len(literal);
+    let mut idx: i32 = 0;
+    let mut next: i32 = offset;
+    loop {
+        if idx >= capacity {
+            break;
+        };
+        let byte: i32 = literal[idx] as i32;
+        if byte == 0 {
+            break;
+        };
+        store_u8(base + next, byte);
+        idx = idx + 1;
+        next = next + 1;
+    };
+    next
+}
+
+fn write_diagnostic_literal(out_ptr: i32, literal: [u8; 32]) -> i32 {
+    if out_ptr <= 0 {
+        return 0;
+    };
+    let written: i32 = write_ascii_literal(out_ptr, 0, literal);
+    store_u8(out_ptr + written, 0);
+    written
+}

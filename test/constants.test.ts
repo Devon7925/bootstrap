@@ -319,7 +319,7 @@ test("const functions cannot call non-const functions", async () => {
         7
     }
   `);
-  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(failure.failure.detail).toBe("Const call to non-const");
 });
 
 test("function names cannot conflict with constants", async () => {

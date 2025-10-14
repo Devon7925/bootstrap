@@ -11,6 +11,11 @@ fn compile_impl(
     out_ptr: i32,
     current_module_index: i32,
 ) -> i32 {
+    if out_ptr > 0 {
+        let fallback: [u8; 32] = "Compilation failed\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
+        let written: i32 = write_ascii_literal(out_ptr, 0, fallback);
+        store_u8(out_ptr + written, 0);
+    };
     if input_len <= 0 {
         return -1;
     };
