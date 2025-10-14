@@ -88,7 +88,7 @@ test("tuple field indices must exist", async () => {
     }
   `);
 
-  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(failure.failure.detail).toBe("Tuple field out of bounds");
 });
 
 test("tuple fields can be chained", async () => {

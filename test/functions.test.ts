@@ -85,7 +85,20 @@ test("duplicate function names are rejected", async () => {
         2
     }
   `);
-  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(failure.failure.detail).toBe("Duplicate function name");
+});
+
+test("call argument types must match function signature", async () => {
+  const failure = await expectCompileFailure(`
+    fn take(value: i32) -> i32 {
+        value
+    }
+
+    fn call_take() -> i32 {
+        take(true)
+    }
+  `);
+  expect(failure.failure.detail).toBe("Argument type mismatch");
 });
 
 test("functions may omit return types", async () => {
