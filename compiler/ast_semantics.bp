@@ -1309,7 +1309,7 @@ fn resolve_expression(out_ptr: i32, ast_base: i32, expr_index: i32, func_count: 
 }
 
 
-const COMPILER_MEMORY_PAGES: i32 = 64;
+const COMPILER_MEMORY_PAGES: i32 = 128;
 
 fn initialize_layout(out_ptr: i32) {
     store_i32(scratch_instr_offset_ptr(out_ptr), 0);
