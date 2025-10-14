@@ -91,6 +91,17 @@ test("tuple field indices must exist", async () => {
   expect(failure.failure.detail).toBe("Tuple field out of bounds");
 });
 
+test("tuple field operand must be tuple", async () => {
+  const failure = await expectCompileFailure(`
+    fn field_on_scalar() -> i32 {
+        let value: i32 = 7;
+        value.0
+    }
+  `);
+
+  expect(failure.failure.detail).toBe("Tuple field on non-tuple");
+});
+
 test("tuple fields can be chained", async () => {
   const wasm = await compileWithAstCompiler(`
     fn main() -> i32 {

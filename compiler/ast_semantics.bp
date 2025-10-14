@@ -661,10 +661,18 @@ fn resolve_expression_internal(
             ast_expr_set_type(ast_base, array_index, resolved_array_type);
         };
         if !type_id_is_array(resolved_array_type) {
+            if out_ptr > 0 {
+                let literal: [u8; 32] = "Indexing non-array value\0\0\0\0\0\0\0\0";
+                let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+            };
             return -1;
         };
         let index_type: i32 = ast_expr_type(ast_base, index_index);
         if index_type != BUILTIN_TYPE_ID_I32 {
+            if out_ptr > 0 {
+                let literal: [u8; 32] = "Array index must be i32\0\0\0\0\0\0\0\0\0";
+                let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+            };
             return -1;
         };
         let element_type: i32 = array_type_element_type(ast_base, resolved_array_type);
@@ -705,6 +713,10 @@ fn resolve_expression_internal(
             ast_expr_set_type(ast_base, array_index, resolved_array_type);
         };
         if !type_id_is_array(resolved_array_type) {
+            if out_ptr > 0 {
+                let literal: [u8; 32] = "len() requires array operand\0\0\0\0";
+                let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+            };
             return -1;
         };
         let length: i32 = array_type_length(ast_base, resolved_array_type);
@@ -745,6 +757,10 @@ fn resolve_expression_internal(
             ast_expr_set_type(ast_base, tuple_index, resolved_tuple);
         };
         if !type_id_is_tuple(resolved_tuple) {
+            if out_ptr > 0 {
+                let literal: [u8; 32] = "Tuple field on non-tuple\0\0\0\0\0\0\0\0";
+                let _diag_written: i32 = write_diagnostic_literal(out_ptr, literal);
+            };
             return -1;
         };
         let tuple_idx: i32 = tuple_type_index(resolved_tuple);
