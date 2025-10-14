@@ -3290,10 +3290,34 @@ fn call_metadata_args_base(metadata_ptr: i32) -> i32 {
     metadata_ptr + 16
 }
 
-fn call_metadata_template_payload_ptr(metadata_ptr: i32) -> i32 {
+fn call_metadata_const_usage_list_slot(metadata_ptr: i32) -> i32 {
     if metadata_ptr <= 0 { return 0; };
     let arg_count: i32 = call_metadata_arg_count(metadata_ptr);
     metadata_ptr + 16 + arg_count * WORD_SIZE
+}
+
+fn call_metadata_const_usage_list_ptr(metadata_ptr: i32) -> i32 {
+    let slot_ptr: i32 = call_metadata_const_usage_list_slot(metadata_ptr);
+    if slot_ptr <= 0 { return 0; };
+    load_i32(slot_ptr)
+}
+
+fn call_metadata_const_usage_count_ptr(metadata_ptr: i32) -> i32 {
+    let slot_ptr: i32 = call_metadata_const_usage_list_slot(metadata_ptr);
+    if slot_ptr <= 0 { return 0; };
+    slot_ptr + WORD_SIZE
+}
+
+fn call_metadata_const_usage_count(metadata_ptr: i32) -> i32 {
+    let count_ptr: i32 = call_metadata_const_usage_count_ptr(metadata_ptr);
+    if count_ptr <= 0 { return 0; };
+    load_i32(count_ptr)
+}
+
+fn call_metadata_template_payload_ptr(metadata_ptr: i32) -> i32 {
+    if metadata_ptr <= 0 { return 0; };
+    let arg_count: i32 = call_metadata_arg_count(metadata_ptr);
+    metadata_ptr + 16 + arg_count * WORD_SIZE + 2 * WORD_SIZE
 }
 
 fn ast_write_function_entry(

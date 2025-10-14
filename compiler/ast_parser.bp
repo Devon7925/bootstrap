@@ -874,7 +874,7 @@ fn parse_basic_expression(
             if name_ptr < 0 {
                 return -1;
             };
-            let metadata_words: i32 = 5 + arg_count;
+            let metadata_words: i32 = 7 + arg_count;
             let metadata_ptr: i32 = ast_call_data_alloc(ast_base, metadata_words);
             if metadata_ptr < 0 {
                 return -1;
@@ -892,7 +892,10 @@ fn parse_basic_expression(
                 store_i32(metadata_ptr + 16 + arg_idx * 4, arg_value);
                 arg_idx = arg_idx + 1;
             };
-            store_i32(metadata_ptr + 16 + arg_count * 4, 0);
+            let const_usage_slot: i32 = metadata_ptr + 16 + arg_count * 4;
+            store_i32(const_usage_slot, 0);
+            store_i32(const_usage_slot + 4, 0);
+            store_i32(const_usage_slot + 8, 0);
             store_i32(out_kind_ptr, 1);
             store_i32(out_data0_ptr, metadata_ptr);
             store_i32(out_data1_ptr, 0);
