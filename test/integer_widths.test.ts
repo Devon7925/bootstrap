@@ -181,7 +181,7 @@ test("mixed integer widths are rejected without casts", async () => {
         if lhs < rhs { 0 } else { 1 }
     }
   `);
-  expect(error.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(error.failure.detail).toBe("Integer operands must match");
 });
 
 test("signed and unsigned mixes require casts", async () => {
@@ -190,7 +190,7 @@ test("signed and unsigned mixes require casts", async () => {
         a - b
     }
   `);
-  expect(error.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(error.failure.detail).toBe("Integer operands must match");
 });
 
 test("integer arguments must match parameter widths", async () => {
@@ -204,5 +204,5 @@ test("integer arguments must match parameter widths", async () => {
         take_i8(sample)
     }
   `);
-  expect(error.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(error.failure.detail).toBe("Argument type mismatch");
 });

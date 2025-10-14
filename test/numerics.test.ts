@@ -156,7 +156,7 @@ test("missing function in addition is rejected", async () => {
         missing() + 1
     }
   `);
-  expect(error.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(error.failure.detail).toBe("Unknown function call");
 });
 
 test("literal subtraction executes", async () => {
@@ -189,7 +189,7 @@ test("subtraction rejects unknown function calls", async () => {
         5 - missing()
     }
   `);
-  expect(error.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(error.failure.detail).toBe("Unknown function call");
 });
 
 test("literal multiplication executes", async () => {
@@ -242,7 +242,7 @@ test("multiplication rejects unknown function calls", async () => {
         3 * missing()
     }
   `);
-  expect(error.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(error.failure.detail).toBe("Unknown function call");
 });
 
 test("mixed addition and subtraction executes", async () => {
