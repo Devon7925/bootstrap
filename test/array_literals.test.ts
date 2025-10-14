@@ -166,7 +166,7 @@ test("array literal rejects negative length", async () => {
     }
   `);
 
-  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(failure.failure.detail).toBe("array literal length must be non-negative");
 });
 
 test("array literal rejects constant expressions with negative length", async () => {
@@ -178,7 +178,7 @@ test("array literal rejects constant expressions with negative length", async ()
     }
   `);
 
-  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(failure.failure.detail).toBe("array literal length must be non-negative");
 });
 
 test("array literal length must match declared type", async () => {
@@ -188,7 +188,9 @@ test("array literal length must match declared type", async () => {
     }
   `);
 
-  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(failure.failure.detail).toBe(
+    "array expression type does not match expected array type",
+  );
 });
 
 test("array list literal length must match declared type", async () => {
@@ -198,7 +200,9 @@ test("array list literal length must match declared type", async () => {
     }
   `);
 
-  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(failure.failure.detail).toBe(
+    "array expression type does not match expected array type",
+  );
 });
 
 test("array list literal requires uniform element types", async () => {
@@ -208,5 +212,7 @@ test("array list literal requires uniform element types", async () => {
     }
   `);
 
-  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(failure.failure.detail).toBe(
+    "array literal elements must have uniform type",
+  );
 });
