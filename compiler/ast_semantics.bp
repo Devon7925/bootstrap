@@ -196,11 +196,15 @@ fn resolve_call_metadata(
     caller_is_const: bool,
     caller_func_index: i32,
 ) -> i32 {
-    if metadata_ptr < 0 {
+    let mut current_metadata: i32 = metadata_ptr;
+    if current_metadata < 0 {
         return -1;
     };
-    let arg_count: i32 = call_metadata_arg_count(metadata_ptr);
-    let args_base: i32 = call_metadata_args_base(metadata_ptr);
+    let mut arg_count: i32 = call_metadata_arg_count(current_metadata);
+    if arg_count < 0 {
+        return -1;
+    };
+    let args_base: i32 = call_metadata_args_base(current_metadata);
     let mut arg_idx: i32 = 0;
     loop {
         if arg_idx >= arg_count {
@@ -220,8 +224,8 @@ fn resolve_call_metadata(
         arg_idx = arg_idx + 1;
     };
 
-    let call_name_ptr: i32 = call_metadata_name_ptr(metadata_ptr);
-    let call_name_len: i32 = call_metadata_name_len(metadata_ptr);
+    let call_name_ptr: i32 = call_metadata_name_ptr(current_metadata);
+    let call_name_len: i32 = call_metadata_name_len(current_metadata);
     let mut target_idx: i32 = 0;
     let mut found_idx: i32 = -1;
     loop {
@@ -243,7 +247,7 @@ fn resolve_call_metadata(
                         return -1;
                     };
                 };
-                let template_slot_ptr: i32 = call_metadata_template_payload_ptr(metadata_ptr);
+                let template_slot_ptr: i32 = call_metadata_template_payload_ptr(current_metadata);
                 if template_slot_ptr > 0 {
                     let template_payload: i32 =
                         ast_function_type_template_payload_ptr(ast_base, target_idx);
@@ -254,9 +258,9 @@ fn resolve_call_metadata(
                         return -1;
                     };
                 };
-                let usage_slot_ptr: i32 = call_metadata_const_usage_list_slot(metadata_ptr);
+                let usage_slot_ptr: i32 = call_metadata_const_usage_list_slot(current_metadata);
                 let usage_count_slot_ptr: i32 =
-                    call_metadata_const_usage_count_ptr(metadata_ptr);
+                    call_metadata_const_usage_count_ptr(current_metadata);
                 if usage_slot_ptr <= 0 {
                     return -1;
                 };
@@ -425,14 +429,14 @@ fn resolve_call_metadata(
                 };
                 if collect_call_const_arguments(
                     ast_base,
-                    metadata_ptr,
+                    current_metadata,
                     target_idx,
                     expected_params,
                 ) < 0 {
                     return -1;
                 };
                 if specialization_count > 0 {
-                    let env_ptr: i32 = call_metadata_const_env_ptr(metadata_ptr);
+                    let env_ptr: i32 = call_metadata_const_env_ptr(current_metadata);
                     if env_ptr <= 0 {
                         return -1;
                     };
@@ -493,7 +497,7 @@ fn resolve_call_metadata(
                 };
                 let mut resolved_target_idx: i32 = target_idx;
                 if ast_function_has_const_params(ast_base, target_idx) {
-                    let key_ptr: i32 = call_metadata_const_key_ptr(metadata_ptr);
+                    let key_ptr: i32 = call_metadata_const_key_ptr(current_metadata);
                     if key_ptr > 0 {
                         let existing_specialization: i32 =
                             ast_function_find_const_specialization(
@@ -534,8 +538,33 @@ fn resolve_call_metadata(
     if found_idx < 0 {
         return -1;
     };
-    store_i32(call_metadata_callee_index_ptr(metadata_ptr), found_idx);
-    0
+    let callee_entry_ptr: i32 = ast_function_entry_ptr(ast_base, found_idx);
+    let runtime_param_count: i32 = load_i32(callee_entry_ptr + 8);
+    if runtime_param_count < 0 {
+        return -1;
+    };
+    if arg_count != runtime_param_count {
+        if arg_count < runtime_param_count {
+            return -1;
+        };
+        if !ast_function_has_const_params(ast_base, found_idx) {
+            let compacted: i32 = call_metadata_compact_runtime_args(
+                ast_base,
+                current_metadata,
+                found_idx,
+                runtime_param_count,
+            );
+            if compacted < 0 {
+                return -1;
+            };
+            current_metadata = compacted;
+            arg_count = runtime_param_count;
+        } else {
+            return -1;
+        };
+    };
+    store_i32(call_metadata_callee_index_ptr(current_metadata), found_idx);
+    current_metadata
 }
 
 // Performs semantic validation on the parsed AST.  This pass ensures each
@@ -771,15 +800,19 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
 
         if body_kind == 1 {
             let metadata_ptr: i32 = load_i32(entry_ptr + 16);
-            if resolve_call_metadata(
+            let updated_metadata: i32 = resolve_call_metadata(
                 out_ptr,
                 ast_base,
                 metadata_ptr,
                 func_count,
                 caller_is_const,
                 idx,
-            ) < 0 {
+            );
+            if updated_metadata < 0 {
                 return -1;
+            };
+            if updated_metadata != metadata_ptr {
+                store_i32(entry_ptr + 16, updated_metadata);
             };
         } else if body_kind == 2 {
             let expr_index: i32 = load_i32(entry_ptr + 16);
@@ -866,17 +899,21 @@ fn resolve_expression_internal(
         if metadata_ptr < 0 {
             return -1;
         };
-        if resolve_call_metadata(
+        let updated_metadata: i32 = resolve_call_metadata(
             out_ptr,
             ast_base,
             metadata_ptr,
             func_count,
             caller_is_const,
             caller_func_index,
-        ) < 0 {
+        );
+        if updated_metadata < 0 {
             return -1;
         };
-        let callee_index: i32 = load_i32(call_metadata_callee_index_ptr(metadata_ptr));
+        if updated_metadata != metadata_ptr {
+            store_i32(entry_ptr + 4, updated_metadata);
+        };
+        let callee_index: i32 = load_i32(call_metadata_callee_index_ptr(updated_metadata));
         if callee_index < 0 {
             return -1;
         };
