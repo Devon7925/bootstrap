@@ -35,12 +35,15 @@ fn compile_impl(
     if validate_program(out_ptr, ast_base, func_count) < 0 {
         return -1;
     };
-
+    let final_func_count: i32 = ast_functions_count(ast_base);
+    if final_func_count < 0 {
+        return -1;
+    };
     if write_type_metadata(out_ptr, ast_base) < 0 {
         return -1;
     };
 
-    let produced_len: i32 = emit_program(out_ptr, ast_base, func_count);
+    let produced_len: i32 = emit_program(out_ptr, ast_base, final_func_count);
     if produced_len <= 0 {
         return -1;
     };

@@ -2904,6 +2904,14 @@ fn ast_functions_count_ptr(ast_base: i32) -> i32 {
     ast_base
 }
 
+fn ast_functions_count(ast_base: i32) -> i32 {
+    load_i32(ast_functions_count_ptr(ast_base))
+}
+
+fn ast_functions_set_count(ast_base: i32, count: i32) {
+    store_i32(ast_functions_count_ptr(ast_base), count);
+}
+
 fn ast_function_entry_ptr(ast_base: i32, index: i32) -> i32 {
     ast_base + WORD_SIZE + index * AST_FUNCTION_ENTRY_SIZE
 }
@@ -3288,6 +3296,528 @@ fn ast_function_register_const_specialization(
     store_i32(new_entry_ptr + 3 * WORD_SIZE, previous_head);
     ast_const_specialization_registry_set_head(ast_base, new_entry_ptr);
     new_entry_ptr
+}
+
+fn clone_const_specialization_expr_list(
+    ast_base: i32,
+    values_ptr: i32,
+    count: i32,
+) -> i32 {
+    if count <= 0 {
+        return 0;
+    };
+    if values_ptr < 0 {
+        return -1;
+    };
+    let new_ptr: i32 = ast_call_data_alloc(ast_base, count);
+    if new_ptr < 0 {
+        return -1;
+    };
+    let mut idx: i32 = 0;
+    loop {
+        if idx >= count {
+            break;
+        };
+        let original_expr: i32 = load_i32(values_ptr + idx * WORD_SIZE);
+        let cloned_expr: i32 = clone_const_specialization_expr(ast_base, original_expr);
+        if cloned_expr < 0 {
+            return -1;
+        };
+        store_i32(new_ptr + idx * WORD_SIZE, cloned_expr);
+        idx = idx + 1;
+    };
+    new_ptr
+}
+
+fn clone_const_specialization_call_metadata(ast_base: i32, metadata_ptr: i32) -> i32 {
+    if metadata_ptr <= 0 {
+        return -1;
+    };
+    let name_ptr: i32 = call_metadata_name_ptr(metadata_ptr);
+    let name_len: i32 = call_metadata_name_len(metadata_ptr);
+    let arg_count: i32 = call_metadata_arg_count(metadata_ptr);
+    if arg_count < 0 {
+        return -1;
+    };
+    let callee_index: i32 = load_i32(call_metadata_callee_index_ptr(metadata_ptr));
+    let total_words: i32 = 4 + arg_count + 5;
+    if total_words <= 0 {
+        return -1;
+    };
+    let new_metadata: i32 = ast_call_data_alloc(ast_base, total_words);
+    if new_metadata < 0 {
+        return -1;
+    };
+    store_i32(new_metadata, name_ptr);
+    store_i32(new_metadata + WORD_SIZE, name_len);
+    store_i32(new_metadata + 2 * WORD_SIZE, arg_count);
+    store_i32(new_metadata + 3 * WORD_SIZE, callee_index);
+    let original_args_base: i32 = call_metadata_args_base(metadata_ptr);
+    if arg_count > 0 {
+        if original_args_base < 0 {
+            return -1;
+        };
+    };
+    let new_args_base: i32 = call_metadata_args_base(new_metadata);
+    let mut arg_idx: i32 = 0;
+    loop {
+        if arg_idx >= arg_count {
+            break;
+        };
+        let original_arg: i32 = load_i32(original_args_base + arg_idx * WORD_SIZE);
+        let cloned_arg: i32 = clone_const_specialization_expr(ast_base, original_arg);
+        if cloned_arg < 0 {
+            return -1;
+        };
+        store_i32(new_args_base + arg_idx * WORD_SIZE, cloned_arg);
+        arg_idx = arg_idx + 1;
+    };
+    let original_extra: i32 = call_metadata_extra_slot_base(metadata_ptr);
+    let new_extra: i32 = call_metadata_extra_slot_base(new_metadata);
+    if original_extra > 0 && new_extra > 0 {
+        let mut extra_idx: i32 = 0;
+        loop {
+            if extra_idx >= 5 {
+                break;
+            };
+            let value: i32 = load_i32(original_extra + extra_idx * WORD_SIZE);
+            store_i32(new_extra + extra_idx * WORD_SIZE, value);
+            extra_idx = extra_idx + 1;
+        };
+    };
+    new_metadata
+}
+
+fn clone_const_specialization_expr(ast_base: i32, expr_index: i32) -> i32 {
+    if expr_index < 0 {
+        return expr_index;
+    };
+    if expr_index >= ast_expr_count(ast_base) {
+        return -1;
+    };
+    let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+    let kind: i32 = load_i32(entry_ptr);
+    if kind == 0 {
+        let value: i32 = load_i32(entry_ptr + WORD_SIZE);
+        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        return ast_expr_alloc_literal(ast_base, value, expr_type);
+    };
+    if kind == 1 {
+        let metadata_ptr: i32 = load_i32(entry_ptr + WORD_SIZE);
+        let cloned_metadata: i32 = clone_const_specialization_call_metadata(ast_base, metadata_ptr);
+        if cloned_metadata < 0 {
+            return -1;
+        };
+        let new_index: i32 = ast_expr_alloc_call(ast_base, cloned_metadata);
+        if new_index < 0 {
+            return -1;
+        };
+        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        if expr_type >= 0 {
+            ast_expr_set_type(ast_base, new_index, expr_type);
+        };
+        return new_index;
+    };
+    if kind == 6 {
+        let param_index: i32 = load_i32(entry_ptr + WORD_SIZE);
+        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        return ast_expr_alloc_param(ast_base, param_index, expr_type);
+    };
+    if kind == 7 {
+        let cond_index: i32 = load_i32(entry_ptr + WORD_SIZE);
+        let then_index: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
+        let else_index: i32 = load_i32(entry_ptr + 3 * WORD_SIZE);
+        let cloned_cond: i32 = clone_const_specialization_expr(ast_base, cond_index);
+        if cloned_cond < 0 {
+            return -1;
+        };
+        let cloned_then: i32 = clone_const_specialization_expr(ast_base, then_index);
+        if cloned_then < 0 {
+            return -1;
+        };
+        let cloned_else: i32 = clone_const_specialization_expr(ast_base, else_index);
+        if cloned_else < 0 {
+            return -1;
+        };
+        let new_index: i32 = ast_expr_alloc(ast_base, 7, cloned_cond, cloned_then, cloned_else);
+        if new_index < 0 {
+            return -1;
+        };
+        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        if expr_type >= 0 {
+            ast_expr_set_type(ast_base, new_index, expr_type);
+        };
+        return new_index;
+    };
+    if kind == 8 {
+        let local_index: i32 = load_i32(entry_ptr + WORD_SIZE);
+        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        return ast_expr_alloc_local(ast_base, local_index, expr_type);
+    };
+    if kind == 9 {
+        let local_index: i32 = load_i32(entry_ptr + WORD_SIZE);
+        let init_index: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
+        let body_index: i32 = load_i32(entry_ptr + 3 * WORD_SIZE);
+        let cloned_init: i32 = clone_const_specialization_expr(ast_base, init_index);
+        if cloned_init < 0 {
+            return -1;
+        };
+        let cloned_body: i32 = clone_const_specialization_expr(ast_base, body_index);
+        if cloned_body < 0 {
+            return -1;
+        };
+        let new_index: i32 = ast_expr_alloc(ast_base, 9, local_index, cloned_init, cloned_body);
+        if new_index < 0 {
+            return -1;
+        };
+        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        if expr_type >= 0 {
+            ast_expr_set_type(ast_base, new_index, expr_type);
+        };
+        return new_index;
+    };
+    if kind == 10 {
+        let local_index: i32 = load_i32(entry_ptr + WORD_SIZE);
+        let value_index: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
+        let cloned_value: i32 = clone_const_specialization_expr(ast_base, value_index);
+        if cloned_value < 0 {
+            return -1;
+        };
+        let new_index: i32 = ast_expr_alloc(ast_base, 10, local_index, cloned_value, 0);
+        if new_index < 0 {
+            return -1;
+        };
+        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        if expr_type >= 0 {
+            ast_expr_set_type(ast_base, new_index, expr_type);
+        };
+        return new_index;
+    };
+    if kind == 11 {
+        let first_index: i32 = load_i32(entry_ptr + WORD_SIZE);
+        let then_index: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
+        let cloned_first: i32 = clone_const_specialization_expr(ast_base, first_index);
+        if cloned_first < 0 {
+            return -1;
+        };
+        let cloned_then: i32 = clone_const_specialization_expr(ast_base, then_index);
+        if cloned_then < 0 {
+            return -1;
+        };
+        let new_index: i32 = ast_expr_alloc(ast_base, 11, cloned_first, cloned_then, 0);
+        if new_index < 0 {
+            return -1;
+        };
+        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        if expr_type >= 0 {
+            ast_expr_set_type(ast_base, new_index, expr_type);
+        };
+        return new_index;
+    };
+    if kind == 12 {
+        let body_index: i32 = load_i32(entry_ptr + WORD_SIZE);
+        let cloned_body: i32 = clone_const_specialization_expr(ast_base, body_index);
+        if cloned_body < 0 {
+            return -1;
+        };
+        let new_index: i32 = ast_expr_alloc(ast_base, 12, cloned_body, 0, 0);
+        if new_index < 0 {
+            return -1;
+        };
+        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        if expr_type >= 0 {
+            ast_expr_set_type(ast_base, new_index, expr_type);
+        };
+        return new_index;
+    };
+    if kind == 13 {
+        let value_index: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
+        let cloned_value: i32 = clone_const_specialization_expr(ast_base, value_index);
+        if cloned_value < 0 {
+            return -1;
+        };
+        let new_index: i32 = ast_expr_alloc(ast_base, 13, -1, cloned_value, 0);
+        if new_index < 0 {
+            return -1;
+        };
+        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        if expr_type >= 0 {
+            ast_expr_set_type(ast_base, new_index, expr_type);
+        };
+        return new_index;
+    };
+    if kind == 23 {
+        let value_index: i32 = load_i32(entry_ptr + WORD_SIZE);
+        let cloned_value: i32 = clone_const_specialization_expr(ast_base, value_index);
+        if cloned_value < 0 {
+            return -1;
+        };
+        let new_index: i32 = ast_expr_alloc_return(ast_base, cloned_value);
+        if new_index < 0 {
+            return -1;
+        };
+        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        if expr_type >= 0 {
+            ast_expr_set_type(ast_base, new_index, expr_type);
+        };
+        return new_index;
+    };
+    if kind == 24 {
+        let new_index: i32 = ast_expr_alloc_continue(ast_base);
+        if new_index < 0 {
+            return -1;
+        };
+        return new_index;
+    };
+    if kind == 22 {
+        let value_index: i32 = load_i32(entry_ptr + WORD_SIZE);
+        let cloned_value: i32 = clone_const_specialization_expr(ast_base, value_index);
+        if cloned_value < 0 {
+            return -1;
+        };
+        let new_index: i32 = ast_expr_alloc(ast_base, 22, cloned_value, 0, 0);
+        if new_index < 0 {
+            return -1;
+        };
+        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        if expr_type >= 0 {
+            ast_expr_set_type(ast_base, new_index, expr_type);
+        };
+        return new_index;
+    };
+    if kind == 35 {
+        let element_index: i32 = load_i32(entry_ptr + WORD_SIZE);
+        let length: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
+        let cloned_element: i32 = clone_const_specialization_expr(ast_base, element_index);
+        if cloned_element < 0 {
+            return -1;
+        };
+        let new_index: i32 = ast_expr_alloc_array_repeat(ast_base, cloned_element, length);
+        if new_index < 0 {
+            return -1;
+        };
+        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        if expr_type >= 0 {
+            ast_expr_set_type(ast_base, new_index, expr_type);
+        };
+        return new_index;
+    };
+    if kind == 36 {
+        let array_index: i32 = load_i32(entry_ptr + WORD_SIZE);
+        let index_index: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
+        let cloned_array: i32 = clone_const_specialization_expr(ast_base, array_index);
+        if cloned_array < 0 {
+            return -1;
+        };
+        let cloned_index: i32 = clone_const_specialization_expr(ast_base, index_index);
+        if cloned_index < 0 {
+            return -1;
+        };
+        let new_index: i32 = ast_expr_alloc_array_get(ast_base, cloned_array, cloned_index);
+        if new_index < 0 {
+            return -1;
+        };
+        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        if expr_type >= 0 {
+            ast_expr_set_type(ast_base, new_index, expr_type);
+        };
+        return new_index;
+    };
+    if kind == 37 {
+        let values_ptr: i32 = load_i32(entry_ptr + WORD_SIZE);
+        let count: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
+        if count < 0 {
+            return -1;
+        };
+        let cloned_ptr: i32 = clone_const_specialization_expr_list(ast_base, values_ptr, count);
+        if cloned_ptr < 0 {
+            return -1;
+        };
+        let new_index: i32 = ast_expr_alloc_array_list(ast_base, cloned_ptr, count);
+        if new_index < 0 {
+            return -1;
+        };
+        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        if expr_type >= 0 {
+            ast_expr_set_type(ast_base, new_index, expr_type);
+        };
+        return new_index;
+    };
+    if kind == 38 {
+        let array_index: i32 = load_i32(entry_ptr + WORD_SIZE);
+        let cloned_array: i32 = clone_const_specialization_expr(ast_base, array_index);
+        if cloned_array < 0 {
+            return -1;
+        };
+        let new_index: i32 = ast_expr_alloc_array_len(ast_base, cloned_array);
+        if new_index < 0 {
+            return -1;
+        };
+        return new_index;
+    };
+    if kind == 39 {
+        let value_index: i32 = load_i32(entry_ptr + WORD_SIZE);
+        let target_type: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
+        let cloned_value: i32 = clone_const_specialization_expr(ast_base, value_index);
+        if cloned_value < 0 {
+            return -1;
+        };
+        let new_index: i32 = ast_expr_alloc_cast(ast_base, cloned_value, target_type);
+        if new_index < 0 {
+            return -1;
+        };
+        return new_index;
+    };
+    if kind == 40 {
+        let values_ptr: i32 = load_i32(entry_ptr + WORD_SIZE);
+        let count: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
+        if count < 0 {
+            return -1;
+        };
+        let cloned_ptr: i32 = clone_const_specialization_expr_list(ast_base, values_ptr, count);
+        if cloned_ptr < 0 {
+            return -1;
+        };
+        let new_index: i32 = ast_expr_alloc_tuple(ast_base, cloned_ptr, count);
+        if new_index < 0 {
+            return -1;
+        };
+        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        if expr_type >= 0 {
+            ast_expr_set_type(ast_base, new_index, expr_type);
+        };
+        return new_index;
+    };
+    if kind == 41 {
+        let tuple_index: i32 = load_i32(entry_ptr + WORD_SIZE);
+        let field_index: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
+        let cloned_tuple: i32 = clone_const_specialization_expr(ast_base, tuple_index);
+        if cloned_tuple < 0 {
+            return -1;
+        };
+        let new_index: i32 = ast_expr_alloc_tuple_get(ast_base, cloned_tuple, field_index);
+        if new_index < 0 {
+            return -1;
+        };
+        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        if expr_type >= 0 {
+            ast_expr_set_type(ast_base, new_index, expr_type);
+        };
+        return new_index;
+    };
+    if kind == 42 {
+        let bytes_ptr: i32 = load_i32(entry_ptr + WORD_SIZE);
+        let byte_count: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
+        let new_index: i32 = ast_expr_alloc_inline_wasm(ast_base, bytes_ptr, byte_count);
+        if new_index < 0 {
+            return -1;
+        };
+        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        if expr_type >= 0 {
+            ast_expr_set_type(ast_base, new_index, expr_type);
+        };
+        return new_index;
+    };
+    if kind == 43 {
+        let name_start: i32 = load_i32(entry_ptr + WORD_SIZE);
+        let name_len: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
+        let source_base: i32 = load_i32(entry_ptr + 3 * WORD_SIZE);
+        let new_index: i32 = ast_expr_alloc_const_ref(ast_base, source_base, name_start, name_len);
+        if new_index < 0 {
+            return -1;
+        };
+        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        if expr_type >= 0 {
+            ast_expr_set_type(ast_base, new_index, expr_type);
+        };
+        return new_index;
+    };
+    if kind == 25 || kind == 26 || kind == 27 || kind == 28 || kind == 29 || kind == 30
+        || kind == 31 || kind == 32 || kind == 33 || kind == 34 || kind == 2 || kind == 3
+        || kind == 4 || kind == 5 || kind == 14 || kind == 15 || kind == 16 || kind == 17
+        || kind == 18 || kind == 19 || kind == 20 || kind == 21
+    {
+        let left_index: i32 = load_i32(entry_ptr + WORD_SIZE);
+        let right_index: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
+        let cloned_left: i32 = clone_const_specialization_expr(ast_base, left_index);
+        if cloned_left < 0 {
+            return -1;
+        };
+        let cloned_right: i32 = clone_const_specialization_expr(ast_base, right_index);
+        if cloned_right < 0 {
+            return -1;
+        };
+        let data2: i32 = load_i32(entry_ptr + 3 * WORD_SIZE);
+        let new_index: i32 = ast_expr_alloc(ast_base, kind, cloned_left, cloned_right, data2);
+        if new_index < 0 {
+            return -1;
+        };
+        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        if expr_type >= 0 {
+            ast_expr_set_type(ast_base, new_index, expr_type);
+        };
+        return new_index;
+    };
+    -1
+}
+
+fn ast_function_clone_const_template(ast_base: i32, index: i32, key_ptr: i32) -> i32 {
+    if index < 0 {
+        return -1;
+    };
+    if key_ptr <= 0 {
+        return -1;
+    };
+    let const_entry_count: i32 = load_i32(key_ptr);
+    if const_entry_count < 0 {
+        return -1;
+    };
+    let declared_const: i32 = ast_function_const_params_count(ast_base, index);
+    if declared_const < 0 {
+        return -1;
+    };
+    if const_entry_count != declared_const {
+        return -1;
+    };
+    let current_count: i32 = ast_functions_count(ast_base);
+    if current_count < 0 {
+        return -1;
+    };
+    if index >= current_count {
+        return -1;
+    };
+    if current_count >= AST_MAX_FUNCTIONS {
+        return -1;
+    };
+    let source_ptr: i32 = ast_function_entry_ptr(ast_base, index);
+    let body_kind: i32 = load_i32(source_ptr + 12);
+    let body_data0: i32 = load_i32(source_ptr + 16);
+    let mut cloned_body_data0: i32 = body_data0;
+    if body_kind == 2 {
+        cloned_body_data0 = clone_const_specialization_expr(ast_base, body_data0);
+        if cloned_body_data0 < 0 {
+            return -1;
+        };
+    };
+    let new_index: i32 = current_count;
+    let dest_ptr: i32 = ast_function_entry_ptr(ast_base, new_index);
+    let mut word_idx: i32 = 0;
+    let total_words: i32 = AST_FUNCTION_ENTRY_SIZE >> 2;
+    loop {
+        if word_idx >= total_words {
+            break;
+        };
+        let value: i32 = load_i32(source_ptr + word_idx * WORD_SIZE);
+        store_i32(dest_ptr + word_idx * WORD_SIZE, value);
+        word_idx = word_idx + 1;
+    };
+    store_i32(dest_ptr, 0);
+    store_i32(dest_ptr + 4, 0);
+    if body_kind == 2 {
+        store_i32(dest_ptr + 16, cloned_body_data0);
+    };
+    ast_functions_set_count(ast_base, new_index + 1);
+    new_index
 }
 
 fn ast_function_canonicalize_const_env(
