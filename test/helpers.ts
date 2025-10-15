@@ -160,6 +160,22 @@ function astExprCountPtr(astBasePtr: number): number {
   return astExtraBase(astBasePtr);
 }
 
+function astNamesLenPtr(astBasePtr: number): number {
+  return astBasePtr + WORD_SIZE + AST_MAX_FUNCTIONS * AST_FUNCTION_ENTRY_SIZE;
+}
+
+function astNamesBase(astBasePtr: number): number {
+  return astNamesLenPtr(astBasePtr) + WORD_SIZE;
+}
+
+function astCallDataLenPtr(astBasePtr: number): number {
+  return astNamesBase(astBasePtr) + AST_NAMES_CAPACITY;
+}
+
+function astCallDataBase(astBasePtr: number): number {
+  return astCallDataLenPtr(astBasePtr) + WORD_SIZE;
+}
+
 export function readExpressionCount(
   memory: WebAssembly.Memory,
   outPtr: number,
@@ -169,6 +185,77 @@ export function readExpressionCount(
   const exprCountPtr = astExprCountPtr(astBasePtr);
   const view = new DataView(memory.buffer);
   return safeReadI32(view, exprCountPtr);
+}
+
+export function getAstBasePointer(outPtr: number, inputLen: number): number {
+  return astBase(outPtr, inputLen);
+}
+
+export function readCallDataInfo(
+  memory: WebAssembly.Memory,
+  outPtr: number,
+  inputLen: number,
+): { readonly base: number; readonly words: number } {
+  const astBasePtr = astBase(outPtr, inputLen);
+  const lenPtr = astCallDataLenPtr(astBasePtr);
+  const usedWords = safeReadI32(new DataView(memory.buffer), lenPtr);
+  const base = astCallDataBase(astBasePtr);
+  return { base, words: usedWords };
+}
+
+export interface ExpressionEntry {
+  readonly kind: number;
+  readonly data0: number;
+  readonly data1: number;
+  readonly data2: number;
+}
+
+export function readExpressionEntry(
+  memory: WebAssembly.Memory,
+  outPtr: number,
+  inputLen: number,
+  index: number,
+): ExpressionEntry {
+  const astBasePtr = astBase(outPtr, inputLen);
+  const entryPtr = astExtraBase(astBasePtr) + WORD_SIZE + index * AST_EXPR_ENTRY_SIZE;
+  const view = new DataView(memory.buffer, entryPtr, AST_EXPR_ENTRY_SIZE);
+  return {
+    kind: view.getInt32(0, true),
+    data0: view.getInt32(4, true),
+    data1: view.getInt32(8, true),
+    data2: view.getInt32(12, true),
+  };
+}
+
+export interface ConstParameterEnvEntry {
+  readonly value: number;
+  readonly type: number;
+}
+
+export function readCallMetadataConstEnvPointer(memory: WebAssembly.Memory, metadataPtr: number): number {
+  const view = new DataView(memory.buffer);
+  const argCount = safeReadI32(view, metadataPtr + 8);
+  const slotBase = metadataPtr + 16 + argCount * WORD_SIZE;
+  return safeReadI32(view, slotBase + 12);
+}
+
+export function readConstParameterEnvironment(
+  memory: WebAssembly.Memory,
+  envPtr: number,
+): { readonly count: number; readonly entries: ConstParameterEnvEntry[] } {
+  const view = new DataView(memory.buffer);
+  const count = safeReadI32(view, envPtr);
+  if (count < 0) {
+    return { count, entries: [] };
+  }
+  const entries: ConstParameterEnvEntry[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const base = envPtr + WORD_SIZE + index * 2 * WORD_SIZE;
+    const value = safeReadI32(view, base);
+    const type = safeReadI32(view, base + WORD_SIZE);
+    entries.push({ value, type });
+  }
+  return { count, entries };
 }
 
 function coerceToI32(value: number | bigint): number {
