@@ -256,6 +256,43 @@ test("const parameters accept const fn results", async () => {
   expect(result).toBe(42);
 });
 
+test("const parameter templates reject mismatched parameter arrays", async () => {
+  const failure = await expectCompileFailure(`
+    fn sum(const N: i32, values: [i32; N]) -> i32 {
+        let mut total: i32 = 0;
+        let mut index: i32 = 0;
+        loop {
+            if index >= N {
+                return total;
+            };
+            total = total + values[index];
+            index = index + 1;
+            0
+        }
+    }
+
+    fn main() -> i32 {
+        let values: [i32; 3] = [5, 6, 7];
+        sum(4, values)
+    }
+  `);
+  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+});
+
+test("const parameter return templates reject mismatched bindings", async () => {
+  const failure = await expectCompileFailure(`
+    fn build(const N: i32, value: i32) -> [i32; N] {
+        [value; N]
+    }
+
+    fn main() -> i32 {
+        let values: [i32; 3] = build(2, 5);
+        values[0]
+    }
+  `);
+  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+});
+
 test("function section handles multibyte type indices", async () => {
   const helperCount = (1 << 7) + 2;
   const parts: string[] = [];
