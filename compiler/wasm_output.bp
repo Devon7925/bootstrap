@@ -2263,7 +2263,8 @@ fn emit_export_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -
         };
         let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
         let name_len: i32 = load_i32(entry_ptr + 4);
-        if name_len > 0 {
+        let exportable: bool = name_len > 0 && !ast_function_has_const_params(ast_base, idx);
+        if exportable {
             exported_functions = exported_functions + 1;
         };
         idx = idx + 1;
@@ -2278,7 +2279,8 @@ fn emit_export_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -
         };
         let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
         let name_len: i32 = load_i32(entry_ptr + 4);
-        if name_len > 0 {
+        let exportable: bool = name_len > 0 && !ast_function_has_const_params(ast_base, idx);
+        if exportable {
             payload_size = payload_size
                 + leb_u32_len(name_len)
                 + name_len
@@ -2311,7 +2313,8 @@ fn emit_export_section(base: i32, offset: i32, ast_base: i32, func_count: i32) -
         let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
         let name_ptr: i32 = load_i32(entry_ptr);
         let name_len: i32 = load_i32(entry_ptr + 4);
-        if name_len > 0 {
+        let exportable: bool = name_len > 0 && !ast_function_has_const_params(ast_base, idx);
+        if exportable {
             out = write_u32_leb(base, out, name_len);
             let mut byte_idx: i32 = 0;
             loop {

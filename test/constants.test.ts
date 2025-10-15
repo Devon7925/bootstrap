@@ -211,6 +211,22 @@ test("const functions can use loops", async () => {
   expect(result).toBe(10);
 });
 
+test("const functions specialize simple const parameters during interpretation", async () => {
+  const wasm = await compileWithAstCompiler(`
+    const fn add_count(const COUNT: i32, value: i32) -> i32 {
+        value + COUNT
+    }
+
+    const VALUE: i32 = add_count(2, 40);
+
+    fn main() -> i32 {
+        VALUE
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(42);
+});
+
 test("const expressions can use if expressions", async () => {
   const wasm = await compileWithAstCompiler(`
     const VALUE: i32 = if true {

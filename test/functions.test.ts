@@ -7,6 +7,7 @@ import {
   readAstCompilerModules,
   readAstCompilerSource,
   runWasmMainWithGc,
+  instantiateWasmModuleWithGc,
   DEFAULT_OUTPUT_STRIDE,
   AST_COMPILER_ENTRY_PATH,
 } from "./helpers";
@@ -291,6 +292,23 @@ test("const parameter return templates reject mismatched bindings", async () => 
     }
   `);
   expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+});
+
+test("const parameter templates are not exported", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn helper(const COUNT: i32, value: i32) -> i32 {
+        value + COUNT
+    }
+
+    fn main() -> i32 {
+        helper(5, 37)
+    }
+  `);
+  const instance = await instantiateWasmModuleWithGc(wasm);
+  const exportNames = Object.keys(instance.exports);
+  expect(exportNames).toContain("memory");
+  expect(exportNames).toContain("main");
+  expect(exportNames).not.toContain("helper");
 });
 
 test("function section handles multibyte type indices", async () => {
