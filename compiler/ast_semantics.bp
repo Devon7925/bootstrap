@@ -503,6 +503,25 @@ fn resolve_call_metadata(
                             );
                         if existing_specialization >= 0 {
                             resolved_target_idx = existing_specialization;
+                        } else {
+                            let new_specialization: i32 = ast_function_clone_const_template(
+                                ast_base,
+                                target_idx,
+                                key_ptr,
+                            );
+                            if new_specialization < 0 {
+                                return -1;
+                            };
+                            if ast_function_register_const_specialization(
+                                ast_base,
+                                target_idx,
+                                key_ptr,
+                                new_specialization,
+                            ) < 0
+                            {
+                                return -1;
+                            };
+                            resolved_target_idx = new_specialization;
                         };
                     };
                 };
