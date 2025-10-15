@@ -227,9 +227,137 @@ export function readExpressionEntry(
   };
 }
 
+export interface FunctionEntryInfo {
+  readonly namePtr: number;
+  readonly nameLength: number;
+  readonly name: string | null;
+  readonly paramCount: number;
+  readonly bodyKind: number;
+  readonly bodyData0: number;
+  readonly localsCount: number;
+  readonly paramTypesPtr: number;
+  readonly returnType: number;
+  readonly flags: number;
+  readonly constParamsPtr: number;
+  readonly constParamsCount: number;
+  readonly constParamMask: readonly number[];
+  readonly templateOwnerIndex: number;
+}
+
+export function readFunctionCount(
+  memory: WebAssembly.Memory,
+  outPtr: number,
+  inputLen: number,
+): number {
+  const astBasePtr = astBase(outPtr, inputLen);
+  const view = new DataView(memory.buffer);
+  return safeReadI32(view, astBasePtr);
+}
+
+export function readFunctionEntry(
+  memory: WebAssembly.Memory,
+  outPtr: number,
+  inputLen: number,
+  index: number,
+): FunctionEntryInfo {
+  const astBasePtr = astBase(outPtr, inputLen);
+  const entryPtr = astBasePtr + WORD_SIZE + index * AST_FUNCTION_ENTRY_SIZE;
+  const view = new DataView(memory.buffer);
+  const namePtr = safeReadI32(view, entryPtr);
+  const nameLength = safeReadI32(view, entryPtr + WORD_SIZE);
+  const paramCount = safeReadI32(view, entryPtr + 2 * WORD_SIZE);
+  const bodyKind = safeReadI32(view, entryPtr + 3 * WORD_SIZE);
+  const bodyData0 = safeReadI32(view, entryPtr + 4 * WORD_SIZE);
+  const localsCount = safeReadI32(view, entryPtr + 5 * WORD_SIZE);
+  const paramTypesPtr = safeReadI32(view, entryPtr + 6 * WORD_SIZE);
+  const returnType = safeReadI32(view, entryPtr + 7 * WORD_SIZE);
+  const flags = safeReadI32(view, entryPtr + 8 * WORD_SIZE);
+  const constParamsPtr = safeReadI32(view, entryPtr + 9 * WORD_SIZE);
+  const templateOwnerIndex = safeReadI32(view, entryPtr + 10 * WORD_SIZE);
+
+  let name: string | null = null;
+  if (namePtr > 0 && nameLength > 0) {
+    try {
+      const bytes = new Uint8Array(memory.buffer, namePtr, nameLength);
+      name = decoder.decode(bytes);
+    } catch {
+      name = null;
+    }
+  }
+
+  let constParamsCount = 0;
+  const constParamMask: number[] = [];
+  if (constParamsPtr > 0) {
+    constParamsCount = safeReadI32(view, constParamsPtr);
+    if (constParamsCount > 0) {
+      let maskWordCount = (paramCount + 31) >> 5;
+      if (maskWordCount <= 0) {
+        maskWordCount = 1;
+      }
+      for (let wordIndex = 0; wordIndex < maskWordCount; wordIndex += 1) {
+        const maskValue = safeReadI32(view, constParamsPtr + WORD_SIZE + wordIndex * WORD_SIZE);
+        constParamMask.push(maskValue);
+      }
+    }
+  }
+
+  return {
+    namePtr,
+    nameLength,
+    name,
+    paramCount,
+    bodyKind,
+    bodyData0,
+    localsCount,
+    paramTypesPtr,
+    returnType,
+    flags,
+    constParamsPtr,
+    constParamsCount,
+    constParamMask,
+    templateOwnerIndex,
+  };
+}
+
 export interface ConstParameterEnvEntry {
   readonly value: number;
   readonly type: number;
+}
+
+export interface ConstSpecializationEntry {
+  readonly templateIndex: number;
+  readonly keyPtr: number;
+  readonly specializedIndex: number;
+  readonly nextPtr: number;
+}
+
+export interface ConstSpecializationKeyEntry {
+  readonly paramIndex: number;
+  readonly value: number;
+  readonly type: number;
+}
+
+export function readConstSpecializationKey(
+  memory: WebAssembly.Memory,
+  keyPtr: number,
+): { readonly count: number; readonly entries: ConstSpecializationKeyEntry[] } {
+  if (keyPtr <= 0) {
+    return { count: -1, entries: [] };
+  }
+  const view = new DataView(memory.buffer);
+  const count = safeReadI32(view, keyPtr);
+  if (count <= 0) {
+    return { count, entries: [] };
+  }
+  const entries: ConstSpecializationKeyEntry[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const base = keyPtr + WORD_SIZE + index * 3 * WORD_SIZE;
+    const paramIndex = safeReadI32(view, base);
+    const value = safeReadI32(view, base + WORD_SIZE);
+    const type = safeReadI32(view, base + 2 * WORD_SIZE);
+    entries.push({ paramIndex, value, type });
+  }
+  return { count, entries };
 }
 
 export function readCallMetadataConstEnvPointer(memory: WebAssembly.Memory, metadataPtr: number): number {
@@ -256,6 +384,30 @@ export function readConstParameterEnvironment(
     entries.push({ value, type });
   }
   return { count, entries };
+}
+
+export function readConstSpecializationRegistry(
+  memory: WebAssembly.Memory,
+  outPtr: number,
+  inputLen: number,
+): ConstSpecializationEntry[] {
+  const { base } = readCallDataInfo(memory, outPtr, inputLen);
+  const view = new DataView(memory.buffer);
+  const headPtr = safeReadI32(view, base);
+  const entries: ConstSpecializationEntry[] = [];
+  let currentPtr = headPtr;
+  while (currentPtr > 0) {
+    const templateIndex = safeReadI32(view, currentPtr);
+    const keyPtr = safeReadI32(view, currentPtr + WORD_SIZE);
+    const specializedIndex = safeReadI32(view, currentPtr + 2 * WORD_SIZE);
+    const nextPtr = safeReadI32(view, currentPtr + 3 * WORD_SIZE);
+    entries.push({ templateIndex, keyPtr, specializedIndex, nextPtr });
+    if (nextPtr <= 0) {
+      break;
+    }
+    currentPtr = nextPtr;
+  }
+  return entries;
 }
 
 function coerceToI32(value: number | bigint): number {
