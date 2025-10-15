@@ -1022,24 +1022,27 @@ fn resolve_expression_internal(
     };
     if kind == 35 {
         let element_index: i32 = load_i32(entry_ptr + 4);
-        let length: i32 = load_i32(entry_ptr + 8);
+        let length: i32 = ast_expr_array_repeat_length(ast_base, expr_index);
+        let length_expr_index: i32 = ast_expr_array_repeat_length_expr(ast_base, expr_index);
         if length < 0 {
-            if out_ptr > 0 {
-                if load_u8(out_ptr) == 0 {
-                    let message: [u8; 64] =
-                        "array literal length must be non-negative\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
-                    let detail_capacity: i32 = len(message);
-                    let mut detail_idx: i32 = 0;
-                    loop {
-                        if detail_idx >= detail_capacity {
-                            break;
+            if length_expr_index < 0 {
+                if out_ptr > 0 {
+                    if load_u8(out_ptr) == 0 {
+                        let message: [u8; 64] =
+                            "array literal length must be non-negative\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
+                        let detail_capacity: i32 = len(message);
+                        let mut detail_idx: i32 = 0;
+                        loop {
+                            if detail_idx >= detail_capacity {
+                                break;
+                            };
+                            store_u8(out_ptr + detail_idx, message[detail_idx] as i32);
+                            detail_idx = detail_idx + 1;
                         };
-                        store_u8(out_ptr + detail_idx, message[detail_idx] as i32);
-                        detail_idx = detail_idx + 1;
                     };
                 };
+                return -1;
             };
-            return -1;
         };
         if resolve_expression_internal(
             out_ptr,
@@ -1065,6 +1068,10 @@ fn resolve_expression_internal(
         };
         if resolved_element != element_type {
             ast_expr_set_type(ast_base, element_index, resolved_element);
+        };
+        if length < 0 {
+            ast_expr_set_type(ast_base, expr_index, -1);
+            return 0;
         };
         let array_type_id: i32 = ast_register_array_type(ast_base, resolved_element, length);
         if array_type_id < 0 {

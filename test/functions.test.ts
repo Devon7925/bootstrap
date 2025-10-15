@@ -311,6 +311,59 @@ test("const parameter templates are not exported", async () => {
   expect(exportNames).not.toContain("helper");
 });
 
+test.skip("const parameter templates specialize array arguments", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn sum(const N: i32, values: [i32; N]) -> i32 {
+        let mut total: i32 = 0;
+        let mut index: i32 = 0;
+        loop {
+            if index >= N {
+                return total;
+            };
+            total = total + values[index];
+            index = index + 1;
+            0
+        }
+    }
+
+    fn main() -> i32 {
+        let values: [i32; 3] = [4, 5, 6];
+        sum(3, values)
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(15);
+});
+
+test.skip("const parameter templates specialize return types", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn build(const N: i32, value: i32) -> [i32; N] {
+        [value; N]
+    }
+
+    fn main() -> i32 {
+        let values: [i32; 3] = build(3, 5);
+        values[0] + values[1] + values[2]
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(15);
+});
+
+test.skip("type-valued const parameters specialize signatures", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn select(const T: type, flag: bool, on_true: T, on_false: T) -> T {
+        if flag { on_true } else { on_false }
+    }
+
+    fn main() -> i32 {
+        select(i32, true, 40, 2)
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(42);
+});
+
 test("function section handles multibyte type indices", async () => {
   const helperCount = (1 << 7) + 2;
   const parts: string[] = [];
