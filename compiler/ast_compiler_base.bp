@@ -3337,6 +3337,12 @@ fn clone_const_specialization_expr_list(
     removed_const_count: i32,
     values_ptr: i32,
     count: i32,
+    env_values_ptr: i32,
+    param_count: i32,
+    eval_stack_base: i32,
+    eval_stack_top_ptr: i32,
+    eval_value_ptr: i32,
+    eval_type_ptr: i32,
 ) -> i32 {
     if count <= 0 {
         return 0;
@@ -3360,6 +3366,12 @@ fn clone_const_specialization_expr_list(
             key_ptr,
             removed_const_count,
             original_expr,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
         );
         if cloned_expr < 0 {
             return -1;
@@ -3376,6 +3388,12 @@ fn clone_const_specialization_call_metadata(
     key_ptr: i32,
     removed_const_count: i32,
     metadata_ptr: i32,
+    env_values_ptr: i32,
+    param_count: i32,
+    eval_stack_base: i32,
+    eval_stack_top_ptr: i32,
+    eval_value_ptr: i32,
+    eval_type_ptr: i32,
 ) -> i32 {
     if metadata_ptr <= 0 {
         return -1;
@@ -3438,6 +3456,12 @@ fn clone_const_specialization_call_metadata(
                 key_ptr,
                 removed_const_count,
                 original_arg,
+                env_values_ptr,
+                param_count,
+                eval_stack_base,
+                eval_stack_top_ptr,
+                eval_value_ptr,
+                eval_type_ptr,
             );
             if cloned_arg < 0 {
                 return -1;
@@ -3480,6 +3504,12 @@ fn clone_const_specialization_expr(
     key_ptr: i32,
     removed_const_count: i32,
     expr_index: i32,
+    env_values_ptr: i32,
+    param_count: i32,
+    eval_stack_base: i32,
+    eval_stack_top_ptr: i32,
+    eval_value_ptr: i32,
+    eval_type_ptr: i32,
 ) -> i32 {
     if expr_index < 0 {
         return expr_index;
@@ -3502,6 +3532,12 @@ fn clone_const_specialization_expr(
             key_ptr,
             removed_const_count,
             metadata_ptr,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
         );
         if cloned_metadata < 0 {
             return -1;
@@ -3555,6 +3591,12 @@ fn clone_const_specialization_expr(
             key_ptr,
             removed_const_count,
             cond_index,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
         );
         if cloned_cond < 0 {
             return -1;
@@ -3565,6 +3607,12 @@ fn clone_const_specialization_expr(
             key_ptr,
             removed_const_count,
             then_index,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
         );
         if cloned_then < 0 {
             return -1;
@@ -3575,6 +3623,12 @@ fn clone_const_specialization_expr(
             key_ptr,
             removed_const_count,
             else_index,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
         );
         if cloned_else < 0 {
             return -1;
@@ -3616,6 +3670,12 @@ fn clone_const_specialization_expr(
             key_ptr,
             removed_const_count,
             init_index,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
         );
         if cloned_init < 0 {
             return -1;
@@ -3626,6 +3686,12 @@ fn clone_const_specialization_expr(
             key_ptr,
             removed_const_count,
             body_index,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
         );
         if cloned_body < 0 {
             return -1;
@@ -3655,6 +3721,12 @@ fn clone_const_specialization_expr(
             key_ptr,
             removed_const_count,
             value_index,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
         );
         if cloned_value < 0 {
             return -1;
@@ -3678,6 +3750,12 @@ fn clone_const_specialization_expr(
             key_ptr,
             removed_const_count,
             first_index,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
         );
         if cloned_first < 0 {
             return -1;
@@ -3688,6 +3766,12 @@ fn clone_const_specialization_expr(
             key_ptr,
             removed_const_count,
             then_index,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
         );
         if cloned_then < 0 {
             return -1;
@@ -3710,6 +3794,12 @@ fn clone_const_specialization_expr(
             key_ptr,
             removed_const_count,
             body_index,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
         );
         if cloned_body < 0 {
             return -1;
@@ -3732,6 +3822,12 @@ fn clone_const_specialization_expr(
             key_ptr,
             removed_const_count,
             value_index,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
         );
         if cloned_value < 0 {
             return -1;
@@ -3754,6 +3850,12 @@ fn clone_const_specialization_expr(
             key_ptr,
             removed_const_count,
             value_index,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
         );
         if cloned_value < 0 {
             return -1;
@@ -3783,6 +3885,12 @@ fn clone_const_specialization_expr(
             key_ptr,
             removed_const_count,
             value_index,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
         );
         if cloned_value < 0 {
             return -1;
@@ -3799,22 +3907,73 @@ fn clone_const_specialization_expr(
     };
     if kind == 35 {
         let element_index: i32 = load_i32(entry_ptr + WORD_SIZE);
-        let length: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
+        let mut length: i32 = ast_expr_array_repeat_length(ast_base, expr_index);
+        let length_expr_index: i32 = ast_expr_array_repeat_length_expr(ast_base, expr_index);
         let cloned_element: i32 = clone_const_specialization_expr(
             ast_base,
             template_index,
             key_ptr,
             removed_const_count,
             element_index,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
         );
         if cloned_element < 0 {
             return -1;
         };
-        let new_index: i32 = ast_expr_alloc_array_repeat(ast_base, cloned_element, length);
+        if length_expr_index >= 0 {
+            if env_values_ptr <= 0 {
+                return -1;
+            };
+            let saved_top: i32 = load_i32(eval_stack_top_ptr);
+            store_i32(eval_stack_top_ptr, 0);
+            let status: i32 = interpret_constant_expression(
+                ast_base,
+                length_expr_index,
+                eval_stack_base,
+                eval_stack_top_ptr,
+                eval_value_ptr,
+                eval_type_ptr,
+                env_values_ptr,
+                param_count,
+                param_count,
+            );
+            store_i32(eval_stack_top_ptr, saved_top);
+            if status < 0 {
+                return -1;
+            };
+            if status != CONST_EVAL_STATUS_OK {
+                return -1;
+            };
+            let result_type: i32 = load_i32(eval_type_ptr);
+            if !constant_eval_integer_type_supported(result_type) {
+                return -1;
+            };
+            let normalized: i32 = normalize_integer_value(load_i32(eval_value_ptr), result_type);
+            if normalized < 0 {
+                return -1;
+            };
+            length = normalized;
+        };
+        let new_index: i32 = ast_expr_alloc_array_repeat(ast_base, cloned_element, length, -1);
         if new_index < 0 {
             return -1;
         };
-        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        let mut expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        if length_expr_index >= 0 {
+            let element_type: i32 = ast_expr_type(ast_base, cloned_element);
+            if element_type >= 0 {
+                let specialized_array: i32 =
+                    ast_register_array_type(ast_base, element_type, length);
+                if specialized_array >= 0 {
+                    expr_type = specialized_array;
+                };
+            };
+        };
         if expr_type >= 0 {
             ast_expr_set_type(ast_base, new_index, expr_type);
         };
@@ -3829,6 +3988,12 @@ fn clone_const_specialization_expr(
             key_ptr,
             removed_const_count,
             array_index,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
         );
         if cloned_array < 0 {
             return -1;
@@ -3839,6 +4004,12 @@ fn clone_const_specialization_expr(
             key_ptr,
             removed_const_count,
             index_index,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
         );
         if cloned_index < 0 {
             return -1;
@@ -3866,6 +4037,12 @@ fn clone_const_specialization_expr(
             removed_const_count,
             values_ptr,
             count,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
         );
         if cloned_ptr < 0 {
             return -1;
@@ -3888,6 +4065,12 @@ fn clone_const_specialization_expr(
             key_ptr,
             removed_const_count,
             array_index,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
         );
         if cloned_array < 0 {
             return -1;
@@ -3907,6 +4090,12 @@ fn clone_const_specialization_expr(
             key_ptr,
             removed_const_count,
             value_index,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
         );
         if cloned_value < 0 {
             return -1;
@@ -3930,6 +4119,12 @@ fn clone_const_specialization_expr(
             removed_const_count,
             values_ptr,
             count,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
         );
         if cloned_ptr < 0 {
             return -1;
@@ -3953,6 +4148,12 @@ fn clone_const_specialization_expr(
             key_ptr,
             removed_const_count,
             tuple_index,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
         );
         if cloned_tuple < 0 {
             return -1;
@@ -4007,6 +4208,12 @@ fn clone_const_specialization_expr(
             key_ptr,
             removed_const_count,
             left_index,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
         );
         if cloned_left < 0 {
             return -1;
@@ -4017,6 +4224,12 @@ fn clone_const_specialization_expr(
             key_ptr,
             removed_const_count,
             right_index,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
         );
         if cloned_right < 0 {
             return -1;
@@ -4216,6 +4429,12 @@ fn ast_function_clone_const_template(ast_base: i32, index: i32, key_ptr: i32) ->
             key_ptr,
             const_entry_count,
             body_data0,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
         );
         if cloned_body_data0 < 0 {
             return -1;
@@ -5723,16 +5942,43 @@ fn ast_expr_alloc_inline_wasm(ast_base: i32, bytes_ptr: i32, byte_count: i32) ->
     index
 }
 
-fn ast_expr_alloc_array_repeat(ast_base: i32, element_index: i32, length: i32) -> i32 {
+fn ast_expr_alloc_array_repeat(
+    ast_base: i32,
+    element_index: i32,
+    length: i32,
+    length_expr_index: i32,
+) -> i32 {
     if length < 0 {
-        return -1;
+        if length_expr_index < 0 {
+            return -1;
+        };
     };
-    let index: i32 = ast_expr_alloc(ast_base, 35, element_index, length, 0);
+    let index: i32 = ast_expr_alloc(ast_base, 35, element_index, length, length_expr_index);
     if index < 0 {
         return -1;
     };
     ast_expr_set_type(ast_base, index, -1);
     index
+}
+
+fn ast_expr_array_repeat_length(ast_base: i32, expr_index: i32) -> i32 {
+    let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+    load_i32(entry_ptr + 2 * WORD_SIZE)
+}
+
+fn ast_expr_array_repeat_length_expr(ast_base: i32, expr_index: i32) -> i32 {
+    let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+    load_i32(entry_ptr + 3 * WORD_SIZE)
+}
+
+fn ast_expr_array_repeat_set_length(ast_base: i32, expr_index: i32, value: i32) {
+    let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+    store_i32(entry_ptr + 2 * WORD_SIZE, value);
+}
+
+fn ast_expr_array_repeat_set_length_expr(ast_base: i32, expr_index: i32, value: i32) {
+    let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+    store_i32(entry_ptr + 3 * WORD_SIZE, value);
 }
 
 fn ast_expr_alloc_array_list(ast_base: i32, values_ptr: i32, count: i32) -> i32 {
@@ -7672,7 +7918,7 @@ fn collect_expression_const_params_visit(
     };
     if kind == 35 {
         let element_index: i32 = load_i32(entry_ptr + 4);
-        return collect_expression_const_params_visit(
+        if collect_expression_const_params_visit(
             ast_base,
             element_index,
             params_count,
@@ -7681,7 +7927,23 @@ fn collect_expression_const_params_visit(
             usage_mask_high_ptr,
             usage_list_ptr,
             usage_count_ptr,
-        );
+        ) < 0 {
+            return -1;
+        };
+        let length_expr_index: i32 = ast_expr_array_repeat_length_expr(ast_base, expr_index);
+        if length_expr_index >= 0 {
+            return collect_expression_const_params_visit(
+                ast_base,
+                length_expr_index,
+                params_count,
+                const_mask_table_ptr,
+                usage_mask_low_ptr,
+                usage_mask_high_ptr,
+                usage_list_ptr,
+                usage_count_ptr,
+            );
+        };
+        return 0;
     };
     if kind == 37 || kind == 40 {
         let values_ptr: i32 = load_i32(entry_ptr + 4);

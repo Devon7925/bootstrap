@@ -282,7 +282,8 @@ fn parse_basic_expression(
             };
             array_cursor = skip_whitespace(base, len, array_cursor);
             let literal_cursor: i32 = parse_i32_literal(base, len, array_cursor, literal_ptr);
-            let mut length: i32 = -1;
+        let mut length: i32 = -1;
+        let mut length_expr_index: i32 = -1;
             if literal_cursor >= 0 {
                 length = load_i32(literal_ptr);
                 if length < 0 {
@@ -359,7 +360,7 @@ fn parse_basic_expression(
                 let length_value_ptr: i32 = length_temp_base;
                 let length_type_ptr: i32 = length_value_ptr + 4;
                 let length_scratch_base: i32 = length_type_ptr + 4;
-                if evaluate_expression_literal(
+                let literal_status: i32 = evaluate_expression_literal(
                     ast_base,
                     length_kind_ptr,
                     length_data0_ptr,
@@ -367,49 +368,47 @@ fn parse_basic_expression(
                     length_scratch_base,
                     length_value_ptr,
                     length_type_ptr,
-                ) < 0 {
-                    let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
-                    if detail_out_ptr > 0 {
-                        if load_u8(detail_out_ptr) == 0 {
-                            let message: [u8; 64] =
-                                "array literal length must be non-negative\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
-                            let detail_capacity: i32 = len(message);
-                            let mut detail_idx: i32 = 0;
-                            loop {
-                                if detail_idx >= detail_capacity {
-                                    break;
+                );
+                if literal_status < 0 {
+                    let length_parts: (i32, i32, i32) = load_expression_parts(
+                        length_kind_ptr,
+                        length_data0_ptr,
+                        length_data1_ptr,
+                    );
+                    length_expr_index = expression_index_from_parts(
+                        ast_base,
+                        length_parts,
+                    );
+                    if length_expr_index < 0 {
+                        return -1;
+                    };
+                    length = -1;
+                } else {
+                    let length_type: i32 = load_i32(length_type_ptr);
+                    if !constant_eval_integer_type_supported(length_type) {
+                        return -1;
+                    };
+                    length =
+                        normalize_integer_value(load_i32(length_value_ptr), length_type);
+                    if length < 0 {
+                        let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+                        if detail_out_ptr > 0 {
+                            if load_u8(detail_out_ptr) == 0 {
+                                let message: [u8; 64] =
+                                    "array literal length must be non-negative\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
+                                let detail_capacity: i32 = len(message);
+                                let mut detail_idx: i32 = 0;
+                                loop {
+                                    if detail_idx >= detail_capacity {
+                                        break;
+                                    };
+                                    store_u8(detail_out_ptr + detail_idx, message[detail_idx] as i32);
+                                    detail_idx = detail_idx + 1;
                                 };
-                                store_u8(detail_out_ptr + detail_idx, message[detail_idx] as i32);
-                                detail_idx = detail_idx + 1;
                             };
                         };
+                        return -1;
                     };
-                    return -1;
-                };
-                let length_type: i32 = load_i32(length_type_ptr);
-                if !constant_eval_integer_type_supported(length_type) {
-                    return -1;
-                };
-                length =
-                    normalize_integer_value(load_i32(length_value_ptr), length_type);
-                if length < 0 {
-                    let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
-                    if detail_out_ptr > 0 {
-                        if load_u8(detail_out_ptr) == 0 {
-                            let message: [u8; 64] =
-                                "array literal length must be non-negative\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
-                            let detail_capacity: i32 = len(message);
-                            let mut detail_idx: i32 = 0;
-                            loop {
-                                if detail_idx >= detail_capacity {
-                                    break;
-                                };
-                                store_u8(detail_out_ptr + detail_idx, message[detail_idx] as i32);
-                                detail_idx = detail_idx + 1;
-                            };
-                        };
-                    };
-                    return -1;
                 };
             };
             array_cursor = skip_whitespace(base, len, array_cursor);
@@ -433,7 +432,12 @@ fn parse_basic_expression(
                 };
                 return -1;
             };
-            let expr_index: i32 = ast_expr_alloc_array_repeat(ast_base, element_index, length);
+            let expr_index: i32 = ast_expr_alloc_array_repeat(
+                ast_base,
+                element_index,
+                length,
+                length_expr_index,
+            );
             if expr_index < 0 {
                 return -1;
             };
@@ -748,7 +752,7 @@ fn parse_basic_expression(
             if zero_index < 0 {
                 return -1;
             };
-            ast_expr_alloc_array_repeat(ast_base, zero_index, 0)
+            ast_expr_alloc_array_repeat(ast_base, zero_index, 0, -1)
         } else {
             let metadata_ptr: i32 = ast_call_data_alloc(ast_base, element_count);
             if metadata_ptr < 0 {
