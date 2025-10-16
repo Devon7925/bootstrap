@@ -1162,11 +1162,6 @@ fn parse_block_expression_body(
             };
             if load_i32(stmt_local_type_ptr) < 0 {
                 let inferred_type: i32 = ast_expr_type(ast_base, init_index);
-                if inferred_type < 0 {
-                    store_i32(locals_stack_count_ptr, saved_stack_count);
-                    store_i32(locals_next_index_ptr, saved_next_index);
-                    return -1;
-                };
                 store_i32(stmt_local_type_ptr, inferred_type);
             };
             idx = skip_whitespace(base, len, idx);
@@ -3330,6 +3325,8 @@ fn const_specialization_lookup_entry(
     (-1, -1)
 }
 
+const CONST_SPECIALIZATION_LOCAL_STACK_ENTRY_SIZE: i32 = 8;
+
 fn clone_const_specialization_expr_list(
     ast_base: i32,
     template_index: i32,
@@ -3343,6 +3340,9 @@ fn clone_const_specialization_expr_list(
     eval_stack_top_ptr: i32,
     eval_value_ptr: i32,
     eval_type_ptr: i32,
+            local_type_stack_ptr: i32,
+            local_type_stack_top_ptr: i32,
+            local_type_stack_capacity: i32,
 ) -> i32 {
     if count <= 0 {
         return 0;
@@ -3372,6 +3372,9 @@ fn clone_const_specialization_expr_list(
             eval_stack_top_ptr,
             eval_value_ptr,
             eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
         );
         if cloned_expr < 0 {
             return -1;
@@ -3394,6 +3397,9 @@ fn clone_const_specialization_call_metadata(
     eval_stack_top_ptr: i32,
     eval_value_ptr: i32,
     eval_type_ptr: i32,
+            local_type_stack_ptr: i32,
+            local_type_stack_top_ptr: i32,
+            local_type_stack_capacity: i32,
 ) -> i32 {
     if metadata_ptr <= 0 {
         return -1;
@@ -3450,19 +3456,22 @@ fn clone_const_specialization_call_metadata(
         let skip_arg: bool = trim_const_args
             && ast_function_param_is_const(ast_base, callee_index, arg_idx);
         if !skip_arg {
-            let cloned_arg: i32 = clone_const_specialization_expr(
-                ast_base,
-                template_index,
-                key_ptr,
-                removed_const_count,
-                original_arg,
-                env_values_ptr,
-                param_count,
-                eval_stack_base,
-                eval_stack_top_ptr,
-                eval_value_ptr,
-                eval_type_ptr,
-            );
+        let cloned_arg: i32 = clone_const_specialization_expr(
+            ast_base,
+            template_index,
+            key_ptr,
+            removed_const_count,
+            original_arg,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
+        );
             if cloned_arg < 0 {
                 return -1;
             };
@@ -3510,6 +3519,9 @@ fn clone_const_specialization_expr(
     eval_stack_top_ptr: i32,
     eval_value_ptr: i32,
     eval_type_ptr: i32,
+            local_type_stack_ptr: i32,
+            local_type_stack_top_ptr: i32,
+            local_type_stack_capacity: i32,
 ) -> i32 {
     if expr_index < 0 {
         return expr_index;
@@ -3538,6 +3550,9 @@ fn clone_const_specialization_expr(
             eval_stack_top_ptr,
             eval_value_ptr,
             eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
         );
         if cloned_metadata < 0 {
             return -1;
@@ -3604,6 +3619,9 @@ fn clone_const_specialization_expr(
             eval_stack_top_ptr,
             eval_value_ptr,
             eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
         );
         if cloned_cond < 0 {
             return -1;
@@ -3620,6 +3638,9 @@ fn clone_const_specialization_expr(
             eval_stack_top_ptr,
             eval_value_ptr,
             eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
         );
         if cloned_then < 0 {
             return -1;
@@ -3636,6 +3657,9 @@ fn clone_const_specialization_expr(
             eval_stack_top_ptr,
             eval_value_ptr,
             eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
         );
         if cloned_else < 0 {
             return -1;
@@ -3658,7 +3682,30 @@ fn clone_const_specialization_expr(
                 return -1;
             };
         };
-        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        let mut expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        if expr_type < 0 {
+            if local_type_stack_ptr > 0 && local_type_stack_top_ptr > 0 {
+                let stack_count: i32 = load_i32(local_type_stack_top_ptr);
+                let mut stack_idx: i32 = stack_count - 1;
+                loop {
+                    if stack_idx < 0 {
+                        break;
+                    };
+                    let entry_offset: i32 =
+                        local_type_stack_ptr + stack_idx * CONST_SPECIALIZATION_LOCAL_STACK_ENTRY_SIZE;
+                    let recorded_index: i32 = load_i32(entry_offset);
+                    if recorded_index == local_index {
+                        let recorded_type: i32 = load_i32(entry_offset + 4);
+                        if recorded_type >= 0 {
+                            expr_type = recorded_type;
+                            ast_expr_set_type(ast_base, expr_index, expr_type);
+                        };
+                        break;
+                    };
+                    stack_idx = stack_idx - 1;
+                };
+            };
+        };
         return ast_expr_alloc_local(ast_base, local_index, expr_type);
     };
     if kind == 9 {
@@ -3683,9 +3730,32 @@ fn clone_const_specialization_expr(
             eval_stack_top_ptr,
             eval_value_ptr,
             eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
         );
         if cloned_init < 0 {
             return -1;
+        };
+        let mut pushed: bool = false;
+        if local_type_stack_ptr > 0 && local_type_stack_top_ptr > 0 {
+            if local_type_stack_capacity <= 0 {
+                return -1;
+            };
+            let stack_top: i32 = load_i32(local_type_stack_top_ptr);
+            if stack_top >= local_type_stack_capacity {
+                return -1;
+            };
+            let init_type: i32 = ast_expr_type(ast_base, cloned_init);
+            if init_type >= 0 {
+                let entry_offset: i32 =
+                    local_type_stack_ptr
+                    + stack_top * CONST_SPECIALIZATION_LOCAL_STACK_ENTRY_SIZE;
+                store_i32(entry_offset, local_index);
+                store_i32(entry_offset + 4, init_type);
+                store_i32(local_type_stack_top_ptr, stack_top + 1);
+                pushed = true;
+            };
         };
         let cloned_body: i32 = clone_const_specialization_expr(
             ast_base,
@@ -3699,7 +3769,17 @@ fn clone_const_specialization_expr(
             eval_stack_top_ptr,
             eval_value_ptr,
             eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
         );
+        if pushed {
+            let stack_top: i32 = load_i32(local_type_stack_top_ptr);
+            if stack_top <= 0 {
+                return -1;
+            };
+            store_i32(local_type_stack_top_ptr, stack_top - 1);
+        };
         if cloned_body < 0 {
             return -1;
         };
@@ -3734,6 +3814,9 @@ fn clone_const_specialization_expr(
             eval_stack_top_ptr,
             eval_value_ptr,
             eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
         );
         if cloned_value < 0 {
             return -1;
@@ -3763,6 +3846,9 @@ fn clone_const_specialization_expr(
             eval_stack_top_ptr,
             eval_value_ptr,
             eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
         );
         if cloned_first < 0 {
             return -1;
@@ -3779,6 +3865,9 @@ fn clone_const_specialization_expr(
             eval_stack_top_ptr,
             eval_value_ptr,
             eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
         );
         if cloned_then < 0 {
             return -1;
@@ -3807,6 +3896,9 @@ fn clone_const_specialization_expr(
             eval_stack_top_ptr,
             eval_value_ptr,
             eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
         );
         if cloned_body < 0 {
             return -1;
@@ -3835,6 +3927,9 @@ fn clone_const_specialization_expr(
             eval_stack_top_ptr,
             eval_value_ptr,
             eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
         );
         if cloned_value < 0 {
             return -1;
@@ -3863,6 +3958,9 @@ fn clone_const_specialization_expr(
             eval_stack_top_ptr,
             eval_value_ptr,
             eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
         );
         if cloned_value < 0 {
             return -1;
@@ -3898,6 +3996,9 @@ fn clone_const_specialization_expr(
             eval_stack_top_ptr,
             eval_value_ptr,
             eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
         );
         if cloned_value < 0 {
             return -1;
@@ -3928,6 +4029,9 @@ fn clone_const_specialization_expr(
             eval_stack_top_ptr,
             eval_value_ptr,
             eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
         );
         if cloned_element < 0 {
             return -1;
@@ -3955,6 +4059,9 @@ fn clone_const_specialization_expr(
                 eval_stack_top_ptr,
                 eval_value_ptr,
                 eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
             );
             if cloned_length_expr < 0 {
                 return -1;
@@ -4069,6 +4176,9 @@ fn clone_const_specialization_expr(
             eval_stack_top_ptr,
             eval_value_ptr,
             eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
         );
         if cloned_array < 0 {
             return -1;
@@ -4085,6 +4195,9 @@ fn clone_const_specialization_expr(
             eval_stack_top_ptr,
             eval_value_ptr,
             eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
         );
         if cloned_index < 0 {
             return -1;
@@ -4118,6 +4231,9 @@ fn clone_const_specialization_expr(
             eval_stack_top_ptr,
             eval_value_ptr,
             eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
         );
         if cloned_ptr < 0 {
             return -1;
@@ -4146,6 +4262,9 @@ fn clone_const_specialization_expr(
             eval_stack_top_ptr,
             eval_value_ptr,
             eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
         );
         if cloned_array < 0 {
             return -1;
@@ -4171,6 +4290,9 @@ fn clone_const_specialization_expr(
             eval_stack_top_ptr,
             eval_value_ptr,
             eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
         );
         if cloned_value < 0 {
             return -1;
@@ -4200,6 +4322,9 @@ fn clone_const_specialization_expr(
             eval_stack_top_ptr,
             eval_value_ptr,
             eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
         );
         if cloned_ptr < 0 {
             return -1;
@@ -4229,6 +4354,9 @@ fn clone_const_specialization_expr(
             eval_stack_top_ptr,
             eval_value_ptr,
             eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
         );
         if cloned_tuple < 0 {
             return -1;
@@ -4289,6 +4417,9 @@ fn clone_const_specialization_expr(
             eval_stack_top_ptr,
             eval_value_ptr,
             eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
         );
         if cloned_left < 0 {
             return -1;
@@ -4305,6 +4436,9 @@ fn clone_const_specialization_expr(
             eval_stack_top_ptr,
             eval_value_ptr,
             eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
         );
         if cloned_right < 0 {
             return -1;
@@ -4409,6 +4543,17 @@ fn ast_function_clone_const_template(ast_base: i32, index: i32, key_ptr: i32) ->
             return -1;
         };
     };
+    let locals_count: i32 = load_i32(source_ptr + 20);
+    let mut local_type_stack_ptr: i32 = 0;
+    let mut local_type_stack_top_ptr: i32 = 0;
+    let mut local_type_stack_capacity: i32 = locals_count;
+    if locals_count > 0 {
+        local_type_stack_ptr = ast_temp_base(ast_base);
+        local_type_stack_top_ptr =
+            local_type_stack_ptr
+            + locals_count * CONST_SPECIALIZATION_LOCAL_STACK_ENTRY_SIZE;
+        store_i32(local_type_stack_top_ptr, 0);
+    };
     let mut specialized_param_types_ptr: i32 = -1;
     if runtime_param_count > 0 {
         specialized_param_types_ptr = ast_call_data_alloc(ast_base, runtime_param_count);
@@ -4512,6 +4657,9 @@ fn ast_function_clone_const_template(ast_base: i32, index: i32, key_ptr: i32) ->
             eval_stack_top_ptr,
             eval_value_ptr,
             eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
         );
         if cloned_body_data0 < 0 {
             return -1;

@@ -21,7 +21,7 @@ test("const parameters specialize array repeat lengths", async () => {
   expect(result).toBe(3);
 });
 
-test.todo("const parameters specialize array repeat lengths in let", async () => {
+test("const parameters specialize array repeat lengths in let", async () => {
   const wasm = await compileWithAstCompiler(`
     fn helper(const COUNT: i32, value: i32) -> i32 {
         let arr = [value; COUNT];
@@ -36,7 +36,23 @@ test.todo("const parameters specialize array repeat lengths in let", async () =>
   expect(result).toBe(3);
 });
 
-test.todo("const parameters specialize complex array repeat lengths as part of index access expression", async () => {
+test("const parameters specialize array repeat lengths through let aliases", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn helper(const COUNT: i32, value: i32) -> i32 {
+        let arr = [value; COUNT];
+        let alias = arr;
+        len(alias)
+    }
+
+    fn main() -> i32 {
+        helper(3, 7)
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(3);
+});
+
+test("const parameters specialize complex array repeat lengths as part of index access expression", async () => {
   const wasm = await compileWithAstCompiler(`
     fn helper(const COUNT: i32, value: i32) -> i32 {
         [value; COUNT][0]
