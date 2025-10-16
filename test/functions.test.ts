@@ -311,6 +311,19 @@ test("const parameter templates are not exported", async () => {
   expect(exportNames).not.toContain("helper");
 });
 
+test("array repeat length reports runtime parameter usage", async () => {
+  const failure = await expectCompileFailure(`
+    fn helper(count: i32, value: i32) -> i32 {
+        len([value; count])
+    }
+
+    fn main() -> i32 {
+        helper(3, 7)
+    }
+  `);
+  expect(failure.failure.detail).toBe("array literal length requires const parameters");
+});
+
 test.skip("const parameter templates specialize array arguments", async () => {
   const wasm = await compileWithAstCompiler(`
     fn sum(const N: i32, values: [i32; N]) -> i32 {
