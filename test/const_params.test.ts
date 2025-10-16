@@ -151,14 +151,14 @@ test("const parameter templates specialize simple loop", async () => {
   expect(result).toBe(0);
 });
 
-test.todo("const parameter templates specialize loop", async () => {
+test("const parameter templates specialize loop", async () => {
   const wasm = await compileWithAstCompiler(`
     fn sum(const N: i32) -> i32 {
         let mut index: i32 = 0;
         loop {
             if index >= N {
                 return index;
-            }
+            };
             index = index + 1;
             0
         }
@@ -172,7 +172,45 @@ test.todo("const parameter templates specialize loop", async () => {
   expect(result).toBe(5);
 });
 
-test.todo("const parameter templates specialize complex array functions", async () => {
+test("const parameter templates specialize complex loop", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn sum(const N: i32) -> i32 {
+        let mut total: i32 = 0;
+        let mut index: i32 = 0;
+        loop {
+            if index >= N {
+                return total;
+            };
+            total = total + index;
+            index = index + 1;
+            0
+        }
+    }
+
+    fn main() -> i32 {
+        sum(5)
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(10);
+});
+
+test.todo("const parameter templates specialize index into let defined array", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn sum(const N: i32) -> i32 {
+        let values = [3; N];
+        values[0]
+    }
+
+    fn main() -> i32 {
+        sum(5)
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(3);
+});
+
+test.todo("const parameter templates specialize complex array loop functions", async () => {
   const wasm = await compileWithAstCompiler(`
     fn sum(const N: i32) -> i32 {
         let values = [3; N];
