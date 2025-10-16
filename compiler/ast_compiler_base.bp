@@ -3554,7 +3554,7 @@ fn clone_const_specialization_expr(
     };
     if kind == 6 {
         let param_index: i32 = load_i32(entry_ptr + WORD_SIZE);
-        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        let mut expr_type: i32 = ast_expr_type(ast_base, expr_index);
         if template_index >= 0 {
             if ast_function_param_is_const(ast_base, template_index, param_index) {
                 let entry: (i32, i32) =
@@ -3571,6 +3571,13 @@ fn clone_const_specialization_expr(
                     return -1;
                 };
                 return literal_index;
+            };
+            if env_values_ptr > 0 {
+                let type_slot_ptr: i32 = env_values_ptr + param_index * 8 + WORD_SIZE;
+                let specialized_type: i32 = load_i32(type_slot_ptr);
+                if specialized_type >= 0 {
+                    expr_type = specialized_type;
+                };
             };
             let runtime_index: i32 =
                 ast_function_param_runtime_index(ast_base, template_index, param_index);
@@ -4378,6 +4385,8 @@ fn ast_function_clone_const_template(ast_base: i32, index: i32, key_ptr: i32) ->
         if resolved_type < 0 {
             return -1;
         };
+        let type_slot_ptr: i32 = env_values_ptr + param_idx * 8 + WORD_SIZE;
+        store_i32(type_slot_ptr, resolved_type);
         if !ast_function_param_is_const(ast_base, index, param_idx) {
             if runtime_param_count > 0 {
                 if specialized_param_types_ptr < 0 {

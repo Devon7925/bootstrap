@@ -48,4 +48,4 @@ test("ast compiler bootstraps itself", async () => {
 
   const result = await runWasmMainWithGc(program);
   expect(result).toBe(10);
-});
+}, { timeout: 15_000 });

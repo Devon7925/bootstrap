@@ -211,3 +211,11 @@ The Wasm emitter derives local allocations by walking expression trees and count
 * Allow const parameters on type aliases and `type` declarations to express compile-time families of types without separate trait machinery.
 * Explore allowing default values for const parameters to support ergonomic APIs when a common constant is frequently used.
 * Investigate exposing const parameter values to metaprogramming facilities once they exist, enabling reflection over compile-time configuration.
+
+## Implementation Notes
+
+The current parser treats array repeat lengths as ordinary constant expressions, which means
+`[value; N]` and `[T; N]` forms still reject identifiers even when `N` is a const parameter.
+Adding a fallback that recognizes parameter references at parse time (and records a template
+handle for later specialization) remains future work so that array literals and array-typed
+parameters can flow through const instantiation.
