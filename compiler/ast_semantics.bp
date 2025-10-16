@@ -931,6 +931,83 @@ const RESOLVE_CONTROL_STACK_CAPACITY: i32 = 128;
 
 const RESOLVE_LOOP_STACK_CAPACITY: i32 = 64;
 
+const RESOLVE_LOCAL_STACK_CAPACITY: i32 = 512;
+
+const RESOLVE_LOCAL_STACK_ENTRY_SIZE: i32 = 12;
+
+fn resolve_local_array_repeat_init_index(
+    ast_base: i32,
+    local_stack_base: i32,
+    local_stack_count_ptr: i32,
+    local_index: i32,
+) -> i32 {
+    if local_stack_base <= 0 {
+        return -1;
+    };
+    if local_stack_count_ptr <= 0 {
+        return -1;
+    };
+    if local_index < 0 {
+        return -1;
+    };
+    let total_count: i32 = load_i32(local_stack_count_ptr);
+    if total_count <= 0 {
+        return -1;
+    };
+    let mut search_local: i32 = local_index;
+    let mut depth: i32 = 0;
+    loop {
+        if depth >= total_count {
+            return -1;
+        };
+        if search_local < 0 {
+            return -1;
+        };
+        let stack_count: i32 = load_i32(local_stack_count_ptr);
+        if stack_count <= 0 {
+            return -1;
+        };
+        let mut stack_idx: i32 = stack_count - 1;
+        let mut follow_alias: bool = false;
+        let mut found_entry: bool = false;
+        loop {
+            if stack_idx < 0 {
+                break;
+            };
+            let entry_offset: i32 =
+                local_stack_base + stack_idx * RESOLVE_LOCAL_STACK_ENTRY_SIZE;
+            let recorded_index: i32 = load_i32(entry_offset);
+            if recorded_index == search_local {
+                found_entry = true;
+                let init_expr_index: i32 = load_i32(entry_offset + 4);
+                if init_expr_index < 0 {
+                    return -1;
+                };
+                let init_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, init_expr_index);
+                let init_kind: i32 = load_i32(init_entry_ptr);
+                if init_kind == 35 {
+                    return init_expr_index;
+                };
+                if init_kind == 8 {
+                    search_local = load_i32(init_entry_ptr + 4);
+                    follow_alias = true;
+                    break;
+                };
+                return -1;
+            };
+            stack_idx = stack_idx - 1;
+        };
+        if !found_entry {
+            return -1;
+        };
+        if follow_alias {
+            depth = depth + 1;
+            continue;
+        };
+        return -1;
+    };
+}
+
 fn resolve_expression_internal(
     out_ptr: i32,
     ast_base: i32,
@@ -940,6 +1017,8 @@ fn resolve_expression_internal(
     control_stack_count_ptr: i32,
     loop_stack_base: i32,
     loop_stack_count_ptr: i32,
+    local_stack_base: i32,
+    local_stack_count_ptr: i32,
     caller_func_index: i32,
     caller_is_const: bool,
 ) -> i32 {
@@ -1074,7 +1153,33 @@ fn resolve_expression_internal(
         return 0;
     };
     if kind == 8 {
-        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        let mut expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        if expr_type < 0 {
+            if local_stack_base > 0 && local_stack_count_ptr > 0 {
+                let local_index: i32 = load_i32(entry_ptr + 4);
+                if local_index >= 0 {
+                    let stack_count: i32 = load_i32(local_stack_count_ptr);
+                    let mut stack_idx: i32 = stack_count - 1;
+                    loop {
+                        if stack_idx < 0 {
+                            break;
+                        };
+                        let entry_offset: i32 =
+                            local_stack_base + stack_idx * RESOLVE_LOCAL_STACK_ENTRY_SIZE;
+                        let recorded_index: i32 = load_i32(entry_offset);
+                        if recorded_index == local_index {
+                            let recorded_type: i32 = load_i32(entry_offset + 8);
+                            if recorded_type >= 0 {
+                                expr_type = recorded_type;
+                                ast_expr_set_type(ast_base, expr_index, expr_type);
+                            };
+                            break;
+                        };
+                        stack_idx = stack_idx - 1;
+                    };
+                };
+            };
+        };
         if expr_type >= 0 {
             let resolved_type: i32 = resolve_type_id(out_ptr, ast_base, expr_type);
             if resolved_type < 0 {
@@ -1119,6 +1224,8 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
         ) < 0 {
@@ -1175,6 +1282,8 @@ fn resolve_expression_internal(
                 control_stack_count_ptr,
                 loop_stack_base,
                 loop_stack_count_ptr,
+                local_stack_base,
+                local_stack_count_ptr,
                 caller_func_index,
                 caller_is_const,
             ) < 0 {
@@ -1239,6 +1348,8 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
         ) < 0 {
@@ -1253,6 +1364,8 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
         ) < 0 {
@@ -1294,6 +1407,33 @@ fn resolve_expression_internal(
                             return 0;
                         };
                     };
+                } else if array_expr_kind == 35 {
+                    let length_expr_index: i32 =
+                        ast_expr_array_repeat_length_expr(ast_base, array_index);
+                    if length_expr_index >= 0 {
+                        let index_type: i32 = ast_expr_type(ast_base, index_index);
+                        if index_type != BUILTIN_TYPE_ID_I32 {
+                            return -1;
+                        };
+                        let element_index: i32 = load_i32(array_entry_ptr + WORD_SIZE);
+                        if element_index < 0 {
+                            return -1;
+                        };
+                        let element_type: i32 = ast_expr_type(ast_base, element_index);
+                        if element_type < 0 {
+                            return -1;
+                        };
+                        let resolved_element: i32 =
+                            resolve_type_id(out_ptr, ast_base, element_type);
+                        if resolved_element < 0 {
+                            return -1;
+                        };
+                        if resolved_element != element_type {
+                            ast_expr_set_type(ast_base, element_index, resolved_element);
+                        };
+                        ast_expr_set_type(ast_base, expr_index, resolved_element);
+                        return 0;
+                    };
                 };
             };
             return -1;
@@ -1334,6 +1474,8 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
         ) < 0 {
@@ -1362,6 +1504,34 @@ fn resolve_expression_internal(
                     if length_expr_index >= 0 {
                         ast_expr_set_type(ast_base, expr_index, BUILTIN_TYPE_ID_I32);
                         return 0;
+                    };
+                } else if array_expr_kind == 8 {
+                    if local_stack_base > 0 && local_stack_count_ptr > 0 {
+                        let local_index: i32 = load_i32(array_entry_ptr + 4);
+                        if local_index >= 0 {
+                            let repeat_init_index: i32 = resolve_local_array_repeat_init_index(
+                                ast_base,
+                                local_stack_base,
+                                local_stack_count_ptr,
+                                local_index,
+                            );
+                            if repeat_init_index >= 0 {
+                                let length_expr_index: i32 = ast_expr_array_repeat_length_expr(
+                                    ast_base,
+                                    repeat_init_index,
+                                );
+                                if length_expr_index >= 0 {
+                                    ast_expr_set_type(ast_base, expr_index, BUILTIN_TYPE_ID_I32);
+                                    return 0;
+                                };
+                                let stored_length: i32 =
+                                    ast_expr_array_repeat_length(ast_base, repeat_init_index);
+                                if stored_length >= 0 {
+                                    ast_expr_set_type(ast_base, expr_index, BUILTIN_TYPE_ID_I32);
+                                    return 0;
+                                };
+                            };
+                        };
                     };
                 };
             };
@@ -1414,6 +1584,8 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
         ) < 0 {
@@ -1512,6 +1684,8 @@ fn resolve_expression_internal(
                 control_stack_count_ptr,
                 loop_stack_base,
                 loop_stack_count_ptr,
+                local_stack_base,
+                local_stack_count_ptr,
                 caller_func_index,
                 caller_is_const,
             ) < 0 {
@@ -1572,6 +1746,8 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
         ) < 0 {
@@ -1593,6 +1769,8 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
         ) < 0 {
@@ -1609,6 +1787,8 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
         ) < 0 {
@@ -1630,6 +1810,8 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
         ) < 0 {
@@ -1685,6 +1867,8 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
         ) < 0 {
@@ -1697,6 +1881,8 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
         ) < 0 {
@@ -1774,6 +1960,8 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
         ) < 0 {
@@ -1795,6 +1983,8 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
         ) < 0 {
@@ -1814,6 +2004,8 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
         ) < 0 {
@@ -1832,6 +2024,8 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
         ) < 0 {
@@ -1845,6 +2039,8 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
         ) < 0 {
@@ -1880,6 +2076,7 @@ fn resolve_expression_internal(
         return 0;
     };
     if kind == 9 {
+        let local_index: i32 = load_i32(entry_ptr + 4);
         let init_index: i32 = load_i32(entry_ptr + 8);
         let body_index: i32 = load_i32(entry_ptr + 12);
         if resolve_expression_internal(out_ptr, ast_base,
@@ -1889,21 +2086,47 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
         ) < 0 {
             return -1;
         };
-        if resolve_expression_internal(out_ptr, ast_base,
+        let mut pushed: bool = false;
+        if local_stack_base > 0 && local_stack_count_ptr > 0 {
+            let stack_count: i32 = load_i32(local_stack_count_ptr);
+            if stack_count >= RESOLVE_LOCAL_STACK_CAPACITY {
+                return -1;
+            };
+            let entry_offset: i32 =
+                local_stack_base + stack_count * RESOLVE_LOCAL_STACK_ENTRY_SIZE;
+            store_i32(entry_offset, local_index);
+            store_i32(entry_offset + 4, init_index);
+            store_i32(entry_offset + 8, ast_expr_type(ast_base, init_index));
+            store_i32(local_stack_count_ptr, stack_count + 1);
+            pushed = true;
+        };
+        let body_status: i32 = resolve_expression_internal(out_ptr, ast_base,
             body_index,
             func_count,
             control_stack_base,
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
-        ) < 0 {
+        );
+        if pushed {
+            let stack_count: i32 = load_i32(local_stack_count_ptr);
+            if stack_count <= 0 {
+                return -1;
+            };
+            store_i32(local_stack_count_ptr, stack_count - 1);
+        };
+        if body_status < 0 {
             return -1;
         };
         ast_expr_set_type(ast_base, expr_index, ast_expr_type(ast_base, body_index));
@@ -1918,6 +2141,8 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
         ) < 0 {
@@ -1936,6 +2161,8 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
         ) < 0 {
@@ -1948,6 +2175,8 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
         ) < 0 {
@@ -1981,6 +2210,8 @@ fn resolve_expression_internal(
             control_stack_count_ptr,
             loop_stack_base,
             loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
         );
@@ -2013,6 +2244,8 @@ fn resolve_expression_internal(
                 control_stack_count_ptr,
                 loop_stack_base,
                 loop_stack_count_ptr,
+                local_stack_base,
+                local_stack_count_ptr,
                 caller_func_index,
                 caller_is_const,
             ) < 0 {
@@ -2056,10 +2289,14 @@ fn resolve_expression(
     let control_stack_base: i32 = temp_base + 8;
     let control_capacity: i32 = RESOLVE_CONTROL_STACK_CAPACITY;
     let loop_stack_base: i32 = control_stack_base + control_capacity * 4;
+    let local_stack_count_ptr: i32 = loop_stack_base + RESOLVE_LOOP_STACK_CAPACITY * 4;
+    let local_stack_base: i32 = local_stack_count_ptr + 4;
     let saved_control_count: i32 = load_i32(control_count_ptr);
     let saved_loop_count: i32 = load_i32(loop_count_ptr);
+    let saved_local_count: i32 = load_i32(local_stack_count_ptr);
     store_i32(control_count_ptr, 0);
     store_i32(loop_count_ptr, 0);
+    store_i32(local_stack_count_ptr, 0);
     let result: i32 = resolve_expression_internal(
         out_ptr,
         ast_base,
@@ -2069,11 +2306,14 @@ fn resolve_expression(
         control_count_ptr,
         loop_stack_base,
         loop_count_ptr,
+        local_stack_base,
+        local_stack_count_ptr,
         caller_func_index,
         caller_is_const,
     );
     store_i32(control_count_ptr, saved_control_count);
     store_i32(loop_count_ptr, saved_loop_count);
+    store_i32(local_stack_count_ptr, saved_local_count);
     result
 }
 
