@@ -1434,6 +1434,48 @@ fn resolve_expression_internal(
                         ast_expr_set_type(ast_base, expr_index, resolved_element);
                         return 0;
                     };
+                } else if array_expr_kind == 8 {
+                    if local_stack_base > 0 && local_stack_count_ptr > 0 {
+                        let local_index: i32 = load_i32(array_entry_ptr + 4);
+                        if local_index >= 0 {
+                            let repeat_init_index: i32 = resolve_local_array_repeat_init_index(
+                                ast_base,
+                                local_stack_base,
+                                local_stack_count_ptr,
+                                local_index,
+                            );
+                            if repeat_init_index >= 0 {
+                                let index_type: i32 = ast_expr_type(ast_base, index_index);
+                                if index_type != BUILTIN_TYPE_ID_I32 {
+                                    return -1;
+                                };
+                                let repeat_entry_ptr: i32 =
+                                    ast_expr_entry_ptr(ast_base, repeat_init_index);
+                                let element_index: i32 = load_i32(repeat_entry_ptr + WORD_SIZE);
+                                if element_index < 0 {
+                                    return -1;
+                                };
+                                let element_type: i32 = ast_expr_type(ast_base, element_index);
+                                if element_type < 0 {
+                                    return -1;
+                                };
+                                let resolved_element: i32 =
+                                    resolve_type_id(out_ptr, ast_base, element_type);
+                                if resolved_element < 0 {
+                                    return -1;
+                                };
+                                if resolved_element != element_type {
+                                    ast_expr_set_type(
+                                        ast_base,
+                                        element_index,
+                                        resolved_element,
+                                    );
+                                };
+                                ast_expr_set_type(ast_base, expr_index, resolved_element);
+                                return 0;
+                            };
+                        };
+                    };
                 };
             };
             return -1;
