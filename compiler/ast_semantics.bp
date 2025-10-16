@@ -793,7 +793,11 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
     };
     let mut idx: i32 = 0;
     loop {
-        if idx >= func_count {
+        let total_funcs: i32 = ast_functions_count(ast_base);
+        if total_funcs < 0 {
+            return -1;
+        };
+        if idx >= total_funcs {
             break;
         };
         let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
@@ -804,7 +808,7 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
         let caller_is_const: bool = ast_function_is_const(ast_base, idx);
         let mut other_idx: i32 = idx + 1;
         loop {
-            if other_idx >= func_count {
+            if other_idx >= total_funcs {
                 break;
             };
             let other_entry_ptr: i32 = ast_function_entry_ptr(ast_base, other_idx);
@@ -866,7 +870,7 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
                 out_ptr,
                 ast_base,
                 metadata_ptr,
-                func_count,
+                total_funcs,
                 caller_is_const,
                 idx,
             );
@@ -882,7 +886,7 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
                 out_ptr,
                 ast_base,
                 expr_index,
-                func_count,
+                total_funcs,
                 caller_is_const,
                 idx,
             ) < 0 {
@@ -1351,6 +1355,13 @@ fn resolve_expression_internal(
                             ast_expr_set_type(ast_base, expr_index, BUILTIN_TYPE_ID_I32);
                             return 0;
                         };
+                    };
+                } else if array_expr_kind == 35 {
+                    let length_expr_index: i32 =
+                        ast_expr_array_repeat_length_expr(ast_base, array_index);
+                    if length_expr_index >= 0 {
+                        ast_expr_set_type(ast_base, expr_index, BUILTIN_TYPE_ID_I32);
+                        return 0;
                     };
                 };
             };

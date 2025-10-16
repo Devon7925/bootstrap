@@ -324,6 +324,20 @@ test("array repeat length reports runtime parameter usage", async () => {
   expect(failure.failure.detail).toBe("array literal length requires const parameters");
 });
 
+test("const parameters specialize array repeat lengths", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn helper(const COUNT: i32, value: i32) -> i32 {
+        len([value; COUNT])
+    }
+
+    fn main() -> i32 {
+        helper(3, 7)
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(3);
+});
+
 test.skip("const parameter templates specialize array arguments", async () => {
   const wasm = await compileWithAstCompiler(`
     fn sum(const N: i32, values: [i32; N]) -> i32 {
