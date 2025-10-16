@@ -808,7 +808,7 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
         let caller_is_const: bool = ast_function_is_const(ast_base, idx);
         let mut other_idx: i32 = idx + 1;
         loop {
-            if other_idx >= total_funcs {
+            if other_idx >= func_count {
                 break;
             };
             let other_entry_ptr: i32 = ast_function_entry_ptr(ast_base, other_idx);
