@@ -3932,46 +3932,95 @@ fn clone_const_specialization_expr(
         if cloned_element < 0 {
             return -1;
         };
+        let mut resolved_length: bool = false;
+        let mut metadata_ptr: i32 = -1;
         if length_expr_index >= 0 {
-            if env_values_ptr <= 0 {
+            let original_metadata_ptr: i32 =
+                ast_expr_array_repeat_length_metadata(ast_base, expr_index);
+            let mut usage_list_ptr: i32 = 0;
+            let mut usage_count: i32 = 0;
+            if original_metadata_ptr > 0 {
+                usage_list_ptr = load_i32(original_metadata_ptr + WORD_SIZE);
+                usage_count = load_i32(original_metadata_ptr + 2 * WORD_SIZE);
+            };
+            let cloned_length_expr: i32 = clone_const_specialization_expr(
+                ast_base,
+                template_index,
+                key_ptr,
+                removed_const_count,
+                length_expr_index,
+                env_values_ptr,
+                param_count,
+                eval_stack_base,
+                eval_stack_top_ptr,
+                eval_value_ptr,
+                eval_type_ptr,
+            );
+            if cloned_length_expr < 0 {
                 return -1;
             };
             let saved_top: i32 = load_i32(eval_stack_top_ptr);
             store_i32(eval_stack_top_ptr, 0);
             let status: i32 = interpret_constant_expression(
                 ast_base,
-                length_expr_index,
+                cloned_length_expr,
                 eval_stack_base,
                 eval_stack_top_ptr,
                 eval_value_ptr,
                 eval_type_ptr,
-                env_values_ptr,
-                param_count,
-                param_count,
+                0,
+                0,
+                0,
             );
             store_i32(eval_stack_top_ptr, saved_top);
-            if status < 0 {
-                return -1;
+            if status == CONST_EVAL_STATUS_OK {
+                let result_type: i32 = load_i32(eval_type_ptr);
+                if constant_eval_integer_type_supported(result_type) {
+                    let normalized: i32 =
+                        normalize_integer_value(load_i32(eval_value_ptr), result_type);
+                    if normalized >= 0 {
+                        length = normalized;
+                        resolved_length = true;
+                    };
+                };
             };
-            if status != CONST_EVAL_STATUS_OK {
-                return -1;
+            if !resolved_length {
+                let mut copied_usage_ptr: i32 = 0;
+                if usage_count > 0 && usage_list_ptr > 0 {
+                    copied_usage_ptr = ast_call_data_alloc(ast_base, usage_count);
+                    if copied_usage_ptr < 0 {
+                        return -1;
+                    };
+                    let mut copy_idx: i32 = 0;
+                    loop {
+                        if copy_idx >= usage_count {
+                            break;
+                        };
+                        let value: i32 = load_i32(usage_list_ptr + copy_idx * WORD_SIZE);
+                        store_i32(copied_usage_ptr + copy_idx * WORD_SIZE, value);
+                        copy_idx = copy_idx + 1;
+                    };
+                };
+                metadata_ptr = ast_call_data_alloc(ast_base, 3);
+                if metadata_ptr < 0 {
+                    return -1;
+                };
+                store_i32(metadata_ptr, cloned_length_expr);
+                store_i32(metadata_ptr + WORD_SIZE, copied_usage_ptr);
+                store_i32(metadata_ptr + 2 * WORD_SIZE, usage_count);
             };
-            let result_type: i32 = load_i32(eval_type_ptr);
-            if !constant_eval_integer_type_supported(result_type) {
-                return -1;
-            };
-            let normalized: i32 = normalize_integer_value(load_i32(eval_value_ptr), result_type);
-            if normalized < 0 {
-                return -1;
-            };
-            length = normalized;
         };
-        let new_index: i32 = ast_expr_alloc_array_repeat(ast_base, cloned_element, length, -1);
+        if resolved_length {
+            metadata_ptr = -1;
+        } else if metadata_ptr < 0 {
+            metadata_ptr = ast_expr_array_repeat_length_metadata(ast_base, expr_index);
+        };
+        let new_index: i32 = ast_expr_alloc_array_repeat(ast_base, cloned_element, length, metadata_ptr);
         if new_index < 0 {
             return -1;
         };
         let mut expr_type: i32 = ast_expr_type(ast_base, expr_index);
-        if length_expr_index >= 0 {
+        if resolved_length {
             let element_type: i32 = ast_expr_type(ast_base, cloned_element);
             if element_type >= 0 {
                 let specialized_array: i32 =
@@ -5955,14 +6004,15 @@ fn ast_expr_alloc_array_repeat(
     ast_base: i32,
     element_index: i32,
     length: i32,
-    length_expr_index: i32,
+    length_expr_metadata_ptr: i32,
 ) -> i32 {
     if length < 0 {
-        if length_expr_index < 0 {
+        if length_expr_metadata_ptr < 0 {
             return -1;
         };
     };
-    let index: i32 = ast_expr_alloc(ast_base, 35, element_index, length, length_expr_index);
+    let index: i32 =
+        ast_expr_alloc(ast_base, 35, element_index, length, length_expr_metadata_ptr);
     if index < 0 {
         return -1;
     };
@@ -5975,9 +6025,17 @@ fn ast_expr_array_repeat_length(ast_base: i32, expr_index: i32) -> i32 {
     load_i32(entry_ptr + 2 * WORD_SIZE)
 }
 
-fn ast_expr_array_repeat_length_expr(ast_base: i32, expr_index: i32) -> i32 {
+fn ast_expr_array_repeat_length_metadata(ast_base: i32, expr_index: i32) -> i32 {
     let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
     load_i32(entry_ptr + 3 * WORD_SIZE)
+}
+
+fn ast_expr_array_repeat_length_expr(ast_base: i32, expr_index: i32) -> i32 {
+    let metadata_ptr: i32 = ast_expr_array_repeat_length_metadata(ast_base, expr_index);
+    if metadata_ptr <= 0 {
+        return -1;
+    };
+    load_i32(metadata_ptr)
 }
 
 fn ast_expr_array_repeat_set_length(ast_base: i32, expr_index: i32, value: i32) {
@@ -5988,6 +6046,22 @@ fn ast_expr_array_repeat_set_length(ast_base: i32, expr_index: i32, value: i32) 
 fn ast_expr_array_repeat_set_length_expr(ast_base: i32, expr_index: i32, value: i32) {
     let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
     store_i32(entry_ptr + 3 * WORD_SIZE, value);
+}
+
+fn ast_expr_array_repeat_length_expr_params_ptr(ast_base: i32, expr_index: i32) -> i32 {
+    let metadata_ptr: i32 = ast_expr_array_repeat_length_metadata(ast_base, expr_index);
+    if metadata_ptr <= 0 {
+        return 0;
+    };
+    load_i32(metadata_ptr + WORD_SIZE)
+}
+
+fn ast_expr_array_repeat_length_expr_params_count(ast_base: i32, expr_index: i32) -> i32 {
+    let metadata_ptr: i32 = ast_expr_array_repeat_length_metadata(ast_base, expr_index);
+    if metadata_ptr <= 0 {
+        return 0;
+    };
+    load_i32(metadata_ptr + 2 * WORD_SIZE)
 }
 
 fn ast_expr_alloc_array_list(ast_base: i32, values_ptr: i32, count: i32) -> i32 {
