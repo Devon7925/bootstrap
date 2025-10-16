@@ -3968,9 +3968,9 @@ fn clone_const_specialization_expr(
                 eval_stack_top_ptr,
                 eval_value_ptr,
                 eval_type_ptr,
-                0,
-                0,
-                0,
+                env_values_ptr,
+                param_count,
+                param_count,
             );
             store_i32(eval_stack_top_ptr, saved_top);
             if status == CONST_EVAL_STATUS_OK {
@@ -3981,6 +3981,25 @@ fn clone_const_specialization_expr(
                     if normalized >= 0 {
                         length = normalized;
                         resolved_length = true;
+                    };
+                };
+            };
+            if !resolved_length {
+                if usage_count == 1 && usage_list_ptr > 0 && key_ptr > 0 {
+                    let recorded_param: i32 = load_i32(usage_list_ptr);
+                    if recorded_param >= 0 {
+                        let const_entry: (i32, i32) =
+                            const_specialization_lookup_entry(key_ptr, recorded_param);
+                        if const_entry.1 >= 0 {
+                            if constant_eval_integer_type_supported(const_entry.1) {
+                                let normalized: i32 =
+                                    normalize_integer_value(const_entry.0, const_entry.1);
+                                if normalized >= 0 {
+                                    length = normalized;
+                                    resolved_length = true;
+                                };
+                            };
+                        };
                     };
                 };
             };
