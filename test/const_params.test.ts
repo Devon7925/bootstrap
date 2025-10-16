@@ -248,6 +248,39 @@ test("const parameter templates specialize array arguments", async () => {
   expect(result).toBe(4);
 });
 
+test("const parameter templates specialize array arguments with arbitrary indicies", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn get(const N: i32, values: [i32; N], idx: i32) -> i32 {
+        values[idx]
+    }
+
+    fn main() -> i32 {
+        get(3, [4, 5, 6], 0) + get(3, [4, 5, 6], 2)
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(10);
+});
+
+test.todo("const parameter templates specialize if expression", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn sum(const N: i32, values: [i32; N]) -> i32 {
+        if N > 5 {
+            1
+        } else {
+            0
+        }
+    }
+
+    fn main() -> i32 {
+        let values: [i32; 3] = [4, 5, 6];
+        sum(3, values)
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(0);
+});
+
 test.todo("const parameter templates specialize complex array arguments", async () => {
   const wasm = await compileWithAstCompiler(`
     fn sum(const N: i32, values: [i32; N]) -> i32 {
