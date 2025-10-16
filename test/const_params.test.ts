@@ -210,7 +210,7 @@ test("const parameter templates specialize index into let defined array", async 
   expect(result).toBe(3);
 });
 
-test.todo("const parameter templates specialize complex array loop functions", async () => {
+test("const parameter templates specialize complex array loop functions", async () => {
   const wasm = await compileWithAstCompiler(`
     fn sum(const N: i32) -> i32 {
         let values = [3; N];
