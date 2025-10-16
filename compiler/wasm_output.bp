@@ -2260,6 +2260,8 @@ fn emit_type_section(
     func_count: i32,
     array_count: i32,
     tuple_count: i32,
+    runtime_map_ptr: i32,
+    runtime_func_count: i32,
 ) -> i32 {
     if array_count < 0 {
         return -1;
@@ -2267,7 +2269,7 @@ fn emit_type_section(
     if tuple_count < 0 {
         return -1;
     };
-    let total_types: i32 = array_count + tuple_count + func_count;
+    let total_types: i32 = array_count + tuple_count + runtime_func_count;
     let mut payload_size: i32 = leb_u32_len(total_types);
 
     let composite_count: i32 = array_count + tuple_count;
@@ -2358,6 +2360,15 @@ fn emit_type_section(
     loop {
         if idx >= func_count {
             break;
+        };
+        let runtime_index: i32 = if runtime_map_ptr > 0 {
+            load_i32(runtime_map_ptr + idx * WORD_SIZE)
+        } else {
+            -1
+        };
+        if runtime_index < 0 {
+            idx = idx + 1;
+            continue;
         };
         let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
         let param_count: i32 = load_i32(entry_ptr + 8);
@@ -2490,6 +2501,15 @@ fn emit_type_section(
         if idx >= func_count {
             break;
         };
+        let runtime_index: i32 = if runtime_map_ptr > 0 {
+            load_i32(runtime_map_ptr + idx * WORD_SIZE)
+        } else {
+            -1
+        };
+        if runtime_index < 0 {
+            idx = idx + 1;
+            continue;
+        };
         let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
         let param_count: i32 = load_i32(entry_ptr + 8);
         let param_types_ptr: i32 = load_i32(entry_ptr + 24);
@@ -2567,7 +2587,7 @@ fn emit_function_section(
             idx = idx + 1;
             continue;
         };
-        let type_index: i32 = array_count + tuple_count + idx;
+        let type_index: i32 = array_count + tuple_count + runtime_index;
         payload_size = payload_size + leb_u32_len(type_index);
         idx = idx + 1;
     };
@@ -2590,7 +2610,7 @@ fn emit_function_section(
             idx = idx + 1;
             continue;
         };
-        let type_index: i32 = array_count + tuple_count + idx;
+        let type_index: i32 = array_count + tuple_count + runtime_index;
         out = write_u32_leb(base, out, type_index);
         idx = idx + 1;
     };
@@ -3160,6 +3180,8 @@ fn emit_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
         func_count,
         array_count,
         tuple_count,
+        runtime_map_ptr,
+        runtime_func_count,
     );
     offset = emit_function_section(
         out_ptr,

@@ -234,7 +234,7 @@ test("const parameter templates specialize complex array loop functions", async 
   expect(result).toBe(15);
 });
 
-test.todo("const parameter templates specialize array arguments", async () => {
+test("const parameter templates specialize array arguments", async () => {
   const wasm = await compileWithAstCompiler(`
     fn head(const N: i32, values: [i32; N]) -> i32 {
         values[0]
