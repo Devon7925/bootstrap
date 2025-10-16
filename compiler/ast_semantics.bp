@@ -147,7 +147,17 @@ fn collect_call_const_arguments(
             if const_type < 0 {
                 return -1;
             };
-            let const_value: i32 = load_i32(eval_value_ptr);
+            let mut const_value: i32 = load_i32(eval_value_ptr);
+            if const_type == BUILTIN_TYPE_ID_TYPE {
+                if const_value < 0 {
+                    return -1;
+                };
+                let resolved_type: i32 = resolve_type_id(0, ast_base, const_value);
+                if resolved_type < 0 {
+                    return -1;
+                };
+                const_value = resolved_type;
+            };
             let slot_ptr: i32 = env_ptr + param_idx * 8;
             store_i32(slot_ptr, const_value);
             store_i32(slot_ptr + 4, const_type);
@@ -482,6 +492,21 @@ fn resolve_call_metadata(
                             eval_type_ptr,
                         );
                         if specialized_type < 0 {
+                            if out_ptr > 0 {
+                                if load_u8(out_ptr) == 0 {
+                                    let message: [u8; 64] =
+                                        "const parameter template resolution failed\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
+                                    let detail_capacity: i32 = len(message);
+                                    let mut detail_idx: i32 = 0;
+                                    loop {
+                                        if detail_idx >= detail_capacity {
+                                            break;
+                                        };
+                                        store_u8(out_ptr + detail_idx, message[detail_idx] as i32);
+                                        detail_idx = detail_idx + 1;
+                                    };
+                                };
+                            };
                             return -1;
                         };
                         let resolved_specialized: i32 =
@@ -490,6 +515,21 @@ fn resolve_call_metadata(
                             return -1;
                         };
                         if resolved_specialized != expected_arg_type {
+                            if out_ptr > 0 {
+                                if load_u8(out_ptr) == 0 {
+                                    let message: [u8; 64] =
+                                        "const parameter template expected type mismatch\0\0\0\0\0\0\0\0\0\0\0\0";
+                                    let detail_capacity: i32 = len(message);
+                                    let mut detail_idx: i32 = 0;
+                                    loop {
+                                        if detail_idx >= detail_capacity {
+                                            break;
+                                        };
+                                        store_u8(out_ptr + detail_idx, message[detail_idx] as i32);
+                                        detail_idx = detail_idx + 1;
+                                    };
+                                };
+                            };
                             return -1;
                         };
                         spec_idx = spec_idx + 1;
@@ -775,6 +815,13 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
                 };
                 let param_type_ptr: i32 = param_types_ptr + param_idx * 4;
                 let param_type_id: i32 = load_i32(param_type_ptr);
+                if param_type_id < 0 {
+                    if !ast_function_param_requires_specialization(ast_base, idx, param_idx) {
+                        return -1;
+                    };
+                    param_idx = param_idx + 1;
+                    continue;
+                };
                 let resolved_param_type: i32 =
                     resolve_type_id(out_ptr, ast_base, param_type_id);
                 if resolved_param_type < 0 {
@@ -1194,6 +1241,27 @@ fn resolve_expression_internal(
         };
         let array_type: i32 = ast_expr_type(ast_base, array_index);
         if array_type < 0 {
+            if caller_func_index >= 0 {
+                let array_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, array_index);
+                let array_expr_kind: i32 = load_i32(array_entry_ptr);
+                if array_expr_kind == 6 {
+                    let param_index: i32 = load_i32(array_entry_ptr + 4);
+                    if param_index >= 0 {
+                        if ast_function_param_requires_specialization(
+                            ast_base,
+                            caller_func_index,
+                            param_index,
+                        ) {
+                            let index_type: i32 = ast_expr_type(ast_base, index_index);
+                            if index_type != BUILTIN_TYPE_ID_I32 {
+                                return -1;
+                            };
+                            ast_expr_set_type(ast_base, expr_index, -1);
+                            return 0;
+                        };
+                    };
+                };
+            };
             return -1;
         };
         let resolved_array_type: i32 = resolve_type_id(out_ptr, ast_base, array_type);
@@ -1239,6 +1307,23 @@ fn resolve_expression_internal(
         };
         let array_type: i32 = ast_expr_type(ast_base, array_index);
         if array_type < 0 {
+            if caller_func_index >= 0 {
+                let array_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, array_index);
+                let array_expr_kind: i32 = load_i32(array_entry_ptr);
+                if array_expr_kind == 6 {
+                    let param_index: i32 = load_i32(array_entry_ptr + 4);
+                    if param_index >= 0 {
+                        if ast_function_param_requires_specialization(
+                            ast_base,
+                            caller_func_index,
+                            param_index,
+                        ) {
+                            ast_expr_set_type(ast_base, expr_index, BUILTIN_TYPE_ID_I32);
+                            return 0;
+                        };
+                    };
+                };
+            };
             return -1;
         };
         let resolved_array_type: i32 = resolve_type_id(out_ptr, ast_base, array_type);
