@@ -307,7 +307,7 @@ fn parse_basic_expression(
                 };
                 array_cursor = literal_cursor;
             } else {
-                let length_temp_root: i32 = ast_temp_base(ast_base);
+                let length_temp_root: i32 = element_temp_base + 256;
                 let length_kind_ptr: i32 = length_temp_root;
                 let length_data0_ptr: i32 = length_kind_ptr + 4;
                 let length_data1_ptr: i32 = length_kind_ptr + 8;
@@ -359,7 +359,9 @@ fn parse_basic_expression(
                 let length_type_ptr: i32 = length_value_ptr + 4;
                 let length_usage_ptr_ptr: i32 = length_type_ptr + 4;
                 let length_usage_count_ptr: i32 = length_usage_ptr_ptr + 4;
-                let length_scratch_base: i32 = length_usage_count_ptr + 4;
+                let length_usage_temp_base: i32 = length_usage_count_ptr + 4;
+                let length_eval_scratch_base: i32 = length_usage_temp_base
+                    + (MAX_PARAMS + 3) * WORD_SIZE;
                 store_i32(length_usage_ptr_ptr, 0);
                 store_i32(length_usage_count_ptr, 0);
                 let literal_status: i32 = evaluate_expression_literal(
@@ -367,7 +369,7 @@ fn parse_basic_expression(
                     length_kind_ptr,
                     length_data0_ptr,
                     length_data1_ptr,
-                    length_scratch_base,
+                    length_eval_scratch_base,
                     length_value_ptr,
                     length_type_ptr,
                 );
@@ -390,7 +392,7 @@ fn parse_basic_expression(
                             length_expr_index_value,
                             params_count,
                             const_mask_table_ptr,
-                            length_scratch_base,
+                            length_usage_temp_base,
                             length_usage_ptr_ptr,
                             length_usage_count_ptr,
                         ) < 0 {
