@@ -52,6 +52,39 @@ test("const parameters specialize array repeat lengths through let aliases", asy
   expect(result).toBe(3);
 });
 
+test("const parameters specialize functions with let mut", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn helper(const COUNT: i32, value: i32) -> i32 {
+        let mut res = COUNT;
+        res = res + value;
+        res
+    }
+
+    fn main() -> i32 {
+        helper(3, 7)
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(10);
+});
+
+test.todo("const parameters specialize functions with array and let mut", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn helper(const COUNT: i32, value: i32) -> i32 {
+        let arr = [value; COUNT];
+        let mut res = len(arr);
+        res = res + value;
+        res
+    }
+
+    fn main() -> i32 {
+        helper(3, 7)
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(10);
+});
+
 test("const parameters specialize complex array repeat lengths as part of index access expression", async () => {
   const wasm = await compileWithAstCompiler(`
     fn helper(const COUNT: i32, value: i32) -> i32 {
@@ -66,7 +99,120 @@ test("const parameters specialize complex array repeat lengths as part of index 
   expect(result).toBe(7);
 });
 
+test("const parameter templates specialize if expressions", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn const_max(const A: i32, b: i32) -> i32 {
+        if A > b {
+            A
+        } else {
+            b    
+        }
+    }
+
+    fn main() -> i32 {
+        const_max(10, 5) + const_max(5, 10)
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(15);
+});
+
+test("const parameter templates specialize if statement", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn const_max(const A: i32, b: i32) -> i32 {
+        let mut acc = b;
+        if acc > A {
+            acc = acc + A;
+        };
+        
+        acc
+    }
+
+    fn main() -> i32 {
+        const_max(10, 4) + const_max(5, 6)
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(15);
+});
+
+test("const parameter templates specialize simple loop", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn sum(const N: i32) -> i32 {
+        let mut index: i32 = 0;
+        loop {
+            return index;
+        }
+    }
+
+    fn main() -> i32 {
+        sum(5)
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(0);
+});
+
+test.todo("const parameter templates specialize loop", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn sum(const N: i32) -> i32 {
+        let mut index: i32 = 0;
+        loop {
+            if index >= N {
+                return index;
+            }
+            index = index + 1;
+            0
+        }
+    }
+
+    fn main() -> i32 {
+        sum(5)
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(5);
+});
+
+test.todo("const parameter templates specialize complex array functions", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn sum(const N: i32) -> i32 {
+        let values = [3; N];
+        let mut total: i32 = 0;
+        let mut index: i32 = 0;
+        loop {
+            if index >= N {
+                return total;
+            };
+            total = total + values[index];
+            index = index + 1;
+            0
+        }
+    }
+
+    fn main() -> i32 {
+        sum(5)
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(15);
+});
+
 test.todo("const parameter templates specialize array arguments", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn head(const N: i32, values: [i32; N]) -> i32 {
+        values[0]
+    }
+
+    fn main() -> i32 {
+        head(3, [4, 5, 6])
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(4);
+});
+
+test.todo("const parameter templates specialize complex array arguments", async () => {
   const wasm = await compileWithAstCompiler(`
     fn sum(const N: i32, values: [i32; N]) -> i32 {
         let mut total: i32 = 0;
