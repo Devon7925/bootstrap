@@ -86,6 +86,38 @@ test("const parameters specialize functions and emit unique clones", async () =>
   expect(boolConstants).toEqual([0, 1]);
 });
 
+test("const parameter specializations support loops", async () => {
+  const compiler = await instantiateAstCompiler();
+  const source = `
+    fn identity(const VALUE: i32) -> i32 {
+        loop {
+            break VALUE;
+        }
+    }
+
+    fn accumulate(const COUNT: i32) -> i32 {
+        let mut index: i32 = 0;
+        let mut total: i32 = 0;
+        loop {
+            if index >= COUNT {
+                break total;
+            };
+            total = total + index;
+            index = index + 1;
+            0
+        }
+    }
+
+    fn main() -> i32 {
+        accumulate(5) + identity(7)
+    }
+  `;
+
+  const wasm = compiler.compileWithLayout(COMPILER_INPUT_PTR, DEFAULT_OUTPUT_STRIDE, source);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(17);
+});
+
 function parseWasmModule(bytes: Uint8Array): ParsedModule {
   if (bytes.length < 8 || bytes[0] !== 0x00 || bytes[1] !== 0x61 || bytes[2] !== 0x73 || bytes[3] !== 0x6d) {
     throw new Error("invalid wasm module");
@@ -248,6 +280,18 @@ function extractCallIndices(body: Uint8Array): number[] {
       case 0x6f:
       case 0x1a:
       case 0x0f:
+      case 0x45:
+      case 0x46:
+      case 0x47:
+      case 0x48:
+      case 0x49:
+      case 0x4a:
+      case 0x4b:
+      case 0x4c:
+      case 0x4d:
+      case 0x4e:
+      case 0x4f:
+      case 0x0c:
         break;
       default:
         throw new Error(`unsupported opcode 0x${opcode.toString(16)}`);
