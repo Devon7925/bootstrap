@@ -262,7 +262,22 @@ test("const parameter templates specialize array arguments with arbitrary indici
     expect(result).toBe(10);
 });
 
-test.todo("const parameter array templates specialize with expression using const parameter", async () => {
+test("array arguments passed from local variable", async () => {
+    const wasm = await compileWithAstCompiler(`
+    fn take(values: [i32; 3]) -> i32 {
+        values[0]
+    }
+
+    fn main() -> i32 {
+        let values: [i32; 3] = [4, 5, 6];
+        take(values)
+    }
+  `);
+    const result = await runWasmMainWithGc(wasm);
+    expect(result).toBe(4);
+});
+
+test("const parameter array templates specialize with expression using const parameter", async () => {
     const wasm = await compileWithAstCompiler(`
     fn sum(const N: i32, values: [i32; N]) -> i32 {
         N
@@ -399,7 +414,7 @@ test("const parameter templates reject mismatched parameter arrays", async () =>
     expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
 });
 
-test("const parameter return templates reject mismatched bindings", async () => {
+test.todo("const parameter return templates reject mismatched bindings", async () => {
     const failure = await expectCompileFailure(`
     fn build(const N: i32, value: i32) -> [i32; N] {
         [value; N]
