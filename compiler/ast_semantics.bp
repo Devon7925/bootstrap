@@ -2135,6 +2135,66 @@ fn resolve_expression_internal(
         ) < 0 {
             return -1;
         };
+        let mut init_type: i32 = ast_expr_type(ast_base, init_index);
+        let has_init_type: bool = init_type >= 0;
+        if caller_func_index >= 0 {
+            let local_types_ptr: i32 =
+                ast_function_local_annotations_ptr(ast_base, caller_func_index);
+            if local_types_ptr > 0 {
+                let param_total: i32 =
+                    ast_function_param_count(ast_base, caller_func_index);
+                if param_total < 0 {
+                    return -1;
+                };
+                let locals_total: i32 =
+                    load_i32(ast_function_entry_ptr(ast_base, caller_func_index) + 20);
+                if locals_total < 0 {
+                    return -1;
+                };
+                let local_slot: i32 = local_index - param_total;
+                if local_slot >= 0 {
+                    if local_slot >= locals_total {
+                        return -1;
+                    };
+                    let expected_type: i32 =
+                        load_i32(local_types_ptr + local_slot * WORD_SIZE);
+                    if expected_type >= 0 && has_init_type {
+                        let resolved_init: i32 =
+                            resolve_type_id(out_ptr, ast_base, init_type);
+                        if resolved_init < 0 {
+                            return -1;
+                        };
+                        if resolved_init != init_type {
+                            ast_expr_set_type(ast_base, init_index, resolved_init);
+                            init_type = resolved_init;
+                        };
+                        let resolved_expected: i32 =
+                            resolve_type_id(out_ptr, ast_base, expected_type);
+                        if resolved_expected < 0 {
+                            return -1;
+                        };
+                        if resolved_expected != resolved_init {
+                            if out_ptr > 0 {
+                                if load_u8(out_ptr) == 0 {
+                                    let message: [u8; 64] =
+                                        "local binding type mismatch\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
+                                    let detail_capacity: i32 = len(message);
+                                    let mut detail_idx: i32 = 0;
+                                    loop {
+                                        if detail_idx >= detail_capacity {
+                                            break;
+                                        };
+                                        store_u8(out_ptr + detail_idx, message[detail_idx] as i32);
+                                        detail_idx = detail_idx + 1;
+                                    };
+                                };
+                            };
+                            return -1;
+                        };
+                    };
+                };
+            };
+        };
         let mut pushed: bool = false;
         if local_stack_base > 0 && local_stack_count_ptr > 0 {
             let stack_count: i32 = load_i32(local_stack_count_ptr);
@@ -2145,7 +2205,7 @@ fn resolve_expression_internal(
                 local_stack_base + stack_count * RESOLVE_LOCAL_STACK_ENTRY_SIZE;
             store_i32(entry_offset, local_index);
             store_i32(entry_offset + 4, init_index);
-            store_i32(entry_offset + 8, ast_expr_type(ast_base, init_index));
+            store_i32(entry_offset + 8, init_type);
             store_i32(local_stack_count_ptr, stack_count + 1);
             pushed = true;
         };

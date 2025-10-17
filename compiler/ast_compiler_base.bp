@@ -810,7 +810,11 @@ fn locals_entry_type_id(entry_ptr: i32) -> i32 {
 }
 
 fn locals_entry_is_mut(entry_ptr: i32) -> bool {
-    load_i32(entry_ptr + 16) != 0
+    (load_i32(entry_ptr + 16) & 1) != 0
+}
+
+fn locals_entry_has_annotation(entry_ptr: i32) -> bool {
+    (load_i32(entry_ptr + 16) & 2) != 0
 }
 
 fn constant_entry_name_matches(
@@ -1210,7 +1214,11 @@ fn parse_block_expression_body(
             store_i32(entry_ptr + 8, local_index);
             let local_type_id: i32 = load_i32(stmt_local_type_ptr);
             store_i32(entry_ptr + 12, local_type_id);
-            store_i32(entry_ptr + 16, if is_mut { 1 } else { 0 });
+            let mut entry_flags: i32 = if is_mut { 1 } else { 0 };
+            if has_type_annotation {
+                entry_flags = entry_flags | 2;
+            };
+            store_i32(entry_ptr + 16, entry_flags);
             store_i32(locals_stack_count_ptr, stack_count + 1);
             store_i32(locals_next_index_ptr, next_local_offset + 1);
 
@@ -2873,7 +2881,7 @@ fn scratch_types_set_count(out_ptr: i32, count: i32) {
 
 const AST_MAX_FUNCTIONS: i32 = 1024;
 
-const AST_FUNCTION_ENTRY_SIZE: i32 = 44;
+const AST_FUNCTION_ENTRY_SIZE: i32 = 48;
 
 const FUNCTION_FLAG_CONST: i32 = 1;
 const FUNCTION_FLAG_HAS_CONST_PARAMS: i32 = 2;
@@ -2964,6 +2972,10 @@ fn ast_function_set_const_params_ptr(ast_base: i32, index: i32, value: i32) {
 
 fn ast_function_set_template_owner_index(ast_base: i32, index: i32, value: i32) {
     store_i32(ast_function_template_owner_index_ptr(ast_base, index), value);
+}
+
+fn ast_function_local_annotations_ptr(ast_base: i32, index: i32) -> i32 {
+    load_i32(ast_function_entry_ptr(ast_base, index) + 44)
 }
 
 fn ast_function_type_template_payload_ptr(ast_base: i32, index: i32) -> i32 {
@@ -5201,6 +5213,7 @@ fn ast_write_function_entry(
     flags: i32,
     const_params_ptr: i32,
     template_owner_index: i32,
+    local_types_ptr: i32,
 ) {
     let entry_ptr: i32 = ast_function_entry_ptr(ast_base, index);
     store_i32(entry_ptr, name_ptr);
@@ -5214,6 +5227,7 @@ fn ast_write_function_entry(
     store_i32(entry_ptr + 32, flags);
     store_i32(entry_ptr + 36, const_params_ptr);
     store_i32(entry_ptr + 40, template_owner_index);
+    store_i32(entry_ptr + 44, local_types_ptr);
 }
 
 fn ast_constants_count_ptr(ast_base: i32) -> i32 {

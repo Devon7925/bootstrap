@@ -2750,6 +2750,27 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
         return -1;
     };
     let locals_total: i32 = load_i32(locals_next_index_ptr);
+    let mut local_types_ptr: i32 = 0;
+    if locals_total > 0 {
+        local_types_ptr = ast_call_data_alloc(ast_base, locals_total);
+        if local_types_ptr < 0 {
+            return -1;
+        };
+        let mut local_copy_idx: i32 = 0;
+        loop {
+            if local_copy_idx >= locals_total {
+                break;
+            };
+            let entry_ptr: i32 = locals_entry_ptr(locals_table_ptr, local_copy_idx);
+            let recorded_type: i32 = if locals_entry_has_annotation(entry_ptr) {
+                load_i32(entry_ptr + 12)
+            } else {
+                -1
+            };
+            store_i32(local_types_ptr + local_copy_idx * WORD_SIZE, recorded_type);
+            local_copy_idx = local_copy_idx + 1;
+        };
+    };
     let mut param_types_ptr: i32 = -1;
     let mut type_template_handles_ptr: i32 = 0;
     let mut const_params_ptr: i32 = 0;
@@ -2841,6 +2862,7 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
         flags,
         const_params_ptr,
         type_template_handles_ptr,
+        local_types_ptr,
     );
     cursor
 }
