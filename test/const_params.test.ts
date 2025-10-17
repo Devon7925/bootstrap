@@ -262,14 +262,10 @@ test("const parameter templates specialize array arguments with arbitrary indici
   expect(result).toBe(10);
 });
 
-test.todo("const parameter templates specialize if expression", async () => {
+test.todo("const parameter array templates specialize with expression using const parameter", async () => {
   const wasm = await compileWithAstCompiler(`
     fn sum(const N: i32, values: [i32; N]) -> i32 {
-        if N > 5 {
-            1
-        } else {
-            0
-        }
+        N
     }
 
     fn main() -> i32 {
