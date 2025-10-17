@@ -725,8 +725,27 @@ const MAX_LOCALS: i32 = 512;
 
 const LOCALS_ENTRY_SIZE: i32 = 20;
 
+const PARSER_TEMP_SCRATCH_OFFSET: i32 =
+    MAX_PARAMS * 8 +
+    MAX_PARAMS * WORD_SIZE * 3 +
+    ((MAX_PARAMS + 31) >> 5) * WORD_SIZE +
+    WORD_SIZE +
+    8 +
+    12 +
+    WORD_SIZE +
+    MAX_LOCALS * LOCALS_ENTRY_SIZE +
+    WORD_SIZE;
+
 fn locals_entry_ptr(locals_table_ptr: i32, index: i32) -> i32 {
     locals_table_ptr + index * LOCALS_ENTRY_SIZE
+}
+
+fn parser_temp_scratch_base(ast_base: i32, params_table_ptr: i32) -> i32 {
+    if params_table_ptr > 0 {
+        params_table_ptr + PARSER_TEMP_SCRATCH_OFFSET
+    } else {
+        ast_temp_base(ast_base)
+    }
 }
 
 fn find_local_entry_index(
@@ -2103,7 +2122,7 @@ fn parse_type(
             return -1;
         };
         cursor = skip_whitespace(base, len, cursor);
-        let literal_base: i32 = ast_temp_base(ast_base);
+        let literal_base: i32 = parser_temp_scratch_base(ast_base, params_table_ptr);
         let literal_ptr: i32 = literal_base;
         let literal_cursor: i32 = parse_i32_literal(base, len, cursor, literal_ptr);
         let mut length: i32 = -1;
@@ -2399,7 +2418,7 @@ fn parse_type(
             let param_type_id: i32 =
                 load_i32(param_types_table_ptr + param_index * WORD_SIZE);
             if param_type_id != BUILTIN_TYPE_ID_TYPE { return -1; };
-            let scratch_base: i32 = ast_temp_base(ast_base);
+            let scratch_base: i32 = parser_temp_scratch_base(ast_base, params_table_ptr);
             let expr_kind_ptr: i32 = scratch_base;
             let expr_data0_ptr: i32 = expr_kind_ptr + 4;
             let expr_data1_ptr: i32 = expr_kind_ptr + 8;
