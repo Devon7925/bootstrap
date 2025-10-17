@@ -333,9 +333,9 @@ test("const parameter templates specialize through multiple calls", async () => 
 
 test("const parameter functions work with other functions", async () => {
     const wasm = await compileWithAstCompiler(`
-fn const_fn(const N: i32) -> i32 { 0 }
-fn foo() -> i32 { 3 }
-fn main() -> i32 { foo() + foo() }
+        fn const_fn(const N: i32) -> i32 { 0 }
+        fn foo() -> i32 { 3 }
+        fn main() -> i32 { foo() + foo() }
   `);
     const result = await runWasmMainWithGc(wasm);
     expect(result).toBe(6);
