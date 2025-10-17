@@ -227,6 +227,34 @@ test("const functions specialize simple const parameters during interpretation",
   expect(result).toBe(42);
 });
 
+test("len intrinsic can be evaluated in const expressions", async () => {
+  const wasm = await compileWithAstCompiler(`
+    const LENGTH: i32 = len([1, 2, 3, 4]);
+
+    fn main() -> i32 {
+        LENGTH
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(4);
+});
+
+test("len intrinsic can be used from const functions", async () => {
+  const wasm = await compileWithAstCompiler(`
+    const fn array_len() -> i32 {
+        len([7; 3])
+    }
+
+    const VALUE: i32 = array_len();
+
+    fn main() -> i32 {
+        VALUE
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(3);
+});
+
 test("const expressions can use if expressions", async () => {
   const wasm = await compileWithAstCompiler(`
     const VALUE: i32 = if true {

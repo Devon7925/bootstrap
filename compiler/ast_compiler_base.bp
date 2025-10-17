@@ -6830,6 +6830,82 @@ fn interpret_constant_expression(
         store_i32(scratch_top_ptr, saved_top);
         return CONST_EVAL_STATUS_OK;
     };
+    if kind == 38 {
+        let array_index: i32 = load_i32(entry_ptr + 4);
+        if array_index < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        let mut length: i32 = -1;
+        let array_type: i32 = ast_expr_type(ast_base, array_index);
+        if array_type >= 0 {
+            length = array_type_length(ast_base, array_type);
+        };
+        if length < 0 {
+            let array_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, array_index);
+            let array_kind: i32 = load_i32(array_entry_ptr);
+            if array_kind == 35 {
+                let stored_length: i32 = ast_expr_array_repeat_length(ast_base, array_index);
+                if stored_length >= 0 {
+                    length = stored_length;
+                } else {
+                    let length_expr_index: i32 =
+                        ast_expr_array_repeat_length_expr(ast_base, array_index);
+                    if length_expr_index < 0 {
+                        store_i32(scratch_top_ptr, saved_top);
+                        return -1;
+                    };
+                    let length_offset: i32 = load_i32(scratch_top_ptr);
+                    let length_value_ptr: i32 = scratch_base + length_offset;
+                    let length_type_ptr: i32 = length_value_ptr + 4;
+                    store_i32(scratch_top_ptr, length_offset + 8);
+                    let length_status: i32 = interpret_constant_expression(
+                        ast_base,
+                        length_expr_index,
+                        scratch_base,
+                        scratch_top_ptr,
+                        length_value_ptr,
+                        length_type_ptr,
+                        param_values_ptr,
+                        param_count,
+                        env_values_count,
+                    );
+                    store_i32(scratch_top_ptr, length_offset);
+                    if length_status < 0 {
+                        store_i32(scratch_top_ptr, saved_top);
+                        return -1;
+                    };
+                    if length_status != CONST_EVAL_STATUS_OK {
+                        store_i32(scratch_top_ptr, saved_top);
+                        return -1;
+                    };
+                    let length_type: i32 = load_i32(length_type_ptr);
+                    if !constant_eval_integer_type_supported(length_type) {
+                        store_i32(scratch_top_ptr, saved_top);
+                        return -1;
+                    };
+                    let raw_length: i32 = load_i32(length_value_ptr);
+                    let normalized_length: i32 =
+                        normalize_integer_value(raw_length, length_type);
+                    if normalized_length < 0 {
+                        store_i32(scratch_top_ptr, saved_top);
+                        return -1;
+                    };
+                    length = normalized_length;
+                };
+            } else if array_kind == 37 {
+                length = load_i32(array_entry_ptr + 2 * WORD_SIZE);
+            };
+        };
+        if length < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        store_i32(out_value_ptr, length);
+        store_i32(out_type_ptr, BUILTIN_TYPE_ID_I32);
+        store_i32(scratch_top_ptr, saved_top);
+        return CONST_EVAL_STATUS_OK;
+    };
     if kind == 1 {
         let metadata_ptr: i32 = load_i32(entry_ptr + 4);
         if metadata_ptr < 0 {
