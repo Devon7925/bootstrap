@@ -262,21 +262,6 @@ test("const parameter templates specialize array arguments with arbitrary indici
     expect(result).toBe(10);
 });
 
-test("array arguments passed from local variable", async () => {
-    const wasm = await compileWithAstCompiler(`
-    fn take(values: [i32; 3]) -> i32 {
-        values[0]
-    }
-
-    fn main() -> i32 {
-        let values: [i32; 3] = [4, 5, 6];
-        take(values)
-    }
-  `);
-    const result = await runWasmMainWithGc(wasm);
-    expect(result).toBe(4);
-});
-
 test("const parameter array templates specialize with expression using const parameter", async () => {
     const wasm = await compileWithAstCompiler(`
     fn sum(const N: i32, values: [i32; N]) -> i32 {
@@ -292,7 +277,7 @@ test("const parameter array templates specialize with expression using const par
     expect(result).toBe(3);
 });
 
-test.todo("const parameter templates specialize complex array arguments", async () => {
+test("const parameter templates specialize complex array arguments", async () => {
     const wasm = await compileWithAstCompiler(`
     fn sum(const N: i32, values: [i32; N]) -> i32 {
         let mut total: i32 = 0;
@@ -316,7 +301,7 @@ test.todo("const parameter templates specialize complex array arguments", async 
     expect(result).toBe(15);
 });
 
-test.todo("const parameter templates specialize return types", async () => {
+test("const parameter templates specialize return types", async () => {
     const wasm = await compileWithAstCompiler(`
     fn build(const N: i32, value: i32) -> [i32; N] {
         [value; N]

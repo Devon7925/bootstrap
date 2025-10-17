@@ -216,3 +216,19 @@ test("array list literal requires uniform element types", async () => {
     "array literal elements must have uniform type",
   );
 });
+
+test("array arguments passed from local variable", async () => {
+    const wasm = await compileWithAstCompiler(`
+    fn take(values: [i32; 3]) -> i32 {
+        values[0]
+    }
+
+    fn main() -> i32 {
+        let values: [i32; 3] = [4, 5, 6];
+        take(values)
+    }
+  `);
+    const result = await runWasmMainWithGc(wasm);
+    expect(result).toBe(4);
+});
+
