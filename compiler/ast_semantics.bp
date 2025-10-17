@@ -1154,29 +1154,48 @@ fn resolve_expression_internal(
     };
     if kind == 8 {
         let mut expr_type: i32 = ast_expr_type(ast_base, expr_index);
-        if expr_type < 0 {
-            if local_stack_base > 0 && local_stack_count_ptr > 0 {
-                let local_index: i32 = load_i32(entry_ptr + 4);
-                if local_index >= 0 {
-                    let stack_count: i32 = load_i32(local_stack_count_ptr);
-                    let mut stack_idx: i32 = stack_count - 1;
-                    loop {
-                        if stack_idx < 0 {
-                            break;
-                        };
-                        let entry_offset: i32 =
-                            local_stack_base + stack_idx * RESOLVE_LOCAL_STACK_ENTRY_SIZE;
-                        let recorded_index: i32 = load_i32(entry_offset);
-                        if recorded_index == local_index {
-                            let recorded_type: i32 = load_i32(entry_offset + 8);
-                            if recorded_type >= 0 {
+        if local_stack_base > 0 && local_stack_count_ptr > 0 {
+            let local_index: i32 = load_i32(entry_ptr + 4);
+            if local_index >= 0 {
+                let stack_count: i32 = load_i32(local_stack_count_ptr);
+                let mut stack_idx: i32 = stack_count - 1;
+                loop {
+                    if stack_idx < 0 {
+                        break;
+                    };
+                    let entry_offset: i32 =
+                        local_stack_base + stack_idx * RESOLVE_LOCAL_STACK_ENTRY_SIZE;
+                    let recorded_index: i32 = load_i32(entry_offset);
+                    if recorded_index == local_index {
+                        let recorded_type: i32 = load_i32(entry_offset + 8);
+                        if recorded_type >= 0 {
+                            if expr_type >= 0 {
+                                if recorded_type != expr_type {
+                                    if out_ptr > 0 {
+                                        if load_u8(out_ptr) == 0 {
+                                            let message: [u8; 64] =
+                                                "local binding type mismatch\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
+                                            let detail_capacity: i32 = len(message);
+                                            let mut detail_idx: i32 = 0;
+                                            loop {
+                                                if detail_idx >= detail_capacity {
+                                                    break;
+                                                };
+                                                store_u8(out_ptr + detail_idx, message[detail_idx] as i32);
+                                                detail_idx = detail_idx + 1;
+                                            };
+                                        };
+                                    };
+                                    return -1;
+                                };
+                            } else {
                                 expr_type = recorded_type;
                                 ast_expr_set_type(ast_base, expr_index, expr_type);
                             };
-                            break;
                         };
-                        stack_idx = stack_idx - 1;
+                        break;
                     };
+                    stack_idx = stack_idx - 1;
                 };
             };
         };

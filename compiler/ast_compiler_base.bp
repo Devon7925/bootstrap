@@ -3702,27 +3702,31 @@ fn clone_const_specialization_expr(
             };
         };
         let mut expr_type: i32 = ast_expr_type(ast_base, expr_index);
-        if expr_type < 0 {
-            if local_type_stack_ptr > 0 && local_type_stack_top_ptr > 0 {
-                let stack_count: i32 = load_i32(local_type_stack_top_ptr);
-                let mut stack_idx: i32 = stack_count - 1;
-                loop {
-                    if stack_idx < 0 {
-                        break;
-                    };
-                    let entry_offset: i32 =
-                        local_type_stack_ptr + stack_idx * CONST_SPECIALIZATION_LOCAL_STACK_ENTRY_SIZE;
-                    let recorded_index: i32 = load_i32(entry_offset);
-                    if recorded_index == local_index {
-                        let recorded_type: i32 = load_i32(entry_offset + 4);
-                        if recorded_type >= 0 {
+        if local_type_stack_ptr > 0 && local_type_stack_top_ptr > 0 {
+            let stack_count: i32 = load_i32(local_type_stack_top_ptr);
+            let mut stack_idx: i32 = stack_count - 1;
+            loop {
+                if stack_idx < 0 {
+                    break;
+                };
+                let entry_offset: i32 =
+                    local_type_stack_ptr + stack_idx * CONST_SPECIALIZATION_LOCAL_STACK_ENTRY_SIZE;
+                let recorded_index: i32 = load_i32(entry_offset);
+                if recorded_index == local_index {
+                    let recorded_type: i32 = load_i32(entry_offset + 4);
+                    if recorded_type >= 0 {
+                        if expr_type >= 0 {
+                            if recorded_type != expr_type {
+                                return -1;
+                            };
+                        } else {
                             expr_type = recorded_type;
                             ast_expr_set_type(ast_base, expr_index, expr_type);
                         };
-                        break;
                     };
-                    stack_idx = stack_idx - 1;
+                    break;
                 };
+                stack_idx = stack_idx - 1;
             };
         };
         return ast_expr_alloc_local(ast_base, local_index, expr_type);
