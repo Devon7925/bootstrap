@@ -113,47 +113,47 @@ fn is_identifier_continue(byte: i32) -> bool {
 }
 
 fn expect_keyword_fn(base: i32, len: i32, offset: i32) -> i32 {
-    expect_keyword_literal(base, len, offset, "fn\0\0\0\0\0\0\0\0\0\0")
+    expect_keyword_literal(base, len, offset, 2, "fn")
 }
 
 fn expect_keyword_use(base: i32, len: i32, offset: i32) -> i32 {
-    expect_keyword_literal(base, len, offset, "use\0\0\0\0\0\0\0\0\0")
+    expect_keyword_literal(base, len, offset, 3, "use")
 }
 
 fn expect_keyword_if(base: i32, len: i32, offset: i32) -> i32 {
-    expect_keyword_literal(base, len, offset, "if\0\0\0\0\0\0\0\0\0\0")
+    expect_keyword_literal(base, len, offset, 2, "if")
 }
 
 fn expect_keyword_as(base: i32, len: i32, offset: i32) -> i32 {
-    expect_keyword_literal(base, len, offset, "as\0\0\0\0\0\0\0\0\0\0")
+    expect_keyword_literal(base, len, offset, 2, "as")
 }
 
 fn expect_keyword_true(base: i32, len: i32, offset: i32) -> i32 {
-    expect_keyword_literal(base, len, offset, "true\0\0\0\0\0\0\0\0")
+    expect_keyword_literal(base, len, offset, 4, "true")
 }
 
 fn expect_keyword_false(base: i32, len: i32, offset: i32) -> i32 {
-    expect_keyword_literal(base, len, offset, "false\0\0\0\0\0\0\0")
+    expect_keyword_literal(base, len, offset, 5, "false")
 }
 
 fn expect_keyword_else(base: i32, len: i32, offset: i32) -> i32 {
-    expect_keyword_literal(base, len, offset, "else\0\0\0\0\0\0\0\0")
+    expect_keyword_literal(base, len, offset, 4, "else")
 }
 
 fn expect_keyword_loop(base: i32, len: i32, offset: i32) -> i32 {
-    expect_keyword_literal(base, len, offset, "loop\0\0\0\0\0\0\0\0")
+    expect_keyword_literal(base, len, offset, 4, "loop")
 }
 
 fn expect_keyword_break(base: i32, len: i32, offset: i32) -> i32 {
-    expect_keyword_literal(base, len, offset, "break\0\0\0\0\0\0\0")
+    expect_keyword_literal(base, len, offset, 5, "break")
 }
 
 fn expect_keyword_continue(base: i32, len: i32, offset: i32) -> i32 {
-    expect_keyword_literal(base, len, offset, "continue\0\0\0\0")
+    expect_keyword_literal(base, len, offset, 8, "continue")
 }
 
 fn expect_keyword_return(base: i32, len: i32, offset: i32) -> i32 {
-    expect_keyword_literal(base, len, offset, "return\0\0\0\0\0\0")
+    expect_keyword_literal(base, len, offset, 6, "return")
 }
 
 fn parse_identifier(base: i32, len: i32, offset: i32) -> (i32, i32, i32) {
@@ -209,42 +209,26 @@ const INTRINSIC_KIND_LEN: i32 = 0;
 
 const INTRINSIC_KIND_INLINE_WASM: i32 = 1;
 
-fn padded_string_len(keyword: [u8; 12]) -> i32 {
-    let capacity: i32 = len(keyword);
-    let mut length: i32 = 0;
-    loop {
-        if length >= capacity {
-            break;
-        };
-        let value: i32 = keyword[length] as i32;
-        if value == 0 {
-            break;
-        };
-        length = length + 1;
-    };
-    length
-}
-
 fn identifier_matches_keyword(
     base: i32,
     source_len: i32,
     start: i32,
     ident_len: i32,
-    keyword: [u8; 12],
+    const KEYWORD_LEN: i32,
+    keyword: [u8; KEYWORD_LEN],
 ) -> bool {
+    if KEYWORD_LEN <= 0 {
+        return false;
+    };
     if start < 0 || start + ident_len > source_len {
         return false;
     };
-    let keyword_len: i32 = padded_string_len(keyword);
-    if keyword_len <= 0 {
-        return false;
-    };
-    if ident_len != keyword_len {
+    if ident_len != KEYWORD_LEN {
         return false;
     };
     let mut idx: i32 = 0;
     loop {
-        if idx >= keyword_len {
+        if idx >= KEYWORD_LEN {
             break;
         };
         if load_u8(base + start + idx) != keyword[idx] as i32 {
@@ -617,17 +601,22 @@ fn type_template_capture_array_length(
     )
 }
 
-fn expect_keyword_literal(base: i32, len: i32, offset: i32, keyword: [u8; 12]) -> i32 {
-    let keyword_len: i32 = padded_string_len(keyword);
-    if keyword_len <= 0 {
+fn expect_keyword_literal(
+    base: i32,
+    len: i32,
+    offset: i32,
+    const KEYWORD_LEN: i32,
+    keyword: [u8; KEYWORD_LEN],
+) -> i32 {
+    if KEYWORD_LEN <= 0 {
         return -1;
     };
-    if offset < 0 || offset + keyword_len > len {
+    if offset < 0 || offset + KEYWORD_LEN > len {
         return -1;
     };
     let mut idx: i32 = 0;
     loop {
-        if idx >= keyword_len {
+        if idx >= KEYWORD_LEN {
             break;
         };
         if load_u8(base + offset + idx) != keyword[idx] as i32 {
@@ -635,7 +624,7 @@ fn expect_keyword_literal(base: i32, len: i32, offset: i32, keyword: [u8; 12]) -
         };
         idx = idx + 1;
     };
-    let next: i32 = offset + keyword_len;
+    let next: i32 = offset + KEYWORD_LEN;
     if next < len {
         let after: i32 = load_u8(base + next);
         if is_identifier_continue(after) {
@@ -646,21 +635,11 @@ fn expect_keyword_literal(base: i32, len: i32, offset: i32, keyword: [u8; 12]) -
 }
 
 fn identify_intrinsic(base: i32, len: i32, start: i32, ident_len: i32) -> i32 {
-    let names: [[u8; 12]; 2] = [
-        "len\0\0\0\0\0\0\0\0\0",
-        "inline_wasm\0",
-    ];
-    let kinds: [i32; 2] = [INTRINSIC_KIND_LEN, INTRINSIC_KIND_INLINE_WASM];
-    let mut idx: i32 = 0;
-    let count: i32 = len(kinds);
-    loop {
-        if idx >= count {
-            break;
-        };
-        if identifier_matches_keyword(base, len, start, ident_len, names[idx]) {
-            return kinds[idx];
-        };
-        idx = idx + 1;
+    if identifier_matches_keyword(base, len, start, ident_len, 3, "len") {
+        return INTRINSIC_KIND_LEN;
+    };
+    if identifier_matches_keyword(base, len, start, ident_len, 11, "inline_wasm") {
+        return INTRINSIC_KIND_INLINE_WASM;
     };
     INTRINSIC_KIND_NONE
 }
@@ -714,11 +693,11 @@ fn find_parameter_index(
 }
 
 fn expect_keyword_const(base: i32, len: i32, offset: i32) -> i32 {
-    expect_keyword_literal(base, len, offset, "const\0\0\0\0\0\0\0")
+    expect_keyword_literal(base, len, offset, 5, "const")
 }
 
 fn expect_keyword_let(base: i32, len: i32, offset: i32) -> i32 {
-    expect_keyword_literal(base, len, offset, "let\0\0\0\0\0\0\0\0\0")
+    expect_keyword_literal(base, len, offset, 3, "let")
 }
 
 const MAX_LOCALS: i32 = 512;
@@ -2388,15 +2367,13 @@ fn parse_type(
         };
         return next;
     };
-    let bool_keyword: [u8; 12] = "bool\0\0\0\0\0\0\0\0";
-    if identifier_matches_keyword(base, len, offset, ident_len, bool_keyword) {
+    if identifier_matches_keyword(base, len, offset, ident_len, 4, "bool") {
         if out_type_ptr >= 0 {
             store_i32(out_type_ptr, BUILTIN_TYPE_ID_BOOL);
         };
         return next;
     };
-    let type_keyword: [u8; 12] = "type\0\0\0\0\0\0\0\0";
-    if identifier_matches_keyword(base, len, offset, ident_len, type_keyword) {
+    if identifier_matches_keyword(base, len, offset, ident_len, 4, "type") {
         if out_type_ptr >= 0 {
             store_i32(out_type_ptr, BUILTIN_TYPE_ID_TYPE);
         };
