@@ -342,6 +342,13 @@ fn resolve_call_metadata(
                     let arg_expr_index: i32 = load_i32(args_base + verify_idx * 4);
                     let arg_type: i32 = ast_expr_type(ast_base, arg_expr_index);
                     if arg_type < 0 {
+                        if requires_specialization {
+                            store_i32(
+                                call_metadata_callee_index_ptr(current_metadata),
+                                target_idx,
+                            );
+                            return current_metadata;
+                        };
                         return -1;
                     };
                     let resolved_arg: i32 =
@@ -437,17 +444,25 @@ fn resolve_call_metadata(
                         store_i32(usage_count_slot_ptr, usage_total);
                     };
                 };
-                if collect_call_const_arguments(
+                let const_status: i32 = collect_call_const_arguments(
                     ast_base,
                     current_metadata,
                     target_idx,
                     expected_params,
-                ) < 0 {
+                );
+                if const_status < 0 {
                     return -1;
                 };
                 if specialization_count > 0 {
                     let env_ptr: i32 = call_metadata_const_env_ptr(current_metadata);
                     if env_ptr <= 0 {
+                        if call_metadata_const_usage_count(current_metadata) > 0 {
+                            store_i32(
+                                call_metadata_callee_index_ptr(current_metadata),
+                                target_idx,
+                            );
+                            return current_metadata;
+                        };
                         return -1;
                     };
                     let env_param_count: i32 = load_i32(env_ptr);
@@ -1099,6 +1114,9 @@ fn resolve_expression_internal(
             };
             let env_ptr: i32 = call_metadata_const_env_ptr(metadata_ptr);
             if env_ptr <= 0 {
+                if call_metadata_const_usage_count(metadata_ptr) > 0 {
+                    return 0;
+                };
                 return -1;
             };
             let env_param_count: i32 = load_i32(env_ptr);
