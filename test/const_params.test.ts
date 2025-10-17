@@ -331,7 +331,7 @@ test("const parameter templates specialize through multiple calls", async () => 
     expect(result).toBe(2);
 });
 
-test.todo("const parameter functions work with other functions", async () => {
+test("const parameter functions work with other functions", async () => {
     const wasm = await compileWithAstCompiler(`
 fn const_fn(const N: i32) -> i32 { 0 }
 fn foo() -> i32 { 3 }
