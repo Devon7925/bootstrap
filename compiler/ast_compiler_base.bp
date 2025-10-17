@@ -3934,24 +3934,27 @@ fn clone_const_specialization_expr(
     };
     if kind == 13 {
         let value_index: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
-        let cloned_value: i32 = clone_const_specialization_expr(
-            ast_base,
-            template_index,
-            key_ptr,
-            removed_const_count,
-            value_index,
-            env_values_ptr,
-            param_count,
-            eval_stack_base,
-            eval_stack_top_ptr,
-            eval_value_ptr,
-            eval_type_ptr,
-            local_type_stack_ptr,
-            local_type_stack_top_ptr,
-            local_type_stack_capacity,
-        );
-        if cloned_value < 0 {
-            return -1;
+        let mut cloned_value: i32 = -1;
+        if value_index >= 0 {
+            cloned_value = clone_const_specialization_expr(
+                ast_base,
+                template_index,
+                key_ptr,
+                removed_const_count,
+                value_index,
+                env_values_ptr,
+                param_count,
+                eval_stack_base,
+                eval_stack_top_ptr,
+                eval_value_ptr,
+                eval_type_ptr,
+                local_type_stack_ptr,
+                local_type_stack_top_ptr,
+                local_type_stack_capacity,
+            );
+            if cloned_value < 0 {
+                return -1;
+            };
         };
         let new_index: i32 = ast_expr_alloc(ast_base, 13, -1, cloned_value, 0);
         if new_index < 0 {
