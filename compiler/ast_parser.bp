@@ -1070,15 +1070,13 @@ fn parse_basic_expression(
             store_i32(out_data1_ptr, BUILTIN_TYPE_ID_TYPE);
             return skip_whitespace(base, len, next_cursor);
         };
-        let bool_keyword: [u8; 12] = "bool\0\0\0\0\0\0\0\0";
-        if identifier_matches_keyword(base, len, ident_start, ident_len, bool_keyword) {
+        if identifier_matches_keyword(base, len, ident_start, ident_len, 4, "bool") {
             store_i32(out_kind_ptr, 0);
             store_i32(out_data0_ptr, BUILTIN_TYPE_ID_BOOL);
             store_i32(out_data1_ptr, BUILTIN_TYPE_ID_TYPE);
             return skip_whitespace(base, len, next_cursor);
         };
-        let type_keyword: [u8; 12] = "type\0\0\0\0\0\0\0\0";
-        if identifier_matches_keyword(base, len, ident_start, ident_len, type_keyword) {
+        if identifier_matches_keyword(base, len, ident_start, ident_len, 4, "type") {
             store_i32(out_kind_ptr, 0);
             store_i32(out_data0_ptr, BUILTIN_TYPE_ID_TYPE);
             store_i32(out_data1_ptr, BUILTIN_TYPE_ID_TYPE);
