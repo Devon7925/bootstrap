@@ -194,6 +194,41 @@ test("functions can return from multiple paths", async () => {
   expect(result).toBe(36);
 });
 
+test("unit return functions allow bare return", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn do_nothing() -> () {
+        return;
+    }
+
+    fn early(flag: i32) -> () {
+        if flag {
+            return;
+        };
+        let mut value: i32 = 0;
+        value = value + 1;
+        return;
+    }
+
+    fn main() -> i32 {
+        do_nothing();
+        early(1);
+        early(0);
+        7
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(7);
+});
+
+test("bare return is rejected for non-unit functions", async () => {
+  const failure = await expectCompileFailure(`
+    fn bad() -> i32 {
+        return;
+    }
+  `);
+  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+});
+
 test("functions can use local variables", async () => {
   const wasm = await compileWithAstCompiler(`
     fn compute() -> i32 {

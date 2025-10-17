@@ -2050,7 +2050,40 @@ fn resolve_expression_internal(
         ) < 0 {
             return -1;
         };
-        ast_expr_set_type(ast_base, expr_index, ast_expr_type(ast_base, value_index));
+        let value_type: i32 = ast_expr_type(ast_base, value_index);
+        if caller_func_index >= 0 {
+            let caller_entry_ptr: i32 = ast_function_entry_ptr(ast_base, caller_func_index);
+            let mut expected_return: i32 = load_i32(caller_entry_ptr + 28);
+            if expected_return >= 0 {
+                let resolved_expected: i32 = resolve_type_id(out_ptr, ast_base, expected_return);
+                if resolved_expected < 0 {
+                    return -1;
+                };
+                if resolved_expected != expected_return {
+                    store_i32(caller_entry_ptr + 28, resolved_expected);
+                    expected_return = resolved_expected;
+                };
+                if value_type >= 0 && value_type != expected_return {
+                    if out_ptr > 0 {
+                        if load_u8(out_ptr) == 0 {
+                            let message: [u8; 64] =
+                                "return expression type does not match function return type\0\0\0\0\0\0";
+                            let detail_capacity: i32 = len(message);
+                            let mut detail_idx: i32 = 0;
+                            loop {
+                                if detail_idx >= detail_capacity {
+                                    break;
+                                };
+                                store_u8(out_ptr + detail_idx, message[detail_idx] as i32);
+                                detail_idx = detail_idx + 1;
+                            };
+                        };
+                    };
+                    return -1;
+                };
+            };
+        };
+        ast_expr_set_type(ast_base, expr_index, value_type);
         return 0;
     };
     if kind == 7 {

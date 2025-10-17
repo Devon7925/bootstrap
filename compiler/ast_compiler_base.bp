@@ -1345,49 +1345,67 @@ fn parse_block_expression_body(
         let mut return_cursor: i32 = expect_keyword_return(base, len, idx);
         if return_cursor >= 0 {
             let mut after_return: i32 = skip_whitespace(base, len, return_cursor);
-            after_return = parse_expression(
-                base,
-                len,
-                after_return,
-                ast_base,
-                params_table_ptr,
-                params_count,
-                const_mask_table_ptr,
-                locals_table_ptr,
-                locals_stack_count_ptr,
-                locals_next_index_ptr,
-                stmt_nested_temp_base,
-                loop_depth_ptr,
-                type_template_sink_ptr,
-                stmt_expr_kind_ptr,
-                stmt_expr_data0_ptr,
-                stmt_expr_data1_ptr,
-            );
-            if after_return < 0 {
+            if after_return >= len {
                 store_i32(locals_stack_count_ptr, saved_stack_count);
                 store_i32(locals_next_index_ptr, saved_next_index);
                 return -1;
             };
-            let value_kind: i32 = load_i32(stmt_expr_kind_ptr);
-            let value_data0: i32 = load_i32(stmt_expr_data0_ptr);
-            let value_data1: i32 = load_i32(stmt_expr_data1_ptr);
-            let value_index: i32 = expression_node_from_parts(
-                ast_base,
-                value_kind,
-                value_data0,
-                value_data1,
-            );
-            if value_index < 0 {
-                store_i32(locals_stack_count_ptr, saved_stack_count);
-                store_i32(locals_next_index_ptr, saved_next_index);
-                return -1;
-            };
-            after_return = skip_whitespace(base, len, after_return);
-            after_return = expect_char(base, len, after_return, ';');
-            if after_return < 0 {
-                store_i32(locals_stack_count_ptr, saved_stack_count);
-                store_i32(locals_next_index_ptr, saved_next_index);
-                return -1;
+            let mut value_index: i32 = -1;
+            let next_after_return: i32 = load_u8(base + after_return);
+            if next_after_return == ';' {
+                value_index = ast_expr_alloc_tuple(ast_base, 0, 0);
+                if value_index < 0 {
+                    store_i32(locals_stack_count_ptr, saved_stack_count);
+                    store_i32(locals_next_index_ptr, saved_next_index);
+                    return -1;
+                };
+                after_return = skip_whitespace(base, len, after_return + 1);
+            } else {
+                after_return = parse_expression(
+                    base,
+                    len,
+                    after_return,
+                    ast_base,
+                    params_table_ptr,
+                    params_count,
+                    const_mask_table_ptr,
+                    locals_table_ptr,
+                    locals_stack_count_ptr,
+                    locals_next_index_ptr,
+                    stmt_nested_temp_base,
+                    loop_depth_ptr,
+                    type_template_sink_ptr,
+                    stmt_expr_kind_ptr,
+                    stmt_expr_data0_ptr,
+                    stmt_expr_data1_ptr,
+                );
+                if after_return < 0 {
+                    store_i32(locals_stack_count_ptr, saved_stack_count);
+                    store_i32(locals_next_index_ptr, saved_next_index);
+                    return -1;
+                };
+                let value_kind: i32 = load_i32(stmt_expr_kind_ptr);
+                let value_data0: i32 = load_i32(stmt_expr_data0_ptr);
+                let value_data1: i32 = load_i32(stmt_expr_data1_ptr);
+                value_index = expression_node_from_parts(
+                    ast_base,
+                    value_kind,
+                    value_data0,
+                    value_data1,
+                );
+                if value_index < 0 {
+                    store_i32(locals_stack_count_ptr, saved_stack_count);
+                    store_i32(locals_next_index_ptr, saved_next_index);
+                    return -1;
+                };
+                after_return = skip_whitespace(base, len, after_return);
+                after_return = expect_char(base, len, after_return, ';');
+                if after_return < 0 {
+                    store_i32(locals_stack_count_ptr, saved_stack_count);
+                    store_i32(locals_next_index_ptr, saved_next_index);
+                    return -1;
+                };
+                after_return = skip_whitespace(base, len, after_return);
             };
             let return_expr_index: i32 = ast_expr_alloc_return(ast_base, value_index);
             if return_expr_index < 0 {
@@ -1400,7 +1418,7 @@ fn parse_block_expression_body(
             final_data0 = return_expr_index;
             final_data1 = 0;
             store_i32(out_value_status_ptr, 1);
-            idx = skip_whitespace(base, len, after_return);
+            idx = after_return;
             continue;
         };
 
