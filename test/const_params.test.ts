@@ -319,7 +319,7 @@ test("const parameter templates specialize complex string arguments", async () =
     expect(result).toBe(0);
 });
 
-test.todo("const parameter templates specialize through multiple calls", async () => {
+test("const parameter templates specialize through multiple calls", async () => {
     const wasm = await compileWithAstCompiler(`
     fn foo(const LEN: i32, keyword: [u8; LEN]) -> i32 { LEN }
     fn bar(const LEN: i32, keyword: [u8; LEN]) -> i32 {

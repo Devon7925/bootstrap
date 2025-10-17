@@ -3523,6 +3523,12 @@ fn clone_const_specialization_call_metadata(
             extra_idx = extra_idx + 1;
         };
     };
+    if new_extra > 0 {
+        store_i32(new_extra, 0);
+        store_i32(new_extra + WORD_SIZE, 0);
+        store_i32(new_extra + 3 * WORD_SIZE, 0);
+        store_i32(new_extra + 4 * WORD_SIZE, 0);
+    };
     new_metadata
 }
 
