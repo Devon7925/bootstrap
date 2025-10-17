@@ -1387,9 +1387,38 @@ fn remap_expression_calls(
         if callee_index < 0 {
             return -1;
         };
-        let runtime_index: i32 = load_i32(runtime_map_ptr + callee_index * WORD_SIZE);
+        let mut runtime_index: i32 = -1;
+        let call_name_ptr: i32 = call_metadata_name_ptr(metadata_ptr);
+        let call_name_len: i32 = call_metadata_name_len(metadata_ptr);
+        if call_name_ptr >= 0 {
+            let total_funcs: i32 = ast_functions_count(ast_base);
+            let mut search_idx: i32 = 0;
+            loop {
+                if search_idx >= total_funcs {
+                    break;
+                };
+                let search_entry_ptr: i32 = ast_function_entry_ptr(ast_base, search_idx);
+                let search_name_ptr: i32 = load_i32(search_entry_ptr);
+                let search_name_len: i32 = load_i32(search_entry_ptr + 4);
+                if identifiers_match(
+                    call_name_ptr,
+                    call_name_len,
+                    search_name_ptr,
+                    search_name_len,
+                ) {
+                    runtime_index = load_i32(runtime_map_ptr + search_idx * WORD_SIZE);
+                    if runtime_index >= 0 {
+                        break;
+                    };
+                };
+                search_idx = search_idx + 1;
+            };
+        };
         if runtime_index < 0 {
-            return -1;
+            runtime_index = load_i32(runtime_map_ptr + callee_index * WORD_SIZE);
+            if runtime_index < 0 {
+                return -1;
+            };
         };
         store_i32(call_metadata_callee_index_ptr(metadata_ptr), runtime_index);
         let arg_count: i32 = call_metadata_arg_count(metadata_ptr);
@@ -1671,12 +1700,44 @@ fn emit_expression(
         };
         if runtime_map_ptr > 0 {
             if callee_index >= runtime_func_count {
-                let runtime_index: i32 = load_i32(runtime_map_ptr + callee_index * WORD_SIZE);
+                let runtime_index: i32 =
+                    load_i32(runtime_map_ptr + callee_index * WORD_SIZE);
                 if runtime_index < 0 {
                     return -1;
                 };
                 store_i32(callee_slot, runtime_index);
                 callee_index = runtime_index;
+            } else {
+                let call_name_ptr: i32 = call_metadata_name_ptr(metadata_ptr);
+                let call_name_len: i32 = call_metadata_name_len(metadata_ptr);
+                if call_name_ptr >= 0 {
+                    let total_funcs: i32 = ast_functions_count(ast_base);
+                    let mut search_idx: i32 = 0;
+                    loop {
+                        if search_idx >= total_funcs {
+                            break;
+                        };
+                        let search_entry_ptr: i32 =
+                            ast_function_entry_ptr(ast_base, search_idx);
+                        let search_name_ptr: i32 = load_i32(search_entry_ptr);
+                        let search_name_len: i32 = load_i32(search_entry_ptr + 4);
+                        if identifiers_match(
+                            call_name_ptr,
+                            call_name_len,
+                            search_name_ptr,
+                            search_name_len,
+                        ) {
+                            let runtime_index: i32 =
+                                load_i32(runtime_map_ptr + search_idx * WORD_SIZE);
+                            if runtime_index >= 0 {
+                                store_i32(callee_slot, runtime_index);
+                                callee_index = runtime_index;
+                            };
+                            break;
+                        };
+                        search_idx = search_idx + 1;
+                    };
+                };
             };
         };
         let arg_count: i32 = call_metadata_arg_count(metadata_ptr);
