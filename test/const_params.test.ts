@@ -301,6 +301,24 @@ test("const parameter templates specialize complex array arguments", async () =>
     expect(result).toBe(15);
 });
 
+test("const parameter templates specialize complex string arguments", async () => {
+    const wasm = await compileWithAstCompiler(`
+    fn expect_keyword_literal(const LEN: i32, keyword: [u8; LEN]) -> i32 {
+        let mut idx: i32 = 0;
+        loop {
+            if idx >= LEN { break; };
+            let value: i32 = keyword[idx] as i32;
+            idx = idx + 1;
+            if value == 0 { return -1; };
+        };
+        0
+    }
+    fn main() -> i32 { expect_keyword_literal(3, "foo") }
+  `);
+    const result = await runWasmMainWithGc(wasm);
+    expect(result).toBe(0);
+});
+
 test("const parameter templates specialize return types", async () => {
     const wasm = await compileWithAstCompiler(`
     fn build(const N: i32, value: i32) -> [i32; N] {
