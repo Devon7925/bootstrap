@@ -290,17 +290,11 @@ fn parse_basic_expression(
                     let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
                     if detail_out_ptr > 0 {
                         if load_u8(detail_out_ptr) == 0 {
-                                let message: [u8; 64] =
-                                    "array literal length must be non-negative\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
-                            let detail_capacity: i32 = len(message);
-                            let mut detail_idx: i32 = 0;
-                            loop {
-                                if detail_idx >= detail_capacity {
-                                    break;
-                                };
-                                store_u8(detail_out_ptr + detail_idx, message[detail_idx] as i32);
-                                detail_idx = detail_idx + 1;
-                            };
+                            write_failure_detail(
+                                detail_out_ptr,
+                                41,
+                                "array literal length must be non-negative",
+                            );
                         };
                     };
                     return -1;
@@ -341,17 +335,11 @@ fn parse_basic_expression(
                 if array_cursor < 0 {
                     let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
                     if detail_out_ptr > 0 {
-                        let message: [u8; 64] =
-                            "array literal length expression parse failed\0\0\0\0\0\0\0\0\0\0\0\0\0";
-                        let detail_capacity: i32 = len(message);
-                        let mut detail_idx: i32 = 0;
-                        loop {
-                            if detail_idx >= detail_capacity {
-                                break;
-                            };
-                            store_u8(detail_out_ptr + detail_idx, message[detail_idx] as i32);
-                            detail_idx = detail_idx + 1;
-                        };
+                        write_failure_detail(
+                            detail_out_ptr,
+                            44,
+                            "array literal length expression parse failed",
+                        );
                     };
                     return -1;
                 };
@@ -398,17 +386,11 @@ fn parse_basic_expression(
                         ) < 0 {
                             let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
                             if detail_out_ptr > 0 {
-                                let message: [u8; 64] =
-                                    "array literal length requires const parameters\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
-                                let detail_capacity: i32 = len(message);
-                                let mut detail_idx: i32 = 0;
-                                loop {
-                                    if detail_idx >= detail_capacity {
-                                        break;
-                                    };
-                                    store_u8(detail_out_ptr + detail_idx, message[detail_idx] as i32);
-                                    detail_idx = detail_idx + 1;
-                                };
+                                write_failure_detail(
+                                    detail_out_ptr,
+                                    46,
+                                    "array literal length requires const parameters",
+                                );
                             };
                             return -1;
                         };
@@ -419,17 +401,11 @@ fn parse_basic_expression(
                     if metadata_ptr < 0 {
                         let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
                         if detail_out_ptr > 0 {
-                            let message: [u8; 64] =
-                                "array literal length metadata allocation failed\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
-                            let detail_capacity: i32 = len(message);
-                            let mut detail_idx: i32 = 0;
-                            loop {
-                                if detail_idx >= detail_capacity {
-                                    break;
-                                };
-                                store_u8(detail_out_ptr + detail_idx, message[detail_idx] as i32);
-                                detail_idx = detail_idx + 1;
-                            };
+                            write_failure_detail(
+                                detail_out_ptr,
+                                47,
+                                "array literal length metadata allocation failed",
+                            );
                         };
                         return -1;
                     };
@@ -449,17 +425,11 @@ fn parse_basic_expression(
                         let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
                         if detail_out_ptr > 0 {
                             if load_u8(detail_out_ptr) == 0 {
-                        let message: [u8; 64] =
-                            "array literal length must be non-negative\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
-                                let detail_capacity: i32 = len(message);
-                                let mut detail_idx: i32 = 0;
-                                loop {
-                                    if detail_idx >= detail_capacity {
-                                        break;
-                                    };
-                                    store_u8(detail_out_ptr + detail_idx, message[detail_idx] as i32);
-                                    detail_idx = detail_idx + 1;
-                                };
+                                write_failure_detail(
+                                    detail_out_ptr,
+                                    41,
+                                    "array literal length must be non-negative",
+                                );
                             };
                         };
                         return -1;
@@ -472,17 +442,11 @@ fn parse_basic_expression(
                 let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
                 if detail_out_ptr > 0 {
                     if load_u8(detail_out_ptr) == 0 {
-                        let message: [u8; 64] =
-                            "array literal length must be non-negative\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
-                        let detail_capacity: i32 = len(message);
-                        let mut detail_idx: i32 = 0;
-                        loop {
-                            if detail_idx >= detail_capacity {
-                                break;
-                            };
-                            store_u8(detail_out_ptr + detail_idx, message[detail_idx] as i32);
-                            detail_idx = detail_idx + 1;
-                        };
+                        write_failure_detail(
+                            detail_out_ptr,
+                            41,
+                            "array literal length must be non-negative",
+                        );
                     };
                 };
                 return -1;
