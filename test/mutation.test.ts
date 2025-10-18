@@ -37,7 +37,7 @@ test("array mutation inside loop accumulates", async () => {
   expect(result).toBe(20);
 });
 
-test.todo("tuple field mutation updates field", async () => {
+test("tuple field mutation updates field", async () => {
   const wasm = await compileWithAstCompiler(`
     fn main() -> i32 {
         let mut pair: (i32, i32) = (5, 10);
