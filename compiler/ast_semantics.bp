@@ -79,6 +79,7 @@ fn validate_function_type_template(
 }
 
 fn collect_call_const_arguments(
+    out_ptr: i32,
     ast_base: i32,
     metadata_ptr: i32,
     func_index: i32,
@@ -150,13 +151,40 @@ fn collect_call_const_arguments(
             );
             store_i32(eval_stack_top_ptr, saved_top);
             if status < 0 {
+                if out_ptr > 0 {
+                    if load_u8(out_ptr) == 0 {
+                        write_failure_detail(
+                            out_ptr,
+                            56,
+                            "const parameter arguments must be compile-time constants",
+                        );
+                    };
+                };
                 return -1;
             };
             if status != CONST_EVAL_STATUS_OK {
+                if out_ptr > 0 {
+                    if load_u8(out_ptr) == 0 {
+                        write_failure_detail(
+                            out_ptr,
+                            56,
+                            "const parameter arguments must be compile-time constants",
+                        );
+                    };
+                };
                 return -1;
             };
             let const_type: i32 = load_i32(eval_type_ptr);
             if const_type < 0 {
+                if out_ptr > 0 {
+                    if load_u8(out_ptr) == 0 {
+                        write_failure_detail(
+                            out_ptr,
+                            56,
+                            "const parameter arguments must be compile-time constants",
+                        );
+                    };
+                };
                 return -1;
             };
             let mut const_value: i32 = load_i32(eval_value_ptr);
@@ -282,6 +310,11 @@ fn resolve_call_metadata(
                 };
                 if caller_is_const {
                     if !ast_function_is_const(ast_base, target_idx) {
+                        record_failure_detail(
+                            out_ptr,
+                            45,
+                            "const functions may only call const functions",
+                        );
                         return -1;
                     };
                 };
@@ -467,6 +500,7 @@ fn resolve_call_metadata(
                     };
                 };
                 let const_status: i32 = collect_call_const_arguments(
+                    out_ptr,
                     ast_base,
                     current_metadata,
                     target_idx,
@@ -764,7 +798,7 @@ fn interpret_constant_entry(ast_base: i32, const_entry_ptr: i32) -> i32 {
     0
 }
 
-fn interpret_program_constants(ast_base: i32, func_count: i32) -> i32 {
+fn interpret_program_constants(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
     let constants_count: i32 = ast_constants_count(ast_base);
     let mut const_idx: i32 = 0;
     loop {
@@ -773,6 +807,15 @@ fn interpret_program_constants(ast_base: i32, func_count: i32) -> i32 {
         };
         let const_entry_ptr: i32 = ast_constant_entry_ptr(ast_base, const_idx);
         if interpret_constant_entry(ast_base, const_entry_ptr) < 0 {
+            if out_ptr > 0 {
+                if load_u8(out_ptr) == 0 {
+                    write_failure_detail(
+                        out_ptr,
+                        51,
+                        "constant initializer must be compile-time evaluable",
+                    );
+                };
+            };
             return -1;
         };
         const_idx = const_idx + 1;

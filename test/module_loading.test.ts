@@ -1,11 +1,14 @@
 import { expect, test } from "bun:test";
 
 import {
+  describeCompilationFailure,
   expectExportedFunction,
   expectExportedMemory,
   instantiateWasmModuleWithGc,
   loadAstCompilerWasm,
+  readModuleStorageTop,
 } from "./helpers";
+import type { CompileFailureDetails } from "./helpers";
 
 const encoder = new TextEncoder();
 
@@ -34,6 +37,14 @@ async function instantiateStage2Compiler(): Promise<Stage2Compiler> {
   const loadModuleFromSource = expectExportedFunction(instance, "loadModuleFromSource");
   const compileFromPath = expectExportedFunction(instance, "compileFromPath");
   return { memory, loadModuleFromSource, compileFromPath };
+}
+
+function readCompileFailure(
+  compiler: Stage2Compiler,
+  producedLength: number,
+): CompileFailureDetails {
+  const outputPtr = readModuleStorageTop(compiler.memory);
+  return describeCompilationFailure(compiler.memory, outputPtr, producedLength);
 }
 
 function ensureCapacity(memory: WebAssembly.Memory, required: number) {
@@ -134,7 +145,9 @@ test("compileFromPath returns failure for unknown modules", async () => {
   const compiler = await instantiateStage2Compiler();
   const pathPtr = 1_024;
   writeString(compiler.memory, pathPtr, "/fixtures/missing.bp");
-  expect(compiler.compileFromPath(pathPtr)).toBeLessThan(0);
+  const producedLength = compiler.compileFromPath(pathPtr);
+  const failure = readCompileFailure(compiler, producedLength);
+  expect(failure.detail).toBe("module has not been loaded");
 });
 
 test("compileFromPath resolves use imports relative to module", async () => {
@@ -224,5 +237,6 @@ test("compileFromPath fails when use import is missing", async () => {
   zeroMemory(compiler.memory, contentPtr, contentLength + 1);
 
   const producedLength = compiler.compileFromPath(pathPtr);
-  expect(producedLength).toBeLessThan(0);
+  const failure = readCompileFailure(compiler, producedLength);
+  expect(failure.detail).toBe("module import not found");
 });

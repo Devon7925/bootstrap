@@ -800,6 +800,16 @@ fn parse_basic_expression(
     if first_byte == '\'' {
         let next_cursor: i32 = parse_char_literal(base, len, cursor, literal_ptr);
         if next_cursor < 0 {
+            let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+            if detail_out_ptr > 0 {
+                if load_u8(detail_out_ptr) == 0 {
+                    write_failure_detail(
+                        detail_out_ptr,
+                        52,
+                        "character literal must contain exactly one character",
+                    );
+                };
+            };
             return -1;
         };
         let value: i32 = load_i32(literal_ptr);
@@ -3412,6 +3422,12 @@ fn parse_use_declaration(
     };
     let import_index: i32 = module_find_index(resolved_ptr, resolved_len);
     if import_index < 0 {
+        let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+        if detail_out_ptr > 0 {
+            if load_u8(detail_out_ptr) == 0 {
+                write_failure_detail(detail_out_ptr, 23, "module import not found");
+            };
+        };
         return (-1, func_count);
     };
     if import_index == current_module_index {

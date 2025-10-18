@@ -65,7 +65,9 @@ test("non-const function calls in constant initializers are rejected", async () 
         42
     }
   `);
-  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(failure.failure.detail).toBe(
+    "constant initializer must be compile-time evaluable",
+  );
 });
 
 test("const functions can be used in constant initializers", async () => {
@@ -330,7 +332,9 @@ test("non-type constants cannot be used as type annotations", async () => {
         value
     }
   `);
-  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(failure.failure.detail).toBe(
+    "type annotations require const type values",
+  );
 });
 
 test("const functions can call other const functions", async () => {
@@ -363,7 +367,9 @@ test("const functions cannot call non-const functions", async () => {
         7
     }
   `);
-  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(failure.failure.detail).toBe(
+    "const functions may only call const functions",
+  );
 });
 
 test("function names cannot conflict with constants", async () => {
