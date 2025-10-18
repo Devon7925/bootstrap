@@ -443,7 +443,7 @@ test("const parameter templates reject mismatched parameter arrays", async () =>
     );
 });
 
-test.todo("const parameter return templates reject mismatched bindings", async () => {
+test("const parameter return templates reject mismatched bindings", async () => {
     const failure = await expectCompileFailure(`
     fn build(const N: i32, value: i32) -> [i32; N] {
         [value; N]
