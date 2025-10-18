@@ -31,6 +31,7 @@ const MODULE_PATH_PTR = 1_024;
 const MODULE_CONTENT_PTR = 4_096;
 const DEFAULT_ENTRY_MODULE_PATH = "/entry.bp";
 const MEMORY_INTRINSICS_MODULE_PATH = "/stdlib/memory.bp";
+const FAILURE_DETAIL_CAPACITY = 64;
 
 const WORD_SIZE = 4;
 const SCRATCH_INSTR_CAPACITY = 131_072;
@@ -108,6 +109,17 @@ function zeroModuleMemory(memory: WebAssembly.Memory, ptr: number, length: numbe
   }
   ensureModuleMemoryCapacity(memory, ptr + length);
   new Uint8Array(memory.buffer).fill(0, ptr, ptr + length);
+}
+
+function zeroFailureDetail(memory: WebAssembly.Memory, ptr: number) {
+  if (ptr <= 0) {
+    return;
+  }
+  const view = new Uint8Array(memory.buffer);
+  const end = Math.min(ptr + FAILURE_DETAIL_CAPACITY, view.length);
+  if (end > ptr) {
+    view.fill(0, ptr, end);
+  }
 }
 
 export function readModuleStorageTop(memory: WebAssembly.Memory): number {
@@ -501,6 +513,8 @@ export class CompilerInstance {
         failure,
       );
     }
+
+    zeroFailureDetail(this.#memory, outputPtr);
 
     view.set(sourceBytes, inputPtr);
 

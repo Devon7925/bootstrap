@@ -44,7 +44,7 @@ test("using out of scope locals is rejected", async () => {
         inner
     }
   `);
-  expect(error.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(error.failure.detail).toBe("identifier not found");
 });
 
 test("assignment to immutable locals is rejected", async () => {

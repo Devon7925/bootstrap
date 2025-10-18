@@ -2919,6 +2919,16 @@ fn parse_constant_declaration(
     let name_len: i32 = ident.2;
 
     if find_constant_entry_index(base, ast_base, name_start, name_len, false) >= 0 {
+        let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+        if detail_out_ptr > 0 {
+            if load_u8(detail_out_ptr) == 0 {
+                write_failure_detail(
+                    detail_out_ptr,
+                    30,
+                    "duplicate constant declaration",
+                );
+            };
+        };
         return -1;
     };
 
@@ -2946,6 +2956,16 @@ fn parse_constant_declaration(
                 match_idx = match_idx + 1;
             };
             if matches {
+                let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+                if detail_out_ptr > 0 {
+                    if load_u8(detail_out_ptr) == 0 {
+                        write_failure_detail(
+                            detail_out_ptr,
+                            30,
+                            "duplicate function declaration",
+                        );
+                    };
+                };
                 return -1;
             };
         };
