@@ -1244,29 +1244,44 @@ fn resolve_expression_internal(
     };
     if kind == 8 {
         let mut expr_type: i32 = ast_expr_type(ast_base, expr_index);
-        if expr_type < 0 {
-            if local_stack_base > 0 && local_stack_count_ptr > 0 {
-                let local_index: i32 = load_i32(entry_ptr + 4);
-                if local_index >= 0 {
-                    let stack_count: i32 = load_i32(local_stack_count_ptr);
-                    let mut stack_idx: i32 = stack_count - 1;
-                    loop {
-                        if stack_idx < 0 {
-                            break;
+        let initial_type: i32 = expr_type;
+        let mut recorded_type: i32 = -1;
+        let mut recorded_entry_offset: i32 = -1;
+        let mut init_expr_index: i32 = -1;
+        if local_stack_base > 0 && local_stack_count_ptr > 0 {
+            let local_index: i32 = load_i32(entry_ptr + 4);
+            if local_index >= 0 {
+                let stack_count: i32 = load_i32(local_stack_count_ptr);
+                let mut stack_idx: i32 = stack_count - 1;
+                loop {
+                    if stack_idx < 0 {
+                        break;
+                    };
+                    let entry_offset: i32 =
+                        local_stack_base + stack_idx * RESOLVE_LOCAL_STACK_ENTRY_SIZE;
+                    let recorded_index: i32 = load_i32(entry_offset);
+                    if recorded_index == local_index {
+                        recorded_entry_offset = entry_offset;
+                        init_expr_index = load_i32(entry_offset + 4);
+                        let mut stack_type: i32 = load_i32(entry_offset + 8);
+                        if stack_type < 0 {
+                            if init_expr_index >= 0 {
+                                stack_type = ast_expr_type(ast_base, init_expr_index);
+                                if stack_type >= 0 {
+                                    store_i32(entry_offset + 8, stack_type);
+                                };
+                            };
                         };
-                        let entry_offset: i32 =
-                            local_stack_base + stack_idx * RESOLVE_LOCAL_STACK_ENTRY_SIZE;
-                        let recorded_index: i32 = load_i32(entry_offset);
-                        if recorded_index == local_index {
-                            let recorded_type: i32 = load_i32(entry_offset + 8);
-                            if recorded_type >= 0 {
-                                expr_type = recorded_type;
+                        recorded_type = stack_type;
+                        if expr_type < 0 {
+                            if stack_type >= 0 {
+                                expr_type = stack_type;
                                 ast_expr_set_type(ast_base, expr_index, expr_type);
                             };
-                            break;
                         };
-                        stack_idx = stack_idx - 1;
+                        break;
                     };
+                    stack_idx = stack_idx - 1;
                 };
             };
         };
@@ -1277,6 +1292,58 @@ fn resolve_expression_internal(
             };
             if resolved_type != expr_type {
                 ast_expr_set_type(ast_base, expr_index, resolved_type);
+                expr_type = resolved_type;
+            };
+            if initial_type >= 0 && recorded_type >= 0 {
+                let mut validate_const_template: bool = false;
+                if init_expr_index >= 0 {
+                    let init_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, init_expr_index);
+                    let init_kind: i32 = load_i32(init_entry_ptr);
+                    if init_kind == 1 {
+                        let metadata_ptr: i32 = load_i32(init_entry_ptr + 4);
+                        if metadata_ptr > 0 {
+                            let template_slot_ptr: i32 =
+                                call_metadata_template_payload_ptr(metadata_ptr);
+                            if template_slot_ptr > 0 {
+                                let payload_ptr: i32 = load_i32(template_slot_ptr);
+                                if payload_ptr > 0 {
+                                    let return_handle: i32 = load_i32(
+                                        payload_ptr
+                                            + TYPE_TEMPLATE_PAYLOAD_RETURN_HANDLE_INDEX
+                                                * WORD_SIZE,
+                                    );
+                                    if return_handle > 0 {
+                                        validate_const_template = true;
+                                    };
+                                };
+                            };
+                        };
+                    };
+                };
+                if validate_const_template {
+                    let resolved_recorded: i32 =
+                        resolve_type_id(out_ptr, ast_base, recorded_type);
+                    if resolved_recorded < 0 {
+                        return -1;
+                    };
+                    if recorded_entry_offset >= 0 {
+                        if resolved_recorded != recorded_type {
+                            store_i32(recorded_entry_offset + 8, resolved_recorded);
+                        };
+                    };
+                    if resolved_recorded != expr_type {
+                        if out_ptr > 0 {
+                            if load_u8(out_ptr) == 0 {
+                                write_failure_detail(
+                                    out_ptr,
+                                    47,
+                                    "const parameter template expected type mismatch",
+                                );
+                            };
+                        };
+                        return -1;
+                    };
+                };
             };
         };
         return 0;
