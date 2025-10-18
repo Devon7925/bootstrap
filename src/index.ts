@@ -7,7 +7,7 @@ export enum Target {
 
 export const DEFAULT_TARGET = Target.Wasm;
 
-export const FUNCTION_ENTRY_SIZE = 44;
+export const FUNCTION_ENTRY_SIZE = 60;
 export const FUNCTIONS_BASE_OFFSET = 851_968;
 export const STAGE1_MAX_FUNCTIONS = 512;
 

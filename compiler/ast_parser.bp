@@ -1,3 +1,236 @@
+const FAILURE_DETAIL_CAPACITY: i32 = 64;
+
+fn compute_line_and_column(base: i32, len: i32, offset: i32) -> (i32, i32) {
+    if base < 0 {
+        return (0, 0);
+    };
+    if len <= 0 {
+        return (0, 0);
+    };
+    if offset < 0 {
+        return (0, 0);
+    };
+    let mut line: i32 = 1;
+    let mut column: i32 = 1;
+    let mut idx: i32 = 0;
+    let limit: i32 = if offset > len { len } else { offset };
+    loop {
+        if idx >= limit {
+            break;
+        };
+        let byte: i32 = load_u8(base + idx);
+        if byte == '\n' {
+            line = line + 1;
+            column = 1;
+        } else {
+            column = column + 1;
+        };
+        idx = idx + 1;
+    };
+    (line, column)
+}
+
+fn write_module_prefixed_failure_detail(
+    detail_out_ptr: i32,
+    module_index: i32,
+    module_base: i32,
+    module_len: i32,
+    location_offset: i32,
+    const MESSAGE_LEN: i32,
+    message: [u8; MESSAGE_LEN],
+) -> bool {
+    let mut effective_base: i32 = module_base;
+    let mut effective_len: i32 = module_len;
+    let mut effective_index: i32 = module_index;
+    if (effective_base < 0 || effective_len <= 0) && effective_index >= 0 {
+        effective_base = module_entry_content(effective_index);
+        effective_len = module_entry_content_len(effective_index);
+    };
+    if effective_index < 0 {
+        effective_index = module_find_index_by_content_ptr(effective_base);
+    };
+    if effective_base < 0 {
+        return false;
+    };
+    if effective_len <= 0 {
+        return false;
+    };
+    if location_offset < 0 {
+        return false;
+    };
+    let fallback_path: [u8; 9] = "/entry.bp";
+    let mut path_ptr: i32 = 0;
+    let mut path_len: i32 = 0;
+    if effective_index >= 0 {
+        path_ptr = module_entry_path(effective_index);
+        path_len = module_entry_path_len(effective_index);
+    };
+    let mut use_fallback_path: bool = false;
+    if path_ptr <= 0 || path_len <= 0 {
+        use_fallback_path = true;
+        path_len = 9;
+    };
+    let location: (i32, i32) =
+        compute_line_and_column(effective_base, effective_len, location_offset);
+    let line: i32 = location.0;
+    let column: i32 = location.1;
+    if line <= 0 || column <= 0 {
+        return false;
+    };
+    let mut write_offset: i32 = 0;
+    let mut truncated: bool = false;
+    let mut prefix_idx: i32 = 0;
+    loop {
+        if prefix_idx >= path_len {
+            break;
+        };
+        if write_offset >= FAILURE_DETAIL_CAPACITY {
+            truncated = true;
+            break;
+        };
+        let byte: i32 = if use_fallback_path {
+            fallback_path[prefix_idx] as i32
+        } else {
+            load_u8(path_ptr + prefix_idx)
+        };
+        store_u8(detail_out_ptr + write_offset, byte);
+        write_offset = write_offset + 1;
+        prefix_idx = prefix_idx + 1;
+    };
+    if write_offset < FAILURE_DETAIL_CAPACITY {
+        store_u8(detail_out_ptr + write_offset, ':');
+        write_offset = write_offset + 1;
+    } else {
+        truncated = true;
+    };
+    let mut line_digits_len: i32 = 0;
+    let mut line_temp: i32 = line;
+    if line_temp <= 0 {
+        line_digits_len = 1;
+    } else {
+        loop {
+            if line_temp <= 0 {
+                break;
+            };
+            line_digits_len = line_digits_len + 1;
+            line_temp = line_temp / 10;
+        };
+    };
+    let mut line_divisor: i32 = 1;
+    let mut line_divisor_idx: i32 = 1;
+    loop {
+        if line_divisor_idx >= line_digits_len {
+            break;
+        };
+        line_divisor = line_divisor * 10;
+        line_divisor_idx = line_divisor_idx + 1;
+    };
+    let mut line_remaining: i32 = line;
+    let mut line_written: i32 = 0;
+    loop {
+        if line_written >= line_digits_len {
+            break;
+        };
+        if write_offset >= FAILURE_DETAIL_CAPACITY {
+            truncated = true;
+            break;
+        };
+        let digit: i32 = line_remaining / line_divisor;
+        store_u8(detail_out_ptr + write_offset, digit + '0');
+        write_offset = write_offset + 1;
+        line_remaining = line_remaining - digit * line_divisor;
+        line_written = line_written + 1;
+        if line_divisor <= 1 {
+            line_divisor = 1;
+        } else {
+            line_divisor = line_divisor / 10;
+        };
+    };
+    if write_offset < FAILURE_DETAIL_CAPACITY {
+        store_u8(detail_out_ptr + write_offset, ':');
+        write_offset = write_offset + 1;
+    } else {
+        truncated = true;
+    };
+    let mut column_digits_len: i32 = 0;
+    let mut column_temp: i32 = column;
+    if column_temp <= 0 {
+        column_digits_len = 1;
+    } else {
+        loop {
+            if column_temp <= 0 {
+                break;
+            };
+            column_digits_len = column_digits_len + 1;
+            column_temp = column_temp / 10;
+        };
+    };
+    let mut column_divisor: i32 = 1;
+    let mut column_divisor_idx: i32 = 1;
+    loop {
+        if column_divisor_idx >= column_digits_len {
+            break;
+        };
+        column_divisor = column_divisor * 10;
+        column_divisor_idx = column_divisor_idx + 1;
+    };
+    let mut column_remaining: i32 = column;
+    let mut column_written: i32 = 0;
+    loop {
+        if column_written >= column_digits_len {
+            break;
+        };
+        if write_offset >= FAILURE_DETAIL_CAPACITY {
+            truncated = true;
+            break;
+        };
+        let digit: i32 = column_remaining / column_divisor;
+        store_u8(detail_out_ptr + write_offset, digit + '0');
+        write_offset = write_offset + 1;
+        column_remaining = column_remaining - digit * column_divisor;
+        column_written = column_written + 1;
+        if column_divisor <= 1 {
+            column_divisor = 1;
+        } else {
+            column_divisor = column_divisor / 10;
+        };
+    };
+    if write_offset < FAILURE_DETAIL_CAPACITY {
+        store_u8(detail_out_ptr + write_offset, ':');
+        write_offset = write_offset + 1;
+    } else {
+        truncated = true;
+    };
+    if write_offset < FAILURE_DETAIL_CAPACITY {
+        store_u8(detail_out_ptr + write_offset, ' ');
+        write_offset = write_offset + 1;
+    } else {
+        truncated = true;
+    };
+    let mut message_idx: i32 = 0;
+    loop {
+        if message_idx >= MESSAGE_LEN {
+            break;
+        };
+        if write_offset >= FAILURE_DETAIL_CAPACITY {
+            truncated = true;
+            break;
+        };
+        let byte: i32 = message[message_idx] as i32;
+        store_u8(detail_out_ptr + write_offset, byte);
+        write_offset = write_offset + 1;
+        message_idx = message_idx + 1;
+    };
+    loop {
+        if write_offset >= FAILURE_DETAIL_CAPACITY {
+            break;
+        };
+        store_u8(detail_out_ptr + write_offset, 0);
+        write_offset = write_offset + 1;
+    };
+    !truncated
+}
+
 fn parse_basic_expression(
     base: i32,
     len: i32,
@@ -2390,7 +2623,14 @@ fn parse_expression(
     )
 }
 
-fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i32) -> i32 {
+fn parse_function(
+    base: i32,
+    len: i32,
+    offset: i32,
+    ast_base: i32,
+    func_index: i32,
+    current_module_index: i32,
+) -> i32 {
     let mut cursor: i32 = skip_whitespace(base, len, offset);
     let mut is_const_fn: bool = false;
     let mut maybe_const: i32 = expect_keyword_const(base, len, cursor);
@@ -2412,7 +2652,6 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
     cursor = skip_whitespace(base, len, cursor);
 
     let temp_base: i32 = ast_temp_base(ast_base);
-    let current_module_index: i32 = module_find_index_by_content_ptr(base);
     let params_count_ptr: i32 = temp_base;
     let params_table_ptr: i32 = temp_base + 4;
     let params_table_end: i32 = params_table_ptr + MAX_PARAMS * 8;
@@ -2466,11 +2705,19 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
                 let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
                 if detail_out_ptr > 0 {
                     if load_u8(detail_out_ptr) == 0 {
-                        write_failure_detail(
+                        let message: [u8; 37] = "function name conflicts with constant";
+                        let wrote_detail: bool = write_module_prefixed_failure_detail(
                             detail_out_ptr,
+                            current_module_index,
+                            base,
+                            len,
+                            name_start,
                             37,
-                            "function name conflicts with constant",
+                            message,
                         );
+                        if !wrote_detail {
+                            write_failure_detail(detail_out_ptr, 37, message);
+                        };
                     };
                 };
                 return -1;
@@ -2823,6 +3070,10 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
         flags,
         const_params_ptr,
         type_template_handles_ptr,
+        base,
+        len,
+        current_module_index,
+        name_start,
     );
     cursor
 }
@@ -2942,11 +3193,19 @@ fn parse_constant_declaration(
         let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
         if detail_out_ptr > 0 {
             if load_u8(detail_out_ptr) == 0 {
-                write_failure_detail(
+                let message: [u8; 30] = "duplicate constant declaration";
+                let wrote_detail: bool = write_module_prefixed_failure_detail(
                     detail_out_ptr,
+                    current_module_index,
+                    base,
+                    len,
+                    name_start,
                     30,
-                    "duplicate constant declaration",
+                    message,
                 );
+                if !wrote_detail {
+                    write_failure_detail(detail_out_ptr, 30, message);
+                };
             };
         };
         return -1;
@@ -2979,11 +3238,19 @@ fn parse_constant_declaration(
                 let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
                 if detail_out_ptr > 0 {
                     if load_u8(detail_out_ptr) == 0 {
-                        write_failure_detail(
+                        let message: [u8; 30] = "duplicate function declaration";
+                        let wrote_detail: bool = write_module_prefixed_failure_detail(
                             detail_out_ptr,
+                            current_module_index,
+                            base,
+                            len,
+                            name_start,
                             30,
-                            "duplicate function declaration",
+                            message,
                         );
+                        if !wrote_detail {
+                            write_failure_detail(detail_out_ptr, 30, message);
+                        };
                     };
                 };
                 return -1;
@@ -3380,13 +3647,14 @@ fn parse_use_declaration(
         };
     };
     idx = skip_whitespace(base, len, use_cursor);
+    let literal_start: i32 = idx;
     let temp_base: i32 = ast_temp_base(ast_base);
     let literal_ptr: i32 = temp_base;
     let literal_len_ptr: i32 = literal_ptr + MODULE_PATH_MAX_LENGTH;
     let literal_cursor: i32 = parse_string_literal_to_buffer(
         base,
         len,
-        idx,
+        literal_start,
         literal_ptr,
         MODULE_PATH_MAX_LENGTH,
         literal_len_ptr,
@@ -3425,7 +3693,19 @@ fn parse_use_declaration(
         let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
         if detail_out_ptr > 0 {
             if load_u8(detail_out_ptr) == 0 {
-                write_failure_detail(detail_out_ptr, 23, "module import not found");
+                let message: [u8; 23] = "module import not found";
+                let wrote_detail: bool = write_module_prefixed_failure_detail(
+                    detail_out_ptr,
+                    current_module_index,
+                    base,
+                    len,
+                    literal_start,
+                    23,
+                    message,
+                );
+                if !wrote_detail {
+                    write_failure_detail(detail_out_ptr, 23, message);
+                };
             };
         };
         return (-1, func_count);
@@ -3511,7 +3791,7 @@ fn parse_program(
         if count >= AST_MAX_FUNCTIONS {
             return -1;
         };
-        cursor = parse_function(base, len, cursor, ast_base, count);
+        cursor = parse_function(base, len, cursor, ast_base, count, current_module_index);
         if cursor < 0 {
             return -1;
         };

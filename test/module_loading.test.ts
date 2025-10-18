@@ -238,5 +238,7 @@ test("compileFromPath fails when use import is missing", async () => {
 
   const producedLength = compiler.compileFromPath(pathPtr);
   const failure = readCompileFailure(compiler, producedLength);
-  expect(failure.detail).toBe("module import not found");
+  expect(failure.detail).toBe(
+    "/fixtures/main.bp:2:9: module import not found",
+  );
 });
