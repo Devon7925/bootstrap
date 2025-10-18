@@ -856,6 +856,11 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
             let other_name_len: i32 = load_i32(other_entry_ptr + 4);
             if name_len == other_name_len {
                 if identifiers_match(name_ptr, name_len, other_name_ptr, other_name_len) {
+                    record_failure_detail(
+                        out_ptr,
+                        30,
+                        "duplicate function declaration",
+                    );
                     return -1;
                 };
             };

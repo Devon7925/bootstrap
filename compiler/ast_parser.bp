@@ -2453,6 +2453,16 @@ fn parse_function(base: i32, len: i32, offset: i32, ast_base: i32, func_index: i
                 entry_ptr,
                 current_module_index,
             ) {
+                let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+                if detail_out_ptr > 0 {
+                    if load_u8(detail_out_ptr) == 0 {
+                        write_failure_detail(
+                            detail_out_ptr,
+                            37,
+                            "function name conflicts with constant",
+                        );
+                    };
+                };
                 return -1;
             };
         };
