@@ -40,7 +40,7 @@ test("float remainder is rejected", async () => {
         5.0f32 % 2.0f32
     }
   `);
-  expect(error.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(error.failure.detail).toBe("remainder operator is not supported");
 });
 
 test("literal addition executes", async () => {

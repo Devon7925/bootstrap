@@ -1012,6 +1012,16 @@ fn parse_block_expression_body(
                         final_data0 = 0;
                         final_data1 = 0;
                     } else {
+                        let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+                        if detail_out_ptr > 0 {
+                            if load_u8(detail_out_ptr) == 0 {
+                                write_failure_detail(
+                                    detail_out_ptr,
+                                    33,
+                                    "block must end with an expression",
+                                );
+                            };
+                        };
                         store_i32(locals_stack_count_ptr, saved_stack_count);
                         store_i32(locals_next_index_ptr, saved_next_index);
                         return -1;
@@ -1219,6 +1229,16 @@ fn parse_block_expression_body(
         if break_cursor >= 0 {
             let current_loop_depth: i32 = load_i32(loop_depth_ptr);
             if current_loop_depth <= 0 {
+                let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+                if detail_out_ptr > 0 {
+                    if load_u8(detail_out_ptr) == 0 {
+                        write_failure_detail(
+                            detail_out_ptr,
+                            37,
+                            "break statements must be inside loops",
+                        );
+                    };
+                };
                 store_i32(locals_stack_count_ptr, saved_stack_count);
                 store_i32(locals_next_index_ptr, saved_next_index);
                 return -1;
@@ -1304,6 +1324,16 @@ fn parse_block_expression_body(
         if continue_cursor >= 0 {
             let current_loop_depth: i32 = load_i32(loop_depth_ptr);
             if current_loop_depth <= 0 {
+                let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+                if detail_out_ptr > 0 {
+                    if load_u8(detail_out_ptr) == 0 {
+                        write_failure_detail(
+                            detail_out_ptr,
+                            40,
+                            "continue statements must be inside loops",
+                        );
+                    };
+                };
                 store_i32(locals_stack_count_ptr, saved_stack_count);
                 store_i32(locals_next_index_ptr, saved_next_index);
                 return -1;
@@ -1528,6 +1558,16 @@ fn parse_block_expression_body(
                                 };
                                 let entry_ptr: i32 = locals_entry_ptr(locals_table_ptr, entry_index);
                                 if !locals_entry_is_mut(entry_ptr) {
+                                    let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+                                    if detail_out_ptr > 0 {
+                                        if load_u8(detail_out_ptr) == 0 {
+                                            write_failure_detail(
+                                                detail_out_ptr,
+                                                32,
+                                                "cannot assign to immutable local",
+                                            );
+                                        };
+                                    };
                                     store_i32(locals_stack_count_ptr, saved_stack_count);
                                     store_i32(locals_next_index_ptr, saved_next_index);
                                     return -1;

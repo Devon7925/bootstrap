@@ -800,6 +800,16 @@ fn parse_basic_expression(
     if first_byte == '\'' {
         let next_cursor: i32 = parse_char_literal(base, len, cursor, literal_ptr);
         if next_cursor < 0 {
+            let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+            if detail_out_ptr > 0 {
+                if load_u8(detail_out_ptr) == 0 {
+                    write_failure_detail(
+                        detail_out_ptr,
+                        52,
+                        "character literal must contain exactly one character",
+                    );
+                };
+            };
             return -1;
         };
         let value: i32 = load_i32(literal_ptr);
@@ -1378,6 +1388,19 @@ fn parse_multiplicative_expression(
         };
         let next_byte: i32 = load_u8(base + current_cursor);
         if next_byte != '*' && next_byte != '/' {
+            if next_byte == '%' {
+                let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+                if detail_out_ptr > 0 {
+                    if load_u8(detail_out_ptr) == 0 {
+                        write_failure_detail(
+                            detail_out_ptr,
+                            35,
+                            "remainder operator is not supported",
+                        );
+                    };
+                };
+                return -1;
+            };
             break;
         };
         let operator: i32 = next_byte;
