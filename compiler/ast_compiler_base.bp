@@ -1605,6 +1605,8 @@ fn parse_block_expression_body(
         let mut assignment_kind: i32 = 0;
         let mut assignment_array_expr_index: i32 = -1;
         let mut assignment_array_index_expr_index: i32 = -1;
+        let mut assignment_tuple_expr_index: i32 = -1;
+        let mut assignment_tuple_field_index: i32 = -1;
         if !expression_parsed {
             if is_identifier_start(next_byte) {
                 let assignment_ident: (i32, i32, i32) = parse_identifier(base, len, idx);
@@ -1735,7 +1737,6 @@ fn parse_block_expression_body(
                                         return -1;
                                     };
                                     assignment_local_index = locals_entry_local_index(entry_ptr);
-                                    let local_type_id: i32 = locals_entry_type_id(entry_ptr);
                                     let index_kind_ptr: i32 = stmt_nested_temp_base;
                                     let index_data0_ptr: i32 = stmt_nested_temp_base + 4;
                                     let index_data1_ptr: i32 = stmt_nested_temp_base + 8;
@@ -1781,6 +1782,7 @@ fn parse_block_expression_body(
                                         store_i32(locals_next_index_ptr, saved_next_index);
                                         return -1;
                                     };
+                                    let local_type_id: i32 = locals_entry_type_id(entry_ptr);
                                     let array_expr_index: i32 =
                                         ast_expr_alloc_local(ast_base, assignment_local_index, local_type_id);
                                     if array_expr_index < 0 {
@@ -1797,7 +1799,8 @@ fn parse_block_expression_body(
                                 };
                             };
                         } else if assign_byte == '.' {
-                            let mut field_cursor: i32 = skip_whitespace(base, len, after_ident + 1);
+                            let field_start: i32 = skip_whitespace(base, len, after_ident + 1);
+                            let mut field_cursor: i32 = field_start;
                             let mut field_digits: i32 = 0;
                             loop {
                                 if field_cursor >= len {
@@ -1811,6 +1814,16 @@ fn parse_block_expression_body(
                                 field_digits = field_digits + 1;
                             };
                             if field_digits > 0 {
+                                let mut field_index: i32 = 0;
+                                let mut digit_idx: i32 = 0;
+                                loop {
+                                    if digit_idx >= field_digits {
+                                        break;
+                                    };
+                                    let digit_byte: i32 = load_u8(base + field_start + digit_idx);
+                                    field_index = field_index * 10 + (digit_byte - '0');
+                                    digit_idx = digit_idx + 1;
+                                };
                                 let after_field: i32 = skip_whitespace(base, len, field_cursor);
                                 if after_field < len {
                                     let eq_byte: i32 = load_u8(base + after_field);
@@ -1820,28 +1833,66 @@ fn parse_block_expression_body(
                                             maybe_second = load_u8(base + after_field + 1);
                                         };
                                         if maybe_second != '=' {
-                                            let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
-                                            if detail_out_ptr > 0 {
-                                                if load_u8(detail_out_ptr) == 0 {
-                                                    let message: [u8; 52] =
-                                                        "tuple field assignment is not supported yet";
-                                                    let detail_capacity: i32 = len(message);
-                                                    let mut detail_idx: i32 = 0;
-                                                    loop {
-                                                        if detail_idx >= detail_capacity {
-                                                            break;
+                                            let current_stack: i32 =
+                                                load_i32(locals_stack_count_ptr);
+                                            let entry_index: i32 = find_local_entry_index(
+                                                base,
+                                                locals_table_ptr,
+                                                current_stack,
+                                                name_start,
+                                                name_len,
+                                            );
+                                            if entry_index < 0 {
+                                                store_i32(locals_stack_count_ptr, saved_stack_count);
+                                                store_i32(locals_next_index_ptr, saved_next_index);
+                                                return -1;
+                                            };
+                                            let entry_ptr: i32 =
+                                                locals_entry_ptr(locals_table_ptr, entry_index);
+                                            if !locals_entry_is_mut(entry_ptr) {
+                                                let detail_out_ptr: i32 =
+                                                    ast_base - ast_output_reserve(len);
+                                                if detail_out_ptr > 0 {
+                                                    if load_u8(detail_out_ptr) == 0 {
+                                                        let message: [u8; 33] =
+                                                            "cannot assign to immutable local";
+                                                        let detail_capacity: i32 = len(message);
+                                                        let mut detail_idx: i32 = 0;
+                                                        loop {
+                                                            if detail_idx >= detail_capacity {
+                                                                break;
+                                                            };
+                                                            store_u8(
+                                                                detail_out_ptr + detail_idx,
+                                                                message[detail_idx] as i32,
+                                                            );
+                                                            detail_idx = detail_idx + 1;
                                                         };
-                                                        store_u8(
-                                                            detail_out_ptr + detail_idx,
-                                                            message[detail_idx] as i32,
-                                                        );
-                                                        detail_idx = detail_idx + 1;
                                                     };
                                                 };
+                                                store_i32(locals_stack_count_ptr, saved_stack_count);
+                                                store_i32(locals_next_index_ptr, saved_next_index);
+                                                return -1;
                                             };
-                                            store_i32(locals_stack_count_ptr, saved_stack_count);
-                                            store_i32(locals_next_index_ptr, saved_next_index);
-                                            return -1;
+                                            assignment_local_index =
+                                                locals_entry_local_index(entry_ptr);
+                                            let local_type_id: i32 = locals_entry_type_id(entry_ptr);
+                                            let tuple_expr_index: i32 = ast_expr_alloc_local(
+                                                ast_base,
+                                                assignment_local_index,
+                                                local_type_id,
+                                            );
+                                            if tuple_expr_index < 0 {
+                                                store_i32(locals_stack_count_ptr, saved_stack_count);
+                                                store_i32(locals_next_index_ptr, saved_next_index);
+                                                return -1;
+                                            };
+                                            assignment_tuple_expr_index = tuple_expr_index;
+                                            assignment_tuple_field_index = field_index;
+                                            assignment_kind = 2;
+                                            assignment_identified = true;
+                                            assignment_cursor =
+                                                skip_whitespace(base, len, after_field + 1);
                                         };
                                     };
                                 };
@@ -1908,6 +1959,13 @@ fn parse_block_expression_body(
                         ast_base,
                         assignment_array_expr_index,
                         assignment_array_index_expr_index,
+                        value_index,
+                    );
+                } else if assignment_kind == 2 {
+                    assign_expr_index = ast_expr_alloc_tuple_set(
+                        ast_base,
+                        assignment_tuple_expr_index,
+                        assignment_tuple_field_index,
                         value_index,
                     );
                 };
@@ -4722,6 +4780,63 @@ fn clone_const_specialization_expr(
         };
         return new_index;
     };
+    if kind == 45 {
+        let tuple_index: i32 = load_i32(entry_ptr + WORD_SIZE);
+        let field_index: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
+        let value_index: i32 = load_i32(entry_ptr + 3 * WORD_SIZE);
+        let cloned_tuple: i32 = clone_const_specialization_expr(
+            ast_base,
+            template_index,
+            key_ptr,
+            removed_const_count,
+            tuple_index,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
+        );
+        if cloned_tuple < 0 {
+            return -1;
+        };
+        let cloned_value: i32 = clone_const_specialization_expr(
+            ast_base,
+            template_index,
+            key_ptr,
+            removed_const_count,
+            value_index,
+            env_values_ptr,
+            param_count,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
+            local_type_stack_ptr,
+            local_type_stack_top_ptr,
+            local_type_stack_capacity,
+        );
+        if cloned_value < 0 {
+            return -1;
+        };
+        let new_index: i32 = ast_expr_alloc_tuple_set(
+            ast_base,
+            cloned_tuple,
+            field_index,
+            cloned_value,
+        );
+        if new_index < 0 {
+            return -1;
+        };
+        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        if expr_type >= 0 {
+            ast_expr_set_type(ast_base, new_index, expr_type);
+        };
+        return new_index;
+    };
     if kind == 37 {
         let values_ptr: i32 = load_i32(entry_ptr + WORD_SIZE);
         let count: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
@@ -6995,6 +7110,20 @@ fn ast_expr_alloc_array_set(
     index
 }
 
+fn ast_expr_alloc_tuple_set(
+    ast_base: i32,
+    tuple_index: i32,
+    field_index: i32,
+    value_index: i32,
+) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, 45, tuple_index, field_index, value_index);
+    if index < 0 {
+        return -1;
+    };
+    ast_expr_set_type(ast_base, index, ast_expr_type(ast_base, value_index));
+    index
+}
+
 fn ast_expr_alloc_sequence(ast_base: i32, first_index: i32, then_index: i32) -> i32 {
     let index: i32 = ast_expr_alloc(ast_base, 11, first_index, then_index, 0);
     if index < 0 {
@@ -8825,6 +8954,32 @@ fn collect_expression_const_params_visit(
         if collect_expression_const_params_visit(
             ast_base,
             index_index,
+            params_count,
+            const_mask_table_ptr,
+            usage_mask_low_ptr,
+            usage_mask_high_ptr,
+            usage_list_ptr,
+            usage_count_ptr,
+        ) < 0 {
+            return -1;
+        };
+        let value_index: i32 = load_i32(entry_ptr + 12);
+        return collect_expression_const_params_visit(
+            ast_base,
+            value_index,
+            params_count,
+            const_mask_table_ptr,
+            usage_mask_low_ptr,
+            usage_mask_high_ptr,
+            usage_list_ptr,
+            usage_count_ptr,
+        );
+    };
+    if kind == 45 {
+        let tuple_index: i32 = load_i32(entry_ptr + 4);
+        if collect_expression_const_params_visit(
+            ast_base,
+            tuple_index,
             params_count,
             const_mask_table_ptr,
             usage_mask_low_ptr,
