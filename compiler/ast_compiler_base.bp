@@ -1012,6 +1012,21 @@ fn parse_block_expression_body(
                         final_data0 = 0;
                         final_data1 = 0;
                     } else {
+                        let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+                        if detail_out_ptr > 0 {
+                            if load_u8(detail_out_ptr) == 0 {
+                                let message: [u8; 30] = "block must end with expression";
+                                let detail_capacity: i32 = len(message);
+                                let mut detail_idx: i32 = 0;
+                                loop {
+                                    if detail_idx >= detail_capacity {
+                                        break;
+                                    };
+                                    store_u8(detail_out_ptr + detail_idx, message[detail_idx] as i32);
+                                    detail_idx = detail_idx + 1;
+                                };
+                            };
+                        };
                         store_i32(locals_stack_count_ptr, saved_stack_count);
                         store_i32(locals_next_index_ptr, saved_next_index);
                         return -1;
@@ -1021,6 +1036,63 @@ fn parse_block_expression_body(
             idx = idx + 1;
             idx = skip_whitespace(base, len, idx);
             break;
+        };
+        if next_byte == 'w' {
+            if idx + 5 <= len {
+                let h: i32 = load_u8(base + idx + 1);
+                let i_byte: i32 = load_u8(base + idx + 2);
+                let l: i32 = load_u8(base + idx + 3);
+                let e: i32 = load_u8(base + idx + 4);
+                if h == 'h' && i_byte == 'i' && l == 'l' && e == 'e' {
+                    let after_keyword: i32 = idx + 5;
+                    if after_keyword >= len {
+                        let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+                        if detail_out_ptr > 0 {
+                            if load_u8(detail_out_ptr) == 0 {
+                                let message: [u8; 34] = "while statements are not supported";
+                                let detail_capacity: i32 = len(message);
+                                let mut detail_idx: i32 = 0;
+                                loop {
+                                    if detail_idx >= detail_capacity {
+                                        break;
+                                    };
+                                    store_u8(detail_out_ptr + detail_idx, message[detail_idx] as i32);
+                                    detail_idx = detail_idx + 1;
+                                };
+                            };
+                        };
+                        store_i32(locals_stack_count_ptr, saved_stack_count);
+                        store_i32(locals_next_index_ptr, saved_next_index);
+                        return -1;
+                    };
+                    let after_byte: i32 = load_u8(base + after_keyword);
+                    if !is_whitespace(after_byte) && after_byte != '(' {
+                        // fall through to expression parsing
+                    } else {
+                        let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+                        if detail_out_ptr > 0 {
+                            if load_u8(detail_out_ptr) == 0 {
+                                let message: [u8; 34] = "while statements are not supported";
+                                let detail_capacity: i32 = len(message);
+                                let mut detail_idx: i32 = 0;
+                                loop {
+                                    if detail_idx >= detail_capacity {
+                                        break;
+                                    };
+                                    store_u8(
+                                        detail_out_ptr + detail_idx,
+                                        message[detail_idx] as i32,
+                                    );
+                                    detail_idx = detail_idx + 1;
+                                };
+                            };
+                        };
+                        store_i32(locals_stack_count_ptr, saved_stack_count);
+                        store_i32(locals_next_index_ptr, saved_next_index);
+                        return -1;
+                    };
+                };
+            };
         };
         if have_value_expr {
             store_i32(locals_stack_count_ptr, saved_stack_count);
@@ -1219,6 +1291,24 @@ fn parse_block_expression_body(
         if break_cursor >= 0 {
             let current_loop_depth: i32 = load_i32(loop_depth_ptr);
             if current_loop_depth <= 0 {
+                let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+                if detail_out_ptr > 0 {
+                    if load_u8(detail_out_ptr) == 0 {
+                        let message: [u8; 36] = "break statements must be inside loop";
+                        let detail_capacity: i32 = len(message);
+                        let mut detail_idx: i32 = 0;
+                        loop {
+                            if detail_idx >= detail_capacity {
+                                break;
+                            };
+                            store_u8(
+                                detail_out_ptr + detail_idx,
+                                message[detail_idx] as i32,
+                            );
+                            detail_idx = detail_idx + 1;
+                        };
+                    };
+                };
                 store_i32(locals_stack_count_ptr, saved_stack_count);
                 store_i32(locals_next_index_ptr, saved_next_index);
                 return -1;
@@ -1304,6 +1394,24 @@ fn parse_block_expression_body(
         if continue_cursor >= 0 {
             let current_loop_depth: i32 = load_i32(loop_depth_ptr);
             if current_loop_depth <= 0 {
+                let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+                if detail_out_ptr > 0 {
+                    if load_u8(detail_out_ptr) == 0 {
+                        let message: [u8; 40] = "continue statements must be inside loops";
+                        let detail_capacity: i32 = len(message);
+                        let mut detail_idx: i32 = 0;
+                        loop {
+                            if detail_idx >= detail_capacity {
+                                break;
+                            };
+                            store_u8(
+                                detail_out_ptr + detail_idx,
+                                message[detail_idx] as i32,
+                            );
+                            detail_idx = detail_idx + 1;
+                        };
+                    };
+                };
                 store_i32(locals_stack_count_ptr, saved_stack_count);
                 store_i32(locals_next_index_ptr, saved_next_index);
                 return -1;
@@ -1528,6 +1636,24 @@ fn parse_block_expression_body(
                                 };
                                 let entry_ptr: i32 = locals_entry_ptr(locals_table_ptr, entry_index);
                                 if !locals_entry_is_mut(entry_ptr) {
+                                    let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+                                    if detail_out_ptr > 0 {
+                                        if load_u8(detail_out_ptr) == 0 {
+                                            let message: [u8; 33] = "cannot assign to immutable local";
+                                            let detail_capacity: i32 = len(message);
+                                            let mut detail_idx: i32 = 0;
+                                            loop {
+                                                if detail_idx >= detail_capacity {
+                                                    break;
+                                                };
+                                                store_u8(
+                                                    detail_out_ptr + detail_idx,
+                                                    message[detail_idx] as i32,
+                                                );
+                                                detail_idx = detail_idx + 1;
+                                            };
+                                        };
+                                    };
                                     store_i32(locals_stack_count_ptr, saved_stack_count);
                                     store_i32(locals_next_index_ptr, saved_next_index);
                                     return -1;

@@ -55,7 +55,7 @@ test("assignment to immutable locals is rejected", async () => {
         value
     }
   `);
-  expect(error.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(error.failure.detail).toBe("cannot assign to immutable local");
 });
 
 test("blocks must end with an expression", async () => {
@@ -64,5 +64,5 @@ test("blocks must end with an expression", async () => {
         let value: i32 = 1;
     }
   `);
-  expect(error.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(error.failure.detail).toBe("block must end with expression");
 });
