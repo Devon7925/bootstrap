@@ -1717,6 +1717,111 @@ fn resolve_expression_internal(
         ast_expr_set_type(ast_base, expr_index, resolved_element);
         return 0;
     };
+    if kind == 44 {
+        let array_index: i32 = load_i32(entry_ptr + 4);
+        let index_index: i32 = load_i32(entry_ptr + 8);
+        let value_index: i32 = load_i32(entry_ptr + 12);
+        if resolve_expression_internal(
+            out_ptr,
+            ast_base,
+            array_index,
+            func_count,
+            control_stack_base,
+            control_stack_count_ptr,
+            loop_stack_base,
+            loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
+            caller_func_index,
+            caller_is_const,
+        ) < 0 {
+            return -1;
+        };
+        if resolve_expression_internal(
+            out_ptr,
+            ast_base,
+            index_index,
+            func_count,
+            control_stack_base,
+            control_stack_count_ptr,
+            loop_stack_base,
+            loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
+            caller_func_index,
+            caller_is_const,
+        ) < 0 {
+            return -1;
+        };
+        if resolve_expression_internal(
+            out_ptr,
+            ast_base,
+            value_index,
+            func_count,
+            control_stack_base,
+            control_stack_count_ptr,
+            loop_stack_base,
+            loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
+            caller_func_index,
+            caller_is_const,
+        ) < 0 {
+            return -1;
+        };
+        let array_type: i32 = ast_expr_type(ast_base, array_index);
+        if array_type < 0 {
+            return -1;
+        };
+        let resolved_array: i32 = resolve_type_id(out_ptr, ast_base, array_type);
+        if resolved_array < 0 {
+            return -1;
+        };
+        if resolved_array != array_type {
+            ast_expr_set_type(ast_base, array_index, resolved_array);
+        };
+        if !type_id_is_array(resolved_array) {
+            return -1;
+        };
+        let index_type: i32 = ast_expr_type(ast_base, index_index);
+        if index_type != BUILTIN_TYPE_ID_I32 {
+            record_failure_detail(out_ptr, 36, "array index requires integer indices");
+            return -1;
+        };
+        let element_type: i32 = array_type_element_type(ast_base, resolved_array);
+        if element_type < 0 {
+            return -1;
+        };
+        let resolved_element: i32 = resolve_type_id(out_ptr, ast_base, element_type);
+        if resolved_element < 0 {
+            return -1;
+        };
+        if resolved_element != element_type {
+            let array_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, array_index);
+            let array_kind: i32 = load_i32(array_entry_ptr);
+            if array_kind == 8 {
+                ast_expr_set_type(ast_base, array_index, resolved_array);
+            };
+        };
+        let value_type: i32 = ast_expr_type(ast_base, value_index);
+        if value_type >= 0 {
+            let resolved_value: i32 = resolve_type_id(out_ptr, ast_base, value_type);
+            if resolved_value < 0 {
+                return -1;
+            };
+            if resolved_value != resolved_element {
+                record_failure_detail(out_ptr, 38, "array element assignment type mismatch");
+                return -1;
+            };
+            if resolved_value != value_type {
+                ast_expr_set_type(ast_base, value_index, resolved_value);
+            };
+        } else {
+            ast_expr_set_type(ast_base, value_index, resolved_element);
+        };
+        ast_expr_set_type(ast_base, expr_index, resolved_element);
+        return 0;
+    };
     if kind == 38 {
         let array_index: i32 = load_i32(entry_ptr + 4);
         if resolve_expression_internal(
