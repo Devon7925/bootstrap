@@ -19,6 +19,18 @@ fn identifiers_match(ptr_a: i32, len_a: i32, ptr_b: i32, len_b: i32) -> bool {
 
 const FAILURE_DETAIL_CAPACITY: i32 = 64;
 
+fn record_failure_detail(
+    out_ptr: i32,
+    const MESSAGE_LEN: i32,
+    message: [u8; MESSAGE_LEN],
+) {
+    if out_ptr > 0 {
+        if load_u8(out_ptr) == 0 {
+            write_failure_detail(out_ptr, MESSAGE_LEN, message);
+        };
+    };
+}
+
 fn validate_function_type_template(
     ast_base: i32,
     func_index: i32,
@@ -249,6 +261,11 @@ fn resolve_call_metadata(
             if identifiers_match(call_name_ptr, call_name_len, target_name_ptr, target_name_len) {
                 let expected_params: i32 = load_i32(target_entry_ptr + 8);
                 if expected_params != arg_count {
+                    record_failure_detail(
+                        out_ptr,
+                        28,
+                        "call argument count mismatch",
+                    );
                     return -1;
                 };
                 let param_types_ptr: i32 = load_i32(target_entry_ptr + 24);
@@ -378,6 +395,11 @@ fn resolve_call_metadata(
                             return -1;
                         };
                         if resolved_expected != resolved_arg {
+                            record_failure_detail(
+                                out_ptr,
+                                27,
+                                "call argument type mismatch",
+                            );
                             return -1;
                         };
                     } else {
@@ -594,6 +616,11 @@ fn resolve_call_metadata(
         target_idx = target_idx + 1;
     };
     if found_idx < 0 {
+        record_failure_detail(
+            out_ptr,
+            34,
+            "call references undefined function",
+        );
         return -1;
     };
     let callee_entry_ptr: i32 = ast_function_entry_ptr(ast_base, found_idx);
@@ -603,6 +630,11 @@ fn resolve_call_metadata(
     };
     if arg_count != runtime_param_count {
         if arg_count < runtime_param_count {
+            record_failure_detail(
+                out_ptr,
+                28,
+                "call argument count mismatch",
+            );
             return -1;
         };
         if !ast_function_has_const_params(ast_base, found_idx) {
@@ -618,6 +650,11 @@ fn resolve_call_metadata(
             current_metadata = compacted;
             arg_count = runtime_param_count;
         } else {
+            record_failure_detail(
+                out_ptr,
+                28,
+                "call argument count mismatch",
+            );
             return -1;
         };
     };
@@ -1936,9 +1973,19 @@ fn resolve_expression_internal(
         };
         if kind == 20 || kind == 21 {
             if !type_id_is_bool(resolved_left) {
+                record_failure_detail(
+                    out_ptr,
+                    42,
+                    "logical operators require boolean operands",
+                );
                 return -1;
             };
             if !type_id_is_bool(resolved_right) {
+                record_failure_detail(
+                    out_ptr,
+                    42,
+                    "logical operators require boolean operands",
+                );
                 return -1;
             };
             ast_expr_set_type(ast_base, expr_index, BUILTIN_TYPE_ID_BOOL);
@@ -1952,24 +1999,54 @@ fn resolve_expression_internal(
             || kind == 19
         {
             if !type_id_is_integer(resolved_left) {
+                record_failure_detail(
+                    out_ptr,
+                    41,
+                    "binary operator operands must be integers",
+                );
                 return -1;
             };
             if !type_id_is_integer(resolved_right) {
+                record_failure_detail(
+                    out_ptr,
+                    41,
+                    "binary operator operands must be integers",
+                );
                 return -1;
             };
             if resolved_left != resolved_right {
+                record_failure_detail(
+                    out_ptr,
+                    48,
+                    "binary operator operands must have matching type",
+                );
                 return -1;
             };
             ast_expr_set_type(ast_base, expr_index, BUILTIN_TYPE_ID_BOOL);
             return 0;
         };
         if !type_id_is_integer(resolved_left) {
+            record_failure_detail(
+                out_ptr,
+                41,
+                "binary operator operands must be integers",
+            );
             return -1;
         };
         if !type_id_is_integer(resolved_right) {
+            record_failure_detail(
+                out_ptr,
+                41,
+                "binary operator operands must be integers",
+            );
             return -1;
         };
         if resolved_left != resolved_right {
+            record_failure_detail(
+                out_ptr,
+                48,
+                "binary operator operands must have matching type",
+            );
             return -1;
         };
         ast_expr_set_type(ast_base, expr_index, resolved_left);
@@ -1993,6 +2070,11 @@ fn resolve_expression_internal(
         };
         let value_type: i32 = ast_expr_type(ast_base, value_index);
         if !type_id_is_bool(value_type) {
+            record_failure_detail(
+                out_ptr,
+                35,
+                "logical not operand must be boolean",
+            );
             return -1;
         };
         ast_expr_set_type(ast_base, expr_index, BUILTIN_TYPE_ID_BOOL);
