@@ -42,7 +42,7 @@ test("duplicate constants are rejected", async () => {
     const VALUE: i32 = 1;
     const VALUE: i32 = 2;
   `);
-  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(failure.failure.detail).toBe("duplicate constant declaration");
 });
 
 test("non literal constant initializers are evaluated", async () => {

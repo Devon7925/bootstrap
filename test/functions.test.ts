@@ -226,7 +226,9 @@ test("bare return is rejected for non-unit functions", async () => {
         return;
     }
   `);
-  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(failure.failure.detail).toBe(
+    "return expression type does not match function return type",
+  );
 });
 
 test("functions can use local variables", async () => {
