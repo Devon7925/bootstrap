@@ -27,7 +27,7 @@ test("array index requires integer indices", async () => {
         values[true]
     }
   `);
-  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(failure.failure.detail).toBe("array index requires integer indices");
 });
 
 test("len intrinsic returns array length", async () => {
