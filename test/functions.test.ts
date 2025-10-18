@@ -86,7 +86,7 @@ test("duplicate function names are rejected", async () => {
         2
     }
   `);
-  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(failure.failure.detail).toBe("duplicate function declaration");
 });
 
 test("functions may omit return types", async () => {

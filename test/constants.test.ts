@@ -374,6 +374,6 @@ test("function names cannot conflict with constants", async () => {
         0
     }
   `);
-  expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+  expect(failure.failure.detail).toBe("function name conflicts with constant");
 });
 
