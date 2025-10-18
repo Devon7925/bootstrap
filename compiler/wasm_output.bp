@@ -786,6 +786,77 @@ fn collect_local_counts_from_expression(
             locals_end,
             local_types_ptr,
         );
+    } else if kind == 44 {
+        let array_index: i32 = load_i32(entry_ptr + 4);
+        let index_index: i32 = load_i32(entry_ptr + 8);
+        let value_index: i32 = load_i32(entry_ptr + 12);
+        let array_counts: i32 = collect_local_counts_from_expression(
+            ast_base,
+            array_index,
+            param_count,
+            locals_end,
+            local_types_ptr,
+        );
+        if array_counts < 0 {
+            return -1;
+        };
+        let index_counts: i32 = collect_local_counts_from_expression(
+            ast_base,
+            index_index,
+            param_count,
+            locals_end,
+            local_types_ptr,
+        );
+        if index_counts < 0 {
+            return -1;
+        };
+        let mut total: i32 = local_counts_add(array_counts, index_counts);
+        if total < 0 {
+            return -1;
+        };
+        let value_counts: i32 = collect_local_counts_from_expression(
+            ast_base,
+            value_index,
+            param_count,
+            locals_end,
+            local_types_ptr,
+        );
+        if value_counts < 0 {
+            return -1;
+        };
+        total = local_counts_add(total, value_counts);
+        if total < 0 {
+            return -1;
+        };
+        local_counts_add(total, value_counts)
+    } else if kind == 45 {
+        let tuple_index: i32 = load_i32(entry_ptr + 4);
+        let value_index: i32 = load_i32(entry_ptr + 12);
+        let tuple_counts: i32 = collect_local_counts_from_expression(
+            ast_base,
+            tuple_index,
+            param_count,
+            locals_end,
+            local_types_ptr,
+        );
+        if tuple_counts < 0 {
+            return -1;
+        };
+        let value_counts: i32 = collect_local_counts_from_expression(
+            ast_base,
+            value_index,
+            param_count,
+            locals_end,
+            local_types_ptr,
+        );
+        if value_counts < 0 {
+            return -1;
+        };
+        let total: i32 = local_counts_add(tuple_counts, value_counts);
+        if total < 0 {
+            return -1;
+        };
+        local_counts_add(total, value_counts)
     } else if kind == 40 {
         let values_ptr: i32 = load_i32(entry_ptr + 4);
         let element_count: i32 = load_i32(entry_ptr + 8);
@@ -1080,6 +1151,32 @@ fn expression_code_size(ast_base: i32, expr_index: i32) -> i32 {
         };
         return array_size + index_size + 2 + leb_u32_len(type_index);
     };
+    if kind == 44 {
+        let array_index: i32 = load_i32(entry_ptr + 4);
+        let index_index: i32 = load_i32(entry_ptr + 8);
+        let value_index: i32 = load_i32(entry_ptr + 12);
+        let array_size: i32 = expression_code_size(ast_base, array_index);
+        if array_size < 0 {
+            return -1;
+        };
+        let index_size: i32 = expression_code_size(ast_base, index_index);
+        if index_size < 0 {
+            return -1;
+        };
+        let value_size: i32 = expression_code_size(ast_base, value_index);
+        if value_size < 0 {
+            return -1;
+        };
+        let array_type: i32 = ast_expr_type(ast_base, array_index);
+        if !type_id_is_array(array_type) {
+            return -1;
+        };
+        let type_index: i32 = array_type_heap_index(ast_base, array_type);
+        if type_index < 0 {
+            return -1;
+        };
+        return array_size + index_size + value_size * 2 + 2 + leb_u32_len(type_index);
+    };
     if kind == 38 {
         let array_index: i32 = load_i32(entry_ptr + 4);
         let array_type: i32 = ast_expr_type(ast_base, array_index);
@@ -1111,6 +1208,31 @@ fn expression_code_size(ast_base: i32, expr_index: i32) -> i32 {
             return -1;
         };
         return tuple_size + 2 + leb_u32_len(type_index) + leb_u32_len(field_index);
+    };
+    if kind == 45 {
+        let tuple_index: i32 = load_i32(entry_ptr + 4);
+        let field_index: i32 = load_i32(entry_ptr + 8);
+        let value_index: i32 = load_i32(entry_ptr + 12);
+        if field_index < 0 {
+            return -1;
+        };
+        let tuple_size: i32 = expression_code_size(ast_base, tuple_index);
+        if tuple_size < 0 {
+            return -1;
+        };
+        let value_size: i32 = expression_code_size(ast_base, value_index);
+        if value_size < 0 {
+            return -1;
+        };
+        let tuple_type: i32 = ast_expr_type(ast_base, tuple_index);
+        if !type_id_is_tuple(tuple_type) {
+            return -1;
+        };
+        let type_index: i32 = type_id_heap_type_index(ast_base, tuple_type);
+        if type_index < 0 {
+            return -1;
+        };
+        return tuple_size + value_size * 2 + 2 + leb_u32_len(type_index) + leb_u32_len(field_index);
     };
     if kind == 40 {
         let values_ptr: i32 = load_i32(entry_ptr + 4);
@@ -1871,6 +1993,39 @@ fn emit_expression(
         out = write_u32_leb(base, out, type_index);
         return out;
     };
+    if kind == 44 {
+        let array_index: i32 = load_i32(entry_ptr + 4);
+        let index_index: i32 = load_i32(entry_ptr + 8);
+        let value_index: i32 = load_i32(entry_ptr + 12);
+        let mut out: i32 = emit_expression(base, offset, ast_base, array_index, runtime_map_ptr, runtime_func_count);
+        if out < 0 {
+            return -1;
+        };
+        out = emit_expression(base, out, ast_base, index_index, runtime_map_ptr, runtime_func_count);
+        if out < 0 {
+            return -1;
+        };
+        out = emit_expression(base, out, ast_base, value_index, runtime_map_ptr, runtime_func_count);
+        if out < 0 {
+            return -1;
+        };
+        let array_type: i32 = ast_expr_type(ast_base, array_index);
+        if !type_id_is_array(array_type) {
+            return -1;
+        };
+        let type_index: i32 = array_type_heap_index(ast_base, array_type);
+        if type_index < 0 {
+            return -1;
+        };
+        out = write_byte(base, out, 251);
+        out = write_byte(base, out, 14);
+        out = write_u32_leb(base, out, type_index);
+        out = emit_expression(base, out, ast_base, value_index, runtime_map_ptr, runtime_func_count);
+        if out < 0 {
+            return -1;
+        };
+        return out;
+    };
     if kind == 38 {
         let array_index: i32 = load_i32(entry_ptr + 4);
         let array_type: i32 = ast_expr_type(ast_base, array_index);
@@ -1908,6 +2063,39 @@ fn emit_expression(
         out = write_byte(base, out, 2);
         out = write_u32_leb(base, out, type_index);
         out = write_u32_leb(base, out, field_index);
+        return out;
+    };
+    if kind == 45 {
+        let tuple_index: i32 = load_i32(entry_ptr + 4);
+        let field_index: i32 = load_i32(entry_ptr + 8);
+        let value_index: i32 = load_i32(entry_ptr + 12);
+        if field_index < 0 {
+            return -1;
+        };
+        let mut out: i32 = emit_expression(base, offset, ast_base, tuple_index, runtime_map_ptr, runtime_func_count);
+        if out < 0 {
+            return -1;
+        };
+        out = emit_expression(base, out, ast_base, value_index, runtime_map_ptr, runtime_func_count);
+        if out < 0 {
+            return -1;
+        };
+        let tuple_type: i32 = ast_expr_type(ast_base, tuple_index);
+        if !type_id_is_tuple(tuple_type) {
+            return -1;
+        };
+        let type_index: i32 = type_id_heap_type_index(ast_base, tuple_type);
+        if type_index < 0 {
+            return -1;
+        };
+        out = write_byte(base, out, 251);
+        out = write_byte(base, out, 5);
+        out = write_u32_leb(base, out, type_index);
+        out = write_u32_leb(base, out, field_index);
+        out = emit_expression(base, out, ast_base, value_index, runtime_map_ptr, runtime_func_count);
+        if out < 0 {
+            return -1;
+        };
         return out;
     };
     if kind == 40 {
@@ -2542,7 +2730,7 @@ fn emit_type_section(
                         if next < 0 {
                             return -1;
                         };
-                        out = write_byte(base, next, WASM_MUTABILITY_CONST);
+                        out = write_byte(base, next, WASM_MUTABILITY_VAR);
                         field_idx = field_idx + 1;
                     };
                 };

@@ -5,7 +5,7 @@ import {
   runWasmMainWithGc,
 } from "./helpers";
 
-test.todo("array element mutation updates value", async () => {
+test("array element mutation updates value", async () => {
   const wasm = await compileWithAstCompiler(`
     fn main() -> i32 {
         let mut values: [i32; 3] = [1, 2, 3];
@@ -37,7 +37,7 @@ test.todo("array mutation inside loop accumulates", async () => {
   expect(result).toBe(20);
 });
 
-test.todo("tuple field mutation updates field", async () => {
+test("tuple field mutation updates field", async () => {
   const wasm = await compileWithAstCompiler(`
     fn main() -> i32 {
         let mut pair: (i32, i32) = (5, 10);
@@ -50,7 +50,7 @@ test.todo("tuple field mutation updates field", async () => {
   expect(result).toBe(25);
 });
 
-test.todo("tuple containing array can mutate element", async () => {
+test("tuple containing array can mutate element", async () => {
   const wasm = await compileWithAstCompiler(`
     fn main() -> i32 {
         let mut pair: (i32, [i32; 3]) = (2, [3, 4, 5]);
