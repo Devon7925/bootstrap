@@ -42,7 +42,9 @@ test("duplicate constants are rejected", async () => {
     const VALUE: i32 = 1;
     const VALUE: i32 = 2;
   `);
-  expect(failure.failure.detail).toBe("duplicate constant declaration");
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:3:11: duplicate constant declaration",
+  );
 });
 
 test("non literal constant initializers are evaluated", async () => {
@@ -66,7 +68,7 @@ test("non-const function calls in constant initializers are rejected", async () 
     }
   `);
   expect(failure.failure.detail).toBe(
-    "constant initializer must be compile-time evaluable",
+    "/entry.bp:2:11: const initializer must be compile-time evaluable",
   );
 });
 
@@ -380,6 +382,8 @@ test("function names cannot conflict with constants", async () => {
         0
     }
   `);
-  expect(failure.failure.detail).toBe("function name conflicts with constant");
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:4:8: function name conflicts with constant",
+  );
 });
 

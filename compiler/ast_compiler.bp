@@ -16,6 +16,9 @@ fn compile_impl(
     };
 
     initialize_layout(out_ptr);
+    store_i32(scratch_module_base_ptr(out_ptr), input_ptr);
+    store_i32(scratch_module_len_ptr(out_ptr), input_len);
+    store_i32(scratch_module_index_ptr(out_ptr), current_module_index);
     let ast_base: i32 = ast_program_base(out_ptr, input_len);
     ast_reset(ast_base);
 
