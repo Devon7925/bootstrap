@@ -1416,6 +1416,11 @@ fn resolve_expression_internal(
                         ) {
                             let index_type: i32 = ast_expr_type(ast_base, index_index);
                             if index_type != BUILTIN_TYPE_ID_I32 {
+                                record_failure_detail(
+                                    out_ptr,
+                                    36,
+                                    "array index requires integer indices",
+                                );
                                 return -1;
                             };
                             let element_hint: i32 =
@@ -1443,6 +1448,11 @@ fn resolve_expression_internal(
                     if length_expr_index >= 0 {
                         let index_type: i32 = ast_expr_type(ast_base, index_index);
                         if index_type != BUILTIN_TYPE_ID_I32 {
+                            record_failure_detail(
+                                out_ptr,
+                                36,
+                                "array index requires integer indices",
+                            );
                             return -1;
                         };
                         let element_index: i32 = load_i32(array_entry_ptr + WORD_SIZE);
@@ -1477,6 +1487,11 @@ fn resolve_expression_internal(
                             if repeat_init_index >= 0 {
                                 let index_type: i32 = ast_expr_type(ast_base, index_index);
                                 if index_type != BUILTIN_TYPE_ID_I32 {
+                                    record_failure_detail(
+                                        out_ptr,
+                                        36,
+                                        "array index requires integer indices",
+                                    );
                                     return -1;
                                 };
                                 let repeat_entry_ptr: i32 =
@@ -1522,6 +1537,11 @@ fn resolve_expression_internal(
         };
         let index_type: i32 = ast_expr_type(ast_base, index_index);
         if index_type != BUILTIN_TYPE_ID_I32 {
+            record_failure_detail(
+                out_ptr,
+                36,
+                "array index requires integer indices",
+            );
             return -1;
         };
         let element_type: i32 = array_type_element_type(ast_base, resolved_array_type);
