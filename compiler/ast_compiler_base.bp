@@ -2578,6 +2578,16 @@ fn parse_type(
         };
         let const_type: i32 = ast_constant_entry_type(const_entry_ptr);
         if const_type != BUILTIN_TYPE_ID_TYPE {
+            let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+            if detail_out_ptr > 0 {
+                if load_u8(detail_out_ptr) == 0 {
+                    write_failure_detail(
+                        detail_out_ptr,
+                        42,
+                        "type annotations require const type values",
+                    );
+                };
+            };
             return -1;
         };
         let const_value: i32 = ast_constant_entry_value(const_entry_ptr);
@@ -7114,7 +7124,7 @@ fn interpret_constant_expression(
         };
         let has_const_params: bool = ast_function_has_const_params(ast_base, template_index);
         if has_const_params {
-            if collect_call_const_arguments(ast_base, metadata_ptr, template_index, arg_count) < 0 {
+            if collect_call_const_arguments(0, ast_base, metadata_ptr, template_index, arg_count) < 0 {
                 store_i32(scratch_top_ptr, saved_top);
                 return -1;
             };

@@ -395,7 +395,9 @@ test("const parameters require compile-time constant arguments", async () => {
         scale(runtime, 7)
     }
   `);
-    expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+    expect(failure.failure.detail).toBe(
+      "const parameter arguments must be compile-time constants",
+    );
 });
 
 test("const parameters accept const fn results", async () => {
@@ -436,7 +438,9 @@ test("const parameter templates reject mismatched parameter arrays", async () =>
         sum(4, values)
     }
   `);
-    expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+    expect(failure.failure.detail).toBe(
+      "const parameter template expected type mismatch",
+    );
 });
 
 test.todo("const parameter return templates reject mismatched bindings", async () => {
@@ -450,7 +454,9 @@ test.todo("const parameter return templates reject mismatched bindings", async (
         values[0]
     }
   `);
-    expect(failure.failure.producedLength).toBeLessThanOrEqual(0);
+    expect(failure.failure.detail).toBe(
+      "const parameter template expected type mismatch",
+    );
 });
 
 test("const parameter templates are not exported", async () => {

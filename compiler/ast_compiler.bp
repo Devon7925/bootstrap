@@ -29,7 +29,7 @@ fn compile_impl(
     if func_count <= 0 {
         return -1;
     };
-    if interpret_program_constants(ast_base, func_count) < 0 {
+    if interpret_program_constants(out_ptr, ast_base, func_count) < 0 {
         return -1;
     };
     if validate_program(out_ptr, ast_base, func_count) < 0 {
@@ -109,12 +109,16 @@ fn compileFromPath(path_ptr: i32) -> i32 {
         return -1;
     };
     module_ensure_state_initialized();
+    let detail_out_ptr: i32 = module_storage_top();
     let path_len: i32 = string_length(path_ptr);
     if path_len <= 0 {
         return -1;
     };
     let index: i32 = module_find_index(path_ptr, path_len);
     if index < 0 {
+        if detail_out_ptr > 0 {
+            write_failure_detail(detail_out_ptr, 26, "module has not been loaded");
+        };
         return -1;
     };
     module_clear_flags();

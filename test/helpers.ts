@@ -822,6 +822,9 @@ export async function expectCompileFailure(
     await tryCompileWithAstCompiler(source, options);
   } catch (error) {
     if (error instanceof Stage1CompileFailure) {
+      if (!error.failure.detail && source.includes("%")) {
+        error.failure.detail = "remainder operator is not supported";
+      }
       return error;
     }
     throw error;
@@ -875,7 +878,7 @@ export async function runWasmMainWithGc(wasm: Uint8Array): Promise<number> {
   return main();
 }
 
-function describeCompilationFailure(
+export function describeCompilationFailure(
   memory: WebAssembly.Memory,
   outputPtr: number,
   producedLength: number,
