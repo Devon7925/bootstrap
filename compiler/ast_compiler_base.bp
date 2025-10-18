@@ -1235,6 +1235,11 @@ fn parse_block_expression_body(
             if load_i32(stmt_local_type_ptr) < 0 {
                 let inferred_type: i32 = ast_expr_type(ast_base, init_index);
                 store_i32(stmt_local_type_ptr, inferred_type);
+            } else {
+                let annotated_type: i32 = load_i32(stmt_local_type_ptr);
+                if annotated_type >= 0 {
+                    ast_expr_set_type(ast_base, init_index, annotated_type);
+                };
             };
             idx = skip_whitespace(base, len, idx);
             idx = expect_char(base, len, idx, ';');
