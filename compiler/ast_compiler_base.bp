@@ -930,7 +930,7 @@ fn expression_guaranteed_diverges(ast_base: i32, expr_index: i32) -> bool {
 
 const BLOCK_STATEMENT_ENTRY_SIZE: i32 = 12;
 
-const BLOCK_STATEMENTS_CAPACITY: i32 = 512;
+const BLOCK_STATEMENTS_CAPACITY: i32 = 1024;
 
 fn parse_block_expression_body(
     base: i32,
@@ -2899,7 +2899,7 @@ const AST_CONSTANTS_SECTION_SIZE: i32 = WORD_SIZE + AST_CONSTANTS_CAPACITY * AST
 
 const AST_CONSTANTS_SECTION_WORDS: i32 = AST_CONSTANTS_SECTION_SIZE >> 2;
 
-const AST_CALL_DATA_CAPACITY: i32 = 65536 - AST_CONSTANTS_SECTION_WORDS;
+const AST_CALL_DATA_CAPACITY: i32 = 131072 - AST_CONSTANTS_SECTION_WORDS;
 
 fn write_failure_detail(
     detail_out_ptr: i32,
