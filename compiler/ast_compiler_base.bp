@@ -4550,9 +4550,11 @@ fn clone_const_specialization_expr(
                 ast_expr_array_repeat_length_metadata(ast_base, expr_index);
             let mut usage_list_ptr: i32 = 0;
             let mut usage_count: i32 = 0;
+            let mut location_offset: i32 = -1;
             if original_metadata_ptr > 0 {
                 usage_list_ptr = load_i32(original_metadata_ptr + WORD_SIZE);
                 usage_count = load_i32(original_metadata_ptr + 2 * WORD_SIZE);
+                location_offset = load_i32(original_metadata_ptr + 3 * WORD_SIZE);
             };
             let cloned_length_expr: i32 = clone_const_specialization_expr(
                 ast_base,
@@ -4631,13 +4633,14 @@ fn clone_const_specialization_expr(
                         copy_idx = copy_idx + 1;
                     };
                 };
-                metadata_ptr = ast_call_data_alloc(ast_base, 3);
+                metadata_ptr = ast_call_data_alloc(ast_base, 4);
                 if metadata_ptr < 0 {
                     return -1;
                 };
                 store_i32(metadata_ptr, cloned_length_expr);
                 store_i32(metadata_ptr + WORD_SIZE, copied_usage_ptr);
                 store_i32(metadata_ptr + 2 * WORD_SIZE, usage_count);
+                store_i32(metadata_ptr + 3 * WORD_SIZE, location_offset);
             };
         };
         if resolved_length {
@@ -6806,6 +6809,14 @@ fn ast_expr_array_repeat_length_expr_params_count(ast_base: i32, expr_index: i32
     load_i32(metadata_ptr + 2 * WORD_SIZE)
 }
 
+fn ast_expr_array_repeat_location(ast_base: i32, expr_index: i32) -> i32 {
+    let metadata_ptr: i32 = ast_expr_array_repeat_length_metadata(ast_base, expr_index);
+    if metadata_ptr <= 0 {
+        return -1;
+    };
+    load_i32(metadata_ptr + 3 * WORD_SIZE)
+}
+
 fn ast_expr_alloc_array_list(ast_base: i32, values_ptr: i32, count: i32) -> i32 {
     if count <= 0 {
         return -1;
@@ -6819,6 +6830,16 @@ fn ast_expr_alloc_array_list(ast_base: i32, values_ptr: i32, count: i32) -> i32 
     };
     ast_expr_set_type(ast_base, index, -1);
     index
+}
+
+fn ast_expr_array_list_set_location(ast_base: i32, expr_index: i32, location_offset: i32) {
+    let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+    store_i32(entry_ptr + 3 * WORD_SIZE, location_offset);
+}
+
+fn ast_expr_array_list_location(ast_base: i32, expr_index: i32) -> i32 {
+    let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+    load_i32(entry_ptr + 3 * WORD_SIZE)
 }
 
 fn ast_expr_alloc_array_get(ast_base: i32, array_index: i32, index_index: i32) -> i32 {

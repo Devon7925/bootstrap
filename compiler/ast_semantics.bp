@@ -79,6 +79,24 @@ fn record_failure_with_location(
     0
 }
 
+fn array_literal_location_offset(ast_base: i32, expr_index: i32) -> i32 {
+    if expr_index < 0 {
+        return -1;
+    };
+    if expr_index >= ast_expr_count(ast_base) {
+        return -1;
+    };
+    let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+    let kind: i32 = load_i32(entry_ptr);
+    if kind == 35 {
+        return ast_expr_array_repeat_location(ast_base, expr_index);
+    };
+    if kind == 37 {
+        return ast_expr_array_list_location(ast_base, expr_index);
+    };
+    -1
+}
+
 fn validate_function_type_template(
     ast_base: i32,
     func_index: i32,
@@ -1078,11 +1096,30 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
                         if expr_type != fn_return_type {
                             if out_ptr > 0 {
                                 if load_u8(out_ptr) == 0 {
-                                    write_failure_detail(
-                                        out_ptr,
-                                        56,
-                                        "array expression type does not match expected array type",
-                                    );
+                                    let mut location_offset: i32 = -1;
+                                    let expr_entry_ptr: i32 =
+                                        ast_expr_entry_ptr(ast_base, expr_index);
+                                    let expr_kind: i32 = load_i32(expr_entry_ptr);
+                                    if expr_kind == 35 || expr_kind == 37 {
+                                        location_offset =
+                                            array_literal_location_offset(ast_base, expr_index);
+                                    };
+                                    if location_offset >= 0 {
+                                        record_failure_with_location(
+                                            out_ptr,
+                                            ast_base,
+                                            idx,
+                                            location_offset,
+                                            56,
+                                            "array expression type does not match expected array type",
+                                        );
+                                    } else {
+                                        write_failure_detail(
+                                            out_ptr,
+                                            56,
+                                            "array expression type does not match expected array type",
+                                        );
+                                    };
                                 };
                             };
                             return -1;
@@ -1447,15 +1484,28 @@ fn resolve_expression_internal(
         let length_expr_index: i32 = ast_expr_array_repeat_length_expr(ast_base, expr_index);
         if length < 0 {
             if length_expr_index < 0 {
-                        if out_ptr > 0 {
-                            if load_u8(out_ptr) == 0 {
-                                write_failure_detail(
-                                    out_ptr,
-                                    41,
-                                    "array literal length must be non-negative",
-                                );
-                            };
+                if out_ptr > 0 {
+                    if load_u8(out_ptr) == 0 {
+                        let location_offset: i32 =
+                            array_literal_location_offset(ast_base, expr_index);
+                        if location_offset >= 0 {
+                            record_failure_with_location(
+                                out_ptr,
+                                ast_base,
+                                caller_func_index,
+                                location_offset,
+                                41,
+                                "array literal length must be non-negative",
+                            );
+                        } else {
+                            write_failure_detail(
+                                out_ptr,
+                                41,
+                                "array literal length must be non-negative",
+                            );
                         };
+                    };
+                };
                 return -1;
             };
         };
@@ -1549,11 +1599,24 @@ fn resolve_expression_internal(
             } else if resolved_current != element_type {
                 if out_ptr > 0 {
                     if load_u8(out_ptr) == 0 {
-                        write_failure_detail(
-                            out_ptr,
-                            45,
-                            "array literal elements must have uniform type",
-                        );
+                        let location_offset: i32 =
+                            array_literal_location_offset(ast_base, expr_index);
+                        if location_offset >= 0 {
+                            record_failure_with_location(
+                                out_ptr,
+                                ast_base,
+                                caller_func_index,
+                                location_offset,
+                                45,
+                                "array literal elements must have uniform type",
+                            );
+                        } else {
+                            write_failure_detail(
+                                out_ptr,
+                                45,
+                                "array literal elements must have uniform type",
+                            );
+                        };
                     };
                 };
                 return -1;
@@ -2060,15 +2123,28 @@ fn resolve_expression_internal(
         };
         let length: i32 = array_type_length(ast_base, resolved_array_type);
         if length < 0 {
-                    if out_ptr > 0 {
-                        if load_u8(out_ptr) == 0 {
-                            write_failure_detail(
-                                out_ptr,
-                                41,
-                                "array literal length must be non-negative",
-                            );
-                        };
+            if out_ptr > 0 {
+                if load_u8(out_ptr) == 0 {
+                    let location_offset: i32 =
+                        array_literal_location_offset(ast_base, array_index);
+                    if location_offset >= 0 {
+                        record_failure_with_location(
+                            out_ptr,
+                            ast_base,
+                            caller_func_index,
+                            location_offset,
+                            41,
+                            "array literal length must be non-negative",
+                        );
+                    } else {
+                        write_failure_detail(
+                            out_ptr,
+                            41,
+                            "array literal length must be non-negative",
+                        );
                     };
+                };
+            };
             return -1;
         };
         ast_expr_set_type(ast_base, expr_index, BUILTIN_TYPE_ID_I32);

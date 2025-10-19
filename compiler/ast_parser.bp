@@ -489,6 +489,7 @@ fn parse_basic_expression(
         };
     };
     if first_byte == '[' {
+        let array_start: i32 = cursor;
         let element_kind_ptr: i32 = nested_temp_base;
         let element_data0_ptr: i32 = nested_temp_base + 4;
         let element_data1_ptr: i32 = nested_temp_base + 8;
@@ -540,7 +541,7 @@ fn parse_basic_expression(
             let literal_start: i32 = array_cursor;
             let literal_cursor: i32 = parse_i32_literal(base, len, array_cursor, literal_ptr);
             let mut length: i32 = -1;
-            let mut length_expr_index: i32 = -1;
+            let mut length_metadata_ptr: i32 = -1;
             if literal_cursor >= 0 {
                 length = load_i32(literal_ptr);
                 if length < 0 {
@@ -561,6 +562,13 @@ fn parse_basic_expression(
                     return -1;
                 };
                 array_cursor = literal_cursor;
+                length_metadata_ptr = ast_call_data_alloc(ast_base, 4);
+                if length_metadata_ptr < 0 {
+                    return -1;
+                };
+                store_i32(length_metadata_ptr, -1);
+                store_i32(length_metadata_ptr + WORD_SIZE, 0);
+                store_i32(length_metadata_ptr + 2 * WORD_SIZE, 0);
             } else {
                 let length_temp_root: i32 = element_temp_base + 256;
                 let length_kind_ptr: i32 = length_temp_root;
@@ -667,7 +675,7 @@ fn parse_basic_expression(
                     };
                     let usage_ptr: i32 = load_i32(length_usage_ptr_ptr);
                     let usage_count: i32 = load_i32(length_usage_count_ptr);
-                    let metadata_ptr: i32 = ast_call_data_alloc(ast_base, 3);
+                    let metadata_ptr: i32 = ast_call_data_alloc(ast_base, 4);
                     if metadata_ptr < 0 {
                         let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
                         if detail_out_ptr > 0 {
@@ -686,7 +694,7 @@ fn parse_basic_expression(
                     store_i32(metadata_ptr, length_expr_index_value);
                     store_i32(metadata_ptr + WORD_SIZE, usage_ptr);
                     store_i32(metadata_ptr + 2 * WORD_SIZE, usage_count);
-                    length_expr_index = metadata_ptr;
+                    length_metadata_ptr = metadata_ptr;
                     length = -1;
                 } else {
                     let length_type: i32 = load_i32(length_type_ptr);
@@ -714,6 +722,16 @@ fn parse_basic_expression(
                     };
                 };
             };
+            if length_metadata_ptr < 0 {
+                length_metadata_ptr = ast_call_data_alloc(ast_base, 4);
+                if length_metadata_ptr < 0 {
+                    return -1;
+                };
+                store_i32(length_metadata_ptr, -1);
+                store_i32(length_metadata_ptr + WORD_SIZE, 0);
+                store_i32(length_metadata_ptr + 2 * WORD_SIZE, 0);
+            };
+            store_i32(length_metadata_ptr + 3 * WORD_SIZE, array_start);
             array_cursor = skip_whitespace(base, len, array_cursor);
             array_cursor = expect_char(base, len, array_cursor, ']');
             if array_cursor < 0 {
@@ -733,7 +751,7 @@ fn parse_basic_expression(
                 ast_base,
                 element_index,
                 length,
-                length_expr_index,
+                length_metadata_ptr,
             );
             if expr_index < 0 {
                 return -1;
@@ -821,11 +839,12 @@ fn parse_basic_expression(
         if expr_index < 0 {
             return -1;
         };
-        store_i32(out_kind_ptr, 37);
-        store_i32(out_data0_ptr, expr_index);
-        store_i32(out_data1_ptr, 0);
-        return skip_whitespace(base, len, array_cursor);
-    };
+            store_i32(out_kind_ptr, 37);
+            store_i32(out_data0_ptr, expr_index);
+            store_i32(out_data1_ptr, 0);
+            ast_expr_array_list_set_location(ast_base, expr_index, array_start);
+            return skip_whitespace(base, len, array_cursor);
+        };
     if first_byte == '(' {
         let mut paren_cursor: i32 = cursor + 1;
         paren_cursor = skip_whitespace(base, len, paren_cursor);
