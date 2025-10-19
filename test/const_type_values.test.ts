@@ -53,7 +53,7 @@ test("const fn returning a type can be used to pick const parameter types", asyn
     expect(result).toBe(11);
 });
 
-test.todo("const fn returning a type can define tuple return types", async () => {
+test("const fn returning a type can define tuple return types", async () => {
     const wasm = await compileWithAstCompiler(`
     const fn duplicate_pair_type(const T: type) -> type {
         (T, T)
@@ -72,7 +72,7 @@ test.todo("const fn returning a type can define tuple return types", async () =>
     expect(result).toBe(41);
 });
 
-test.todo("const fn returning a type can define array return types", async () => {
+test("const fn returning a type can define array return types", async () => {
     const wasm = await compileWithAstCompiler(`
     const fn array_of(const T: type, const LEN: i32) -> type {
         [T; LEN]
@@ -91,7 +91,7 @@ test.todo("const fn returning a type can define array return types", async () =>
     expect(result).toBe(6);
 });
 
-test.todo("nested const type functions support conditional selection", async () => {
+test("nested const type functions support conditional selection", async () => {
     const wasm = await compileWithAstCompiler(`
     const fn select_type_by_index(
         const INDEX: i32,
@@ -113,7 +113,7 @@ test.todo("nested const type functions support conditional selection", async () 
     }
 
     fn second() -> select_type_by_index(1, i32, bool, i32) {
-        false
+        true
     }
 
     fn third() -> select_type_by_index(2, i32, bool, i32) {
