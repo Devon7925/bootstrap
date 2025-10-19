@@ -144,6 +144,10 @@ fn expect_keyword_loop(base: i32, len: i32, offset: i32) -> i32 {
     expect_keyword_literal(base, len, offset, 4, "loop")
 }
 
+fn expect_keyword_while(base: i32, len: i32, offset: i32) -> i32 {
+    expect_keyword_literal(base, len, offset, 5, "while")
+}
+
 fn expect_keyword_break(base: i32, len: i32, offset: i32) -> i32 {
     expect_keyword_literal(base, len, offset, 5, "break")
 }
@@ -928,6 +932,9 @@ fn expression_guaranteed_diverges(ast_base: i32, expr_index: i32) -> bool {
     false
 }
 
+const LOOP_FLAG_NONE: i32 = 0;
+const LOOP_FLAG_DISALLOW_BREAK_VALUES: i32 = 1;
+
 const BLOCK_STATEMENT_ENTRY_SIZE: i32 = 12;
 
 const BLOCK_STATEMENTS_CAPACITY: i32 = 1024;
@@ -1044,63 +1051,6 @@ fn parse_block_expression_body(
             idx = idx + 1;
             idx = skip_whitespace(base, len, idx);
             break;
-        };
-        if next_byte == 'w' {
-            if idx + 5 <= len {
-                let h: i32 = load_u8(base + idx + 1);
-                let i_byte: i32 = load_u8(base + idx + 2);
-                let l: i32 = load_u8(base + idx + 3);
-                let e: i32 = load_u8(base + idx + 4);
-                if h == 'h' && i_byte == 'i' && l == 'l' && e == 'e' {
-                    let after_keyword: i32 = idx + 5;
-                    if after_keyword >= len {
-                        let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
-                        if detail_out_ptr > 0 {
-                            if load_u8(detail_out_ptr) == 0 {
-                                let message: [u8; 34] = "while statements are not supported";
-                                let detail_capacity: i32 = len(message);
-                                let mut detail_idx: i32 = 0;
-                                loop {
-                                    if detail_idx >= detail_capacity {
-                                        break;
-                                    };
-                                    store_u8(detail_out_ptr + detail_idx, message[detail_idx] as i32);
-                                    detail_idx = detail_idx + 1;
-                                };
-                            };
-                        };
-                        store_i32(locals_stack_count_ptr, saved_stack_count);
-                        store_i32(locals_next_index_ptr, saved_next_index);
-                        return -1;
-                    };
-                    let after_byte: i32 = load_u8(base + after_keyword);
-                    if !is_whitespace(after_byte) && after_byte != '(' {
-                        // fall through to expression parsing
-                    } else {
-                        let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
-                        if detail_out_ptr > 0 {
-                            if load_u8(detail_out_ptr) == 0 {
-                                let message: [u8; 34] = "while statements are not supported";
-                                let detail_capacity: i32 = len(message);
-                                let mut detail_idx: i32 = 0;
-                                loop {
-                                    if detail_idx >= detail_capacity {
-                                        break;
-                                    };
-                                    store_u8(
-                                        detail_out_ptr + detail_idx,
-                                        message[detail_idx] as i32,
-                                    );
-                                    detail_idx = detail_idx + 1;
-                                };
-                            };
-                        };
-                        store_i32(locals_stack_count_ptr, saved_stack_count);
-                        store_i32(locals_next_index_ptr, saved_next_index);
-                        return -1;
-                    };
-                };
-            };
         };
         if have_value_expr {
             store_i32(locals_stack_count_ptr, saved_stack_count);
@@ -1593,7 +1543,8 @@ fn parse_block_expression_body(
                 store_i32(locals_next_index_ptr, saved_next_index);
                 return -1;
             };
-            let loop_expr_index: i32 = ast_expr_alloc_loop(ast_base, body_index);
+            let loop_expr_index: i32 =
+                ast_expr_alloc_loop(ast_base, body_index, LOOP_FLAG_NONE);
             if loop_expr_index < 0 {
                 store_i32(locals_stack_count_ptr, saved_stack_count);
                 store_i32(locals_next_index_ptr, saved_next_index);
@@ -1603,6 +1554,123 @@ fn parse_block_expression_body(
             store_i32(stmt_expr_data0_ptr, loop_expr_index);
             store_i32(stmt_expr_data1_ptr, 0);
             idx = after_loop;
+            expression_parsed = true;
+        };
+
+        let mut while_cursor: i32 = expect_keyword_while(base, len, idx);
+        if while_cursor >= 0 {
+            let mut condition_cursor: i32 = skip_whitespace(base, len, while_cursor);
+            let cond_kind_ptr: i32 = stmt_nested_temp_base;
+            let cond_data0_ptr: i32 = stmt_nested_temp_base + 4;
+            let cond_data1_ptr: i32 = stmt_nested_temp_base + 8;
+            let cond_temp_base: i32 = stmt_nested_temp_base + 32;
+            condition_cursor = parse_expression(
+                base,
+                len,
+                condition_cursor,
+                ast_base,
+                params_table_ptr,
+                params_count,
+                const_mask_table_ptr,
+                locals_table_ptr,
+                locals_stack_count_ptr,
+                locals_next_index_ptr,
+                cond_temp_base,
+                loop_depth_ptr,
+                type_template_sink_ptr,
+                cond_kind_ptr,
+                cond_data0_ptr,
+                cond_data1_ptr,
+            );
+            if condition_cursor < 0 {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            let cond_kind: i32 = load_i32(cond_kind_ptr);
+            let cond_data0: i32 = load_i32(cond_data0_ptr);
+            let cond_data1: i32 = load_i32(cond_data1_ptr);
+            let cond_index: i32 =
+                expression_node_from_parts(ast_base, cond_kind, cond_data0, cond_data1);
+            if cond_index < 0 {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            condition_cursor = skip_whitespace(base, len, condition_cursor);
+            condition_cursor = expect_char(base, len, condition_cursor, '{');
+            if condition_cursor < 0 {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            let saved_loop_depth: i32 = load_i32(loop_depth_ptr);
+            store_i32(loop_depth_ptr, saved_loop_depth + 1);
+            condition_cursor = parse_block_expression_body(
+                base,
+                len,
+                condition_cursor,
+                ast_base,
+                params_table_ptr,
+                params_count,
+                const_mask_table_ptr,
+                locals_table_ptr,
+                locals_stack_count_ptr,
+                locals_next_index_ptr,
+                literal_ptr,
+                stmt_nested_temp_base,
+                1,
+                loop_depth_ptr,
+                type_template_sink_ptr,
+                stmt_expr_kind_ptr,
+                stmt_expr_data0_ptr,
+                stmt_expr_data1_ptr,
+                stmt_expr_value_status_ptr,
+            );
+            if condition_cursor < 0 {
+                store_i32(loop_depth_ptr, saved_loop_depth);
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            store_i32(loop_depth_ptr, saved_loop_depth);
+            let body_kind: i32 = load_i32(stmt_expr_kind_ptr);
+            let body_data0: i32 = load_i32(stmt_expr_data0_ptr);
+            let body_data1: i32 = load_i32(stmt_expr_data1_ptr);
+            let body_index: i32 =
+                expression_node_from_parts(ast_base, body_kind, body_data0, body_data1);
+            if body_index < 0 {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            let break_expr_index: i32 = ast_expr_alloc_break(ast_base, -1);
+            if break_expr_index < 0 {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            let if_expr_index: i32 =
+                ast_expr_alloc_if(ast_base, cond_index, body_index, break_expr_index);
+            if if_expr_index < 0 {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            let loop_expr_index: i32 = ast_expr_alloc_loop(
+                ast_base,
+                if_expr_index,
+                LOOP_FLAG_DISALLOW_BREAK_VALUES,
+            );
+            if loop_expr_index < 0 {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            };
+            store_i32(stmt_expr_kind_ptr, 12);
+            store_i32(stmt_expr_data0_ptr, loop_expr_index);
+            store_i32(stmt_expr_data1_ptr, 0);
+            idx = condition_cursor;
             expression_parsed = true;
         };
 
@@ -4437,6 +4505,7 @@ fn clone_const_specialization_expr(
     };
     if kind == 12 {
         let body_index: i32 = load_i32(entry_ptr + WORD_SIZE);
+        let loop_flags: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
         let cloned_body: i32 = clone_const_specialization_expr(
             ast_base,
             template_index,
@@ -4456,7 +4525,7 @@ fn clone_const_specialization_expr(
         if cloned_body < 0 {
             return -1;
         };
-        let new_index: i32 = ast_expr_alloc(ast_base, 12, cloned_body, 0, 0);
+        let new_index: i32 = ast_expr_alloc_loop(ast_base, cloned_body, loop_flags);
         if new_index < 0 {
             return -1;
         };
@@ -7193,8 +7262,8 @@ fn ast_expr_alloc_sequence(ast_base: i32, first_index: i32, then_index: i32) -> 
     index
 }
 
-fn ast_expr_alloc_loop(ast_base: i32, body_index: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 12, body_index, 0, 0);
+fn ast_expr_alloc_loop(ast_base: i32, body_index: i32, flags: i32) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, 12, body_index, flags, 0);
     if index < 0 {
         return -1;
     };

@@ -179,7 +179,7 @@ test("while break cannot carry values", async () => {
         }
     }
   `);
-  expect(failure.failure.detail).toBe("while statements are not supported");
+  expect(failure.failure.detail).toBe("while loops cannot break with values");
 });
 
 test("loop and break support truthy conditions", async () => {
@@ -377,7 +377,7 @@ test("if else with parameter condition executes", async () => {
   expect(result).toBe(20);
 });
 
-test.todo("while loops execute", async () => {
+test("while loops execute", async () => {
   const wasm = await compileWithAstCompiler(`
     fn main() -> i32 {
         let mut total: i32 = 0;
@@ -393,7 +393,7 @@ test.todo("while loops execute", async () => {
   expect(result).toBe(6);
 });
 
-test.todo("while loops support continue", async () => {
+test("while loops support continue", async () => {
   const wasm = await compileWithAstCompiler(`
     fn main() -> i32 {
         let mut total: i32 = 0;
@@ -412,7 +412,7 @@ test.todo("while loops support continue", async () => {
   expect(result).toBe(18);
 });
 
-test.todo("while loops reject break values", async () => {
+test("while loops reject break values", async () => {
   const failure = await expectCompileFailure(`
     fn attempt() {
         while true {
