@@ -4,10 +4,7 @@
 
 fn memory_equal(a_ptr: i32, b_ptr: i32, len: i32) -> bool {
     let mut idx: i32 = 0;
-    loop {
-        if idx >= len {
-            break;
-        };
+    while idx < len {
         let a_byte: i32 = load_u8(a_ptr + idx);
         let b_byte: i32 = load_u8(b_ptr + idx);
         if a_byte != b_byte {
@@ -23,11 +20,7 @@ fn string_length(ptr: i32) -> i32 {
         return -1;
     };
     let mut len: i32 = 0;
-    loop {
-        let byte: i32 = load_u8(ptr + len);
-        if byte == 0 {
-            break;
-        };
+    while load_u8(ptr + len) != 0 {
         len = len + 1;
     };
     len
@@ -35,10 +28,7 @@ fn string_length(ptr: i32) -> i32 {
 
 fn copy_bytes(dest: i32, src: i32, len: i32) {
     let mut idx: i32 = 0;
-    loop {
-        if idx >= len {
-            break;
-        };
+    while idx < len {
         let byte: i32 = load_u8(src + idx);
         store_u8(dest + idx, byte);
         idx = idx + 1;
