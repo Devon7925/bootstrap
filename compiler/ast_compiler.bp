@@ -74,9 +74,8 @@ fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
         return -1;
     };
     let existing_index: i32 = module_find_index(path_ptr, path_len);
-    let mut stored_path_ptr: i32 = 0;
-    if existing_index >= 0 {
-        stored_path_ptr = module_entry_path(existing_index);
+    let stored_path_ptr: i32 = if existing_index >= 0 {
+        module_entry_path(existing_index)
     } else {
         if module_count() >= MODULE_MAX_COUNT {
             return -1;
@@ -87,7 +86,7 @@ fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
         };
         copy_bytes(allocated_path_ptr, path_ptr, path_len);
         store_u8(allocated_path_ptr + path_len, 0);
-        stored_path_ptr = allocated_path_ptr;
+        allocated_path_ptr
     };
     let allocated_content_ptr: i32 = module_allocate_bytes(content_len + 1);
     if allocated_content_ptr <= 0 {
@@ -95,10 +94,12 @@ fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
     };
     copy_bytes(allocated_content_ptr, content_ptr, content_len);
     store_u8(allocated_content_ptr + content_len, 0);
-    let mut store_index: i32 = existing_index;
-    if store_index < 0 {
-        store_index = module_count();
-        module_set_count(store_index + 1);
+    let store_index: i32 = if existing_index >= 0 {
+        existing_index
+    } else {
+        let index: i32 = module_count();
+        module_set_count(index + 1);
+        index
     };
     module_write_entry(store_index, stored_path_ptr, path_len, allocated_content_ptr, content_len);
     0
@@ -131,23 +132,23 @@ fn compileFromPath(path_ptr: i32) -> i32 {
     if input_ptr <= 0 || input_len <= 0 {
         return -1;
     };
-    let mut out_ptr: i32 = module_storage_top();
-    if out_ptr <= 0 {
-        module_ensure_state_initialized();
-        out_ptr = module_storage_top();
-    };
-    out_ptr = align_to(out_ptr, WORD_SIZE);
+    let initial_top: i32 = module_storage_top();
+    let out_ptr: i32 = align_to(
+        if initial_top > 0 {
+            initial_top
+        } else {
+            module_ensure_state_initialized();
+            module_storage_top()
+        },
+        WORD_SIZE,
+    );
     module_set_storage_top(out_ptr);
     let required: i32 = out_ptr + ast_output_reserve(input_len);
     if ensure_memory_capacity(required) < 0 {
         return -1;
     };
     let status: i32 = compile_impl(input_ptr, input_len, out_ptr, index);
-    if status > 0 {
-        module_entry_set_flags(index, MODULE_FLAG_IMPORTED);
-    } else {
-        module_entry_set_flags(index, 0);
-    };
+    module_entry_set_flags(index, if status > 0 { MODULE_FLAG_IMPORTED } else { 0 });
     status
 }
 
