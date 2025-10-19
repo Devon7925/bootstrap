@@ -1510,8 +1510,13 @@ fn parse_unary_expression(
             return -1;
         };
 
-        let get_index: i32 =
-            ast_expr_alloc_tuple_get(ast_base, tuple_expr_index, field_index);
+        let field_start: i32 = field_cursor - digits;
+        let get_index: i32 = ast_expr_alloc_tuple_get(
+            ast_base,
+            tuple_expr_index,
+            field_index,
+            field_start,
+        );
         if get_index < 0 {
             return -1;
         };
