@@ -180,7 +180,9 @@ test("array literal rejects constant expressions with negative length", async ()
     }
   `);
 
-  expect(failure.failure.detail).toBe("array literal length must be non-negative");
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:5:19: array literal length must be non-negative",
+  );
 });
 
 test("array literal length must match declared type", async () => {

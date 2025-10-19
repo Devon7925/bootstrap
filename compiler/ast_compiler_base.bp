@@ -4221,7 +4221,8 @@ fn clone_const_specialization_expr(
         if cloned_metadata < 0 {
             return -1;
         };
-        let new_index: i32 = ast_expr_alloc_call(ast_base, cloned_metadata);
+        let location_offset: i32 = load_i32(entry_ptr + 3 * WORD_SIZE);
+        let new_index: i32 = ast_expr_alloc_call(ast_base, cloned_metadata, location_offset);
         if new_index < 0 {
             return -1;
         };
@@ -6808,8 +6809,8 @@ fn ast_expr_alloc_literal(ast_base: i32, value: i32, type_id: i32) -> i32 {
     index
 }
 
-fn ast_expr_alloc_call(ast_base: i32, metadata_ptr: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 1, metadata_ptr, 0, 0);
+fn ast_expr_alloc_call(ast_base: i32, metadata_ptr: i32, location_offset: i32) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, 1, metadata_ptr, 0, location_offset);
     if index < 0 {
         return -1;
     };
@@ -7429,7 +7430,7 @@ fn expression_node_from_parts(ast_base: i32, kind: i32, data0: i32, data1: i32) 
         return ast_expr_alloc_literal(ast_base, data0, data1);
     };
     if kind == 1 {
-        return ast_expr_alloc_call(ast_base, data0);
+        return ast_expr_alloc_call(ast_base, data0, data1);
     };
     if kind == 6 {
         return ast_expr_alloc_param(ast_base, data0, data1);
