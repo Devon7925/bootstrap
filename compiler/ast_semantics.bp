@@ -32,6 +32,53 @@ fn record_failure_detail(
     };
 }
 
+fn record_failure_with_location(
+    out_ptr: i32,
+    ast_base: i32,
+    caller_func_index: i32,
+    location_offset: i32,
+    const MESSAGE_LEN: i32,
+    message: [u8; MESSAGE_LEN],
+) -> i32 {
+    if out_ptr <= 0 {
+        return 0;
+    };
+    if load_u8(out_ptr) != 0 {
+        return 0;
+    };
+    if location_offset < 0 {
+        write_failure_detail(out_ptr, MESSAGE_LEN, message);
+        return 0;
+    };
+    let mut module_index: i32 = scratch_module_index(out_ptr);
+    let mut module_base: i32 = scratch_module_base(out_ptr);
+    let mut module_len: i32 = scratch_module_len(out_ptr);
+    if caller_func_index >= 0 {
+        let func_base: i32 = ast_function_entry_module_base(ast_base, caller_func_index);
+        let func_len: i32 = ast_function_entry_module_len(ast_base, caller_func_index);
+        let func_index: i32 = ast_function_entry_module_index(ast_base, caller_func_index);
+        if func_base > 0 {
+            module_base = func_base;
+        };
+        if func_len > 0 {
+            module_len = func_len;
+        };
+        if func_index >= 0 {
+            module_index = func_index;
+        };
+    };
+    write_failure_detail_with_location(
+        out_ptr,
+        module_index,
+        module_base,
+        module_len,
+        location_offset,
+        MESSAGE_LEN,
+        message,
+    );
+    0
+}
+
 fn validate_function_type_template(
     ast_base: i32,
     func_index: i32,
@@ -2070,9 +2117,13 @@ fn resolve_expression_internal(
             return -1;
         };
         let element_count: i32 = ast_tuple_type_element_count(ast_base, tuple_idx);
+        let access_location: i32 = load_i32(entry_ptr + 12);
         if element_count <= field_index {
-            record_failure_detail(
+            record_failure_with_location(
                 out_ptr,
+                ast_base,
+                caller_func_index,
+                access_location,
                 31,
                 "tuple field index out of bounds",
             );
