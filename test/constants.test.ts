@@ -335,7 +335,7 @@ test("non-type constants cannot be used as type annotations", async () => {
     }
   `);
   expect(failure.failure.detail).toBe(
-    "type annotations require const type values",
+    "/entry.bp:4:23: type annotations require const type values",
   );
 });
 
