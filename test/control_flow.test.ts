@@ -281,7 +281,9 @@ test("continue outside loop is rejected", async () => {
         0
     }
   `);
-  expect(failure.failure.detail).toBe("continue statements must be inside loops");
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:3:9: continue statements must be inside loops",
+  );
 });
 
 test("nested loops can break with values", async () => {
@@ -344,7 +346,9 @@ test("break outside loop is rejected", async () => {
         0
     }
   `);
-  expect(failure.failure.detail).toBe("break statements must be inside loop");
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:3:9: break statements must be inside loop",
+  );
 });
 
 test("if with literal condition executes", async () => {
