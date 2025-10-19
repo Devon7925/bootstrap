@@ -356,20 +356,6 @@ test("const parameter templates specialize return types", async () => {
     expect(result).toBe(15);
 });
 
-test.todo("type-valued const parameters specialize signatures", async () => {
-    const wasm = await compileWithAstCompiler(`
-    fn select(const T: type, flag: bool, on_true: T, on_false: T) -> T {
-        if flag { on_true } else { on_false }
-    }
-
-    fn main() -> i32 {
-        select(i32, true, 40, 2)
-    }
-  `);
-    const result = await runWasmMainWithGc(wasm);
-    expect(result).toBe(42);
-});
-
 test("const parameters accept literal arguments", async () => {
     const wasm = await compileWithAstCompiler(`
     fn add_count(const COUNT: i32, value: i32) -> i32 {
