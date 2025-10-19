@@ -377,6 +377,52 @@ test("if else with parameter condition executes", async () => {
   expect(result).toBe(20);
 });
 
+test.todo("while loops execute", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn main() -> i32 {
+        let mut total: i32 = 0;
+        let mut value: i32 = 0;
+        while value < 4 {
+            total = total + value;
+            value = value + 1;
+        }
+        total
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(6);
+});
+
+test.todo("while loops support continue", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn main() -> i32 {
+        let mut total: i32 = 0;
+        let mut value: i32 = 0;
+        while value < 6 {
+            value = value + 1;
+            if value == 3 {
+                continue;
+            };
+            total = total + value;
+        }
+        total
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(18);
+});
+
+test.todo("while loops reject break values", async () => {
+  const failure = await expectCompileFailure(`
+    fn attempt() {
+        while true {
+            break 1;
+        }
+    }
+  `);
+  expect(failure.failure.detail).toBe("while loops cannot break with values");
+});
+
 test("nested if expressions execute", async () => {
   const wasm = await compileWithAstCompiler(`
     fn pick(a: i32, b: i32) -> i32 {
