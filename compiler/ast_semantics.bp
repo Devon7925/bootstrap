@@ -2438,17 +2438,24 @@ fn resolve_expression_internal(
             ast_expr_set_type(ast_base, right_index, resolved_right);
         };
         if kind == 20 || kind == 21 {
+            let location_offset: i32 = load_i32(entry_ptr + 12);
             if !type_id_is_bool(resolved_left) {
-                record_failure_detail(
+                record_failure_with_location(
                     out_ptr,
+                    ast_base,
+                    caller_func_index,
+                    location_offset,
                     42,
                     "logical operators require boolean operands",
                 );
                 return -1;
             };
             if !type_id_is_bool(resolved_right) {
-                record_failure_detail(
+                record_failure_with_location(
                     out_ptr,
+                    ast_base,
+                    caller_func_index,
+                    location_offset,
                     42,
                     "logical operators require boolean operands",
                 );
@@ -2464,25 +2471,35 @@ fn resolve_expression_internal(
             || kind == 18
             || kind == 19
         {
+            let location_offset: i32 = load_i32(entry_ptr + 12);
             if !type_id_is_integer(resolved_left) {
-                record_failure_detail(
+                record_failure_with_location(
                     out_ptr,
+                    ast_base,
+                    caller_func_index,
+                    location_offset,
                     41,
                     "binary operator operands must be integers",
                 );
                 return -1;
             };
             if !type_id_is_integer(resolved_right) {
-                record_failure_detail(
+                record_failure_with_location(
                     out_ptr,
+                    ast_base,
+                    caller_func_index,
+                    location_offset,
                     41,
                     "binary operator operands must be integers",
                 );
                 return -1;
             };
             if resolved_left != resolved_right {
-                record_failure_detail(
+                record_failure_with_location(
                     out_ptr,
+                    ast_base,
+                    caller_func_index,
+                    location_offset,
                     48,
                     "binary operator operands must have matching type",
                 );
@@ -2491,25 +2508,35 @@ fn resolve_expression_internal(
             ast_expr_set_type(ast_base, expr_index, BUILTIN_TYPE_ID_BOOL);
             return 0;
         };
+        let location_offset: i32 = load_i32(entry_ptr + 12);
         if !type_id_is_integer(resolved_left) {
-            record_failure_detail(
+            record_failure_with_location(
                 out_ptr,
+                ast_base,
+                caller_func_index,
+                location_offset,
                 41,
                 "binary operator operands must be integers",
             );
             return -1;
         };
         if !type_id_is_integer(resolved_right) {
-            record_failure_detail(
+            record_failure_with_location(
                 out_ptr,
+                ast_base,
+                caller_func_index,
+                location_offset,
                 41,
                 "binary operator operands must be integers",
             );
             return -1;
         };
         if resolved_left != resolved_right {
-            record_failure_detail(
+            record_failure_with_location(
                 out_ptr,
+                ast_base,
+                caller_func_index,
+                location_offset,
                 48,
                 "binary operator operands must have matching type",
             );
@@ -2536,8 +2563,12 @@ fn resolve_expression_internal(
         };
         let value_type: i32 = ast_expr_type(ast_base, value_index);
         if !type_id_is_bool(value_type) {
-            record_failure_detail(
+            let location_offset: i32 = load_i32(entry_ptr + 12);
+            record_failure_with_location(
                 out_ptr,
+                ast_base,
+                caller_func_index,
+                location_offset,
                 35,
                 "logical not operand must be boolean",
             );

@@ -6817,8 +6817,13 @@ fn ast_expr_alloc_call(ast_base: i32, metadata_ptr: i32) -> i32 {
     index
 }
 
-fn ast_expr_alloc_add(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 2, left_index, right_index, 0);
+fn ast_expr_alloc_add(
+    ast_base: i32,
+    left_index: i32,
+    right_index: i32,
+    location_offset: i32,
+) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, 2, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
     };
@@ -6826,8 +6831,13 @@ fn ast_expr_alloc_add(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
     index
 }
 
-fn ast_expr_alloc_sub(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 3, left_index, right_index, 0);
+fn ast_expr_alloc_sub(
+    ast_base: i32,
+    left_index: i32,
+    right_index: i32,
+    location_offset: i32,
+) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, 3, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
     };
@@ -6835,8 +6845,13 @@ fn ast_expr_alloc_sub(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
     index
 }
 
-fn ast_expr_alloc_mul(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 4, left_index, right_index, 0);
+fn ast_expr_alloc_mul(
+    ast_base: i32,
+    left_index: i32,
+    right_index: i32,
+    location_offset: i32,
+) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, 4, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
     };
@@ -6844,8 +6859,13 @@ fn ast_expr_alloc_mul(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
     index
 }
 
-fn ast_expr_alloc_div(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 5, left_index, right_index, 0);
+fn ast_expr_alloc_div(
+    ast_base: i32,
+    left_index: i32,
+    right_index: i32,
+    location_offset: i32,
+) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, 5, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
     };
@@ -6853,8 +6873,13 @@ fn ast_expr_alloc_div(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
     index
 }
 
-fn ast_expr_alloc_bitwise_or(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 25, left_index, right_index, 0);
+fn ast_expr_alloc_bitwise_or(
+    ast_base: i32,
+    left_index: i32,
+    right_index: i32,
+    location_offset: i32,
+) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, 25, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
     };
@@ -6862,8 +6887,13 @@ fn ast_expr_alloc_bitwise_or(ast_base: i32, left_index: i32, right_index: i32) -
     index
 }
 
-fn ast_expr_alloc_bitwise_and(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 26, left_index, right_index, 0);
+fn ast_expr_alloc_bitwise_and(
+    ast_base: i32,
+    left_index: i32,
+    right_index: i32,
+    location_offset: i32,
+) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, 26, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
     };
@@ -7098,8 +7128,13 @@ fn ast_expr_alloc_cast(ast_base: i32, value_index: i32, target_type_id: i32) -> 
     index
 }
 
-fn ast_expr_alloc_shl(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 27, left_index, right_index, 0);
+fn ast_expr_alloc_shl(
+    ast_base: i32,
+    left_index: i32,
+    right_index: i32,
+    location_offset: i32,
+) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, 27, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
     };
@@ -7107,8 +7142,13 @@ fn ast_expr_alloc_shl(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
     index
 }
 
-fn ast_expr_alloc_shr_s(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 28, left_index, right_index, 0);
+fn ast_expr_alloc_shr_s(
+    ast_base: i32,
+    left_index: i32,
+    right_index: i32,
+    location_offset: i32,
+) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, 28, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
     };
@@ -7116,8 +7156,13 @@ fn ast_expr_alloc_shr_s(ast_base: i32, left_index: i32, right_index: i32) -> i32
     index
 }
 
-fn ast_expr_alloc_eq(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 14, left_index, right_index, 0);
+fn ast_expr_alloc_eq(
+    ast_base: i32,
+    left_index: i32,
+    right_index: i32,
+    location_offset: i32,
+) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, 14, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
     };
@@ -7125,8 +7170,13 @@ fn ast_expr_alloc_eq(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
     index
 }
 
-fn ast_expr_alloc_ne(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 15, left_index, right_index, 0);
+fn ast_expr_alloc_ne(
+    ast_base: i32,
+    left_index: i32,
+    right_index: i32,
+    location_offset: i32,
+) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, 15, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
     };
@@ -7134,8 +7184,13 @@ fn ast_expr_alloc_ne(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
     index
 }
 
-fn ast_expr_alloc_lt(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 16, left_index, right_index, 0);
+fn ast_expr_alloc_lt(
+    ast_base: i32,
+    left_index: i32,
+    right_index: i32,
+    location_offset: i32,
+) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, 16, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
     };
@@ -7143,8 +7198,13 @@ fn ast_expr_alloc_lt(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
     index
 }
 
-fn ast_expr_alloc_gt(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 17, left_index, right_index, 0);
+fn ast_expr_alloc_gt(
+    ast_base: i32,
+    left_index: i32,
+    right_index: i32,
+    location_offset: i32,
+) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, 17, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
     };
@@ -7152,8 +7212,13 @@ fn ast_expr_alloc_gt(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
     index
 }
 
-fn ast_expr_alloc_le(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 18, left_index, right_index, 0);
+fn ast_expr_alloc_le(
+    ast_base: i32,
+    left_index: i32,
+    right_index: i32,
+    location_offset: i32,
+) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, 18, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
     };
@@ -7161,8 +7226,13 @@ fn ast_expr_alloc_le(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
     index
 }
 
-fn ast_expr_alloc_ge(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 19, left_index, right_index, 0);
+fn ast_expr_alloc_ge(
+    ast_base: i32,
+    left_index: i32,
+    right_index: i32,
+    location_offset: i32,
+) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, 19, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
     };
@@ -7170,8 +7240,13 @@ fn ast_expr_alloc_ge(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
     index
 }
 
-fn ast_expr_alloc_logical_or(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 20, left_index, right_index, 0);
+fn ast_expr_alloc_logical_or(
+    ast_base: i32,
+    left_index: i32,
+    right_index: i32,
+    location_offset: i32,
+) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, 20, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
     };
@@ -7179,8 +7254,13 @@ fn ast_expr_alloc_logical_or(ast_base: i32, left_index: i32, right_index: i32) -
     index
 }
 
-fn ast_expr_alloc_logical_and(ast_base: i32, left_index: i32, right_index: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 21, left_index, right_index, 0);
+fn ast_expr_alloc_logical_and(
+    ast_base: i32,
+    left_index: i32,
+    right_index: i32,
+    location_offset: i32,
+) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, 21, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
     };
@@ -7188,8 +7268,12 @@ fn ast_expr_alloc_logical_and(ast_base: i32, left_index: i32, right_index: i32) 
     index
 }
 
-fn ast_expr_alloc_logical_not(ast_base: i32, value_index: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 22, value_index, 0, 0);
+fn ast_expr_alloc_logical_not(
+    ast_base: i32,
+    value_index: i32,
+    location_offset: i32,
+) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, 22, value_index, 0, location_offset);
     if index < 0 {
         return -1;
     };

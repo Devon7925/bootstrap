@@ -181,7 +181,9 @@ test("mixed integer widths are rejected without casts", async () => {
         if lhs < rhs { 0 } else { 1 }
     }
   `);
-  expect(error.failure.detail).toBe("binary operator operands must have matching type");
+  expect(error.failure.detail).toBe(
+    "/entry.bp:5:16: binary operator operands must have matching type",
+  );
 });
 
 test("signed and unsigned mixes require casts", async () => {
@@ -190,7 +192,9 @@ test("signed and unsigned mixes require casts", async () => {
         a - b
     }
   `);
-  expect(error.failure.detail).toBe("binary operator operands must have matching type");
+  expect(error.failure.detail).toBe(
+    "/entry.bp:3:11: binary operator operands must have matching type",
+  );
 });
 
 test("integer arguments must match parameter widths", async () => {
