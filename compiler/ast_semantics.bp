@@ -18,6 +18,7 @@ fn identifiers_match(ptr_a: i32, len_a: i32, ptr_b: i32, len_b: i32) -> bool {
 }
 
 const FAILURE_DETAIL_CAPACITY: i32 = 64;
+const LOOP_STACK_FLAG_STRIDE: i32 = 65536;
 
 fn record_failure_detail(
     out_ptr: i32,
@@ -2727,11 +2728,13 @@ fn resolve_expression_internal(
         if loop_count >= loop_capacity {
             return -1;
         };
+        let loop_flags: i32 = load_i32(entry_ptr + 8);
         store_i32(control_stack_base + control_count * 4, 0);
         store_i32(control_stack_count_ptr, control_count + 1);
         store_i32(control_stack_base + (control_count + 1) * 4, 1);
         store_i32(control_stack_count_ptr, control_count + 2);
-        store_i32(loop_stack_base + loop_count * 4, control_count);
+        let packed_target: i32 = control_count + loop_flags * LOOP_STACK_FLAG_STRIDE;
+        store_i32(loop_stack_base + loop_count * 4, packed_target);
         store_i32(loop_stack_count_ptr, loop_count + 1);
         let body_result: i32 = resolve_expression_internal(out_ptr, ast_base,
             body_index,
@@ -2758,7 +2761,10 @@ fn resolve_expression_internal(
         if loop_count <= 0 {
             return -1;
         };
-        let target_index: i32 = load_i32(loop_stack_base + (loop_count - 1) * 4);
+        let stored_target: i32 = load_i32(loop_stack_base + (loop_count - 1) * 4);
+        let loop_flags: i32 = stored_target / LOOP_STACK_FLAG_STRIDE;
+        let target_index: i32 =
+            stored_target - loop_flags * LOOP_STACK_FLAG_STRIDE;
         let control_count: i32 = load_i32(control_stack_count_ptr);
         let branch_depth: i32 = control_count - 1 - target_index;
         if branch_depth < 0 {
@@ -2767,6 +2773,14 @@ fn resolve_expression_internal(
         store_i32(entry_ptr + 4, branch_depth);
         let value_index: i32 = load_i32(entry_ptr + 8);
         if value_index >= 0 {
+            if loop_flags != 0 {
+                record_failure_detail(
+                    out_ptr,
+                    36,
+                    "while loops cannot break with values",
+                );
+                return -1;
+            };
             if resolve_expression_internal(out_ptr, ast_base,
                 value_index,
                 func_count,
@@ -2792,7 +2806,10 @@ fn resolve_expression_internal(
         if loop_count <= 0 {
             return -1;
         };
-        let target_index: i32 = load_i32(loop_stack_base + (loop_count - 1) * 4);
+        let stored_target: i32 = load_i32(loop_stack_base + (loop_count - 1) * 4);
+        let loop_flags: i32 = stored_target / LOOP_STACK_FLAG_STRIDE;
+        let target_index: i32 =
+            stored_target - loop_flags * LOOP_STACK_FLAG_STRIDE;
         let continue_target: i32 = target_index + 1;
         let control_count: i32 = load_i32(control_stack_count_ptr);
         let branch_depth: i32 = control_count - 1 - continue_target;
