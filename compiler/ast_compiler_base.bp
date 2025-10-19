@@ -5214,7 +5214,7 @@ fn ast_function_clone_const_template(ast_base: i32, index: i32, key_ptr: i32) ->
             if template_handle <= 0 {
                 return -1;
             };
-            let specialized_type: i32 = type_template_resolve_type(
+            let mut specialized_type: i32 = type_template_resolve_type(
                 ast_base,
                 template_handle,
                 env_values_ptr,
@@ -5226,6 +5226,23 @@ fn ast_function_clone_const_template(ast_base: i32, index: i32, key_ptr: i32) ->
             );
             if specialized_type < 0 {
                 return -1;
+            };
+            if specialized_type == BUILTIN_TYPE_ID_TYPE {
+                let usage_count: i32 = type_template_entry_param_count(template_handle);
+                if usage_count > 0 {
+                    let first_param: i32 = type_template_entry_param_index(template_handle, 0);
+                    if first_param >= 0 && first_param < param_count {
+                        let env_slot: i32 = env_values_ptr + first_param * 8;
+                        let captured_kind: i32 = load_i32(env_slot + WORD_SIZE);
+                        if captured_kind == BUILTIN_TYPE_ID_TYPE {
+                            let captured_value: i32 = load_i32(env_slot);
+                            if captured_value < 0 {
+                                return -1;
+                            };
+                            specialized_type = captured_value;
+                        };
+                    };
+                };
             };
             resolved_type = specialized_type;
         };
@@ -5276,6 +5293,23 @@ fn ast_function_clone_const_template(ast_base: i32, index: i32, key_ptr: i32) ->
             return -1;
         };
         specialized_return_type = resolved_return;
+        if specialized_return_type == BUILTIN_TYPE_ID_TYPE {
+            let usage_count: i32 = type_template_entry_param_count(return_template_handle);
+            if usage_count > 0 {
+                let first_param: i32 = type_template_entry_param_index(return_template_handle, 0);
+                if first_param >= 0 && first_param < param_count {
+                    let env_slot: i32 = env_values_ptr + first_param * 8;
+                    let captured_kind: i32 = load_i32(env_slot + WORD_SIZE);
+                    if captured_kind == BUILTIN_TYPE_ID_TYPE {
+                        let captured_value: i32 = load_i32(env_slot);
+                        if captured_value < 0 {
+                            return -1;
+                        };
+                        specialized_return_type = captured_value;
+                    };
+                };
+            };
+        };
     };
     let mut cloned_body_data0: i32 = body_data0;
     if body_kind == 2 {

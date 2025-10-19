@@ -19,7 +19,7 @@ test("type-valued const parameters specialize signatures", async () => {
     expect(result).toBe(40);
 });
 
-test.todo("type-valued const parameters support multiple invocations", async () => {
+test("type-valued const parameters support multiple invocations", async () => {
     const wasm = await compileWithAstCompiler(`
     fn select(const T: type, flag: bool, on_true: T, on_false: T) -> T {
         if flag { on_true } else { on_false }
@@ -32,10 +32,10 @@ test.todo("type-valued const parameters support multiple invocations", async () 
     }
   `);
     const result = await runWasmMainWithGc(wasm);
-    expect(result).toBe(102);
+    expect(result).toBe(140);
 });
 
-test.todo("const fn returning a type can be used to pick const parameter types", async () => {
+test("const fn returning a type can be used to pick const parameter types", async () => {
     const wasm = await compileWithAstCompiler(`
     const fn identity_type(const T: type) -> type {
         T
