@@ -1859,6 +1859,7 @@ fn parse_block_expression_body(
                                                 ast_base,
                                                 current_expr_index,
                                                 index_expr_index,
+                                                expr_start,
                                             );
                                             if new_expr_index < 0 {
                                                 store_i32(locals_stack_count_ptr, saved_stack_count);
@@ -4706,7 +4707,13 @@ fn clone_const_specialization_expr(
         if cloned_index < 0 {
             return -1;
         };
-        let new_index: i32 = ast_expr_alloc_array_get(ast_base, cloned_array, cloned_index);
+        let location_offset: i32 = load_i32(entry_ptr + 3 * WORD_SIZE);
+        let new_index: i32 = ast_expr_alloc_array_get(
+            ast_base,
+            cloned_array,
+            cloned_index,
+            location_offset,
+        );
         if new_index < 0 {
             return -1;
         };
@@ -6821,13 +6828,24 @@ fn ast_expr_alloc_array_list(ast_base: i32, values_ptr: i32, count: i32) -> i32 
     index
 }
 
-fn ast_expr_alloc_array_get(ast_base: i32, array_index: i32, index_index: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 36, array_index, index_index, 0);
+fn ast_expr_alloc_array_get(
+    ast_base: i32,
+    array_index: i32,
+    index_index: i32,
+    location_offset: i32,
+) -> i32 {
+    let index: i32 =
+        ast_expr_alloc(ast_base, 36, array_index, index_index, location_offset);
     if index < 0 {
         return -1;
     };
     ast_expr_set_type(ast_base, index, -1);
     index
+}
+
+fn ast_expr_array_get_location(ast_base: i32, expr_index: i32) -> i32 {
+    let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+    load_i32(entry_ptr + 3 * WORD_SIZE)
 }
 
 fn ast_expr_alloc_tuple_get(

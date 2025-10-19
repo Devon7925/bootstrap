@@ -51,6 +51,6 @@ fn invalid() -> i32 {
 
   const failure = await expectCompileFailure(source);
   expect(failure.failure.detail).toBe(
-    "character literal must contain exactly one character",
+    "/entry.bp:3:20: character literal must have one character",
   );
 });
