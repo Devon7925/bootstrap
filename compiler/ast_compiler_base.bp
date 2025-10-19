@@ -932,6 +932,14 @@ const BLOCK_STATEMENT_ENTRY_SIZE: i32 = 12;
 
 const BLOCK_STATEMENTS_CAPACITY: i32 = 1024;
 
+const ASSIGNMENT_SELECTOR_ENTRY_SIZE: i32 = 12;
+
+const ASSIGNMENT_SELECTOR_CAPACITY: i32 = 16;
+
+const ASSIGNMENT_SELECTOR_TYPE_ARRAY: i32 = 1;
+
+const ASSIGNMENT_SELECTOR_TYPE_TUPLE: i32 = 2;
+
 fn parse_block_expression_body(
     base: i32,
     len: i32,
@@ -1616,204 +1624,90 @@ fn parse_block_expression_body(
                     let name_len: i32 = assignment_ident.2;
                     let mut after_ident: i32 = skip_whitespace(base, len, assignment_cursor);
                     if after_ident < len {
-                        let assign_byte: i32 = load_u8(base + after_ident);
-                        if assign_byte == '=' {
-                            let mut after_equal: i32 = after_ident + 1;
-                            if after_equal >= len {
-                                store_i32(locals_stack_count_ptr, saved_stack_count);
-                                store_i32(locals_next_index_ptr, saved_next_index);
-                                return -1;
+                        let selectors_base: i32 = stmt_nested_temp_base + 128;
+                        let selector_entry_size: i32 = ASSIGNMENT_SELECTOR_ENTRY_SIZE;
+                        let mut selector_count: i32 = 0;
+                        let mut scan_cursor: i32 = after_ident;
+                        let mut eq_cursor: i32 = -1;
+                        loop {
+                            scan_cursor = skip_whitespace(base, len, scan_cursor);
+                            if scan_cursor >= len {
+                                break;
                             };
-                            let maybe_second_equal: i32 = load_u8(base + after_equal);
-                            if maybe_second_equal != '=' {
-                                let current_stack: i32 = load_i32(locals_stack_count_ptr);
-                                let entry_index: i32 = find_local_entry_index(
-                                    base,
-                                    locals_table_ptr,
-                                    current_stack,
-                                    name_start,
-                                    name_len,
-                                );
-                                if entry_index < 0 {
+                            let scan_byte: i32 = load_u8(base + scan_cursor);
+                            if scan_byte == '=' {
+                                let mut maybe_second: i32 = -1;
+                                if scan_cursor + 1 < len {
+                                    maybe_second = load_u8(base + scan_cursor + 1);
+                                };
+                                if maybe_second != '=' {
+                                    eq_cursor = scan_cursor;
+                                };
+                                break;
+                            };
+                            if scan_byte == '[' {
+                                if selector_count >= ASSIGNMENT_SELECTOR_CAPACITY {
                                     store_i32(locals_stack_count_ptr, saved_stack_count);
                                     store_i32(locals_next_index_ptr, saved_next_index);
                                     return -1;
                                 };
-                                let entry_ptr: i32 = locals_entry_ptr(locals_table_ptr, entry_index);
-                                if !locals_entry_is_mut(entry_ptr) {
-                                    let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
-                                    if detail_out_ptr > 0 {
-                                        if load_u8(detail_out_ptr) == 0 {
-                                            let message: [u8; 33] = "cannot assign to immutable local";
-                                            let detail_capacity: i32 = len(message);
-                                            let mut detail_idx: i32 = 0;
-                                            loop {
-                                                if detail_idx >= detail_capacity {
-                                                    break;
-                                                };
-                                                store_u8(detail_out_ptr + detail_idx, message[detail_idx] as i32);
-                                                detail_idx = detail_idx + 1;
-                                            };
-                                        };
-                                    };
-                                    store_i32(locals_stack_count_ptr, saved_stack_count);
-                                    store_i32(locals_next_index_ptr, saved_next_index);
-                                    return -1;
-                                };
-                                assignment_local_index = locals_entry_local_index(entry_ptr);
-                                assignment_kind = 0;
-                                assignment_identified = true;
-                                assignment_cursor = skip_whitespace(base, len, after_equal);
-                            };
-                        } else if assign_byte == '[' {
-                            let mut scan_idx: i32 = after_ident + 1;
-                            let mut bracket_depth: i32 = 1;
-                            let mut closing_idx: i32 = -1;
-                            loop {
-                                if scan_idx >= len {
-                                    break;
-                                };
-                                let scan_byte: i32 = load_u8(base + scan_idx);
-                                if scan_byte == '[' {
-                                    bracket_depth = bracket_depth + 1;
-                                } else if scan_byte == ']' {
-                                    bracket_depth = bracket_depth - 1;
-                                    if bracket_depth <= 0 {
-                                        closing_idx = scan_idx;
+                                let entry_ptr: i32 =
+                                    selectors_base + selector_count * selector_entry_size;
+                                let mut bracket_depth: i32 = 1;
+                                let mut inner_cursor: i32 = scan_cursor + 1;
+                                let expr_start: i32 = skip_whitespace(base, len, inner_cursor);
+                                let mut closing_idx: i32 = -1;
+                                loop {
+                                    if inner_cursor >= len {
                                         break;
                                     };
-                                };
-                                scan_idx = scan_idx + 1;
-                            };
-                            if closing_idx >= 0 {
-                                let mut after_bracket: i32 =
-                                    skip_whitespace(base, len, closing_idx + 1);
-                                let mut is_assignment: bool = false;
-                                if after_bracket < len {
-                                    let eq_byte: i32 = load_u8(base + after_bracket);
-                                    if eq_byte == '=' {
-                                        let mut maybe_second: i32 = -1;
-                                        if after_bracket + 1 < len {
-                                            maybe_second = load_u8(base + after_bracket + 1);
-                                        };
-                                        if maybe_second != '=' {
-                                            is_assignment = true;
+                                    let inner_byte: i32 = load_u8(base + inner_cursor);
+                                    if inner_byte == '[' {
+                                        bracket_depth = bracket_depth + 1;
+                                    } else if inner_byte == ']' {
+                                        bracket_depth = bracket_depth - 1;
+                                        if bracket_depth <= 0 {
+                                            closing_idx = inner_cursor;
+                                            break;
                                         };
                                     };
+                                    inner_cursor = inner_cursor + 1;
                                 };
-                                if is_assignment {
-                                    let current_stack: i32 = load_i32(locals_stack_count_ptr);
-                                    let entry_index: i32 = find_local_entry_index(
-                                        base,
-                                        locals_table_ptr,
-                                        current_stack,
-                                        name_start,
-                                        name_len,
-                                    );
-                                    if entry_index < 0 {
-                                        store_i32(locals_stack_count_ptr, saved_stack_count);
-                                        store_i32(locals_next_index_ptr, saved_next_index);
-                                        return -1;
-                                    };
-                                    let entry_ptr: i32 = locals_entry_ptr(locals_table_ptr, entry_index);
-                                    if !locals_entry_is_mut(entry_ptr) {
-                                        let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
-                                        if detail_out_ptr > 0 {
-                                            if load_u8(detail_out_ptr) == 0 {
-                                                let message: [u8; 33] = "cannot assign to immutable local";
-                                                let detail_capacity: i32 = len(message);
-                                                let mut detail_idx: i32 = 0;
-                                                loop {
-                                                    if detail_idx >= detail_capacity {
-                                                        break;
-                                                    };
-                                                    store_u8(detail_out_ptr + detail_idx, message[detail_idx] as i32);
-                                                    detail_idx = detail_idx + 1;
-                                                };
-                                            };
-                                        };
-                                        store_i32(locals_stack_count_ptr, saved_stack_count);
-                                        store_i32(locals_next_index_ptr, saved_next_index);
-                                        return -1;
-                                    };
-                                    assignment_local_index = locals_entry_local_index(entry_ptr);
-                                    let index_kind_ptr: i32 = stmt_nested_temp_base;
-                                    let index_data0_ptr: i32 = stmt_nested_temp_base + 4;
-                                    let index_data1_ptr: i32 = stmt_nested_temp_base + 8;
-                                    let index_temp_base: i32 = stmt_nested_temp_base + 32;
-                                    let mut index_cursor: i32 =
-                                        skip_whitespace(base, len, after_ident + 1);
-                                    index_cursor = parse_expression(
-                                        base,
-                                        len,
-                                        index_cursor,
-                                        ast_base,
-                                        params_table_ptr,
-                                        params_count,
-                                        const_mask_table_ptr,
-                                        locals_table_ptr,
-                                        locals_stack_count_ptr,
-                                        locals_next_index_ptr,
-                                        index_temp_base,
-                                        loop_depth_ptr,
-                                        type_template_sink_ptr,
-                                        index_kind_ptr,
-                                        index_data0_ptr,
-                                        index_data1_ptr,
-                                    );
-                                    if index_cursor < 0 {
-                                        store_i32(locals_stack_count_ptr, saved_stack_count);
-                                        store_i32(locals_next_index_ptr, saved_next_index);
-                                        return -1;
-                                    };
-                                    index_cursor = skip_whitespace(base, len, index_cursor);
-                                    index_cursor = expect_char(base, len, index_cursor, ']');
-                                    if index_cursor < 0 {
-                                        store_i32(locals_stack_count_ptr, saved_stack_count);
-                                        store_i32(locals_next_index_ptr, saved_next_index);
-                                        return -1;
-                                    };
-                                    let index_parts: (i32, i32, i32) =
-                                        load_expression_parts(index_kind_ptr, index_data0_ptr, index_data1_ptr);
-                                    let index_expr_index: i32 =
-                                        expression_index_from_parts(ast_base, index_parts);
-                                    if index_expr_index < 0 {
-                                        store_i32(locals_stack_count_ptr, saved_stack_count);
-                                        store_i32(locals_next_index_ptr, saved_next_index);
-                                        return -1;
-                                    };
-                                    let local_type_id: i32 = locals_entry_type_id(entry_ptr);
-                                    let array_expr_index: i32 =
-                                        ast_expr_alloc_local(ast_base, assignment_local_index, local_type_id);
-                                    if array_expr_index < 0 {
-                                        store_i32(locals_stack_count_ptr, saved_stack_count);
-                                        store_i32(locals_next_index_ptr, saved_next_index);
-                                        return -1;
-                                    };
-                                    assignment_array_expr_index = array_expr_index;
-                                    assignment_array_index_expr_index = index_expr_index;
-                                    assignment_kind = 1;
-                                    assignment_identified = true;
-                                    assignment_cursor =
-                                        skip_whitespace(base, len, after_bracket + 1);
-                                };
-                            };
-                        } else if assign_byte == '.' {
-                            let field_start: i32 = skip_whitespace(base, len, after_ident + 1);
-                            let mut field_cursor: i32 = field_start;
-                            let mut field_digits: i32 = 0;
-                            loop {
-                                if field_cursor >= len {
+                                if closing_idx < 0 {
                                     break;
                                 };
-                                let field_byte: i32 = load_u8(base + field_cursor);
-                                if field_byte < '0' || field_byte > '9' {
+                                store_i32(entry_ptr, ASSIGNMENT_SELECTOR_TYPE_ARRAY);
+                                store_i32(entry_ptr + 4, expr_start);
+                                store_i32(entry_ptr + 8, closing_idx);
+                                selector_count = selector_count + 1;
+                                scan_cursor = closing_idx + 1;
+                                continue;
+                            };
+                            if scan_byte == '.' {
+                                if selector_count >= ASSIGNMENT_SELECTOR_CAPACITY {
+                                    store_i32(locals_stack_count_ptr, saved_stack_count);
+                                    store_i32(locals_next_index_ptr, saved_next_index);
+                                    return -1;
+                                };
+                                let entry_ptr: i32 =
+                                    selectors_base + selector_count * selector_entry_size;
+                                let field_start: i32 = skip_whitespace(base, len, scan_cursor + 1);
+                                let mut field_cursor: i32 = field_start;
+                                let mut field_digits: i32 = 0;
+                                loop {
+                                    if field_cursor >= len {
+                                        break;
+                                    };
+                                    let field_byte: i32 = load_u8(base + field_cursor);
+                                    if field_byte < '0' || field_byte > '9' {
+                                        break;
+                                    };
+                                    field_cursor = field_cursor + 1;
+                                    field_digits = field_digits + 1;
+                                };
+                                if field_digits <= 0 {
                                     break;
                                 };
-                                field_cursor = field_cursor + 1;
-                                field_digits = field_digits + 1;
-                            };
-                            if field_digits > 0 {
                                 let mut field_index: i32 = 0;
                                 let mut digit_idx: i32 = 0;
                                 loop {
@@ -1824,78 +1718,175 @@ fn parse_block_expression_body(
                                     field_index = field_index * 10 + (digit_byte - '0');
                                     digit_idx = digit_idx + 1;
                                 };
-                                let after_field: i32 = skip_whitespace(base, len, field_cursor);
-                                if after_field < len {
-                                    let eq_byte: i32 = load_u8(base + after_field);
-                                    if eq_byte == '=' {
-                                        let mut maybe_second: i32 = -1;
-                                        if after_field + 1 < len {
-                                            maybe_second = load_u8(base + after_field + 1);
-                                        };
-                                        if maybe_second != '=' {
-                                            let current_stack: i32 =
-                                                load_i32(locals_stack_count_ptr);
-                                            let entry_index: i32 = find_local_entry_index(
-                                                base,
-                                                locals_table_ptr,
-                                                current_stack,
-                                                name_start,
-                                                name_len,
-                                            );
-                                            if entry_index < 0 {
-                                                store_i32(locals_stack_count_ptr, saved_stack_count);
-                                                store_i32(locals_next_index_ptr, saved_next_index);
-                                                return -1;
+                                store_i32(entry_ptr, ASSIGNMENT_SELECTOR_TYPE_TUPLE);
+                                store_i32(entry_ptr + 4, field_index);
+                                store_i32(entry_ptr + 8, 0);
+                                selector_count = selector_count + 1;
+                                scan_cursor = field_cursor;
+                                continue;
+                            };
+                            break;
+                        };
+                        if eq_cursor >= 0 {
+                            let current_stack: i32 = load_i32(locals_stack_count_ptr);
+                            let entry_index: i32 = find_local_entry_index(
+                                base,
+                                locals_table_ptr,
+                                current_stack,
+                                name_start,
+                                name_len,
+                            );
+                            if entry_index < 0 {
+                                store_i32(locals_stack_count_ptr, saved_stack_count);
+                                store_i32(locals_next_index_ptr, saved_next_index);
+                                return -1;
+                            };
+                            let entry_ptr: i32 = locals_entry_ptr(locals_table_ptr, entry_index);
+                            if !locals_entry_is_mut(entry_ptr) {
+                                let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+                                if detail_out_ptr > 0 {
+                                    if load_u8(detail_out_ptr) == 0 {
+                                        let message: [u8; 33] = "cannot assign to immutable local";
+                                        let detail_capacity: i32 = len(message);
+                                        let mut detail_idx: i32 = 0;
+                                        loop {
+                                            if detail_idx >= detail_capacity {
+                                                break;
                                             };
-                                            let entry_ptr: i32 =
-                                                locals_entry_ptr(locals_table_ptr, entry_index);
-                                            if !locals_entry_is_mut(entry_ptr) {
-                                                let detail_out_ptr: i32 =
-                                                    ast_base - ast_output_reserve(len);
-                                                if detail_out_ptr > 0 {
-                                                    if load_u8(detail_out_ptr) == 0 {
-                                                        let message: [u8; 33] =
-                                                            "cannot assign to immutable local";
-                                                        let detail_capacity: i32 = len(message);
-                                                        let mut detail_idx: i32 = 0;
-                                                        loop {
-                                                            if detail_idx >= detail_capacity {
-                                                                break;
-                                                            };
-                                                            store_u8(
-                                                                detail_out_ptr + detail_idx,
-                                                                message[detail_idx] as i32,
-                                                            );
-                                                            detail_idx = detail_idx + 1;
-                                                        };
-                                                    };
-                                                };
-                                                store_i32(locals_stack_count_ptr, saved_stack_count);
-                                                store_i32(locals_next_index_ptr, saved_next_index);
-                                                return -1;
-                                            };
-                                            assignment_local_index =
-                                                locals_entry_local_index(entry_ptr);
-                                            let local_type_id: i32 = locals_entry_type_id(entry_ptr);
-                                            let tuple_expr_index: i32 = ast_expr_alloc_local(
-                                                ast_base,
-                                                assignment_local_index,
-                                                local_type_id,
-                                            );
-                                            if tuple_expr_index < 0 {
-                                                store_i32(locals_stack_count_ptr, saved_stack_count);
-                                                store_i32(locals_next_index_ptr, saved_next_index);
-                                                return -1;
-                                            };
-                                            assignment_tuple_expr_index = tuple_expr_index;
-                                            assignment_tuple_field_index = field_index;
-                                            assignment_kind = 2;
-                                            assignment_identified = true;
-                                            assignment_cursor =
-                                                skip_whitespace(base, len, after_field + 1);
+                                            store_u8(detail_out_ptr + detail_idx, message[detail_idx] as i32);
+                                            detail_idx = detail_idx + 1;
                                         };
                                     };
                                 };
+                                store_i32(locals_stack_count_ptr, saved_stack_count);
+                                store_i32(locals_next_index_ptr, saved_next_index);
+                                return -1;
+                            };
+                            assignment_local_index = locals_entry_local_index(entry_ptr);
+                            let local_type_id: i32 = locals_entry_type_id(entry_ptr);
+                            if selector_count <= 0 {
+                                assignment_kind = 0;
+                                assignment_identified = true;
+                                assignment_cursor = skip_whitespace(base, len, eq_cursor + 1);
+                            } else {
+                                let mut current_expr_index: i32 = ast_expr_alloc_local(
+                                    ast_base,
+                                    assignment_local_index,
+                                    local_type_id,
+                                );
+                                if current_expr_index < 0 {
+                                    store_i32(locals_stack_count_ptr, saved_stack_count);
+                                    store_i32(locals_next_index_ptr, saved_next_index);
+                                    return -1;
+                                };
+                                let mut selector_idx: i32 = 0;
+                                loop {
+                                    if selector_idx >= selector_count {
+                                        break;
+                                    };
+                                    let selector_ptr: i32 =
+                                        selectors_base + selector_idx * selector_entry_size;
+                                    let selector_type: i32 = load_i32(selector_ptr);
+                                    if selector_type == ASSIGNMENT_SELECTOR_TYPE_ARRAY {
+                                        let expr_start: i32 = load_i32(selector_ptr + 4);
+                                        let index_kind_ptr: i32 = stmt_nested_temp_base;
+                                        let index_data0_ptr: i32 = stmt_nested_temp_base + 4;
+                                        let index_data1_ptr: i32 = stmt_nested_temp_base + 8;
+                                        let index_temp_base: i32 = stmt_nested_temp_base + 32;
+                                        let mut index_cursor: i32 = parse_expression(
+                                            base,
+                                            len,
+                                            expr_start,
+                                            ast_base,
+                                            params_table_ptr,
+                                            params_count,
+                                            const_mask_table_ptr,
+                                            locals_table_ptr,
+                                            locals_stack_count_ptr,
+                                            locals_next_index_ptr,
+                                            index_temp_base,
+                                            loop_depth_ptr,
+                                            type_template_sink_ptr,
+                                            index_kind_ptr,
+                                            index_data0_ptr,
+                                            index_data1_ptr,
+                                        );
+                                        if index_cursor < 0 {
+                                            store_i32(locals_stack_count_ptr, saved_stack_count);
+                                            store_i32(locals_next_index_ptr, saved_next_index);
+                                            return -1;
+                                        };
+                                        index_cursor = skip_whitespace(base, len, index_cursor);
+                                        index_cursor = expect_char(base, len, index_cursor, ']');
+                                        if index_cursor < 0 {
+                                            store_i32(locals_stack_count_ptr, saved_stack_count);
+                                            store_i32(locals_next_index_ptr, saved_next_index);
+                                            return -1;
+                                        };
+                                        let index_parts: (i32, i32, i32) = load_expression_parts(
+                                            index_kind_ptr,
+                                            index_data0_ptr,
+                                            index_data1_ptr,
+                                        );
+                                        let index_expr_index: i32 =
+                                            expression_index_from_parts(ast_base, index_parts);
+                                        if index_expr_index < 0 {
+                                            store_i32(locals_stack_count_ptr, saved_stack_count);
+                                            store_i32(locals_next_index_ptr, saved_next_index);
+                                            return -1;
+                                        };
+                                        if selector_idx == selector_count - 1 {
+                                            assignment_array_expr_index = current_expr_index;
+                                            assignment_array_index_expr_index = index_expr_index;
+                                            assignment_kind = 1;
+                                        } else {
+                                            let new_expr_index: i32 = ast_expr_alloc_array_get(
+                                                ast_base,
+                                                current_expr_index,
+                                                index_expr_index,
+                                            );
+                                            if new_expr_index < 0 {
+                                                store_i32(locals_stack_count_ptr, saved_stack_count);
+                                                store_i32(locals_next_index_ptr, saved_next_index);
+                                                return -1;
+                                            };
+                                            current_expr_index = new_expr_index;
+                                        };
+                                    } else if selector_type
+                                        == ASSIGNMENT_SELECTOR_TYPE_TUPLE
+                                    {
+                                        let field_index: i32 = load_i32(selector_ptr + 4);
+                                        if selector_idx == selector_count - 1 {
+                                            assignment_tuple_expr_index = current_expr_index;
+                                            assignment_tuple_field_index = field_index;
+                                            assignment_kind = 2;
+                                        } else {
+                                            let new_expr_index: i32 = ast_expr_alloc_tuple_get(
+                                                ast_base,
+                                                current_expr_index,
+                                                field_index,
+                                            );
+                                            if new_expr_index < 0 {
+                                                store_i32(locals_stack_count_ptr, saved_stack_count);
+                                                store_i32(locals_next_index_ptr, saved_next_index);
+                                                return -1;
+                                            };
+                                            current_expr_index = new_expr_index;
+                                        };
+                                    } else {
+                                        store_i32(locals_stack_count_ptr, saved_stack_count);
+                                        store_i32(locals_next_index_ptr, saved_next_index);
+                                        return -1;
+                                    };
+                                    selector_idx = selector_idx + 1;
+                                };
+                                if assignment_kind == 0 {
+                                    store_i32(locals_stack_count_ptr, saved_stack_count);
+                                    store_i32(locals_next_index_ptr, saved_next_index);
+                                    return -1;
+                                };
+                                assignment_identified = true;
+                                assignment_cursor = skip_whitespace(base, len, eq_cursor + 1);
                             };
                         };
                     };

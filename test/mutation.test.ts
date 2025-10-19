@@ -50,7 +50,7 @@ test("tuple field mutation updates field", async () => {
   expect(result).toBe(25);
 });
 
-test.todo("tuple containing array can mutate element", async () => {
+test("tuple containing array can mutate element", async () => {
   const wasm = await compileWithAstCompiler(`
     fn main() -> i32 {
         let mut pair: (i32, [i32; 3]) = (2, [3, 4, 5]);
@@ -63,7 +63,7 @@ test.todo("tuple containing array can mutate element", async () => {
   expect(result).toBe(11);
 });
 
-test.todo("array of tuples allows inner field mutation", async () => {
+test("array of tuples allows inner field mutation", async () => {
   const wasm = await compileWithAstCompiler(`
     fn main() -> i32 {
         let mut items: [(i32, bool); 2] = [(1, false), (2, true)];
