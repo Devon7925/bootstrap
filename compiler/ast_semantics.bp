@@ -2774,11 +2774,45 @@ fn resolve_expression_internal(
         let value_index: i32 = load_i32(entry_ptr + 8);
         if value_index >= 0 {
             if loop_flags != 0 {
-                record_failure_detail(
-                    out_ptr,
-                    36,
-                    "while loops cannot break with values",
-                );
+                if out_ptr > 0 {
+                    if load_u8(out_ptr) == 0 {
+                        let location_offset: i32 = ast_expr_break_location(ast_base, expr_index);
+                        if location_offset >= 0 {
+                            let mut module_index: i32 = -1;
+                            let mut module_base: i32 = 0;
+                            let mut module_len: i32 = 0;
+                            if caller_func_index >= 0 {
+                                module_index = ast_function_entry_module_index(ast_base, caller_func_index);
+                                module_base = ast_function_entry_module_base(ast_base, caller_func_index);
+                                module_len = ast_function_entry_module_len(ast_base, caller_func_index);
+                                if (module_base <= 0 || module_len <= 0) && module_index >= 0 {
+                                    module_base = module_entry_content(module_index);
+                                    module_len = module_entry_content_len(module_index);
+                                };
+                            };
+                            if module_index < 0 {
+                                module_base = scratch_module_base(out_ptr);
+                                module_len = scratch_module_len(out_ptr);
+                            };
+                            let message: [u8; 36] = "while loops cannot break with values";
+                            write_failure_detail_with_location(
+                                out_ptr,
+                                module_index,
+                                module_base,
+                                module_len,
+                                location_offset,
+                                36,
+                                message,
+                            );
+                        } else {
+                            record_failure_detail(
+                                out_ptr,
+                                36,
+                                "while loops cannot break with values",
+                            );
+                        };
+                    };
+                };
                 return -1;
             };
             if resolve_expression_internal(out_ptr, ast_base,

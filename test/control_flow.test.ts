@@ -179,7 +179,9 @@ test("while break cannot carry values", async () => {
         }
     }
   `);
-  expect(failure.failure.detail).toBe("while loops cannot break with values");
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:4:13: while loops cannot break with values",
+  );
 });
 
 test("loop and break support truthy conditions", async () => {
@@ -420,7 +422,9 @@ test("while loops reject break values", async () => {
         }
     }
   `);
-  expect(failure.failure.detail).toBe("while loops cannot break with values");
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:4:13: while loops cannot break with values",
+  );
 });
 
 test("nested if expressions execute", async () => {
