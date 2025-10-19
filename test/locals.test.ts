@@ -44,7 +44,7 @@ test("using out of scope locals is rejected", async () => {
         inner
     }
   `);
-  expect(error.failure.detail).toBe("identifier not found");
+  expect(error.failure.detail).toBe("/entry.bp:7:9: identifier not found");
 });
 
 test("assignment to immutable locals is rejected", async () => {
@@ -55,7 +55,7 @@ test("assignment to immutable locals is rejected", async () => {
         value
     }
   `);
-  expect(error.failure.detail).toBe("cannot assign to immutable local");
+  expect(error.failure.detail).toBe("/entry.bp:4:9: cannot assign to immutable local");
 });
 
 test("blocks must end with an expression", async () => {
@@ -64,5 +64,5 @@ test("blocks must end with an expression", async () => {
         let value: i32 = 1;
     }
   `);
-  expect(error.failure.detail).toBe("block must end with expression");
+  expect(error.failure.detail).toBe("/entry.bp:4:5: block must end with expression");
 });
