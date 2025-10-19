@@ -77,6 +77,33 @@ fn write_module_prefixed_failure_detail(
     if line <= 0 || column <= 0 {
         return false;
     };
+    let limited_offset: i32 = if location_offset > effective_len {
+        effective_len
+    } else {
+        location_offset
+    };
+    if detail_out_ptr > 0 {
+        let stored_path_ptr: i32 = if use_fallback_path {
+            detail_out_ptr
+        } else {
+            path_ptr
+        };
+        store_i32(scratch_failure_path_ptr_ptr(detail_out_ptr), stored_path_ptr);
+        store_i32(scratch_failure_path_len_ptr(detail_out_ptr), path_len);
+        store_i32(scratch_failure_line_ptr(detail_out_ptr), line);
+        store_i32(scratch_failure_column_ptr(detail_out_ptr), column);
+        store_i32(scratch_failure_character_ptr(detail_out_ptr), limited_offset + 1);
+        store_i32(scratch_failure_offset_ptr(detail_out_ptr), limited_offset);
+        if effective_base > 0 {
+            store_i32(scratch_module_base_ptr(detail_out_ptr), effective_base);
+        };
+        if effective_len > 0 {
+            store_i32(scratch_module_len_ptr(detail_out_ptr), effective_len);
+        };
+        if effective_index >= 0 {
+            store_i32(scratch_module_index_ptr(detail_out_ptr), effective_index);
+        };
+    };
     let mut write_offset: i32 = 0;
     let mut truncated: bool = false;
     let mut prefix_idx: i32 = 0;
@@ -229,6 +256,32 @@ fn write_module_prefixed_failure_detail(
         write_offset = write_offset + 1;
     };
     !truncated
+}
+
+fn write_failure_detail_with_location(
+    detail_out_ptr: i32,
+    module_index: i32,
+    module_base: i32,
+    module_len: i32,
+    location_offset: i32,
+    const MESSAGE_LEN: i32,
+    message: [u8; MESSAGE_LEN],
+) {
+    if detail_out_ptr > 0 {
+        let wrote_detail: bool = write_module_prefixed_failure_detail(
+            detail_out_ptr,
+            module_index,
+            module_base,
+            module_len,
+            location_offset,
+            MESSAGE_LEN,
+            message,
+        );
+        if !wrote_detail {
+            clear_failure_location(detail_out_ptr);
+            write_failure_detail(detail_out_ptr, MESSAGE_LEN, message);
+        };
+    };
 }
 
 fn parse_basic_expression(
@@ -514,17 +567,22 @@ fn parse_basic_expression(
                 return -1;
             };
             array_cursor = skip_whitespace(base, len, array_cursor);
+            let literal_start: i32 = array_cursor;
             let literal_cursor: i32 = parse_i32_literal(base, len, array_cursor, literal_ptr);
-        let mut length: i32 = -1;
-        let mut length_expr_index: i32 = -1;
+            let mut length: i32 = -1;
+            let mut length_expr_index: i32 = -1;
             if literal_cursor >= 0 {
                 length = load_i32(literal_ptr);
                 if length < 0 {
                     let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
                     if detail_out_ptr > 0 {
                         if load_u8(detail_out_ptr) == 0 {
-                            write_failure_detail(
+                            write_failure_detail_with_location(
                                 detail_out_ptr,
+                                scratch_module_index(detail_out_ptr),
+                                base,
+                                len,
+                                literal_start,
                                 41,
                                 "array literal length must be non-negative",
                             );
@@ -547,6 +605,7 @@ fn parse_basic_expression(
                 store_i32(length_locals_stack_count_ptr, 0);
                 store_i32(length_locals_next_index_ptr, 0);
                 store_i32(length_loop_depth_ptr, 0);
+                let length_expr_start: i32 = array_cursor;
                 array_cursor = parse_expression(
                     base,
                     len,
@@ -568,8 +627,12 @@ fn parse_basic_expression(
                 if array_cursor < 0 {
                     let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
                     if detail_out_ptr > 0 {
-                        write_failure_detail(
+                        write_failure_detail_with_location(
                             detail_out_ptr,
+                            scratch_module_index(detail_out_ptr),
+                            base,
+                            len,
+                            length_expr_start,
                             44,
                             "array literal length expression parse failed",
                         );
@@ -619,8 +682,12 @@ fn parse_basic_expression(
                         ) < 0 {
                             let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
                             if detail_out_ptr > 0 {
-                                write_failure_detail(
+                                write_failure_detail_with_location(
                                     detail_out_ptr,
+                                    scratch_module_index(detail_out_ptr),
+                                    base,
+                                    len,
+                                    length_expr_start,
                                     46,
                                     "array literal length requires const parameters",
                                 );
@@ -634,8 +701,12 @@ fn parse_basic_expression(
                     if metadata_ptr < 0 {
                         let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
                         if detail_out_ptr > 0 {
-                            write_failure_detail(
+                            write_failure_detail_with_location(
                                 detail_out_ptr,
+                                scratch_module_index(detail_out_ptr),
+                                base,
+                                len,
+                                length_expr_start,
                                 47,
                                 "array literal length metadata allocation failed",
                             );
@@ -658,8 +729,12 @@ fn parse_basic_expression(
                         let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
                         if detail_out_ptr > 0 {
                             if load_u8(detail_out_ptr) == 0 {
-                                write_failure_detail(
+                                write_failure_detail_with_location(
                                     detail_out_ptr,
+                                    scratch_module_index(detail_out_ptr),
+                                    base,
+                                    len,
+                                    length_expr_start,
                                     41,
                                     "array literal length must be non-negative",
                                 );
@@ -2706,7 +2781,7 @@ fn parse_function(
                 if detail_out_ptr > 0 {
                     if load_u8(detail_out_ptr) == 0 {
                         let message: [u8; 37] = "function name conflicts with constant";
-                        let wrote_detail: bool = write_module_prefixed_failure_detail(
+                        write_failure_detail_with_location(
                             detail_out_ptr,
                             current_module_index,
                             base,
@@ -2715,9 +2790,6 @@ fn parse_function(
                             37,
                             message,
                         );
-                        if !wrote_detail {
-                            write_failure_detail(detail_out_ptr, 37, message);
-                        };
                     };
                 };
                 return -1;
@@ -3194,7 +3266,7 @@ fn parse_constant_declaration(
         if detail_out_ptr > 0 {
             if load_u8(detail_out_ptr) == 0 {
                 let message: [u8; 30] = "duplicate constant declaration";
-                let wrote_detail: bool = write_module_prefixed_failure_detail(
+                write_failure_detail_with_location(
                     detail_out_ptr,
                     current_module_index,
                     base,
@@ -3203,9 +3275,6 @@ fn parse_constant_declaration(
                     30,
                     message,
                 );
-                if !wrote_detail {
-                    write_failure_detail(detail_out_ptr, 30, message);
-                };
             };
         };
         return -1;
@@ -3239,7 +3308,7 @@ fn parse_constant_declaration(
                 if detail_out_ptr > 0 {
                     if load_u8(detail_out_ptr) == 0 {
                         let message: [u8; 30] = "duplicate function declaration";
-                        let wrote_detail: bool = write_module_prefixed_failure_detail(
+                        write_failure_detail_with_location(
                             detail_out_ptr,
                             current_module_index,
                             base,
@@ -3248,9 +3317,6 @@ fn parse_constant_declaration(
                             30,
                             message,
                         );
-                        if !wrote_detail {
-                            write_failure_detail(detail_out_ptr, 30, message);
-                        };
                     };
                 };
                 return -1;
@@ -3694,7 +3760,7 @@ fn parse_use_declaration(
         if detail_out_ptr > 0 {
             if load_u8(detail_out_ptr) == 0 {
                 let message: [u8; 23] = "module import not found";
-                let wrote_detail: bool = write_module_prefixed_failure_detail(
+                write_failure_detail_with_location(
                     detail_out_ptr,
                     current_module_index,
                     base,
@@ -3703,9 +3769,6 @@ fn parse_use_declaration(
                     23,
                     message,
                 );
-                if !wrote_detail {
-                    write_failure_detail(detail_out_ptr, 23, message);
-                };
             };
         };
         return (-1, func_count);

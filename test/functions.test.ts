@@ -260,7 +260,9 @@ test("array repeat length reports runtime parameter usage", async () => {
         helper(3, 7)
     }
   `);
-  expect(failure.failure.detail).toBe("array literal length requires const parameters");
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:3:21: array literal length requires const parameters",
+  );
 });
 
 test("function section handles multibyte type indices", async () => {

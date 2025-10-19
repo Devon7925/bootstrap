@@ -824,7 +824,7 @@ fn interpret_program_constants(out_ptr: i32, ast_base: i32, func_count: i32) -> 
                     };
                     let location_offset: i32 =
                         ast_constant_entry_name_start(const_entry_ptr);
-                    let wrote_detail: bool = write_module_prefixed_failure_detail(
+                    write_failure_detail_with_location(
                         out_ptr,
                         module_index,
                         module_base,
@@ -833,9 +833,6 @@ fn interpret_program_constants(out_ptr: i32, ast_base: i32, func_count: i32) -> 
                         48,
                         message,
                     );
-                    if !wrote_detail {
-                        write_failure_detail(out_ptr, 48, message);
-                    };
                 };
             };
             return -1;
@@ -937,7 +934,7 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
                             let name_start: i32 =
                                 ast_function_entry_name_start(ast_base, idx);
                             let message: [u8; 30] = "duplicate function declaration";
-                            let wrote_detail: bool = write_module_prefixed_failure_detail(
+                            write_failure_detail_with_location(
                                 detail_out_ptr,
                                 module_index,
                                 module_base,
@@ -946,9 +943,6 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
                                 30,
                                 message,
                             );
-                            if !wrote_detail {
-                                write_failure_detail(detail_out_ptr, 30, message);
-                            };
                         };
                     };
                     return -1;
@@ -2761,6 +2755,7 @@ fn initialize_layout(out_ptr: i32) {
             detail_idx = detail_idx + 1;
         };
     };
+    clear_failure_location(out_ptr);
     store_i32(scratch_instr_offset_ptr(out_ptr), 0);
     store_i32(scratch_expr_type_ptr(out_ptr), -1);
     store_i32(scratch_module_base_ptr(out_ptr), 0);
