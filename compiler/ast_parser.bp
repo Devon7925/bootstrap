@@ -1383,11 +1383,13 @@ fn parse_unary_expression(
 ) -> i32 {
     let mut current_cursor: i32 = cursor;
     let mut not_count: i32 = 0;
+    let mut not_location: i32 = -1;
     while current_cursor < len {
         let next_byte: i32 = load_u8(base + current_cursor);
         if next_byte != '!' {
             break;
         };
+        not_location = current_cursor;
         not_count = not_count + 1;
         current_cursor = skip_whitespace(base, len, current_cursor + 1);
     };
@@ -1560,7 +1562,7 @@ fn parse_unary_expression(
         if value_index < 0 {
             return -1;
         };
-        let not_index: i32 = ast_expr_alloc_logical_not(ast_base, value_index);
+        let not_index: i32 = ast_expr_alloc_logical_not(ast_base, value_index, not_location);
         if not_index < 0 {
             return -1;
         };
@@ -1654,6 +1656,7 @@ fn parse_multiplicative_expression(
     };
 
     while current_cursor < len {
+        let operator_location: i32 = current_cursor;
         let next_byte: i32 = load_u8(base + current_cursor);
         if next_byte != '*' && next_byte != '/' {
             break;
@@ -1699,9 +1702,9 @@ fn parse_multiplicative_expression(
         };
 
         let new_index: i32 = if operator == '*' {
-            ast_expr_alloc_mul(ast_base, left_index, right_index)
+            ast_expr_alloc_mul(ast_base, left_index, right_index, operator_location)
         } else {
-            ast_expr_alloc_div(ast_base, left_index, right_index)
+            ast_expr_alloc_div(ast_base, left_index, right_index, operator_location)
         };
         if new_index < 0 {
             return -1;
@@ -1759,6 +1762,7 @@ fn parse_additive_expression(
     let nested_temp_base: i32 = temp_base + 32;
 
     while current_cursor < len {
+        let operator_location: i32 = current_cursor;
         let next_byte: i32 = load_u8(base + current_cursor);
         if next_byte != '+' && next_byte != '-' {
             break;
@@ -1803,9 +1807,9 @@ fn parse_additive_expression(
         };
 
         let new_index: i32 = if operator == '+' {
-            ast_expr_alloc_add(ast_base, left_index, right_index)
+            ast_expr_alloc_add(ast_base, left_index, right_index, operator_location)
         } else {
-            ast_expr_alloc_sub(ast_base, left_index, right_index)
+            ast_expr_alloc_sub(ast_base, left_index, right_index, operator_location)
         };
         if new_index < 0 {
             return -1;
@@ -1863,6 +1867,7 @@ fn parse_shift_expression(
     let next_data1_ptr: i32 = temp_base + 8;
 
     while current_cursor + 1 < len {
+        let operator_location: i32 = current_cursor;
         let first: i32 = load_u8(base + current_cursor);
         let second: i32 = load_u8(base + current_cursor + 1);
         let mut op_kind: i32 = -1;
@@ -1912,9 +1917,9 @@ fn parse_shift_expression(
         };
 
         let new_index: i32 = if op_kind == 0 {
-            ast_expr_alloc_shl(ast_base, left_index, right_index)
+            ast_expr_alloc_shl(ast_base, left_index, right_index, operator_location)
         } else {
-            ast_expr_alloc_shr_s(ast_base, left_index, right_index)
+            ast_expr_alloc_shr_s(ast_base, left_index, right_index, operator_location)
         };
         if new_index < 0 {
             return -1;
@@ -1972,6 +1977,7 @@ fn parse_relational_expression(
     let next_data1_ptr: i32 = temp_base + 8;
 
     while current_cursor < len {
+        let operator_location: i32 = current_cursor;
         let operator_byte: i32 = load_u8(base + current_cursor);
         let mut relation_op: i32 = -1;
         let mut consume: i32 = 1;
@@ -2048,13 +2054,13 @@ fn parse_relational_expression(
         };
 
         let new_index: i32 = if relation_op == 0 {
-            ast_expr_alloc_lt(ast_base, left_index, right_index)
+            ast_expr_alloc_lt(ast_base, left_index, right_index, operator_location)
         } else if relation_op == 1 {
-            ast_expr_alloc_gt(ast_base, left_index, right_index)
+            ast_expr_alloc_gt(ast_base, left_index, right_index, operator_location)
         } else if relation_op == 2 {
-            ast_expr_alloc_le(ast_base, left_index, right_index)
+            ast_expr_alloc_le(ast_base, left_index, right_index, operator_location)
         } else {
-            ast_expr_alloc_ge(ast_base, left_index, right_index)
+            ast_expr_alloc_ge(ast_base, left_index, right_index, operator_location)
         };
         if new_index < 0 {
             return -1;
@@ -2112,6 +2118,7 @@ fn parse_equality_expression(
     let next_data1_ptr: i32 = temp_base + 8;
 
     while current_cursor + 1 < len {
+        let operator_location: i32 = current_cursor;
         let operator_byte: i32 = load_u8(base + current_cursor);
         let next_byte: i32 = load_u8(base + current_cursor + 1);
         let mut equality_op: i32 = -1;
@@ -2168,9 +2175,9 @@ fn parse_equality_expression(
         };
 
         let new_index: i32 = if equality_op == 0 {
-            ast_expr_alloc_eq(ast_base, left_index, right_index)
+            ast_expr_alloc_eq(ast_base, left_index, right_index, operator_location)
         } else {
-            ast_expr_alloc_ne(ast_base, left_index, right_index)
+            ast_expr_alloc_ne(ast_base, left_index, right_index, operator_location)
         };
         if new_index < 0 {
             return -1;
@@ -2228,6 +2235,7 @@ fn parse_bitwise_and_expression(
     let next_data1_ptr: i32 = temp_base + 8;
 
     while current_cursor < len {
+        let operator_location: i32 = current_cursor;
         let operator_byte: i32 = load_u8(base + current_cursor);
         if operator_byte != '&' {
             break;
@@ -2276,7 +2284,8 @@ fn parse_bitwise_and_expression(
             return -1;
         };
 
-        let new_index: i32 = ast_expr_alloc_bitwise_and(ast_base, left_index, right_index);
+        let new_index: i32 =
+            ast_expr_alloc_bitwise_and(ast_base, left_index, right_index, operator_location);
         if new_index < 0 {
             return -1;
         };
@@ -2333,6 +2342,7 @@ fn parse_bitwise_or_expression(
     let next_data1_ptr: i32 = temp_base + 8;
 
     while current_cursor < len {
+        let operator_location: i32 = current_cursor;
         let operator_byte: i32 = load_u8(base + current_cursor);
         if operator_byte != '|' {
             break;
@@ -2381,7 +2391,8 @@ fn parse_bitwise_or_expression(
             return -1;
         };
 
-        let new_index: i32 = ast_expr_alloc_bitwise_or(ast_base, left_index, right_index);
+        let new_index: i32 =
+            ast_expr_alloc_bitwise_or(ast_base, left_index, right_index, operator_location);
         if new_index < 0 {
             return -1;
         };
@@ -2438,6 +2449,7 @@ fn parse_logical_and_expression(
     let next_data1_ptr: i32 = temp_base + 8;
 
     while current_cursor + 1 < len {
+        let operator_location: i32 = current_cursor;
         let first: i32 = load_u8(base + current_cursor);
         if first != '&' {
             break;
@@ -2483,7 +2495,12 @@ fn parse_logical_and_expression(
             return -1;
         };
 
-        let new_index: i32 = ast_expr_alloc_logical_and(ast_base, left_index, right_index);
+        let new_index: i32 = ast_expr_alloc_logical_and(
+            ast_base,
+            left_index,
+            right_index,
+            operator_location,
+        );
         if new_index < 0 {
             return -1;
         };
@@ -2540,6 +2557,7 @@ fn parse_logical_or_expression(
     let next_data1_ptr: i32 = temp_base + 8;
 
     while current_cursor + 1 < len {
+        let operator_location: i32 = current_cursor;
         let first: i32 = load_u8(base + current_cursor);
         if first != '|' {
             break;
@@ -2585,7 +2603,12 @@ fn parse_logical_or_expression(
             return -1;
         };
 
-        let new_index: i32 = ast_expr_alloc_logical_or(ast_base, left_index, right_index);
+        let new_index: i32 = ast_expr_alloc_logical_or(
+            ast_base,
+            left_index,
+            right_index,
+            operator_location,
+        );
         if new_index < 0 {
             return -1;
         };
