@@ -2966,15 +2966,27 @@ fn parse_char_literal(base: i32, len: i32, offset: i32, out_value_ptr: i32) -> i
 
 const WORD_SIZE: i32 = 4;
 
-const SCRATCH_INSTR_OFFSET: i32 = 4096;
+const SCRATCH_FAILURE_PATH_PTR_OFFSET: i32 = 4048;
 
-const SCRATCH_MODULE_INDEX_OFFSET: i32 = 4088;
+const SCRATCH_FAILURE_PATH_LEN_OFFSET: i32 = 4052;
 
-const SCRATCH_MODULE_LEN_OFFSET: i32 = 4084;
+const SCRATCH_FAILURE_LINE_OFFSET: i32 = 4056;
+
+const SCRATCH_FAILURE_COLUMN_OFFSET: i32 = 4060;
+
+const SCRATCH_FAILURE_CHARACTER_OFFSET: i32 = 4064;
+
+const SCRATCH_FAILURE_OFFSET_OFFSET: i32 = 4068;
 
 const SCRATCH_MODULE_BASE_OFFSET: i32 = 4080;
 
+const SCRATCH_MODULE_LEN_OFFSET: i32 = 4084;
+
+const SCRATCH_MODULE_INDEX_OFFSET: i32 = 4088;
+
 const SCRATCH_EXPR_TYPE_OFFSET: i32 = 4092;
+
+const SCRATCH_INSTR_OFFSET: i32 = 4096;
 
 const SCRATCH_INSTR_BASE_OFFSET: i32 = 8192;
 
@@ -3219,6 +3231,63 @@ fn scratch_expr_type_ptr(out_ptr: i32) -> i32 {
 
 fn scratch_instr_base(out_ptr: i32) -> i32 {
     out_ptr + SCRATCH_INSTR_BASE_OFFSET
+}
+
+fn scratch_failure_path_ptr_ptr(out_ptr: i32) -> i32 {
+    out_ptr + SCRATCH_FAILURE_PATH_PTR_OFFSET
+}
+
+fn scratch_failure_path_len_ptr(out_ptr: i32) -> i32 {
+    out_ptr + SCRATCH_FAILURE_PATH_LEN_OFFSET
+}
+
+fn scratch_failure_line_ptr(out_ptr: i32) -> i32 {
+    out_ptr + SCRATCH_FAILURE_LINE_OFFSET
+}
+
+fn scratch_failure_column_ptr(out_ptr: i32) -> i32 {
+    out_ptr + SCRATCH_FAILURE_COLUMN_OFFSET
+}
+
+fn scratch_failure_character_ptr(out_ptr: i32) -> i32 {
+    out_ptr + SCRATCH_FAILURE_CHARACTER_OFFSET
+}
+
+fn scratch_failure_offset_ptr(out_ptr: i32) -> i32 {
+    out_ptr + SCRATCH_FAILURE_OFFSET_OFFSET
+}
+
+fn clear_failure_location(out_ptr: i32) {
+    store_i32(scratch_failure_path_ptr_ptr(out_ptr), 0);
+    store_i32(scratch_failure_path_len_ptr(out_ptr), 0);
+    store_i32(scratch_failure_line_ptr(out_ptr), 0);
+    store_i32(scratch_failure_column_ptr(out_ptr), 0);
+    store_i32(scratch_failure_character_ptr(out_ptr), 0);
+    store_i32(scratch_failure_offset_ptr(out_ptr), 0);
+}
+
+fn scratch_failure_path_ptr(out_ptr: i32) -> i32 {
+    load_i32(scratch_failure_path_ptr_ptr(out_ptr))
+}
+
+fn scratch_failure_path_len(out_ptr: i32) -> i32 {
+    load_i32(scratch_failure_path_len_ptr(out_ptr))
+}
+
+fn scratch_failure_line(out_ptr: i32) -> i32 {
+    load_i32(scratch_failure_line_ptr(out_ptr))
+}
+
+fn scratch_failure_column(out_ptr: i32) -> i32 {
+    load_i32(scratch_failure_column_ptr(out_ptr))
+}
+
+fn scratch_failure_character(out_ptr: i32) -> i32 {
+    load_i32(scratch_failure_character_ptr(out_ptr))
+}
+
+fn scratch_failure_offset(out_ptr: i32) -> i32 {
+    load_i32(scratch_failure_offset_ptr(out_ptr))
 }
 
 fn scratch_module_base_ptr(out_ptr: i32) -> i32 {
