@@ -56,20 +56,14 @@ fn ensure_memory_capacity(required: i32) -> i32 {
 
 fn skip_whitespace(base: i32, len: i32, offset: i32) -> i32 {
     let mut idx: i32 = offset;
-    loop {
-        if idx >= len {
-            break;
-        };
+    while idx < len {
         let byte: i32 = load_u8(base + idx);
         if byte == '/' {
             if idx + 1 < len {
                 let next: i32 = load_u8(base + idx + 1);
                 if next == '/' {
                     idx = idx + 2;
-                    loop {
-                        if idx >= len {
-                            break;
-                        };
+                    while idx < len {
                         let comment_byte: i32 = load_u8(base + idx);
                         if comment_byte == '\n' {
                             idx = idx + 1;
@@ -169,10 +163,7 @@ fn parse_identifier(base: i32, len: i32, offset: i32) -> (i32, i32, i32) {
         return (-1, 0, 0);
     };
     let mut idx: i32 = offset + 1;
-    loop {
-        if idx >= len {
-            break;
-        };
+    while idx < len {
         let byte: i32 = load_u8(base + idx);
         if !is_identifier_continue(byte) {
             break;
@@ -233,10 +224,7 @@ fn identifier_matches_keyword(
         return false;
     };
     let mut idx: i32 = 0;
-    loop {
-        if idx >= KEYWORD_LEN {
-            break;
-        };
+    while idx < KEYWORD_LEN {
         if load_u8(base + start + idx) != keyword[idx] as i32 {
             return false;
         };
@@ -621,10 +609,7 @@ fn expect_keyword_literal(
         return -1;
     };
     let mut idx: i32 = 0;
-    loop {
-        if idx >= KEYWORD_LEN {
-            break;
-        };
+    while idx < KEYWORD_LEN {
         if load_u8(base + offset + idx) != keyword[idx] as i32 {
             return -1;
         };
@@ -661,10 +646,7 @@ fn identifiers_match_source(
         return false;
     };
     let mut idx: i32 = 0;
-    loop {
-        if idx >= len_a {
-            break;
-        };
+    while idx < len_a {
         let a_byte: i32 = load_u8(base + start_a + idx);
         let b_byte: i32 = load_u8(base + start_b + idx);
         if a_byte != b_byte {
@@ -683,10 +665,7 @@ fn find_parameter_index(
     ident_len: i32,
 ) -> i32 {
     let mut idx: i32 = 0;
-    loop {
-        if idx >= params_count {
-            break;
-        };
+    while idx < params_count {
         let entry_ptr: i32 = params_table_ptr + idx * 8;
         let param_start: i32 = load_i32(entry_ptr);
         let param_len: i32 = load_i32(entry_ptr + 4);
@@ -744,10 +723,7 @@ fn find_local_entry_index(
         return -1;
     };
     let mut idx: i32 = locals_stack_count - 1;
-    loop {
-        if idx < 0 {
-            break;
-        };
+    while idx >= 0 {
         let entry_ptr: i32 = locals_entry_ptr(locals_table_ptr, idx);
         let local_start: i32 = load_i32(entry_ptr);
         let local_len: i32 = load_i32(entry_ptr + 4);
@@ -771,10 +747,7 @@ fn find_local_entry_index_in_scope(
         return -1;
     };
     let mut idx: i32 = locals_stack_count - 1;
-    loop {
-        if idx < scope_start {
-            break;
-        };
+    while idx >= scope_start {
         let entry_ptr: i32 = locals_entry_ptr(locals_table_ptr, idx);
         let local_start: i32 = load_i32(entry_ptr);
         let local_len: i32 = load_i32(entry_ptr + 4);
@@ -822,10 +795,7 @@ fn constant_entry_name_matches(
         return false;
     };
     let mut idx: i32 = 0;
-    loop {
-        if idx >= const_len {
-            break;
-        };
+    while idx < const_len {
         let const_byte: i32 = load_u8(module_base + const_start + idx);
         let ident_byte: i32 = load_u8(base + ident_start + idx);
         if const_byte != ident_byte {
@@ -850,10 +820,7 @@ fn find_constant_entry_index(
     let current_module_index: i32 = module_find_index_by_content_ptr(base);
     let mut idx: i32 = 0;
     let mut imported_match: i32 = -1;
-    loop {
-        if idx >= count {
-            break;
-        };
+    while idx < count {
         let entry_ptr: i32 = ast_constant_entry_ptr(ast_base, idx);
         let entry_module_index: i32 = ast_constant_entry_module_index(entry_ptr);
         let same_module: bool = if entry_module_index < 0 {
@@ -1033,10 +1000,7 @@ fn parse_block_expression_body(
                                 let message: [u8; 30] = "block must end with expression";
                                 let detail_capacity: i32 = len(message);
                                 let mut detail_idx: i32 = 0;
-                                loop {
-                                    if detail_idx >= detail_capacity {
-                                        break;
-                                    };
+                                while detail_idx < detail_capacity {
                                     store_u8(detail_out_ptr + detail_idx, message[detail_idx] as i32);
                                     detail_idx = detail_idx + 1;
                                 };
@@ -1255,10 +1219,7 @@ fn parse_block_expression_body(
                         let message: [u8; 36] = "break statements must be inside loop";
                         let detail_capacity: i32 = len(message);
                         let mut detail_idx: i32 = 0;
-                        loop {
-                            if detail_idx >= detail_capacity {
-                                break;
-                            };
+                        while detail_idx < detail_capacity {
                             store_u8(
                                 detail_out_ptr + detail_idx,
                                 message[detail_idx] as i32,
@@ -1358,10 +1319,7 @@ fn parse_block_expression_body(
                         let message: [u8; 40] = "continue statements must be inside loops";
                         let detail_capacity: i32 = len(message);
                         let mut detail_idx: i32 = 0;
-                        loop {
-                            if detail_idx >= detail_capacity {
-                                break;
-                            };
+                        while detail_idx < detail_capacity {
                             store_u8(
                                 detail_out_ptr + detail_idx,
                                 message[detail_idx] as i32,
@@ -1725,10 +1683,7 @@ fn parse_block_expression_body(
                                 let mut inner_cursor: i32 = scan_cursor + 1;
                                 let expr_start: i32 = skip_whitespace(base, len, inner_cursor);
                                 let mut closing_idx: i32 = -1;
-                                loop {
-                                    if inner_cursor >= len {
-                                        break;
-                                    };
+                                while inner_cursor < len {
                                     let inner_byte: i32 = load_u8(base + inner_cursor);
                                     if inner_byte == '[' {
                                         bracket_depth = bracket_depth + 1;
@@ -1762,10 +1717,7 @@ fn parse_block_expression_body(
                                 let field_start: i32 = skip_whitespace(base, len, scan_cursor + 1);
                                 let mut field_cursor: i32 = field_start;
                                 let mut field_digits: i32 = 0;
-                                loop {
-                                    if field_cursor >= len {
-                                        break;
-                                    };
+                                while field_cursor < len {
                                     let field_byte: i32 = load_u8(base + field_cursor);
                                     if field_byte < '0' || field_byte > '9' {
                                         break;
@@ -1778,10 +1730,7 @@ fn parse_block_expression_body(
                                 };
                                 let mut field_index: i32 = 0;
                                 let mut digit_idx: i32 = 0;
-                                loop {
-                                    if digit_idx >= field_digits {
-                                        break;
-                                    };
+                                while digit_idx < field_digits {
                                     let digit_byte: i32 = load_u8(base + field_start + digit_idx);
                                     field_index = field_index * 10 + (digit_byte - '0');
                                     digit_idx = digit_idx + 1;
@@ -1817,10 +1766,7 @@ fn parse_block_expression_body(
                                         let message: [u8; 33] = "cannot assign to immutable local";
                                         let detail_capacity: i32 = len(message);
                                         let mut detail_idx: i32 = 0;
-                                        loop {
-                                            if detail_idx >= detail_capacity {
-                                                break;
-                                            };
+                                        while detail_idx < detail_capacity {
                                             store_u8(detail_out_ptr + detail_idx, message[detail_idx] as i32);
                                             detail_idx = detail_idx + 1;
                                         };
@@ -1848,10 +1794,7 @@ fn parse_block_expression_body(
                                     return -1;
                                 };
                                 let mut selector_idx: i32 = 0;
-                                loop {
-                                    if selector_idx >= selector_count {
-                                        break;
-                                    };
+                                while selector_idx < selector_count {
                                     let selector_ptr: i32 =
                                         selectors_base + selector_idx * selector_entry_size;
                                     let selector_type: i32 = load_i32(selector_ptr);
@@ -2178,10 +2121,7 @@ fn parse_block_expression_body(
     let stmt_count: i32 = load_i32(statement_count_ptr);
     if stmt_count > 0 {
         let mut stmt_idx: i32 = stmt_count - 1;
-        loop {
-            if stmt_idx < 0 {
-                break;
-            };
+        while stmt_idx >= 0 {
             let stmt_ptr: i32 = statements_base + stmt_idx * statement_entry_size;
             let stmt_kind: i32 = load_i32(stmt_ptr);
             if stmt_kind == 0 {
@@ -2285,10 +2225,7 @@ fn integer_type_variant_index(type_id: i32) -> i32 {
     ];
     let count: i32 = len(signed);
     let mut idx: i32 = 0;
-    loop {
-        if idx >= count {
-            break;
-        };
+    while idx < count {
         if type_id == signed[idx] {
             return idx;
         };
@@ -2313,10 +2250,7 @@ fn type_id_is_signed_integer(type_id: i32) -> bool {
     ];
     let count: i32 = len(signed);
     let mut idx: i32 = 0;
-    loop {
-        if idx >= count {
-            break;
-        };
+    while idx < count {
         if type_id == signed[idx] {
             return true;
         };
@@ -2334,10 +2268,7 @@ fn type_id_is_unsigned_integer(type_id: i32) -> bool {
     ];
     let count: i32 = len(unsigned);
     let mut idx: i32 = 0;
-    loop {
-        if idx >= count {
-            break;
-        };
+    while idx < count {
         if type_id == unsigned[idx] {
             return true;
         };
@@ -2400,10 +2331,7 @@ fn logical_shr(value: i32, amount: i32) -> i32 {
     };
     let mut count: i32 = 0;
     let mut current: i32 = value;
-    loop {
-        if count >= amount {
-            break;
-        };
+    while count < amount {
         let shifted: i32 = current >> 1;
         if current < 0 {
             current = shifted & 2147483647;
@@ -2484,10 +2412,7 @@ fn builtin_integer_type_keyword_to_id(base: i32, start: i32, ident_len: i32) -> 
     };
     let mut idx: i32 = 1;
     let mut width: i32 = 0;
-    loop {
-        if idx >= ident_len {
-            break;
-        };
+    while idx < ident_len {
         let digit: i32 = load_u8(base + start + idx);
         if !is_digit(digit) {
             return -1;
@@ -2497,10 +2422,7 @@ fn builtin_integer_type_keyword_to_id(base: i32, start: i32, ident_len: i32) -> 
     };
     let variant_count: i32 = BUILTIN_INTEGER_VARIANT_COUNT;
     let mut variant_index: i32 = 0;
-    loop {
-        if variant_index >= variant_count {
-            break;
-        };
+    while variant_index < variant_count {
         let expected_width: i32 = builtin_integer_variant_width(variant_index);
         if expected_width == width {
             if first == 'i' {
@@ -2803,10 +2725,7 @@ fn parse_type(
         return -1;
     };
     let mut next: i32 = offset + 1;
-    loop {
-        if next >= len {
-            break;
-        };
+    while next < len {
         let byte: i32 = load_u8(base + next);
         if !is_identifier_continue(byte) {
             break;
@@ -2934,10 +2853,7 @@ fn parse_i32_literal(base: i32, len: i32, offset: i32, out_value_ptr: i32) -> i3
             idx = idx + 2;
             let mut digits: i32 = 0;
             let mut value: i32 = 0;
-            loop {
-                if idx >= len {
-                    break;
-                };
+            while idx < len {
                 let byte: i32 = load_u8(base + idx);
                 let hex: i32 = if byte >= '0' && byte <= '9' {
                     byte - '0'
@@ -2964,10 +2880,7 @@ fn parse_i32_literal(base: i32, len: i32, offset: i32, out_value_ptr: i32) -> i3
     };
     let mut digits: i32 = 0;
     let mut value: i32 = 0;
-    loop {
-        if idx >= len {
-            break;
-        };
+    while idx < len {
         let byte: i32 = load_u8(base + idx);
         if !is_digit(byte) {
             break;
@@ -3157,10 +3070,7 @@ fn module_entry_set_flags(index: i32, flags: i32) {
 fn module_clear_flags() {
     let count: i32 = module_count();
     let mut idx: i32 = 0;
-    loop {
-        if idx >= count {
-            break;
-        };
+    while idx < count {
         module_entry_set_flags(idx, 0);
         idx = idx + 1;
     };
@@ -3222,10 +3132,7 @@ fn module_find_index(path_ptr: i32, path_len: i32) -> i32 {
         return -1;
     };
     let mut index: i32 = 0;
-    loop {
-        if index >= count {
-            break;
-        };
+    while index < count {
         let entry_ptr: i32 = module_entry_ptr(index);
         let stored_len: i32 = load_i32(module_entry_path_len_ptr(entry_ptr));
         if stored_len == path_len {
@@ -3248,10 +3155,7 @@ fn module_find_index_by_content_ptr(content_ptr: i32) -> i32 {
         return -1;
     };
     let mut index: i32 = 0;
-    loop {
-        if index >= count {
-            break;
-        };
+    while index < count {
         if module_entry_content(index) == content_ptr {
             return index;
         };
@@ -3454,10 +3358,7 @@ fn write_failure_detail(
 ) {
     if detail_out_ptr > 0 {
         let mut idx: i32 = 0;
-        loop {
-            if idx >= FAILURE_DETAIL_CAPACITY {
-                break;
-            };
+        while idx < FAILURE_DETAIL_CAPACITY {
             let mut byte: i32 = 0;
             if idx < MESSAGE_LEN {
                 byte = message[idx] as i32;
@@ -3759,10 +3660,7 @@ fn ast_function_param_const_rank(
     };
     let mut rank: i32 = 0;
     let mut scan_index: i32 = 0;
-    loop {
-        if scan_index >= param_index {
-            break;
-        };
+    while scan_index < param_index {
         if ast_function_param_is_const(ast_base, index, scan_index) {
             rank = rank + 1;
         };
@@ -3788,10 +3686,7 @@ fn ast_function_param_runtime_index(
     };
     let mut runtime_index: i32 = 0;
     let mut scan_index: i32 = 0;
-    loop {
-        if scan_index >= param_index {
-            break;
-        };
+    while scan_index < param_index {
         if !ast_function_param_is_const(ast_base, index, scan_index) {
             runtime_index = runtime_index + 1;
         };
@@ -3819,10 +3714,7 @@ fn const_specialization_keys_equal(existing_key_ptr: i32, query_key_ptr: i32) ->
         return false;
     };
     let mut idx: i32 = 0;
-    loop {
-        if idx >= existing_count {
-            break;
-        };
+    while idx < existing_count {
         let existing_entry_ptr: i32 =
             existing_key_ptr + WORD_SIZE + idx * 3 * WORD_SIZE;
         let query_entry_ptr: i32 = query_key_ptr + WORD_SIZE + idx * 3 * WORD_SIZE;
@@ -3861,10 +3753,7 @@ fn ast_function_find_const_specialization(
         return -1;
     };
     let mut entry_ptr: i32 = ast_const_specialization_registry_head(ast_base);
-    loop {
-        if entry_ptr <= 0 {
-            break;
-        };
+    while entry_ptr > 0 {
         let entry_template_index: i32 = load_i32(entry_ptr);
         if entry_template_index == index {
             let existing_key_ptr: i32 = load_i32(entry_ptr + WORD_SIZE);
@@ -3923,10 +3812,7 @@ fn const_specialization_lookup_entry(
         return (-1, -1);
     };
     let mut scan_index: i32 = 0;
-    loop {
-        if scan_index >= entry_count {
-            break;
-        };
+    while scan_index < entry_count {
         let entry_ptr: i32 =
             key_ptr + WORD_SIZE + scan_index * 3 * WORD_SIZE;
         let recorded_param: i32 = load_i32(entry_ptr);
@@ -3970,10 +3856,7 @@ fn clone_const_specialization_expr_list(
         return -1;
     };
     let mut idx: i32 = 0;
-    loop {
-        if idx >= count {
-            break;
-        };
+    while idx < count {
         let original_expr: i32 = load_i32(values_ptr + idx * WORD_SIZE);
         let cloned_expr: i32 = clone_const_specialization_expr(
             ast_base,
@@ -4032,10 +3915,7 @@ fn clone_const_specialization_call_metadata(
     if trim_const_args {
         runtime_arg_count = 0;
         let mut count_idx: i32 = 0;
-        loop {
-            if count_idx >= arg_count {
-                break;
-            };
+        while count_idx < arg_count {
             if !ast_function_param_is_const(ast_base, callee_index, count_idx) {
                 runtime_arg_count = runtime_arg_count + 1;
             };
@@ -4063,10 +3943,7 @@ fn clone_const_specialization_call_metadata(
     let new_args_base: i32 = call_metadata_args_base(new_metadata);
     let mut arg_idx: i32 = 0;
     let mut runtime_idx: i32 = 0;
-    loop {
-        if arg_idx >= arg_count {
-            break;
-        };
+    while arg_idx < arg_count {
         let original_arg: i32 = load_i32(original_args_base + arg_idx * WORD_SIZE);
         let skip_arg: bool = trim_const_args
             && ast_function_param_is_const(ast_base, callee_index, arg_idx);
@@ -4110,10 +3987,7 @@ fn clone_const_specialization_call_metadata(
     let new_extra: i32 = call_metadata_extra_slot_base(new_metadata);
     if original_extra > 0 && new_extra > 0 {
         let mut extra_idx: i32 = 0;
-        loop {
-            if extra_idx >= 5 {
-                break;
-            };
+        while extra_idx < 5 {
             let value: i32 = load_i32(original_extra + extra_idx * WORD_SIZE);
             store_i32(new_extra + extra_idx * WORD_SIZE, value);
             extra_idx = extra_idx + 1;
@@ -4308,10 +4182,7 @@ fn clone_const_specialization_expr(
             if local_type_stack_ptr > 0 && local_type_stack_top_ptr > 0 {
                 let stack_count: i32 = load_i32(local_type_stack_top_ptr);
                 let mut stack_idx: i32 = stack_count - 1;
-                loop {
-                    if stack_idx < 0 {
-                        break;
-                    };
+                while stack_idx >= 0 {
                     let entry_offset: i32 =
                         local_type_stack_ptr + stack_idx * CONST_SPECIALIZATION_LOCAL_STACK_ENTRY_SIZE;
                     let recorded_index: i32 = load_i32(entry_offset);
@@ -4743,10 +4614,7 @@ fn clone_const_specialization_expr(
                         return -1;
                     };
                     let mut copy_idx: i32 = 0;
-                    loop {
-                        if copy_idx >= usage_count {
-                            break;
-                        };
+                    while copy_idx < usage_count {
                         let value: i32 = load_i32(usage_list_ptr + copy_idx * WORD_SIZE);
                         store_i32(copied_usage_ptr + copy_idx * WORD_SIZE, value);
                         copy_idx = copy_idx + 1;
@@ -5251,20 +5119,14 @@ fn ast_function_clone_const_template(ast_base: i32, index: i32, key_ptr: i32) ->
     let eval_stack_base: i32 = eval_stack_top_ptr + WORD_SIZE;
     store_i32(eval_stack_top_ptr, 0);
     let mut init_idx: i32 = 0;
-    loop {
-        if init_idx >= param_count {
-            break;
-        };
+    while init_idx < param_count {
         let slot_ptr: i32 = env_values_ptr + init_idx * 8;
         store_i32(slot_ptr, 0);
         store_i32(slot_ptr + WORD_SIZE, -1);
         init_idx = init_idx + 1;
     };
     let mut key_idx: i32 = 0;
-    loop {
-        if key_idx >= const_entry_count {
-            break;
-        };
+    while key_idx < const_entry_count {
         let entry_ptr: i32 = key_ptr + WORD_SIZE + key_idx * 3 * WORD_SIZE;
         let recorded_param: i32 = load_i32(entry_ptr);
         if recorded_param < 0 {
@@ -5317,10 +5179,7 @@ fn ast_function_clone_const_template(ast_base: i32, index: i32, key_ptr: i32) ->
     };
     let mut param_idx: i32 = 0;
     let mut runtime_write_index: i32 = 0;
-    loop {
-        if param_idx >= param_count {
-            break;
-        };
+    while param_idx < param_count {
         let mut resolved_type: i32 = -1;
         if source_param_types_ptr >= 0 {
             resolved_type = load_i32(source_param_types_ptr + param_idx * WORD_SIZE);
@@ -5423,10 +5282,7 @@ fn ast_function_clone_const_template(ast_base: i32, index: i32, key_ptr: i32) ->
     let dest_ptr: i32 = ast_function_entry_ptr(ast_base, new_index);
     let mut word_idx: i32 = 0;
     let total_words: i32 = AST_FUNCTION_ENTRY_SIZE >> 2;
-    loop {
-        if word_idx >= total_words {
-            break;
-        };
+    while word_idx < total_words {
         let value: i32 = load_i32(source_ptr + word_idx * WORD_SIZE);
         store_i32(dest_ptr + word_idx * WORD_SIZE, value);
         word_idx = word_idx + 1;
@@ -5493,10 +5349,7 @@ fn ast_function_canonicalize_const_env(
     store_i32(payload_ptr, const_count);
     let mut collected: i32 = 0;
     let mut param_index: i32 = 0;
-    loop {
-        if param_index >= param_count {
-            break;
-        };
+    while param_index < param_count {
         if ast_function_param_is_const(ast_base, index, param_index) {
             let slot_ptr: i32 = values_ptr + param_index * 8;
             let raw_value: i32 = load_i32(slot_ptr);
@@ -5585,10 +5438,7 @@ fn ast_store_name(ast_base: i32, source_base: i32, start: i32, len: i32) -> i32 
     };
     let name_ptr: i32 = ast_names_base(ast_base) + used;
     let mut idx: i32 = 0;
-    loop {
-        if idx >= len {
-            break;
-        };
+    while idx < len {
         let byte: i32 = load_u8(source_base + start + idx);
         store_u8(name_ptr + idx, byte);
         idx = idx + 1;
@@ -5685,10 +5535,7 @@ fn inline_wasm_collect_bytes(
             return -1;
         };
         let mut idx: i32 = 0;
-        loop {
-            if idx >= length {
-                break;
-            };
+        while idx < length {
             store_i32(bytes_ptr + idx * WORD_SIZE, byte_value);
             idx = idx + 1;
         };
@@ -5716,10 +5563,7 @@ fn inline_wasm_collect_bytes(
             return -1;
         };
         let mut idx: i32 = 0;
-        loop {
-            if idx >= element_count {
-                break;
-            };
+        while idx < element_count {
             let element_index: i32 = load_i32(values_ptr + idx * WORD_SIZE);
             let byte_value: i32 = inline_wasm_literal_byte(ast_base, element_index);
             if byte_value < 0 {
@@ -5816,15 +5660,9 @@ fn call_metadata_compact_runtime_args(
     let mut arg_idx: i32 = 0;
     let mut runtime_idx: i32 = 0;
     let mut key_idx: i32 = 0;
-    loop {
-        if arg_idx >= arg_count {
-            break;
-        };
+    while arg_idx < arg_count {
         let mut skip_arg: bool = false;
-        loop {
-            if key_idx >= const_entry_count {
-                break;
-            };
+        while key_idx < const_entry_count {
             let entry_ptr: i32 = key_ptr + WORD_SIZE + key_idx * 3 * WORD_SIZE;
             let recorded_param: i32 = load_i32(entry_ptr);
             if recorded_param < 0 {
@@ -5857,10 +5695,7 @@ fn call_metadata_compact_runtime_args(
     let new_extra: i32 = call_metadata_extra_slot_base(new_metadata);
     if original_extra > 0 && new_extra > 0 {
         let mut extra_idx: i32 = 0;
-        loop {
-            if extra_idx >= 5 {
-                break;
-            };
+        while extra_idx < 5 {
             let value: i32 = load_i32(original_extra + extra_idx * WORD_SIZE);
             store_i32(new_extra + extra_idx * WORD_SIZE, value);
             extra_idx = extra_idx + 1;
@@ -6048,10 +5883,7 @@ fn ast_constants_count(ast_base: i32) -> i32 {
 fn ast_constants_reset(ast_base: i32) {
     store_i32(ast_constants_count_ptr(ast_base), 0);
     let mut idx: i32 = 0;
-    loop {
-        if idx >= AST_CONSTANTS_CAPACITY {
-            break;
-        };
+    while idx < AST_CONSTANTS_CAPACITY {
         let entry_ptr: i32 = ast_constant_entry_ptr(ast_base, idx);
         ast_constant_entry_set_expr_index(entry_ptr, -1);
         ast_constant_entry_set_eval_state(entry_ptr, AST_CONSTANT_EVAL_STATE_UNEVALUATED);
@@ -6355,10 +6187,7 @@ fn composite_type_dependencies_resolved(
         return false;
     };
     let mut field_idx: i32 = 0;
-    loop {
-        if field_idx >= element_count {
-            break;
-        };
+    while field_idx < element_count {
         let field_type_id: i32 = load_i32(elements_ptr + field_idx * WORD_SIZE);
         if field_type_id < 0 {
             return false;
@@ -6388,18 +6217,12 @@ fn assign_heap_type_indices(out_ptr: i32, ast_base: i32) -> i32 {
     };
     let total: i32 = array_count + tuple_count;
     let mut idx: i32 = 0;
-    loop {
-        if idx >= array_count {
-            break;
-        };
+    while idx < array_count {
         ast_array_heap_index_set(ast_base, idx, -1);
         idx = idx + 1;
     };
     idx = 0;
-    loop {
-        if idx >= tuple_count {
-            break;
-        };
+    while idx < tuple_count {
         ast_tuple_heap_index_set(ast_base, idx, -1);
         idx = idx + 1;
     };
@@ -6409,26 +6232,17 @@ fn assign_heap_type_indices(out_ptr: i32, ast_base: i32) -> i32 {
     let resolved_ptr: i32 = ast_temp_base(ast_base);
     let indices_ptr: i32 = resolved_ptr + total * WORD_SIZE;
     idx = 0;
-    loop {
-        if idx >= total {
-            break;
-        };
+    while idx < total {
         store_i32(resolved_ptr + idx * WORD_SIZE, 0);
         store_i32(indices_ptr + idx * WORD_SIZE, -1);
         idx = idx + 1;
     };
     let mut assigned: i32 = 0;
     let mut next_index: i32 = 0;
-    loop {
-        if assigned >= total {
-            break;
-        };
+    while assigned < total {
         let mut progress: bool = false;
         let mut node: i32 = 0;
-        loop {
-            if node >= total {
-                break;
-            };
+        while node < total {
             let resolved: i32 = load_i32(resolved_ptr + node * WORD_SIZE);
             if resolved != 0 {
                 node = node + 1;
@@ -6454,10 +6268,7 @@ fn assign_heap_type_indices(out_ptr: i32, ast_base: i32) -> i32 {
         };
     };
     idx = 0;
-    loop {
-        if idx >= array_count {
-            break;
-        };
+    while idx < array_count {
         let heap_index: i32 = load_i32(indices_ptr + idx * WORD_SIZE);
         if heap_index < 0 {
             return -1;
@@ -6466,10 +6277,7 @@ fn assign_heap_type_indices(out_ptr: i32, ast_base: i32) -> i32 {
         idx = idx + 1;
     };
     idx = 0;
-    loop {
-        if idx >= tuple_count {
-            break;
-        };
+    while idx < tuple_count {
         let node: i32 = array_count + idx;
         let heap_index: i32 = load_i32(indices_ptr + node * WORD_SIZE);
         if heap_index < 0 {
@@ -6488,10 +6296,7 @@ fn ast_register_array_type(ast_base: i32, element_type_id: i32, length: i32) -> 
     let count_ptr: i32 = ast_array_types_count_ptr(ast_base);
     let count: i32 = load_i32(count_ptr);
     let mut idx: i32 = 0;
-    loop {
-        if idx >= count {
-            break;
-        };
+    while idx < count {
         let entry_ptr: i32 = ast_array_type_entry_ptr(ast_base, idx);
         let existing_element: i32 = load_i32(entry_ptr);
         let existing_length: i32 = load_i32(entry_ptr + 4);
@@ -6521,10 +6326,7 @@ fn ast_register_tuple_type(ast_base: i32, elements_ptr: i32, element_count: i32)
     let count_ptr: i32 = ast_tuple_types_count_ptr(ast_base);
     let count: i32 = load_i32(count_ptr);
     let mut idx: i32 = 0;
-    loop {
-        if idx >= count {
-            break;
-        };
+    while idx < count {
         let entry_ptr: i32 = ast_tuple_type_entry_ptr(ast_base, idx);
         let existing_count: i32 =
             load_i32(entry_ptr + AST_TUPLE_TYPE_COUNT_OFFSET);
@@ -6542,10 +6344,7 @@ fn ast_register_tuple_type(ast_base: i32, elements_ptr: i32, element_count: i32)
         };
         let mut match_idx: i32 = 0;
         let mut matches: bool = true;
-        loop {
-            if match_idx >= element_count {
-                break;
-            };
+        while match_idx < element_count {
             let existing_type: i32 =
                 load_i32(existing_ptr + match_idx * WORD_SIZE);
             let new_type: i32 =
@@ -6683,10 +6482,7 @@ fn resolve_tuple_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
             return -1;
         };
         let mut elem_idx: i32 = 0;
-        loop {
-            if elem_idx >= element_count {
-                break;
-            };
+        while elem_idx < element_count {
             let type_ptr: i32 = elements_ptr + elem_idx * WORD_SIZE;
             let element_type_id: i32 = load_i32(type_ptr);
             let resolved_element: i32 =
@@ -7690,10 +7486,7 @@ fn interpret_constant_expression(
             let total_functions: i32 = load_i32(ast_functions_count_ptr(ast_base));
             let mut search_idx: i32 = 0;
             let mut found_index: i32 = -1;
-            loop {
-                if search_idx >= total_functions {
-                    break;
-                };
+            while search_idx < total_functions {
                 let search_entry_ptr: i32 = ast_function_entry_ptr(ast_base, search_idx);
                 let search_name_ptr: i32 = load_i32(search_entry_ptr);
                 let search_name_len: i32 = load_i32(search_entry_ptr + 4);
@@ -7801,10 +7594,7 @@ fn interpret_constant_expression(
             };
             let mut scan_idx: i32 = 0;
             let mut runtime_slot: i32 = 0;
-            loop {
-                if scan_idx >= arg_count {
-                    break;
-                };
+            while scan_idx < arg_count {
                 if ast_function_param_is_const(ast_base, template_index, scan_idx) {
                     scan_idx = scan_idx + 1;
                     continue;
@@ -7826,10 +7616,7 @@ fn interpret_constant_expression(
             };
         };
         let mut arg_idx: i32 = 0;
-        loop {
-            if arg_idx >= arg_count {
-                break;
-            };
+        while arg_idx < arg_count {
             let current_offset: i32 = load_i32(scratch_top_ptr);
             let arg_value_ptr: i32 = scratch_base + current_offset;
             let arg_type_ptr: i32 = arg_value_ptr + 4;
@@ -7862,10 +7649,7 @@ fn interpret_constant_expression(
             runtime_idx = 0;
             let mut scan_idx: i32 = 0;
             let mut write_idx: i32 = 0;
-            loop {
-                if scan_idx >= arg_count {
-                    break;
-                };
+            while scan_idx < arg_count {
                 let is_const_param: bool = ast_function_param_is_const(
                     ast_base,
                     template_index,
@@ -7924,10 +7708,7 @@ fn interpret_constant_expression(
             let after_args_offset: i32 = load_i32(scratch_top_ptr);
             store_i32(scratch_top_ptr, after_args_offset + locals_count * 8);
             let mut local_fill_idx: i32 = 0;
-            loop {
-                if local_fill_idx >= locals_count {
-                    break;
-                };
+            while local_fill_idx < locals_count {
                 let slot_ptr: i32 = env_ptr + (callee_param_count + local_fill_idx) * 8;
                 store_i32(slot_ptr, 0);
                 store_i32(slot_ptr + 4, -1);
@@ -8765,10 +8546,7 @@ fn collect_expression_const_params_visit(
             };
         };
         let mut arg_idx: i32 = 0;
-        loop {
-            if arg_idx >= arg_count {
-                break;
-            };
+        while arg_idx < arg_count {
             let arg_expr_index: i32 = load_i32(args_base + arg_idx * WORD_SIZE);
             if collect_expression_const_params_visit(
                 ast_base,
@@ -9143,10 +8921,7 @@ fn collect_expression_const_params_visit(
             return -1;
         };
         let mut elem_idx: i32 = 0;
-        loop {
-            if elem_idx >= count {
-                break;
-            };
+        while elem_idx < count {
             let value_index: i32 = load_i32(values_ptr + elem_idx * WORD_SIZE);
             if collect_expression_const_params_visit(
                 ast_base,
@@ -9227,10 +9002,7 @@ fn collect_expression_const_params(
         return -1;
     };
     let mut copy_idx: i32 = 0;
-    loop {
-        if copy_idx >= usage_count {
-            break;
-        };
+    while copy_idx < usage_count {
         let param_index: i32 = load_i32(usage_list_ptr + copy_idx * WORD_SIZE);
         store_i32(params_ptr + copy_idx * WORD_SIZE, param_index);
         copy_idx = copy_idx + 1;

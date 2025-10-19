@@ -14,10 +14,7 @@ fn compute_line_and_column(base: i32, len: i32, offset: i32) -> (i32, i32) {
     let mut column: i32 = 1;
     let mut idx: i32 = 0;
     let limit: i32 = if offset > len { len } else { offset };
-    loop {
-        if idx >= limit {
-            break;
-        };
+    while idx < limit {
         let byte: i32 = load_u8(base + idx);
         if byte == '\n' {
             line = line + 1;
@@ -107,10 +104,7 @@ fn write_module_prefixed_failure_detail(
     let mut write_offset: i32 = 0;
     let mut truncated: bool = false;
     let mut prefix_idx: i32 = 0;
-    loop {
-        if prefix_idx >= path_len {
-            break;
-        };
+    while prefix_idx < path_len {
         if write_offset >= FAILURE_DETAIL_CAPACITY {
             truncated = true;
             break;
@@ -135,29 +129,20 @@ fn write_module_prefixed_failure_detail(
     if line_temp <= 0 {
         line_digits_len = 1;
     } else {
-        loop {
-            if line_temp <= 0 {
-                break;
-            };
+        while line_temp > 0 {
             line_digits_len = line_digits_len + 1;
             line_temp = line_temp / 10;
         };
     };
     let mut line_divisor: i32 = 1;
     let mut line_divisor_idx: i32 = 1;
-    loop {
-        if line_divisor_idx >= line_digits_len {
-            break;
-        };
+    while line_divisor_idx < line_digits_len {
         line_divisor = line_divisor * 10;
         line_divisor_idx = line_divisor_idx + 1;
     };
     let mut line_remaining: i32 = line;
     let mut line_written: i32 = 0;
-    loop {
-        if line_written >= line_digits_len {
-            break;
-        };
+    while line_written < line_digits_len {
         if write_offset >= FAILURE_DETAIL_CAPACITY {
             truncated = true;
             break;
@@ -184,29 +169,20 @@ fn write_module_prefixed_failure_detail(
     if column_temp <= 0 {
         column_digits_len = 1;
     } else {
-        loop {
-            if column_temp <= 0 {
-                break;
-            };
+        while column_temp > 0 {
             column_digits_len = column_digits_len + 1;
             column_temp = column_temp / 10;
         };
     };
     let mut column_divisor: i32 = 1;
     let mut column_divisor_idx: i32 = 1;
-    loop {
-        if column_divisor_idx >= column_digits_len {
-            break;
-        };
+    while column_divisor_idx < column_digits_len {
         column_divisor = column_divisor * 10;
         column_divisor_idx = column_divisor_idx + 1;
     };
     let mut column_remaining: i32 = column;
     let mut column_written: i32 = 0;
-    loop {
-        if column_written >= column_digits_len {
-            break;
-        };
+    while column_written < column_digits_len {
         if write_offset >= FAILURE_DETAIL_CAPACITY {
             truncated = true;
             break;
@@ -235,10 +211,7 @@ fn write_module_prefixed_failure_detail(
         truncated = true;
     };
     let mut message_idx: i32 = 0;
-    loop {
-        if message_idx >= MESSAGE_LEN {
-            break;
-        };
+    while message_idx < MESSAGE_LEN {
         if write_offset >= FAILURE_DETAIL_CAPACITY {
             truncated = true;
             break;
@@ -248,10 +221,7 @@ fn write_module_prefixed_failure_detail(
         write_offset = write_offset + 1;
         message_idx = message_idx + 1;
     };
-    loop {
-        if write_offset >= FAILURE_DETAIL_CAPACITY {
-            break;
-        };
+    while write_offset < FAILURE_DETAIL_CAPACITY {
         store_u8(detail_out_ptr + write_offset, 0);
         write_offset = write_offset + 1;
     };
@@ -842,10 +812,7 @@ fn parse_basic_expression(
             return -1;
         };
         let mut copy_idx: i32 = 0;
-        loop {
-            if copy_idx >= element_count {
-                break;
-            };
+        while copy_idx < element_count {
             let value_index: i32 = load_i32(values_list_ptr + copy_idx * WORD_SIZE);
             store_i32(metadata_ptr + copy_idx * WORD_SIZE, value_index);
             copy_idx = copy_idx + 1;
@@ -1003,10 +970,7 @@ fn parse_basic_expression(
         };
         if element_count > 0 {
             let mut copy_idx: i32 = 0;
-            loop {
-                if copy_idx >= element_count {
-                    break;
-                };
+            while copy_idx < element_count {
                 let value_index: i32 =
                     load_i32(values_list_ptr + copy_idx * WORD_SIZE);
                 store_i32(metadata_ptr + copy_idx * WORD_SIZE, value_index);
@@ -1086,10 +1050,7 @@ fn parse_basic_expression(
                 return -1;
             };
             let mut copy_idx: i32 = 0;
-            loop {
-                if copy_idx >= element_count {
-                    break;
-                };
+            while copy_idx < element_count {
                 let value_index: i32 =
                     load_i32(values_list_ptr + copy_idx * WORD_SIZE);
                 store_i32(metadata_ptr + copy_idx * WORD_SIZE, value_index);
@@ -1305,10 +1266,7 @@ fn parse_basic_expression(
             store_i32(metadata_ptr + 8, arg_count);
             store_i32(metadata_ptr + 12, -1);
             let mut arg_idx: i32 = 0;
-            loop {
-                if arg_idx >= arg_count {
-                    break;
-                };
+            while arg_idx < arg_count {
                 let arg_value: i32 = load_i32(args_list_ptr + arg_idx * 4);
                 store_i32(metadata_ptr + 16 + arg_idx * 4, arg_value);
                 arg_idx = arg_idx + 1;
@@ -1421,10 +1379,7 @@ fn parse_unary_expression(
 ) -> i32 {
     let mut current_cursor: i32 = cursor;
     let mut not_count: i32 = 0;
-    loop {
-        if current_cursor >= len {
-            break;
-        };
+    while current_cursor < len {
         let next_byte: i32 = load_u8(base + current_cursor);
         if next_byte != '!' {
             break;
@@ -1461,10 +1416,7 @@ fn parse_unary_expression(
     let index_data1_ptr: i32 = nested_temp_base + 8;
     let index_temp_base: i32 = nested_temp_base + 32;
 
-    loop {
-        if resolved_cursor >= len {
-            break;
-        };
+    while resolved_cursor < len {
         let next_byte: i32 = load_u8(base + resolved_cursor);
         if next_byte == '[' {
             let mut index_cursor: i32 = skip_whitespace(base, len, resolved_cursor + 1);
@@ -1538,10 +1490,7 @@ fn parse_unary_expression(
         };
         let mut field_index: i32 = 0;
         let mut digits: i32 = 0;
-        loop {
-            if field_cursor >= len {
-                break;
-            };
+        while field_cursor < len {
             let digit_byte: i32 = load_u8(base + field_cursor);
             if !is_digit(digit_byte) {
                 break;
@@ -1690,10 +1639,7 @@ fn parse_multiplicative_expression(
         return -1;
     };
 
-    loop {
-        if current_cursor >= len {
-            break;
-        };
+    while current_cursor < len {
         let next_byte: i32 = load_u8(base + current_cursor);
         if next_byte != '*' && next_byte != '/' {
             break;
@@ -1798,10 +1744,7 @@ fn parse_additive_expression(
     let next_data1_ptr: i32 = temp_base + 8;
     let nested_temp_base: i32 = temp_base + 32;
 
-    loop {
-        if current_cursor >= len {
-            break;
-        };
+    while current_cursor < len {
         let next_byte: i32 = load_u8(base + current_cursor);
         if next_byte != '+' && next_byte != '-' {
             break;
@@ -1905,10 +1848,7 @@ fn parse_shift_expression(
     let next_data0_ptr: i32 = temp_base + 4;
     let next_data1_ptr: i32 = temp_base + 8;
 
-    loop {
-        if current_cursor + 1 >= len {
-            break;
-        };
+    while current_cursor + 1 < len {
         let first: i32 = load_u8(base + current_cursor);
         let second: i32 = load_u8(base + current_cursor + 1);
         let mut op_kind: i32 = -1;
@@ -2017,10 +1957,7 @@ fn parse_relational_expression(
     let next_data0_ptr: i32 = temp_base + 4;
     let next_data1_ptr: i32 = temp_base + 8;
 
-    loop {
-        if current_cursor >= len {
-            break;
-        };
+    while current_cursor < len {
         let operator_byte: i32 = load_u8(base + current_cursor);
         let mut relation_op: i32 = -1;
         let mut consume: i32 = 1;
@@ -2160,10 +2097,7 @@ fn parse_equality_expression(
     let next_data0_ptr: i32 = temp_base + 4;
     let next_data1_ptr: i32 = temp_base + 8;
 
-    loop {
-        if current_cursor + 1 >= len {
-            break;
-        };
+    while current_cursor + 1 < len {
         let operator_byte: i32 = load_u8(base + current_cursor);
         let next_byte: i32 = load_u8(base + current_cursor + 1);
         let mut equality_op: i32 = -1;
@@ -2279,10 +2213,7 @@ fn parse_bitwise_and_expression(
     let next_data0_ptr: i32 = temp_base + 4;
     let next_data1_ptr: i32 = temp_base + 8;
 
-    loop {
-        if current_cursor >= len {
-            break;
-        };
+    while current_cursor < len {
         let operator_byte: i32 = load_u8(base + current_cursor);
         if operator_byte != '&' {
             break;
@@ -2387,10 +2318,7 @@ fn parse_bitwise_or_expression(
     let next_data0_ptr: i32 = temp_base + 4;
     let next_data1_ptr: i32 = temp_base + 8;
 
-    loop {
-        if current_cursor >= len {
-            break;
-        };
+    while current_cursor < len {
         let operator_byte: i32 = load_u8(base + current_cursor);
         if operator_byte != '|' {
             break;
@@ -2495,10 +2423,7 @@ fn parse_logical_and_expression(
     let next_data0_ptr: i32 = temp_base + 4;
     let next_data1_ptr: i32 = temp_base + 8;
 
-    loop {
-        if current_cursor + 1 >= len {
-            break;
-        };
+    while current_cursor + 1 < len {
         let first: i32 = load_u8(base + current_cursor);
         if first != '&' {
             break;
@@ -2600,10 +2525,7 @@ fn parse_logical_or_expression(
     let next_data0_ptr: i32 = temp_base + 4;
     let next_data1_ptr: i32 = temp_base + 8;
 
-    loop {
-        if current_cursor + 1 >= len {
-            break;
-        };
+    while current_cursor + 1 < len {
         let first: i32 = load_u8(base + current_cursor);
         if first != '|' {
             break;
@@ -2758,10 +2680,7 @@ fn parse_function(
 
     let constants_count: i32 = ast_constants_count(ast_base);
     let mut const_idx: i32 = 0;
-    loop {
-        if const_idx >= constants_count {
-            break;
-        };
+    while const_idx < constants_count {
         let entry_ptr: i32 = ast_constant_entry_ptr(ast_base, const_idx);
         let entry_module_index: i32 = ast_constant_entry_module_index(entry_ptr);
         let same_module: bool = if entry_module_index < 0 {
@@ -2809,18 +2728,12 @@ fn parse_function(
     let mut const_params_count: i32 = 0;
     let mut mask_clear_idx: i32 = 0;
     let mut template_clear_idx: i32 = 0;
-    loop {
-        if template_clear_idx >= MAX_PARAMS {
-            break;
-        };
+    while template_clear_idx < MAX_PARAMS {
         store_i32(param_template_handles_table_ptr + template_clear_idx * 4, 0);
         store_i32(param_template_bases_table_ptr + template_clear_idx * 4, 0);
         template_clear_idx = template_clear_idx + 1;
     };
-    loop {
-        if mask_clear_idx >= const_mask_table_words {
-            break;
-        };
+    while mask_clear_idx < const_mask_table_words {
         store_i32(const_mask_table_ptr + mask_clear_idx * 4, 0);
         mask_clear_idx = mask_clear_idx + 1;
     };
@@ -2870,10 +2783,7 @@ fn parse_function(
         let param_start: i32 = param_ident.1;
         let param_len: i32 = param_ident.2;
         let mut existing_idx: i32 = 0;
-        loop {
-            if existing_idx >= param_count {
-                break;
-            };
+        while existing_idx < param_count {
             let existing_ptr: i32 = params_table_ptr + existing_idx * 8;
             let existing_start: i32 = load_i32(existing_ptr);
             let existing_len: i32 = load_i32(existing_ptr + 4);
@@ -3060,10 +2970,7 @@ fn parse_function(
             return -1;
         };
         let mut copy_idx: i32 = 0;
-        loop {
-            if copy_idx >= param_count {
-                break;
-            };
+        while copy_idx < param_count {
             let type_id: i32 = load_i32(param_types_table_ptr + copy_idx * 4);
             store_i32(param_types_ptr + copy_idx * 4, type_id);
             copy_idx = copy_idx + 1;
@@ -3080,10 +2987,7 @@ fn parse_function(
             };
             store_i32(const_params_ptr, const_params_count);
             let mut mask_copy_idx: i32 = 0;
-            loop {
-                if mask_copy_idx >= mask_word_count {
-                    break;
-                };
+            while mask_copy_idx < mask_word_count {
                 let mask_word_value: i32 =
                     load_i32(const_mask_table_ptr + mask_copy_idx * 4);
                 store_i32(const_params_ptr + 4 + mask_copy_idx * 4, mask_word_value);
@@ -3101,10 +3005,7 @@ fn parse_function(
         store_i32(type_template_handles_ptr, return_template_handle);
         store_i32(type_template_handles_ptr + WORD_SIZE, return_template_base);
         let mut template_copy_idx: i32 = 0;
-        loop {
-            if template_copy_idx >= param_count {
-                break;
-            };
+        while template_copy_idx < param_count {
             let handle: i32 =
                 load_i32(param_template_handles_table_ptr + template_copy_idx * 4);
             let base_type: i32 =
@@ -3281,20 +3182,14 @@ fn parse_constant_declaration(
     };
 
     let mut func_idx: i32 = 0;
-    loop {
-        if func_idx >= func_count {
-            break;
-        };
+    while func_idx < func_count {
         let entry_ptr: i32 = ast_function_entry_ptr(ast_base, func_idx);
         let func_name_ptr: i32 = load_i32(entry_ptr);
         let func_name_len: i32 = load_i32(entry_ptr + 4);
         if func_name_len == name_len {
             let mut match_idx: i32 = 0;
             let mut matches: bool = true;
-            loop {
-                if match_idx >= name_len {
-                    break;
-                };
+            while match_idx < name_len {
                 let func_byte: i32 = load_u8(func_name_ptr + match_idx);
                 let const_byte: i32 = load_u8(base + name_start + match_idx);
                 if func_byte != const_byte {
@@ -3554,10 +3449,7 @@ fn module_resolve_import_path(
     let mut out_len: i32 = 0;
     let mut idx: i32 = 0;
     let mut last_slash: i32 = -1;
-    loop {
-        if idx >= base_len {
-            break;
-        };
+    while idx < base_len {
         let byte: i32 = load_u8(base_ptr + idx);
         if byte == '/' {
             last_slash = idx;
@@ -3574,15 +3466,9 @@ fn module_resolve_import_path(
     };
     let mut import_idx: i32 = 0;
     let mut last_segment_type: i32 = -1;
-    loop {
-        if import_idx >= import_len {
-            break;
-        };
+    while import_idx < import_len {
         let segment_start: i32 = import_idx;
-        loop {
-            if import_idx >= import_len {
-                break;
-            };
+        while import_idx < import_len {
             let byte: i32 = load_u8(import_ptr + import_idx);
             if byte == '/' {
                 break;
@@ -3627,10 +3513,7 @@ fn module_resolve_import_path(
             };
             let mut back_idx: i32 = new_len - 1;
             let mut found: bool = false;
-            loop {
-                if back_idx < 0 {
-                    break;
-                };
+            while back_idx >= 0 {
                 let byte: i32 = load_u8(out_ptr + back_idx);
                 if byte == '/' {
                     new_len = back_idx + 1;
@@ -3826,10 +3709,7 @@ fn parse_program(
     let mut cursor: i32 = skip_whitespace(base, len, 0);
     let mut count: i32 = initial_count;
     store_i32(ast_functions_count_ptr(ast_base), count);
-    loop {
-        if cursor >= len {
-            break;
-        };
+    while cursor < len {
         let use_result: (i32, i32) =
             parse_use_declaration(base, len, cursor, ast_base, count, current_module_index);
         let use_cursor: i32 = use_result.0;

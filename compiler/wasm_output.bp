@@ -86,10 +86,7 @@ fn build_runtime_function_map(ast_base: i32, func_count: i32) -> (i32, i32) {
     let map_ptr: i32 = ast_temp_base(ast_base);
     let mut runtime_index: i32 = 0;
     let mut idx: i32 = 0;
-    loop {
-        if idx >= total_functions {
-            break;
-        };
+    while idx < total_functions {
         if ast_function_has_const_params(ast_base, idx) {
             store_i32(map_ptr + idx * WORD_SIZE, -1);
         } else {
@@ -469,10 +466,7 @@ fn collect_local_counts_from_expression(
         let args_base: i32 = call_metadata_args_base(metadata_ptr);
         let mut total: i32 = 0;
         let mut idx: i32 = 0;
-        loop {
-            if idx >= arg_count {
-                break;
-            };
+        while idx < arg_count {
             let arg_expr_index: i32 = load_i32(args_base + idx * 4);
             let arg_counts: i32 = collect_local_counts_from_expression(
                 ast_base,
@@ -513,10 +507,7 @@ fn collect_local_counts_from_expression(
         };
         let mut total: i32 = 0;
         let mut idx: i32 = 0;
-        loop {
-            if idx >= element_count {
-                break;
-            };
+        while idx < element_count {
             let element_index: i32 = load_i32(values_ptr + idx * WORD_SIZE);
             let element_counts: i32 = collect_local_counts_from_expression(
                 ast_base,
@@ -881,10 +872,7 @@ fn collect_local_counts_from_expression(
         };
         let mut total: i32 = 0;
         let mut idx: i32 = 0;
-        loop {
-            if idx >= element_count {
-                break;
-            };
+        while idx < element_count {
             let value_index: i32 = load_i32(values_ptr + idx * WORD_SIZE);
             let value_counts: i32 = collect_local_counts_from_expression(
                 ast_base,
@@ -967,10 +955,7 @@ fn collect_function_local_counts(
     let locals_end: i32 = param_count + locals_count;
     if local_types_ptr >= 0 {
         let mut init_idx: i32 = 0;
-        loop {
-            if init_idx >= locals_count {
-                break;
-            };
+        while init_idx < locals_count {
             store_i32(local_types_ptr + init_idx * WORD_SIZE, -1);
             init_idx = init_idx + 1;
         };
@@ -990,10 +975,7 @@ fn collect_function_local_counts(
         let args_base: i32 = call_metadata_args_base(metadata_ptr);
         let mut total: i32 = 0;
         let mut idx: i32 = 0;
-        loop {
-            if idx >= arg_count {
-                break;
-            };
+        while idx < arg_count {
             let arg_expr_index: i32 = load_i32(args_base + idx * 4);
             let arg_counts: i32 = collect_local_counts_from_expression(
                 ast_base,
@@ -1059,10 +1041,7 @@ fn expression_code_size(ast_base: i32, expr_index: i32) -> i32 {
         let args_base: i32 = call_metadata_args_base(metadata_ptr);
         let mut total: i32 = 0;
         let mut arg_idx: i32 = 0;
-        loop {
-            if arg_idx >= arg_count {
-                break;
-            };
+        while arg_idx < arg_count {
             let arg_expr_index: i32 = load_i32(args_base + arg_idx * 4);
             let arg_size: i32 = expression_code_size(ast_base, arg_expr_index);
             if arg_size < 0 {
@@ -1118,10 +1097,7 @@ fn expression_code_size(ast_base: i32, expr_index: i32) -> i32 {
         };
         let mut total: i32 = 0;
         let mut idx: i32 = 0;
-        loop {
-            if idx >= element_count {
-                break;
-            };
+        while idx < element_count {
             let element_index: i32 = load_i32(values_ptr + idx * WORD_SIZE);
             let element_size: i32 = expression_code_size(ast_base, element_index);
             if element_size < 0 {
@@ -1264,10 +1240,7 @@ fn expression_code_size(ast_base: i32, expr_index: i32) -> i32 {
                 return -1;
             };
             let mut idx: i32 = 0;
-            loop {
-                if idx >= element_count {
-                    break;
-                };
+            while idx < element_count {
                 let value_index: i32 = load_i32(values_ptr + idx * WORD_SIZE);
                 let value_size: i32 = expression_code_size(ast_base, value_index);
                 if value_size < 0 {
@@ -1533,10 +1506,7 @@ fn remap_expression_calls(
         if call_name_ptr >= 0 {
             let total_funcs: i32 = ast_functions_count(ast_base);
             let mut search_idx: i32 = 0;
-            loop {
-                if search_idx >= total_funcs {
-                    break;
-                };
+            while search_idx < total_funcs {
                 let search_entry_ptr: i32 = ast_function_entry_ptr(ast_base, search_idx);
                 let search_name_ptr: i32 = load_i32(search_entry_ptr);
                 let search_name_len: i32 = load_i32(search_entry_ptr + 4);
@@ -1569,10 +1539,7 @@ fn remap_expression_calls(
             };
         };
         let mut arg_idx: i32 = 0;
-        loop {
-            if arg_idx >= arg_count {
-                break;
-            };
+        while arg_idx < arg_count {
             let arg_expr_index: i32 = load_i32(args_base + arg_idx * WORD_SIZE);
             if remap_expression_calls(ast_base, arg_expr_index, runtime_map_ptr, func_index) < 0 {
                 return -1;
@@ -1596,10 +1563,7 @@ fn remap_expression_calls(
                 return -1;
             };
             let mut idx: i32 = 0;
-            loop {
-                if idx >= element_count {
-                    break;
-                };
+            while idx < element_count {
                 let element_index: i32 = load_i32(values_ptr + idx * WORD_SIZE);
                 if remap_expression_calls(ast_base, element_index, runtime_map_ptr, func_index) < 0 {
                     return -1;
@@ -1655,10 +1619,7 @@ fn remap_expression_calls(
                 return -1;
             };
             let mut idx: i32 = 0;
-            loop {
-                if idx >= element_count {
-                    break;
-                };
+            while idx < element_count {
                 let value_index: i32 = load_i32(values_ptr + idx * WORD_SIZE);
                 if remap_expression_calls(ast_base, value_index, runtime_map_ptr, func_index) < 0 {
                     return -1;
@@ -1805,10 +1766,7 @@ fn remap_function_calls(ast_base: i32, func_index: i32, runtime_map_ptr: i32) ->
             };
         };
         let mut arg_idx: i32 = 0;
-        loop {
-            if arg_idx >= arg_count {
-                break;
-            };
+        while arg_idx < arg_count {
             let arg_expr_index: i32 = load_i32(args_base + arg_idx * WORD_SIZE);
             if remap_expression_calls(ast_base, arg_expr_index, runtime_map_ptr, func_index) < 0 {
                 return -1;
@@ -1876,10 +1834,7 @@ fn emit_expression(
                 if call_name_ptr >= 0 {
                     let total_funcs: i32 = ast_functions_count(ast_base);
                     let mut search_idx: i32 = 0;
-                    loop {
-                        if search_idx >= total_funcs {
-                            break;
-                        };
+                    while search_idx < total_funcs {
                         let search_entry_ptr: i32 =
                             ast_function_entry_ptr(ast_base, search_idx);
                         let search_name_ptr: i32 = load_i32(search_entry_ptr);
@@ -1907,10 +1862,7 @@ fn emit_expression(
         let args_base: i32 = call_metadata_args_base(metadata_ptr);
         let mut out: i32 = offset;
         let mut arg_idx: i32 = 0;
-        loop {
-            if arg_idx >= arg_count {
-                break;
-            };
+        while arg_idx < arg_count {
             let arg_expr_index: i32 = load_i32(args_base + arg_idx * 4);
             out = emit_expression(
                 base,
@@ -1985,10 +1937,7 @@ fn emit_expression(
         };
         let mut out: i32 = offset;
         let mut idx: i32 = 0;
-        loop {
-            if idx >= element_count {
-                break;
-            };
+        while idx < element_count {
             let element_index: i32 = load_i32(values_ptr + idx * WORD_SIZE);
             out = emit_expression(base, out, ast_base, element_index, runtime_map_ptr, runtime_func_count);
             if out < 0 {
@@ -2162,10 +2111,7 @@ fn emit_expression(
                 return -1;
             };
             let mut idx: i32 = 0;
-            loop {
-                if idx >= element_count {
-                    break;
-                };
+            while idx < element_count {
                 let value_index: i32 = load_i32(values_ptr + idx * WORD_SIZE);
                 out = emit_expression(base, out, ast_base, value_index, runtime_map_ptr, runtime_func_count);
                 if out < 0 {
@@ -2201,10 +2147,7 @@ fn emit_expression(
         };
         let mut out: i32 = offset;
         let mut idx: i32 = 0;
-        loop {
-            if idx >= byte_count {
-                break;
-            };
+        while idx < byte_count {
             let byte_value: i32 = load_i32(bytes_ptr + idx * WORD_SIZE);
             if byte_value < 0 || byte_value > 255 {
                 return -1;
@@ -2575,16 +2518,10 @@ fn emit_type_section(
 
     let composite_count: i32 = array_count + tuple_count;
     let mut heap_idx: i32 = 0;
-    loop {
-        if heap_idx >= composite_count {
-            break;
-        };
+    while heap_idx < composite_count {
         let mut handled: bool = false;
         let mut array_idx: i32 = 0;
-        loop {
-            if array_idx >= array_count {
-                break;
-            };
+        while array_idx < array_count {
             let current_heap: i32 = ast_array_heap_index(ast_base, array_idx);
             if current_heap == heap_idx {
                 let entry_ptr: i32 = ast_array_type_entry_ptr(ast_base, array_idx);
@@ -2608,10 +2545,7 @@ fn emit_type_section(
             continue;
         };
         let mut tuple_idx: i32 = 0;
-        loop {
-            if tuple_idx >= tuple_count {
-                break;
-            };
+        while tuple_idx < tuple_count {
             let current_heap: i32 = ast_tuple_heap_index(ast_base, tuple_idx);
             if current_heap == heap_idx {
                 let entry_ptr: i32 = ast_tuple_type_entry_ptr(ast_base, tuple_idx);
@@ -2630,10 +2564,7 @@ fn emit_type_section(
                         return -1;
                     };
                     let mut field_idx: i32 = 0;
-                    loop {
-                        if field_idx >= element_count {
-                            break;
-                        };
+                    while field_idx < element_count {
                         let field_type_id: i32 =
                             load_i32(elements_ptr + field_idx * WORD_SIZE);
                         let field_size: i32 =
@@ -2658,10 +2589,7 @@ fn emit_type_section(
     };
 
     let mut idx: i32 = 0;
-    loop {
-        if idx >= func_count {
-            break;
-        };
+    while idx < func_count {
         let runtime_index: i32 = if runtime_map_ptr > 0 {
             load_i32(runtime_map_ptr + idx * WORD_SIZE)
         } else {
@@ -2682,10 +2610,7 @@ fn emit_type_section(
         let mut entry_size: i32 = 1;
         entry_size = entry_size + leb_u32_len(param_count);
         let mut param_idx: i32 = 0;
-        loop {
-            if param_idx >= param_count {
-                break;
-            };
+        while param_idx < param_count {
             let param_type_id: i32 = load_i32(param_types_ptr + param_idx * 4);
             let param_size: i32 = type_id_wasm_value_type_len(ast_base, param_type_id);
             if param_size < 0 {
@@ -2714,16 +2639,10 @@ fn emit_type_section(
     out = write_u32_leb(base, out, total_types);
 
     heap_idx = 0;
-    loop {
-        if heap_idx >= composite_count {
-            break;
-        };
+    while heap_idx < composite_count {
         let mut handled: bool = false;
         let mut array_idx: i32 = 0;
-        loop {
-            if array_idx >= array_count {
-                break;
-            };
+        while array_idx < array_count {
             let current_heap: i32 = ast_array_heap_index(ast_base, array_idx);
             if current_heap == heap_idx {
                 let entry_ptr: i32 = ast_array_type_entry_ptr(ast_base, array_idx);
@@ -2746,10 +2665,7 @@ fn emit_type_section(
             continue;
         };
         let mut tuple_idx: i32 = 0;
-        loop {
-            if tuple_idx >= tuple_count {
-                break;
-            };
+        while tuple_idx < tuple_count {
             let current_heap: i32 = ast_tuple_heap_index(ast_base, tuple_idx);
             if current_heap == heap_idx {
                 let entry_ptr: i32 = ast_tuple_type_entry_ptr(ast_base, tuple_idx);
@@ -2767,10 +2683,7 @@ fn emit_type_section(
                         return -1;
                     };
                     let mut field_idx: i32 = 0;
-                    loop {
-                        if field_idx >= element_count {
-                            break;
-                        };
+                    while field_idx < element_count {
                         let field_type_id: i32 =
                             load_i32(elements_ptr + field_idx * WORD_SIZE);
                         let next: i32 = write_type_id_as_wasm_value_type(
@@ -2798,10 +2711,7 @@ fn emit_type_section(
     };
 
     idx = 0;
-    loop {
-        if idx >= func_count {
-            break;
-        };
+    while idx < func_count {
         let runtime_index: i32 = if runtime_map_ptr > 0 {
             load_i32(runtime_map_ptr + idx * WORD_SIZE)
         } else {
@@ -2822,10 +2732,7 @@ fn emit_type_section(
         out = write_byte(base, out, 96);
         out = write_u32_leb(base, out, param_count);
         let mut param_idx: i32 = 0;
-        loop {
-            if param_idx >= param_count {
-                break;
-            };
+        while param_idx < param_count {
             let param_type_id: i32 = load_i32(param_types_ptr + param_idx * 4);
             let next: i32 = write_type_id_as_wasm_value_type(
                 base,
@@ -2875,10 +2782,7 @@ fn emit_function_section(
     };
     let mut payload_size: i32 = leb_u32_len(runtime_func_count);
     let mut idx: i32 = 0;
-    loop {
-        if idx >= func_count {
-            break;
-        };
+    while idx < func_count {
         let runtime_index: i32 = if runtime_map_ptr > 0 {
             load_i32(runtime_map_ptr + idx * WORD_SIZE)
         } else {
@@ -2898,10 +2802,7 @@ fn emit_function_section(
     out = write_u32_leb(base, out, payload_size);
     out = write_u32_leb(base, out, runtime_func_count);
     idx = 0;
-    loop {
-        if idx >= func_count {
-            break;
-        };
+    while idx < func_count {
         let runtime_index: i32 = if runtime_map_ptr > 0 {
             load_i32(runtime_map_ptr + idx * WORD_SIZE)
         } else {
@@ -2947,10 +2848,7 @@ fn emit_export_section(
     };
     let mut exported_functions: i32 = 0;
     let mut idx: i32 = 0;
-    loop {
-        if idx >= func_count {
-            break;
-        };
+    while idx < func_count {
         let runtime_index: i32 = load_i32(runtime_map_ptr + idx * WORD_SIZE);
         if runtime_index >= 0 {
             let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
@@ -2965,10 +2863,7 @@ fn emit_export_section(
     let mut payload_size: i32 = leb_u32_len(total_exports);
     payload_size = payload_size + leb_u32_len(6) + 6 + 1 + leb_u32_len(0);
     idx = 0;
-    loop {
-        if idx >= func_count {
-            break;
-        };
+    while idx < func_count {
         let runtime_index: i32 = load_i32(runtime_map_ptr + idx * WORD_SIZE);
         if runtime_index >= 0 {
             let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
@@ -3000,10 +2895,7 @@ fn emit_export_section(
     out = write_u32_leb(base, out, 0);
 
     idx = 0;
-    loop {
-        if idx >= func_count {
-            break;
-        };
+    while idx < func_count {
         let runtime_index: i32 = load_i32(runtime_map_ptr + idx * WORD_SIZE);
         if runtime_index >= 0 {
             let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
@@ -3012,10 +2904,7 @@ fn emit_export_section(
             if name_len > 0 {
                 out = write_u32_leb(base, out, name_len);
                 let mut byte_idx: i32 = 0;
-                loop {
-                    if byte_idx >= name_len {
-                        break;
-                    };
+                while byte_idx < name_len {
                     let byte: i32 = load_u8(name_ptr + byte_idx);
                     out = write_byte(base, out, byte);
                     byte_idx = byte_idx + 1;
@@ -3045,10 +2934,7 @@ fn emit_code_section(
     };
     let mut payload_size: i32 = leb_u32_len(runtime_func_count);
     let mut idx: i32 = 0;
-    loop {
-        if idx >= func_count {
-            break;
-        };
+    while idx < func_count {
         let runtime_index: i32 = if runtime_map_ptr > 0 {
             load_i32(runtime_map_ptr + idx * WORD_SIZE)
         } else {
@@ -3082,19 +2968,13 @@ fn emit_code_section(
         };
         let mut local_groups: i32 = 0;
         let mut type_idx: i32 = 0;
-        loop {
-            if type_idx >= locals_count {
-                break;
-            };
+        while type_idx < locals_count {
             let type_id: i32 = load_i32(local_types_ptr + type_idx * WORD_SIZE);
             if type_id < 0 {
                 return -1;
             };
             let mut run_len: i32 = 1;
-            loop {
-                if type_idx + run_len >= locals_count {
-                    break;
-                };
+            while type_idx + run_len < locals_count {
                 let next_type: i32 =
                     load_i32(local_types_ptr + (type_idx + run_len) * WORD_SIZE);
                 if next_type != type_id {
@@ -3110,10 +2990,7 @@ fn emit_code_section(
         let locals_decl_size: i32 = if locals_count > 0 {
             let mut size: i32 = leb_u32_len(local_groups);
             let mut run_idx: i32 = 0;
-            loop {
-                if run_idx >= local_groups {
-                    break;
-                };
+            while run_idx < local_groups {
                 let run_len: i32 = load_i32(run_counts_ptr + run_idx * WORD_SIZE);
                 let type_id: i32 = load_i32(run_types_ptr + run_idx * WORD_SIZE);
                 let type_len: i32 = type_id_wasm_value_type_len(ast_base, type_id);
@@ -3144,10 +3021,7 @@ fn emit_code_section(
             let args_base: i32 = call_metadata_args_base(metadata_ptr);
             let mut args_size: i32 = 0;
             let mut arg_idx: i32 = 0;
-            loop {
-                if arg_idx >= arg_count {
-                    break;
-                };
+            while arg_idx < arg_count {
                 let arg_expr_index: i32 = load_i32(args_base + arg_idx * 4);
                 let arg_size: i32 = expression_code_size(ast_base, arg_expr_index);
                 if arg_size < 0 {
@@ -3175,10 +3049,7 @@ fn emit_code_section(
     out = write_u32_leb(base, out, runtime_func_count);
 
     idx = 0;
-    loop {
-        if idx >= func_count {
-            break;
-        };
+    while idx < func_count {
         let runtime_index: i32 = if runtime_map_ptr > 0 {
             load_i32(runtime_map_ptr + idx * WORD_SIZE)
         } else {
@@ -3212,19 +3083,13 @@ fn emit_code_section(
         };
         let mut local_groups: i32 = 0;
         let mut type_idx: i32 = 0;
-        loop {
-            if type_idx >= locals_count {
-                break;
-            };
+        while type_idx < locals_count {
             let type_id: i32 = load_i32(local_types_ptr + type_idx * WORD_SIZE);
             if type_id < 0 {
                 return -1;
             };
             let mut run_len: i32 = 1;
-            loop {
-                if type_idx + run_len >= locals_count {
-                    break;
-                };
+            while type_idx + run_len < locals_count {
                 let next_type: i32 =
                     load_i32(local_types_ptr + (type_idx + run_len) * WORD_SIZE);
                 if next_type != type_id {
@@ -3240,10 +3105,7 @@ fn emit_code_section(
         let locals_decl_size: i32 = if locals_count > 0 {
             let mut size: i32 = leb_u32_len(local_groups);
             let mut run_idx: i32 = 0;
-            loop {
-                if run_idx >= local_groups {
-                    break;
-                };
+            while run_idx < local_groups {
                 let run_len: i32 = load_i32(run_counts_ptr + run_idx * WORD_SIZE);
                 let type_id: i32 = load_i32(run_types_ptr + run_idx * WORD_SIZE);
                 let type_len: i32 = type_id_wasm_value_type_len(ast_base, type_id);
@@ -3265,10 +3127,7 @@ fn emit_code_section(
             if locals_count > 0 {
                 out = write_u32_leb(base, out, local_groups);
                 let mut run_idx: i32 = 0;
-                loop {
-                    if run_idx >= local_groups {
-                        break;
-                    };
+                while run_idx < local_groups {
                     let run_len: i32 = load_i32(run_counts_ptr + run_idx * WORD_SIZE);
                     let type_id: i32 = load_i32(run_types_ptr + run_idx * WORD_SIZE);
                     out = write_u32_leb(base, out, run_len);
@@ -3314,10 +3173,7 @@ fn emit_code_section(
                 let args_base: i32 = call_metadata_args_base(metadata_ptr);
                 let mut args_size: i32 = 0;
                 let mut arg_idx: i32 = 0;
-                loop {
-                    if arg_idx >= arg_count {
-                        break;
-                    };
+                while arg_idx < arg_count {
                     let arg_expr_index: i32 = load_i32(args_base + arg_idx * 4);
                     let arg_size: i32 = expression_code_size(ast_base, arg_expr_index);
                     if arg_size < 0 {
@@ -3331,10 +3187,7 @@ fn emit_code_section(
             if locals_count > 0 {
                 out = write_u32_leb(base, out, local_groups);
                 let mut run_idx: i32 = 0;
-                loop {
-                    if run_idx >= local_groups {
-                        break;
-                    };
+                while run_idx < local_groups {
                     let run_len: i32 = load_i32(run_counts_ptr + run_idx * WORD_SIZE);
                     let type_id: i32 = load_i32(run_types_ptr + run_idx * WORD_SIZE);
                     out = write_u32_leb(base, out, run_len);
@@ -3350,10 +3203,7 @@ fn emit_code_section(
                 out = write_u32_leb(base, out, 0);
             };
             let mut emit_idx: i32 = 0;
-            loop {
-                    if emit_idx >= arg_count {
-                        break;
-                    };
+            while emit_idx < arg_count {
                     let arg_expr_index: i32 = load_i32(args_base + emit_idx * 4);
                     out = emit_expression(base, out, ast_base, arg_expr_index, runtime_map_ptr, runtime_func_count);
                     if out < 0 {
@@ -3375,10 +3225,7 @@ fn emit_code_section(
             if locals_count > 0 {
                 out = write_u32_leb(base, out, local_groups);
                 let mut run_idx: i32 = 0;
-                loop {
-                    if run_idx >= local_groups {
-                        break;
-                    };
+                while run_idx < local_groups {
                     let run_len: i32 = load_i32(run_counts_ptr + run_idx * WORD_SIZE);
                     let type_id: i32 = load_i32(run_types_ptr + run_idx * WORD_SIZE);
                     out = write_u32_leb(base, out, run_len);
@@ -3411,10 +3258,7 @@ fn emit_code_section(
 fn write_type_metadata(out_ptr: i32, ast_base: i32) -> i32 {
     let array_count: i32 = ast_array_types_count(ast_base);
     let mut idx: i32 = 0;
-    loop {
-        if idx >= array_count {
-            break;
-        };
+    while idx < array_count {
         let type_id: i32 = array_type_id(idx);
         if resolve_array_type_id(out_ptr, ast_base, type_id) < 0 {
             return -1;
@@ -3423,10 +3267,7 @@ fn write_type_metadata(out_ptr: i32, ast_base: i32) -> i32 {
     };
     let tuple_count: i32 = ast_tuple_types_count(ast_base);
     let mut tuple_idx: i32 = 0;
-    loop {
-        if tuple_idx >= tuple_count {
-            break;
-        };
+    while tuple_idx < tuple_count {
         let type_id: i32 = tuple_type_id(tuple_idx);
         if resolve_tuple_type_id(out_ptr, ast_base, type_id) < 0 {
             return -1;
@@ -3458,10 +3299,7 @@ fn emit_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
         return -1;
     };
     let mut idx: i32 = 0;
-    loop {
-        if idx >= func_count {
-            break;
-        };
+    while idx < func_count {
         if runtime_map_ptr > 0 {
             let runtime_index: i32 = load_i32(runtime_map_ptr + idx * WORD_SIZE);
             if runtime_index >= 0 {
