@@ -3,10 +3,7 @@ fn identifiers_match(ptr_a: i32, len_a: i32, ptr_b: i32, len_b: i32) -> bool {
         return false;
     };
     let mut idx: i32 = 0;
-    loop {
-        if idx >= len_a {
-            break;
-        };
+    while idx < len_a {
         let a_byte: i32 = load_u8(ptr_a + idx);
         let b_byte: i32 = load_u8(ptr_b + idx);
         if a_byte != b_byte {
@@ -60,10 +57,7 @@ fn validate_function_type_template(
     };
     let func_param_count: i32 = ast_function_param_count(ast_base, func_index);
     let mut idx: i32 = 0;
-    loop {
-        if idx >= required_count {
-            break;
-        };
+    while idx < required_count {
         let required_param: i32 = type_template_entry_param_index(template_handle, idx);
         if required_param < 0 {
             return -1;
@@ -118,20 +112,14 @@ fn collect_call_const_arguments(
     let eval_stack_top_ptr: i32 = eval_type_ptr + 4;
     let eval_stack_base: i32 = eval_stack_top_ptr + 4;
     let mut init_idx: i32 = 0;
-    loop {
-        if init_idx >= param_count {
-            break;
-        };
+    while init_idx < param_count {
         let slot_ptr: i32 = env_ptr + init_idx * 8;
         store_i32(slot_ptr, 0);
         store_i32(slot_ptr + 4, -1);
         init_idx = init_idx + 1;
     };
     let mut param_idx: i32 = 0;
-    loop {
-        if param_idx >= param_count {
-            break;
-        };
+    while param_idx < param_count {
         if ast_function_param_is_const(ast_base, func_index, param_idx) {
             let arg_expr_index: i32 = load_i32(args_base + param_idx * WORD_SIZE);
             if arg_expr_index < 0 {
@@ -215,10 +203,7 @@ fn collect_call_const_arguments(
     };
     store_i32(env_copy_ptr, param_count);
     let mut copy_idx: i32 = 0;
-    loop {
-        if copy_idx >= param_count {
-            break;
-        };
+    while copy_idx < param_count {
         let src_ptr: i32 = env_ptr + copy_idx * 8;
         let dst_ptr: i32 = env_copy_ptr + WORD_SIZE + copy_idx * 8;
         store_i32(dst_ptr, load_i32(src_ptr));
@@ -257,10 +242,7 @@ fn resolve_call_metadata(
     };
     let args_base: i32 = call_metadata_args_base(current_metadata);
     let mut arg_idx: i32 = 0;
-    loop {
-        if arg_idx >= arg_count {
-            break;
-        };
+    while arg_idx < arg_count {
         let arg_expr_index: i32 = load_i32(args_base + arg_idx * 4);
         if resolve_expression(
             out_ptr,
@@ -279,10 +261,7 @@ fn resolve_call_metadata(
     let call_name_len: i32 = call_metadata_name_len(current_metadata);
     let mut target_idx: i32 = 0;
     let mut found_idx: i32 = -1;
-    loop {
-        if target_idx >= func_count {
-            break;
-        };
+    while target_idx < func_count {
         let target_entry_ptr: i32 = ast_function_entry_ptr(ast_base, target_idx);
         let target_name_ptr: i32 = load_i32(target_entry_ptr);
         let target_name_len: i32 = load_i32(target_entry_ptr + 4);
@@ -362,10 +341,7 @@ fn resolve_call_metadata(
                     };
                 };
                 let mut verify_idx: i32 = 0;
-                loop {
-                    if verify_idx >= arg_count {
-                        break;
-                    };
+                while verify_idx < arg_count {
                     let requires_specialization: bool =
                         ast_function_param_requires_specialization(
                             ast_base,
@@ -488,10 +464,7 @@ fn resolve_call_metadata(
                             return -1;
                         };
                         let mut copy_idx: i32 = 0;
-                        loop {
-                            if copy_idx >= usage_total {
-                                break;
-                            };
+                        while copy_idx < usage_total {
                             let value: i32 = load_i32(usage_list_ptr + copy_idx * WORD_SIZE);
                             store_i32(params_ptr + copy_idx * WORD_SIZE, value);
                             copy_idx = copy_idx + 1;
@@ -537,10 +510,7 @@ fn resolve_call_metadata(
                     let eval_stack_base: i32 = eval_stack_top_ptr + WORD_SIZE;
                     store_i32(eval_stack_top_ptr, 0);
                     let mut spec_idx: i32 = 0;
-                    loop {
-                        if spec_idx >= specialization_count {
-                            break;
-                        };
+                    while spec_idx < specialization_count {
                         let param_index: i32 =
                             load_i32(specialization_temp_base + spec_idx * 8);
                         let expected_arg_type: i32 =
@@ -620,10 +590,7 @@ fn resolve_call_metadata(
                                             "const specialization cloning failed\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
                                         let detail_capacity: i32 = len(message);
                                         let mut detail_idx: i32 = 0;
-                                        loop {
-                                            if detail_idx >= detail_capacity {
-                                                break;
-                                            };
+                                        while detail_idx < detail_capacity {
                                             store_u8(out_ptr + detail_idx, message[detail_idx] as i32);
                                             detail_idx = detail_idx + 1;
                                         };
@@ -725,10 +692,7 @@ fn interpret_constants_visit_call_metadata(ast_base: i32, metadata_ptr: i32) -> 
         return -1;
     };
     let mut arg_idx: i32 = 0;
-    loop {
-        if arg_idx >= arg_count {
-            break;
-        };
+    while arg_idx < arg_count {
         let arg_expr_index: i32 = load_i32(args_base + arg_idx * WORD_SIZE);
         if interpret_constants_visit_expression(ast_base, arg_expr_index) < 0 {
             return -1;
@@ -802,10 +766,7 @@ fn interpret_constant_entry(ast_base: i32, const_entry_ptr: i32) -> i32 {
 fn interpret_program_constants(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
     let constants_count: i32 = ast_constants_count(ast_base);
     let mut const_idx: i32 = 0;
-    loop {
-        if const_idx >= constants_count {
-            break;
-        };
+    while const_idx < constants_count {
         let const_entry_ptr: i32 = ast_constant_entry_ptr(ast_base, const_idx);
         if interpret_constant_entry(ast_base, const_entry_ptr) < 0 {
             if out_ptr > 0 {
@@ -842,10 +803,7 @@ fn interpret_program_constants(out_ptr: i32, ast_base: i32, func_count: i32) -> 
     };
 
     let mut func_idx: i32 = 0;
-    loop {
-        if func_idx >= func_count {
-            break;
-        };
+    while func_idx < func_count {
         let entry_ptr: i32 = ast_function_entry_ptr(ast_base, func_idx);
         let body_kind: i32 = load_i32(entry_ptr + 12);
         if body_kind == 1 {
@@ -864,10 +822,7 @@ fn interpret_program_constants(out_ptr: i32, ast_base: i32, func_count: i32) -> 
 
     let expr_count: i32 = ast_expr_count(ast_base);
     let mut expr_idx: i32 = 0;
-    loop {
-        if expr_idx >= expr_count {
-            break;
-        };
+    while expr_idx < expr_count {
         // Placeholder for future constant interpretation work that may require
         // inspecting each expression node in order.
         expr_idx = expr_idx + 1;
@@ -878,10 +833,7 @@ fn interpret_program_constants(out_ptr: i32, ast_base: i32, func_count: i32) -> 
 fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
     let constants_count: i32 = ast_constants_count(ast_base);
     let mut const_idx: i32 = 0;
-    loop {
-        if const_idx >= constants_count {
-            break;
-        };
+    while const_idx < constants_count {
         let const_entry_ptr: i32 = ast_constant_entry_ptr(ast_base, const_idx);
         let const_type_ptr: i32 = ast_constant_entry_type_ptr(const_entry_ptr);
         let const_type_id: i32 = load_i32(const_type_ptr);
@@ -895,14 +847,11 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
         const_idx = const_idx + 1;
     };
     let mut idx: i32 = 0;
-    loop {
-        let total_funcs: i32 = ast_functions_count(ast_base);
-        if total_funcs < 0 {
-            return -1;
-        };
-        if idx >= total_funcs {
-            break;
-        };
+    let mut total_funcs: i32 = ast_functions_count(ast_base);
+    if total_funcs < 0 {
+        return -1;
+    };
+    while idx < total_funcs {
         let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
         let name_ptr: i32 = load_i32(entry_ptr);
         let name_len: i32 = load_i32(entry_ptr + 4);
@@ -910,10 +859,7 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
         let body_kind: i32 = load_i32(entry_ptr + 12);
         let caller_is_const: bool = ast_function_is_const(ast_base, idx);
         let mut other_idx: i32 = idx + 1;
-        loop {
-            if other_idx >= func_count {
-                break;
-            };
+        while other_idx < func_count {
             let other_entry_ptr: i32 = ast_function_entry_ptr(ast_base, other_idx);
             let other_name_ptr: i32 = load_i32(other_entry_ptr);
             let other_name_len: i32 = load_i32(other_entry_ptr + 4);
@@ -958,10 +904,7 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
                 return -1;
             };
             let mut param_idx: i32 = 0;
-            loop {
-                if param_idx >= param_count {
-                    break;
-                };
+            while param_idx < param_count {
                 let param_type_ptr: i32 = param_types_ptr + param_idx * 4;
                 let param_type_id: i32 = load_i32(param_type_ptr);
                 if param_type_id < 0 {
@@ -1047,6 +990,10 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
             };
         };
         idx = idx + 1;
+        total_funcs = ast_functions_count(ast_base);
+        if total_funcs < 0 {
+            return -1;
+        };
     };
     0
 }
@@ -1080,10 +1027,7 @@ fn resolve_local_array_repeat_init_index(
     };
     let mut search_local: i32 = local_index;
     let mut depth: i32 = 0;
-    loop {
-        if depth >= total_count {
-            return -1;
-        };
+    while depth < total_count {
         if search_local < 0 {
             return -1;
         };
@@ -1094,10 +1038,7 @@ fn resolve_local_array_repeat_init_index(
         let mut stack_idx: i32 = stack_count - 1;
         let mut follow_alias: bool = false;
         let mut found_entry: bool = false;
-        loop {
-            if stack_idx < 0 {
-                break;
-            };
+        while stack_idx >= 0 {
             let entry_offset: i32 =
                 local_stack_base + stack_idx * RESOLVE_LOCAL_STACK_ENTRY_SIZE;
             let recorded_index: i32 = load_i32(entry_offset);
@@ -1130,6 +1071,7 @@ fn resolve_local_array_repeat_init_index(
         };
         return -1;
     };
+    -1
 }
 
 fn resolve_expression_internal(
@@ -1295,10 +1237,7 @@ fn resolve_expression_internal(
             if local_index >= 0 {
                 let stack_count: i32 = load_i32(local_stack_count_ptr);
                 let mut stack_idx: i32 = stack_count - 1;
-                loop {
-                    if stack_idx < 0 {
-                        break;
-                    };
+                while stack_idx >= 0 {
                     let entry_offset: i32 =
                         local_stack_base + stack_idx * RESOLVE_LOCAL_STACK_ENTRY_SIZE;
                     let recorded_index: i32 = load_i32(entry_offset);
@@ -1461,10 +1400,7 @@ fn resolve_expression_internal(
         };
         let mut element_type: i32 = -1;
         let mut idx: i32 = 0;
-        loop {
-            if idx >= element_count {
-                break;
-            };
+        while idx < element_count {
             let element_index: i32 = load_i32(values_ptr + idx * WORD_SIZE);
             if resolve_expression_internal(
                 out_ptr,
@@ -2129,10 +2065,7 @@ fn resolve_expression_internal(
             return -1;
         };
         let mut idx: i32 = 0;
-        loop {
-            if idx >= element_count {
-                break;
-            };
+        while idx < element_count {
             let value_index: i32 = load_i32(values_ptr + idx * WORD_SIZE);
             if resolve_expression_internal(
                 out_ptr,
@@ -2870,10 +2803,7 @@ const COMPILER_MEMORY_PAGES: i32 = 256;
 fn initialize_layout(out_ptr: i32) {
     if out_ptr > 0 {
         let mut detail_idx: i32 = 0;
-        loop {
-            if detail_idx >= FAILURE_DETAIL_CAPACITY {
-                break;
-            };
+        while detail_idx < FAILURE_DETAIL_CAPACITY {
             store_u8(out_ptr + detail_idx, 0);
             detail_idx = detail_idx + 1;
         };
