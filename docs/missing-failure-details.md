@@ -8,14 +8,12 @@ below currently drop detail text and should be tackled individually so fixes rem
 
 ### `loadModuleFromSource`
 
-- **Null module path pointer.** A zero or negative pointer causes an immediate `-1` return with no
-  attempt to write into the failure buffer. 【F:compiler/ast_compiler.bp†L59-L63】
 - **Missing module content.** When the provided content pointer is zero or negative, the helper exits
-  without providing context for the failure. 【F:compiler/ast_compiler.bp†L59-L63】
+  without providing context for the failure. 【F:compiler/ast_compiler.bp†L69-L72】
 - **Negative content length.** If `string_length(content_ptr)` reports a negative length the function
-  returns `-1` without populating `failure.detail`. 【F:compiler/ast_compiler.bp†L72-L75】
+  returns `-1` without populating `failure.detail`. 【F:compiler/ast_compiler.bp†L69-L72】
 - **Module table capacity reached.** Hitting `MODULE_MAX_COUNT` silently rejects the registration
-  request. 【F:compiler/ast_compiler.bp†L80-L83】
+  request. 【F:compiler/ast_compiler.bp†L77-L83】
 - **Memory allocation failures.** Allocation failures for either the stored path or the module
   contents return early without diagnostics, leaving the host with an empty detail string.
   【F:compiler/ast_compiler.bp†L83-L104】
@@ -23,17 +21,17 @@ below currently drop detail text and should be tackled individually so fixes rem
 ### `compileFromPath`
 
 - **Null module path pointer.** A zero or negative path pointer aborts compilation without recording
-  why the input was rejected. 【F:compiler/ast_compiler.bp†L112-L115】
+  why the input was rejected. 【F:compiler/ast_compiler.bp†L109-L112】
 - **Empty module path.** The path length check returns `-1` when `string_length(path_ptr)` is zero,
-  and today the branch omits failure detail text. 【F:compiler/ast_compiler.bp†L117-L120】
+  and today the branch omits failure detail text. 【F:compiler/ast_compiler.bp†L114-L117】
 - **Invalid cached module entry.** When the cached entry lacks a valid content pointer or length, the
-  wrapper exits early without writing to the diagnostic buffer. 【F:compiler/ast_compiler.bp†L130-L134】
+  wrapper exits early without writing to the diagnostic buffer. 【F:compiler/ast_compiler.bp†L118-L123】
 - **Downstream pipeline status codes.** Any negative status propagated from `compile_impl`
   (parsing, constant evaluation, validation, metadata generation, or code emission) ultimately
   surfaces through the host without extra context when the callee omits a detail message.
-  【F:compiler/ast_compiler.bp†L142-L156】
+  【F:compiler/ast_compiler.bp†L143-L152】
 - **Memory reservation failures now emit detail.** The linear-memory reservation branch writes a
-  message today, so no additional work is required for this case. 【F:compiler/ast_compiler.bp†L126-L139】
+  message today, so no additional work is required for this case. 【F:compiler/ast_compiler.bp†L144-L148】
 
 ## Stage1 pipeline phases lacking guaranteed diagnostics
 

@@ -57,15 +57,12 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
 // cache.  The storage is owned by the compiler runtime so subsequent imports can
 // reuse the content without copying from the host again.
 fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
-    if path_ptr <= 0 || content_ptr <= 0 {
-        return -1;
-    };
     module_ensure_state_initialized();
     let path_len: i32 = string_length(path_ptr);
     if path_len <= 0 {
         let detail_out_ptr: i32 = module_storage_top();
         if detail_out_ptr > 0 {
-            write_failure_detail(detail_out_ptr, 10, "empty path");
+            write_failure_detail(detail_out_ptr, 19, "module path missing");
         };
         return -1;
     };
