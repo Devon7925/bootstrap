@@ -156,7 +156,9 @@ test("missing function in addition is rejected", async () => {
         missing() + 1
     }
   `);
-  expect(error.failure.detail).toBe("call references undefined function");
+  expect(error.failure.detail).toBe(
+    "/entry.bp:3:9: call references undefined function",
+  );
 });
 
 test("literal subtraction executes", async () => {
@@ -189,7 +191,9 @@ test("subtraction rejects unknown function calls", async () => {
         5 - missing()
     }
   `);
-  expect(error.failure.detail).toBe("call references undefined function");
+  expect(error.failure.detail).toBe(
+    "/entry.bp:3:13: call references undefined function",
+  );
 });
 
 test("literal multiplication executes", async () => {
@@ -266,7 +270,9 @@ test("multiplication rejects unknown function calls", async () => {
         3 * missing()
     }
   `);
-  expect(error.failure.detail).toBe("call references undefined function");
+  expect(error.failure.detail).toBe(
+    "/entry.bp:3:13: call references undefined function",
+  );
 });
 
 test("mixed addition and subtraction executes", async () => {

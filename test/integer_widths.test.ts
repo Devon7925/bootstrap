@@ -220,5 +220,7 @@ test("integer arguments must match parameter widths", async () => {
         take_i8(sample)
     }
   `);
-  expect(error.failure.detail).toBe("call argument type mismatch");
+  expect(error.failure.detail).toBe(
+    "/entry.bp:8:9: call argument type mismatch",
+  );
 });

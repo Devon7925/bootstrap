@@ -60,7 +60,9 @@ test("unknown function calls are rejected", async () => {
         missing()
     }
   `);
-  expect(failure.failure.detail).toBe("call references undefined function");
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:3:9: call references undefined function",
+  );
 });
 
 test("call argument counts must match function signature", async () => {
@@ -73,7 +75,9 @@ test("call argument counts must match function signature", async () => {
         add(1)
     }
   `);
-  expect(failure.failure.detail).toBe("call argument count mismatch");
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:7:9: call argument count mismatch",
+  );
 });
 
 test("duplicate function names are rejected", async () => {

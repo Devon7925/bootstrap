@@ -370,7 +370,7 @@ test("const functions cannot call non-const functions", async () => {
     }
   `);
   expect(failure.failure.detail).toBe(
-    "const functions may only call const functions",
+    "/entry.bp:3:9: const functions may only call const functions",
   );
 });
 
