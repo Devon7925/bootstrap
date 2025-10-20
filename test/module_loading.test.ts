@@ -150,6 +150,22 @@ test("compileFromPath returns failure for unknown modules", async () => {
   expect(failure.detail).toBe("module has not been loaded");
 });
 
+test("compileFromPath reports failure detail for invalid path pointer", async () => {
+  const compiler = await instantiateStage2Compiler();
+  const producedLength = compiler.compileFromPath(0);
+  const failure = readCompileFailure(compiler, producedLength);
+  expect(failure.detail).toBe("module path pointer must be > 0");
+});
+
+test("compileFromPath reports failure detail for empty path", async () => {
+  const compiler = await instantiateStage2Compiler();
+  const pathPtr = 1_024;
+  zeroMemory(compiler.memory, pathPtr, 8);
+  const producedLength = compiler.compileFromPath(pathPtr);
+  const failure = readCompileFailure(compiler, producedLength);
+  expect(failure.detail).toBe("module path must not be empty");
+});
+
 test("compileFromPath resolves use imports relative to module", async () => {
   const compiler = await instantiateStage2Compiler();
   const pathPtr = 1_024;
