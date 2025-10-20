@@ -27,8 +27,6 @@ below currently drop detail text and should be tackled individually so fixes rem
 `-1` without guaranteeing that a detail string was written first, producing silent failures in the
 host wrapper.
 
-- **Parsing failures.** `parse_program` returns a non-positive function count for syntax issues, but
-  a number of parse errors still return `0` without emitting a message. 【F:compiler/ast_compiler.bp†L21-L32】【F:compiler/ast_parser.bp†L257-L360】
 - **Constant interpretation errors.** `interpret_program_constants` can return `< 0` and relies on
   the interpreter to explain the failure; several error exits only propagate status codes.
   【F:compiler/ast_compiler.bp†L28-L31】【F:compiler/ast_semantics.bp†L849-L907】
