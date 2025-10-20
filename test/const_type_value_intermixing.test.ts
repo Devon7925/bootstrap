@@ -44,9 +44,24 @@ test.todo("const arrays can hold type entries", async () => {
     expect(result).toBe(200);
 });
 
+test.todo("can make tuple from types", async () => {
+    const wasm = await compileWithAstCompiler(`
+    const TYPE_VALUE_PAIR: (type, type) = (i32, u8);
+
+    const PAIR_TYPE: type = TYPE_VALUE_PAIR.0;
+
+    fn main() -> i32 {
+        let value: PAIR_TYPE = 2;
+        value
+    }
+  `);
+    const result = await runWasmMainWithGc(wasm);
+    expect(result).toBe(2);
+});
+
 test.todo("const tuple bindings can mix type and value entries", async () => {
     const wasm = await compileWithAstCompiler(`
-    const TYPE_VALUE_PAIR = (i32, 2);
+    const TYPE_VALUE_PAIR: (type, i32) = (i32, 2);
 
     const PAIR_TYPE: type = TYPE_VALUE_PAIR.0;
     const PAIR_VALUE: i32 = TYPE_VALUE_PAIR.1;
