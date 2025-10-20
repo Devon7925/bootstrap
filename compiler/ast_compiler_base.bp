@@ -8472,19 +8472,20 @@ fn interpret_constant_expression(
         };
         let call_data_used_ptr: i32 = ast_call_data_len_ptr(ast_base);
         let saved_used: i32 = load_i32(call_data_used_ptr);
-        let elements_ptr: i32 = if element_count > 0 {
-            ast_call_data_alloc(ast_base, element_count)
+        let tuple_values_ptr: i32 = if element_count > 0 {
+            ast_call_data_alloc(ast_base, element_count * 2)
         } else {
             0
         };
         if element_count > 0 {
-            if elements_ptr < 0 {
+            if tuple_values_ptr < 0 {
                 store_i32(call_data_used_ptr, saved_used);
                 store_i32(scratch_top_ptr, saved_top);
                 return -1;
             };
         };
         let mut idx: i32 = 0;
+        let mut all_type_elements: bool = true;
         while idx < element_count {
             let value_index: i32 = load_i32(values_ptr + idx * WORD_SIZE);
             let element_offset: i32 = load_i32(scratch_top_ptr);
@@ -8512,23 +8513,93 @@ fn interpret_constant_expression(
                 store_i32(scratch_top_ptr, saved_top);
                 return -1;
             };
-            let element_type: i32 = load_i32(element_type_ptr);
+            let mut element_type: i32 = load_i32(element_type_ptr);
+            let mut element_value: i32 = load_i32(element_value_ptr);
             if element_type != BUILTIN_TYPE_ID_TYPE {
-                store_i32(call_data_used_ptr, saved_used);
-                store_i32(scratch_top_ptr, saved_top);
-                return -1;
+                all_type_elements = false;
+            } else {
+                if element_value < 0 {
+                    store_i32(call_data_used_ptr, saved_used);
+                    store_i32(scratch_top_ptr, saved_top);
+                    return -1;
+                };
             };
-            let element_value: i32 = load_i32(element_value_ptr);
-            if element_value < 0 {
-                store_i32(call_data_used_ptr, saved_used);
-                store_i32(scratch_top_ptr, saved_top);
-                return -1;
+            if constant_eval_integer_type_supported(element_type) {
+                element_value = normalize_integer_value(element_value, element_type);
+            } else if element_type == BUILTIN_TYPE_ID_BOOL {
+                element_value = if element_value != 0 { 1 } else { 0 };
             };
-            if elements_ptr > 0 {
-                store_i32(elements_ptr + idx * WORD_SIZE, element_value);
+            if tuple_values_ptr > 0 {
+                let entry_ptr: i32 = tuple_values_ptr + idx * 2 * WORD_SIZE;
+                store_i32(entry_ptr, element_value);
+                store_i32(entry_ptr + WORD_SIZE, element_type);
             };
             store_i32(scratch_top_ptr, element_offset);
             idx = idx + 1;
+        };
+        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        if expr_type == BUILTIN_TYPE_ID_TYPE {
+            if !all_type_elements {
+                store_i32(call_data_used_ptr, saved_used);
+                store_i32(scratch_top_ptr, saved_top);
+                return -1;
+            };
+            let elements_ptr: i32 = if element_count > 0 {
+                ast_call_data_alloc(ast_base, element_count)
+            } else {
+                0
+            };
+            if element_count > 0 {
+                if elements_ptr < 0 {
+                    store_i32(call_data_used_ptr, saved_used);
+                    store_i32(scratch_top_ptr, saved_top);
+                    return -1;
+                };
+                idx = 0;
+                while idx < element_count {
+                    let entry_ptr: i32 = tuple_values_ptr + idx * 2 * WORD_SIZE;
+                    let type_value: i32 = load_i32(entry_ptr);
+                    store_i32(elements_ptr + idx * WORD_SIZE, type_value);
+                    idx = idx + 1;
+                };
+            };
+            let before_count: i32 = ast_tuple_types_count(ast_base);
+            let tuple_type_id: i32 =
+                ast_register_tuple_type(ast_base, elements_ptr, element_count);
+            if tuple_type_id < 0 {
+                store_i32(call_data_used_ptr, saved_used);
+                store_i32(scratch_top_ptr, saved_top);
+                return -1;
+            };
+            let after_count: i32 = ast_tuple_types_count(ast_base);
+            store_i32(call_data_used_ptr, saved_used);
+            if element_count > 0 && after_count == before_count {
+                store_i32(call_data_used_ptr, saved_used);
+            };
+            store_i32(out_value_ptr, tuple_type_id);
+            store_i32(out_type_ptr, BUILTIN_TYPE_ID_TYPE);
+            store_i32(scratch_top_ptr, saved_top);
+            return CONST_EVAL_STATUS_OK;
+        };
+        let saved_after_values: i32 = load_i32(call_data_used_ptr);
+        let elements_ptr: i32 = if element_count > 0 {
+            ast_call_data_alloc(ast_base, element_count)
+        } else {
+            0
+        };
+        if element_count > 0 {
+            if elements_ptr < 0 {
+                store_i32(call_data_used_ptr, saved_used);
+                store_i32(scratch_top_ptr, saved_top);
+                return -1;
+            };
+            idx = 0;
+            while idx < element_count {
+                let entry_ptr: i32 = tuple_values_ptr + idx * 2 * WORD_SIZE;
+                let field_type: i32 = load_i32(entry_ptr + WORD_SIZE);
+                store_i32(elements_ptr + idx * WORD_SIZE, field_type);
+                idx = idx + 1;
+            };
         };
         let before_count: i32 = ast_tuple_types_count(ast_base);
         let tuple_type_id: i32 =
@@ -8540,10 +8611,142 @@ fn interpret_constant_expression(
         };
         let after_count: i32 = ast_tuple_types_count(ast_base);
         if element_count > 0 && after_count == before_count {
-            store_i32(call_data_used_ptr, saved_used);
+            store_i32(call_data_used_ptr, saved_after_values);
         };
-        store_i32(out_value_ptr, tuple_type_id);
-        store_i32(out_type_ptr, BUILTIN_TYPE_ID_TYPE);
+        if expr_type != tuple_type_id {
+            ast_expr_set_type(ast_base, expr_index, tuple_type_id);
+        };
+        store_i32(out_value_ptr, tuple_values_ptr);
+        store_i32(out_type_ptr, tuple_type_id);
+        store_i32(scratch_top_ptr, saved_top);
+        return CONST_EVAL_STATUS_OK;
+    };
+    if kind == 41 {
+        let tuple_index: i32 = load_i32(entry_ptr + 4);
+        let field_index: i32 = load_i32(entry_ptr + 8);
+        if field_index < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        let tuple_offset: i32 = load_i32(scratch_top_ptr);
+        let tuple_value_ptr: i32 = scratch_base + tuple_offset;
+        let tuple_type_ptr: i32 = tuple_value_ptr + 4;
+        store_i32(scratch_top_ptr, tuple_offset + 8);
+        let tuple_status: i32 = interpret_constant_expression(
+            ast_base,
+            tuple_index,
+            scratch_base,
+            scratch_top_ptr,
+            tuple_value_ptr,
+            tuple_type_ptr,
+            param_values_ptr,
+            param_count,
+            env_values_count,
+        );
+        if tuple_status < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        if tuple_status != CONST_EVAL_STATUS_OK {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        let tuple_type: i32 = load_i32(tuple_type_ptr);
+        let tuple_value: i32 = load_i32(tuple_value_ptr);
+        if tuple_type == BUILTIN_TYPE_ID_TYPE {
+            if tuple_value < 0 {
+                store_i32(scratch_top_ptr, saved_top);
+                return -1;
+            };
+            if !type_id_is_tuple(tuple_value) {
+                store_i32(scratch_top_ptr, saved_top);
+                return -1;
+            };
+            let tuple_metadata_index: i32 = tuple_type_index(tuple_value);
+            if tuple_metadata_index < 0 {
+                store_i32(scratch_top_ptr, saved_top);
+                return -1;
+            };
+            let element_count: i32 =
+                ast_tuple_type_element_count(ast_base, tuple_metadata_index);
+            if field_index >= element_count {
+                store_i32(scratch_top_ptr, saved_top);
+                return -1;
+            };
+            let elements_ptr: i32 = if element_count > 0 {
+                ast_tuple_type_elements_ptr(ast_base, tuple_metadata_index)
+            } else {
+                0
+            };
+            if element_count > 0 {
+                if elements_ptr < 0 {
+                    store_i32(scratch_top_ptr, saved_top);
+                    return -1;
+                };
+            };
+            let field_type: i32 = if elements_ptr > 0 {
+                load_i32(elements_ptr + field_index * WORD_SIZE)
+            } else {
+                -1
+            };
+            if field_type < 0 {
+                store_i32(scratch_top_ptr, saved_top);
+                return -1;
+            };
+            store_i32(out_value_ptr, field_type);
+            store_i32(out_type_ptr, BUILTIN_TYPE_ID_TYPE);
+            store_i32(scratch_top_ptr, saved_top);
+            return CONST_EVAL_STATUS_OK;
+        };
+        if !type_id_is_tuple(tuple_type) {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        let tuple_metadata_index: i32 = tuple_type_index(tuple_type);
+        if tuple_metadata_index < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        let element_count: i32 =
+            ast_tuple_type_element_count(ast_base, tuple_metadata_index);
+        if field_index >= element_count {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        if element_count > 0 {
+            if tuple_value <= 0 {
+                store_i32(scratch_top_ptr, saved_top);
+                return -1;
+            };
+        };
+        let expected_types_ptr: i32 = if element_count > 0 {
+            ast_tuple_type_elements_ptr(ast_base, tuple_metadata_index)
+        } else {
+            0
+        };
+        if element_count > 0 {
+            if expected_types_ptr < 0 {
+                store_i32(scratch_top_ptr, saved_top);
+                return -1;
+            };
+        };
+        let mut field_value: i32 = 0;
+        let mut field_type: i32 = -1;
+        if tuple_value > 0 {
+            let entry_ptr: i32 =
+                tuple_value + field_index * 2 * WORD_SIZE;
+            field_value = load_i32(entry_ptr);
+            field_type = load_i32(entry_ptr + WORD_SIZE);
+        };
+        if field_type < 0 && expected_types_ptr > 0 {
+            field_type = load_i32(expected_types_ptr + field_index * WORD_SIZE);
+        };
+        if field_type < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        };
+        store_i32(out_value_ptr, field_value);
+        store_i32(out_type_ptr, field_type);
         store_i32(scratch_top_ptr, saved_top);
         return CONST_EVAL_STATUS_OK;
     };

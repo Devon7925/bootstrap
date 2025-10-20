@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 
 import { compileWithAstCompiler, runWasmMainWithGc } from "./helpers";
 
-test.todo("const tuples can mix type and value entries", async () => {
+test("const tuples can mix type and value entries", async () => {
     const wasm = await compileWithAstCompiler(`
     const fn type_value_pair() -> (type, i32) {
         (i32, 2)
