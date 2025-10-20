@@ -26,8 +26,6 @@ host wrapper.
   【F:compiler/ast_compiler.bp†L28-L31】【F:compiler/ast_semantics.bp†L849-L907】
 - **Semantic validation checks.** The semantic validator forwards `-1` for many guardrail failures
   without always setting `failure.detail`. 【F:compiler/ast_compiler.bp†L31-L34】【F:compiler/ast_semantics.bp†L925-L1096】
-- **Function accounting.** A negative result from `ast_functions_count` leads to an unannotated early
-  return. 【F:compiler/ast_compiler.bp†L34-L37】【F:compiler/ast_compiler_base.bp†L3556-L3562】
 - **Metadata emission failures.** `write_type_metadata` can produce `< 0` when buffers overflow or
   layout checks fail without recording why. 【F:compiler/ast_compiler.bp†L37-L40】【F:compiler/wasm_output.bp†L3272-L3348】
 - **Code generation errors.** A non-positive byte count from `emit_program` is surfaced directly to

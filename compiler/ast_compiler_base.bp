@@ -5274,7 +5274,14 @@ fn clone_const_specialization_expr(
     -1
 }
 
-fn ast_function_clone_const_template(ast_base: i32, index: i32, key_ptr: i32) -> i32 {
+fn ast_function_clone_const_template(
+    ast_base: i32,
+    index: i32,
+    key_ptr: i32,
+    detail_out_ptr: i32,
+    caller_func_index: i32,
+    location_offset: i32,
+) -> i32 {
     if index < 0 {
         return -1;
     };
@@ -5343,6 +5350,36 @@ fn ast_function_clone_const_template(ast_base: i32, index: i32, key_ptr: i32) ->
         return -1;
     };
     if current_count >= AST_MAX_FUNCTIONS {
+        if detail_out_ptr > 0 {
+            let mut module_base: i32 = scratch_module_base(detail_out_ptr);
+            let mut module_len: i32 = scratch_module_len(detail_out_ptr);
+            let mut module_index: i32 = scratch_module_index(detail_out_ptr);
+            if caller_func_index >= 0 {
+                let func_base: i32 = ast_function_entry_module_base(ast_base, caller_func_index);
+                let func_len: i32 = ast_function_entry_module_len(ast_base, caller_func_index);
+                let func_index: i32 = ast_function_entry_module_index(ast_base, caller_func_index);
+                if func_base > 0 { module_base = func_base; };
+                if func_len > 0 { module_len = func_len; };
+                if func_index >= 0 { module_index = func_index; };
+            };
+            if location_offset >= 0 && module_base > 0 && module_len > 0 {
+                write_failure_detail_with_location(
+                    detail_out_ptr,
+                    module_index,
+                    module_base,
+                    module_len,
+                    location_offset,
+                    44,
+                    "const specialization function limit exceeded",
+                );
+            } else {
+                write_failure_detail(
+                    detail_out_ptr,
+                    44,
+                    "const specialization function limit exceeded",
+                );
+            };
+        };
         return -1;
     };
     let source_ptr: i32 = ast_function_entry_ptr(ast_base, index);
@@ -8010,6 +8047,9 @@ fn interpret_constant_expression(
                     ast_base,
                     template_index,
                     key_ptr,
+                    0,
+                    -1,
+                    -1,
                 );
                 if new_specialization < 0 {
                     store_i32(scratch_top_ptr, saved_top);
