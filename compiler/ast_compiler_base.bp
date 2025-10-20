@@ -8174,7 +8174,15 @@ fn interpret_constant_expression(
         };
         let has_const_params: bool = ast_function_has_const_params(ast_base, template_index);
         if has_const_params {
-            if collect_call_const_arguments(0, ast_base, metadata_ptr, template_index, arg_count) < 0 {
+            if collect_call_const_arguments(
+                0,
+                ast_base,
+                metadata_ptr,
+                template_index,
+                arg_count,
+                -1,
+                -1,
+            ) < 0 {
                 store_i32(scratch_top_ptr, saved_top);
                 return -1;
             };

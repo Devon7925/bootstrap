@@ -382,7 +382,7 @@ test("const parameters require compile-time constant arguments", async () => {
     }
   `);
     expect(failure.failure.detail).toBe(
-      "const parameter arguments must be compile-time constants",
+      "/entry.bp:8:9: const parameter arguments must be compile-time constants",
     );
 });
 
@@ -425,7 +425,7 @@ test("const parameter templates reject mismatched parameter arrays", async () =>
     }
   `);
     expect(failure.failure.detail).toBe(
-      "const parameter template expected type mismatch",
+      "/entry.bp:17:9: const parameter template expected type mismatch",
     );
 });
 
@@ -441,7 +441,7 @@ test("const parameter return templates reject mismatched bindings", async () => 
     }
   `);
     expect(failure.failure.detail).toBe(
-      "const parameter template expected type mismatch",
+      "/entry.bp:1:1: const parameter template expected type mismatch",
     );
 });
 
