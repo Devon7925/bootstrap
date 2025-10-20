@@ -24,8 +24,6 @@ host wrapper.
 - **Constant interpretation errors.** `interpret_program_constants` can return `< 0` and relies on
   the interpreter to explain the failure; several error exits only propagate status codes.
   【F:compiler/ast_compiler.bp†L28-L31】【F:compiler/ast_semantics.bp†L849-L907】
-- **Function accounting.** A negative result from `ast_functions_count` leads to an unannotated early
-  return. 【F:compiler/ast_compiler.bp†L34-L37】【F:compiler/ast_compiler_base.bp†L3556-L3562】
 - **Metadata emission failures.** `write_type_metadata` can produce `< 0` when buffers overflow or
   layout checks fail without recording why. 【F:compiler/ast_compiler.bp†L37-L40】【F:compiler/wasm_output.bp†L3272-L3348】
 - **Code generation errors.** A non-positive byte count from `emit_program` is surfaced directly to

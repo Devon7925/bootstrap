@@ -810,6 +810,9 @@ fn resolve_call_metadata(
                                 ast_base,
                                 target_idx,
                                 key_ptr,
+                                out_ptr,
+                                caller_func_index,
+                                resolved_location_offset,
                             );
                             if new_specialization < 0 {
                                 if out_ptr > 0 {

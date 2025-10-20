@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import {
   COMPILER_INPUT_PTR,
   DEFAULT_OUTPUT_STRIDE,
+  expectCompileFailure,
   instantiateAstCompiler,
   runWasmMainWithGc,
 } from "./helpers";
@@ -116,6 +117,30 @@ test("const parameter specializations support loops", async () => {
   const wasm = compiler.compileWithLayout(COMPILER_INPUT_PTR, DEFAULT_OUTPUT_STRIDE, source);
   const result = await runWasmMainWithGc(wasm);
   expect(result).toBe(17);
+});
+
+test("const specialization overflow reports function limit detail", async () => {
+  const cloneCount = 1_023;
+  const lines: string[] = [
+    "fn choose(const VALUE: i32) -> i32 {",
+    "    VALUE",
+    "}",
+    "",
+    "fn main() -> i32 {",
+    "    let mut total: i32 = 0;",
+  ];
+  for (let value = 0; value < cloneCount; value += 1) {
+    lines.push(`    total = total + choose(${value});`);
+  }
+  lines.push("    total");
+  lines.push("}");
+  const source = lines.join("\n");
+
+  const failure = await expectCompileFailure(source);
+  expect(failure.failure.detail).toBeDefined();
+  expect(failure.failure.detail).toMatch(
+    /\/entry\.bp:\d+:\d+: const specialization function limit exceeded$/,
+  );
 });
 
 function parseWasmModule(bytes: Uint8Array): ParsedModule {
