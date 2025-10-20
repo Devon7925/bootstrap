@@ -14,8 +14,6 @@ below currently drop detail text and should be tackled individually so fixes rem
 
 ### `compileFromPath`
 
-- **Invalid cached module entry.** When the cached entry lacks a valid content pointer or length, the
-  wrapper exits early without writing to the diagnostic buffer. 【F:compiler/ast_compiler.bp†L133-L137】
 - **Downstream pipeline status codes.** Any negative status propagated from `compile_impl`
   (parsing, constant evaluation, validation, metadata generation, or code emission) ultimately
   surfaces through the host without extra context when the callee omits a detail message.

@@ -14,6 +14,9 @@ const encoder = new TextEncoder();
 
 const MODULE_STATE_BASE = 1_048_576;
 const MODULE_STORAGE_TOP_OFFSET = 4;
+const MODULE_TABLE_OFFSET = 8;
+const MODULE_CONTENT_PTR_OFFSET = 8;
+const MODULE_CONTENT_LEN_OFFSET = 12;
 
 let stage2WasmPromise: Promise<Uint8Array> | undefined;
 
@@ -139,6 +142,31 @@ test("compileFromPath uses the latest module contents", async () => {
   const instance2 = await instantiateWasmModuleWithGc(wasm2);
   const main2 = expectExportedFunction(instance2, "main");
   expect(main2()).toBe(7);
+});
+
+test("compileFromPath reports invalid cached module entry", async () => {
+  const compiler = await instantiateStage2Compiler();
+  const pathPtr = 1_024;
+  const contentPtr = 4_096;
+
+  writeString(compiler.memory, pathPtr, "/fixtures/invalid-cache.bp");
+  writeString(compiler.memory, contentPtr, "fn main() -> i32 { 0 }");
+  expect(compiler.loadModuleFromSource(pathPtr, contentPtr)).toBe(0);
+
+  const view = new DataView(compiler.memory.buffer);
+  const entryPtr = MODULE_STATE_BASE + MODULE_TABLE_OFFSET;
+  expect(view.getInt32(entryPtr + MODULE_CONTENT_PTR_OFFSET, true)).toBeGreaterThan(0);
+  view.setInt32(entryPtr + MODULE_CONTENT_PTR_OFFSET, 0, true);
+  view.setInt32(entryPtr + MODULE_CONTENT_LEN_OFFSET, 0, true);
+
+  const detailOutPtr = readModuleStorageTop(compiler.memory);
+  zeroMemory(compiler.memory, detailOutPtr, 64);
+
+  const status = compiler.compileFromPath(pathPtr);
+  expect(status).toBeLessThan(0);
+
+  const failure = readCompileFailure(compiler, status);
+  expect(failure.detail).toBe("cached module entry missing content");
 });
 
 test("loadModuleFromSource reports module table capacity reached", async () => {
