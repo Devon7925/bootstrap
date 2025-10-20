@@ -4836,7 +4836,9 @@ fn clone_const_specialization_expr(
         } else if metadata_ptr < 0 {
             metadata_ptr = ast_expr_array_repeat_length_metadata(ast_base, expr_index);
         };
-        let new_index: i32 = ast_expr_alloc_array_repeat(ast_base, cloned_element, length, metadata_ptr);
+        let location: i32 = ast_expr_array_repeat_location(ast_base, expr_index);
+        let new_index: i32 =
+            ast_expr_alloc_array_repeat(ast_base, cloned_element, length, metadata_ptr, location);
         if new_index < 0 {
             return -1;
         };
@@ -5076,7 +5078,9 @@ fn clone_const_specialization_expr(
         if cloned_ptr < 0 {
             return -1;
         };
-        let new_index: i32 = ast_expr_alloc_array_list(ast_base, cloned_ptr, count);
+        let location: i32 = ast_expr_array_list_location(ast_base, expr_index);
+        let new_index: i32 =
+            ast_expr_alloc_array_list(ast_base, cloned_ptr, count, location);
         if new_index < 0 {
             return -1;
         };
@@ -7086,6 +7090,7 @@ fn ast_expr_alloc_array_repeat(
     element_index: i32,
     length: i32,
     length_expr_metadata_ptr: i32,
+    location_offset: i32,
 ) -> i32 {
     if length < 0 {
         if length_expr_metadata_ptr < 0 {
@@ -7098,6 +7103,7 @@ fn ast_expr_alloc_array_repeat(
         return -1;
     };
     ast_expr_set_type(ast_base, index, -1);
+    ast_expr_entry_set_extra(ast_base, index, location_offset);
     index
 }
 
@@ -7145,7 +7151,12 @@ fn ast_expr_array_repeat_length_expr_params_count(ast_base: i32, expr_index: i32
     load_i32(metadata_ptr + 2 * WORD_SIZE)
 }
 
-fn ast_expr_alloc_array_list(ast_base: i32, values_ptr: i32, count: i32) -> i32 {
+fn ast_expr_alloc_array_list(
+    ast_base: i32,
+    values_ptr: i32,
+    count: i32,
+    location_offset: i32,
+) -> i32 {
     if count <= 0 {
         return -1;
     };
@@ -7157,7 +7168,16 @@ fn ast_expr_alloc_array_list(ast_base: i32, values_ptr: i32, count: i32) -> i32 
         return -1;
     };
     ast_expr_set_type(ast_base, index, -1);
+    ast_expr_entry_set_extra(ast_base, index, location_offset);
     index
+}
+
+fn ast_expr_array_repeat_location(ast_base: i32, expr_index: i32) -> i32 {
+    ast_expr_entry_extra(ast_base, expr_index)
+}
+
+fn ast_expr_array_list_location(ast_base: i32, expr_index: i32) -> i32 {
+    ast_expr_entry_extra(ast_base, expr_index)
 }
 
 fn ast_expr_alloc_array_get(

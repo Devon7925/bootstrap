@@ -217,7 +217,7 @@ test("array list literal requires uniform element types", async () => {
   `);
 
   expect(failure.failure.detail).toBe(
-    "array literal elements must have uniform type",
+    "/entry.bp:3:9: array literal elements must have uniform type",
   );
 });
 
