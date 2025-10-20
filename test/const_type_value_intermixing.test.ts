@@ -25,7 +25,7 @@ test("const tuples can mix type and value entries", async () => {
     expect(result).toBe(2);
 });
 
-test.todo("const arrays can hold type entries", async () => {
+test("const arrays can hold type entries", async () => {
     const wasm = await compileWithAstCompiler(`
     const fn numeric_types() -> [type; 3] {
         [i32, u32, u8]
