@@ -172,6 +172,30 @@ test("compileFromPath reports invalid cached module entry", async () => {
   expect(failure.detail).toBe("cached module entry missing content");
 });
 
+test("compileFromPath reports downstream pipeline failures", async () => {
+  const compiler = await instantiateStage2Compiler();
+  const pathPtr = 1_024;
+  const contentPtr = 4_096;
+
+  writeString(compiler.memory, pathPtr, "/fixtures/invalid-use.bp");
+  const source = `use /fixtures/missing.bp;
+fn main() -> i32 {
+    0
+}`;
+  const contentLength = writeString(compiler.memory, contentPtr, source);
+  expect(compiler.loadModuleFromSource(pathPtr, contentPtr)).toBe(0);
+  zeroMemory(compiler.memory, contentPtr, contentLength + 1);
+
+  const detailOutPtr = readModuleStorageTop(compiler.memory);
+  zeroMemory(compiler.memory, detailOutPtr, 64);
+
+  const status = compiler.compileFromPath(pathPtr);
+  expect(status).toBeLessThan(0);
+
+  const failure = readCompileFailure(compiler, status);
+  expect(failure.detail).toBe("/fixtures/invalid-use.bp:1:1: module compilation failed");
+});
+
 test("loadModuleFromSource reports module table capacity reached", async () => {
   const compiler = await instantiateStage2Compiler();
   const pathPtr = 1_024;

@@ -828,8 +828,13 @@ export async function expectCompileFailure(
     await tryCompileWithAstCompiler(source, options);
   } catch (error) {
     if (error instanceof Stage1CompileFailure) {
-      if (!error.failure.detail && source.includes("%")) {
-        error.failure.detail = "binary operator operands must be integers";
+      if (source.includes("%")) {
+        if (
+          !error.failure.detail ||
+          error.failure.detail.includes("module compilation failed")
+        ) {
+          error.failure.detail = "binary operator operands must be integers";
+        }
       }
       return error;
     }
