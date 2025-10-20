@@ -4,6 +4,7 @@ import {
   COMPILER_INPUT_PTR,
   DEFAULT_OUTPUT_STRIDE,
   compileWithAstCompiler,
+  expectCompileFailure,
   instantiateAstCompiler,
   runWasmMainWithGc,
 } from "./helpers";
@@ -182,4 +183,24 @@ test("array type length accepts constant expressions", async () => {
 
   const result = await runWasmMainWithGc(wasm);
   expect(result).toBe(6);
+});
+
+test("array type registration reports capacity diagnostics", async () => {
+  const parts: string[] = [];
+  for (let length = 1; length <= 257; length += 1) {
+    parts.push(`fn use_array_${length}() -> i32 {`);
+    parts.push(`    let values: [i32; ${length}] = [0; ${length}];`);
+    parts.push("    values[0]");
+    parts.push("}");
+    parts.push("");
+  }
+  parts.push("fn main() -> i32 {");
+  parts.push("    use_array_1()");
+  parts.push("}");
+
+  const source = parts.join("\n");
+  const failure = await expectCompileFailure(source);
+  expect(failure.failure.detail).toMatch(
+    /^\/entry\.bp:\d+:\d+: array type table capacity exceeded$/,
+  );
 });

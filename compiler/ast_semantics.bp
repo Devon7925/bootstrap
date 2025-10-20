@@ -1678,6 +1678,7 @@ fn resolve_expression_internal(
         };
         let array_type_id: i32 = ast_register_array_type(ast_base, resolved_element, length);
         if array_type_id < 0 {
+            record_failure_detail(out_ptr, 34, "array type table capacity exceeded");
             return -1;
         };
         let resolved_array_type: i32 = resolve_type_id(out_ptr, ast_base, array_type_id);
@@ -1751,6 +1752,7 @@ fn resolve_expression_internal(
         };
         let array_type_id: i32 = ast_register_array_type(ast_base, element_type, element_count);
         if array_type_id < 0 {
+            record_failure_detail(out_ptr, 34, "array type table capacity exceeded");
             return -1;
         };
         let resolved_array_type: i32 = resolve_type_id(out_ptr, ast_base, array_type_id);
