@@ -234,6 +234,30 @@ test("const parameter templates specialize complex array loop functions", async 
     expect(result).toBe(15);
 });
 
+test("const argument metadata exhaustion reports diagnostic", async () => {
+  const constParamCount = 64;
+  const callCount = 1024;
+  const paramDecls = Array.from({ length: constParamCount }, (_, index) =>
+    `const P${index}: i32`,
+  ).join(", ");
+  const argList = Array.from({ length: constParamCount }, (_, index) => `${index}`).join(", ");
+  const callLines = Array.from({ length: callCount }, () => `    helper(${argList});`);
+  const sourceLines = [
+    `fn helper(${paramDecls}) -> i32 {`,
+    `    P0`,
+    `}`,
+    ``,
+    `fn main() -> i32 {`,
+    ...callLines,
+    `    0`,
+    `}`,
+  ];
+  const failure = await expectCompileFailure(sourceLines.join("\n"));
+  expect(failure.failure.detail).toMatch(
+    /\/entry\.bp:\d+:\d+: const argument metadata capacity exceeded$/,
+  );
+});
+
 test("const parameter templates specialize array arguments", async () => {
     const wasm = await compileWithAstCompiler(`
     fn head(const N: i32, values: [i32; N]) -> i32 {

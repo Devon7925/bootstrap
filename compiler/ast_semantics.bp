@@ -374,6 +374,27 @@ fn collect_call_const_arguments(
     };
     let env_copy_ptr: i32 = ast_call_data_alloc(ast_base, env_words);
     if env_copy_ptr < 0 {
+        if out_ptr > 0 {
+            if load_u8(out_ptr) == 0 {
+                let location_offset: i32 =
+                    find_call_metadata_location(ast_base, metadata_ptr);
+                let recorded: bool = try_record_call_failure_with_location(
+                    out_ptr,
+                    ast_base,
+                    func_index,
+                    location_offset,
+                    41,
+                    "const argument metadata capacity exceeded",
+                );
+                if !recorded {
+                    record_failure_detail(
+                        out_ptr,
+                        41,
+                        "const argument metadata capacity exceeded",
+                    );
+                };
+            };
+        };
         return -1;
     };
     store_i32(env_copy_ptr, param_count);
@@ -683,6 +704,27 @@ fn resolve_call_metadata(
                     if usage_total > 0 {
                         let params_ptr: i32 = ast_call_data_alloc(ast_base, usage_total);
                         if params_ptr < 0 {
+                            if out_ptr > 0 {
+                                if load_u8(out_ptr) == 0 {
+                                    let location_offset: i32 =
+                                        find_call_metadata_location(ast_base, current_metadata);
+                                    let recorded: bool = try_record_call_failure_with_location(
+                                        out_ptr,
+                                        ast_base,
+                                        caller_func_index,
+                                        location_offset,
+                                        41,
+                                        "const argument metadata capacity exceeded",
+                                    );
+                                    if !recorded {
+                                        record_failure_detail(
+                                            out_ptr,
+                                            41,
+                                            "const argument metadata capacity exceeded",
+                                        );
+                                    };
+                                };
+                            };
                             return -1;
                         };
                         let mut copy_idx: i32 = 0;
