@@ -476,3 +476,14 @@ test("else if chains cover all branches", async () => {
   const result = await runWasmMainWithGc(wasm);
   expect(result).toBe(321);
 });
+
+test("parser reports detail for incomplete if condition", async () => {
+  const failure = await expectCompileFailure(`
+    fn main() -> i32 {
+        if (
+    }
+  `);
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:3:12: if expression condition parse failed",
+  );
+});
