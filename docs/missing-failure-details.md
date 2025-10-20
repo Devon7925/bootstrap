@@ -24,9 +24,7 @@ paths never populate the diagnostic string. The situations below currently surfa
 - **`loadModuleFromSource` argument or storage failures.** The WebAssembly side returns `-1` for
   invalid pointers, empty paths, exceeding the module cache capacity, or allocation failures, but it
   never fills the failure buffer for those guard clauses. 【F:compiler/ast_compiler.bp†L63-L105】
-- **Linear-memory growth failures.** If `ensure_memory_capacity` cannot satisfy the requested size,
-  it simply returns `-1`, so the caller propagates a failure with an empty detail field. 【F:compiler/ast_compiler_base.bp†L18-L39】
-
+  
 ## Compiler pipeline entrypoints
 
 - **Downstream phases that return `< 0` without a diagnostic.** `compile_impl` simply forwards

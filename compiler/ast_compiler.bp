@@ -158,9 +158,8 @@ fn compileFromPath(path_ptr: i32) -> i32 {
     module_set_storage_top(out_ptr);
     let required: i32 = out_ptr + ast_output_reserve(input_len);
     if ensure_memory_capacity(required) < 0 {
-        module_entry_set_flags(index, 0);
-        if detail_out_ptr > 0 {
-            write_failure_detail(detail_out_ptr, 38, "failed to reserve module output memory");
+        if out_ptr > 0 {
+            write_failure_detail(out_ptr, 54, "failed to reserve linear memory for module compilation");
         };
         return -1;
     };

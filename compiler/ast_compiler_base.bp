@@ -3290,6 +3290,10 @@ fn module_allocate_bytes(len: i32) -> i32 {
         end = start;
     };
     if ensure_memory_capacity(end + 1) < 0 {
+        let detail_out_ptr: i32 = module_storage_top();
+        if detail_out_ptr > 0 {
+            write_failure_detail(detail_out_ptr, 50, "failed to reserve linear memory for module storage");
+        };
         return -1;
     };
     module_set_storage_top(end);
