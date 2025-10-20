@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 
 import {
   compileWithAstCompiler,
+  expectCompileFailure,
   runWasmMainWithGc,
 } from "./helpers";
 
@@ -74,4 +75,30 @@ test("array of tuples allows inner field mutation", async () => {
 
   const result = await runWasmMainWithGc(wasm);
   expect(result).toBe(42);
+});
+
+test("array element assignment reports type mismatch location", async () => {
+  const failure = await expectCompileFailure(`
+    fn assign(values: [i32; 2]) {
+        let mut local: [i32; 2] = values;
+        local[0] = true;
+    }
+  `);
+
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:4:15: array element assignment type mismatch",
+  );
+});
+
+test("tuple field assignment reports type mismatch location", async () => {
+  const failure = await expectCompileFailure(`
+    fn assign(pair: (i32, bool)) {
+        let mut local: (i32, bool) = pair;
+        local.1 = 5;
+    }
+  `);
+
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:4:15: tuple field assignment type mismatch",
+  );
 });

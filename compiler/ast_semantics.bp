@@ -1966,6 +1966,7 @@ fn resolve_expression_internal(
         let array_index: i32 = load_i32(entry_ptr + 4);
         let index_index: i32 = load_i32(entry_ptr + 8);
         let value_index: i32 = load_i32(entry_ptr + 12);
+        let location: i32 = ast_expr_array_set_location(ast_base, expr_index);
         if resolve_expression_internal(
             out_ptr,
             ast_base,
@@ -2030,7 +2031,14 @@ fn resolve_expression_internal(
         };
         let index_type: i32 = ast_expr_type(ast_base, index_index);
         if index_type != BUILTIN_TYPE_ID_I32 {
-            record_failure_detail(out_ptr, 36, "array index requires integer indices");
+            record_failure_with_location(
+                out_ptr,
+                ast_base,
+                caller_func_index,
+                location,
+                36,
+                "array index requires integer indices",
+            );
             return -1;
         };
         let element_type: i32 = array_type_element_type(ast_base, resolved_array);
@@ -2055,7 +2063,14 @@ fn resolve_expression_internal(
                 return -1;
             };
             if resolved_value != resolved_element {
-                record_failure_detail(out_ptr, 38, "array element assignment type mismatch");
+                record_failure_with_location(
+                    out_ptr,
+                    ast_base,
+                    caller_func_index,
+                    location,
+                    38,
+                    "array element assignment type mismatch",
+                );
                 return -1;
             };
             if resolved_value != value_type {
@@ -2071,6 +2086,7 @@ fn resolve_expression_internal(
         let tuple_index: i32 = load_i32(entry_ptr + 4);
         let field_index: i32 = load_i32(entry_ptr + 8);
         let value_index: i32 = load_i32(entry_ptr + 12);
+        let location: i32 = ast_expr_tuple_set_location(ast_base, expr_index);
         if field_index < 0 {
             return -1;
         };
@@ -2132,7 +2148,14 @@ fn resolve_expression_internal(
         };
         let element_count: i32 = ast_tuple_type_element_count(ast_base, tuple_idx);
         if element_count <= field_index {
-            record_failure_detail(out_ptr, 31, "tuple field index out of bounds");
+            record_failure_with_location(
+                out_ptr,
+                ast_base,
+                caller_func_index,
+                location,
+                31,
+                "tuple field index out of bounds",
+            );
             return -1;
         };
         if element_count <= 0 {
@@ -2161,7 +2184,14 @@ fn resolve_expression_internal(
                 return -1;
             };
             if resolved_value != resolved_element {
-                record_failure_detail(out_ptr, 36, "tuple field assignment type mismatch");
+                record_failure_with_location(
+                    out_ptr,
+                    ast_base,
+                    caller_func_index,
+                    location,
+                    36,
+                    "tuple field assignment type mismatch",
+                );
                 return -1;
             };
             if resolved_value != value_type {
