@@ -20,18 +20,14 @@ below currently drop detail text and should be tackled individually so fixes rem
 
 ### `compileFromPath`
 
-- **Null module path pointer.** A zero or negative path pointer aborts compilation without recording
-  why the input was rejected. 【F:compiler/ast_compiler.bp†L109-L112】
-- **Empty module path.** The path length check returns `-1` when `string_length(path_ptr)` is zero,
-  and today the branch omits failure detail text. 【F:compiler/ast_compiler.bp†L114-L117】
 - **Invalid cached module entry.** When the cached entry lacks a valid content pointer or length, the
-  wrapper exits early without writing to the diagnostic buffer. 【F:compiler/ast_compiler.bp†L118-L123】
+  wrapper exits early without writing to the diagnostic buffer. 【F:compiler/ast_compiler.bp†L133-L137】
 - **Downstream pipeline status codes.** Any negative status propagated from `compile_impl`
   (parsing, constant evaluation, validation, metadata generation, or code emission) ultimately
   surfaces through the host without extra context when the callee omits a detail message.
-  【F:compiler/ast_compiler.bp†L143-L152】
+  【F:compiler/ast_compiler.bp†L156-L158】
 - **Memory reservation failures now emit detail.** The linear-memory reservation branch writes a
-  message today, so no additional work is required for this case. 【F:compiler/ast_compiler.bp†L144-L148】
+  message today, so no additional work is required for this case. 【F:compiler/ast_compiler.bp†L149-L154】
 
 ## Stage1 pipeline phases lacking guaranteed diagnostics
 
