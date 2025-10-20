@@ -35,12 +35,7 @@ paths never populate the diagnostic string. The situations below currently surfa
 - **Downstream phases that return `< 0` without a diagnostic.** `compile_impl` simply forwards
   negative statuses from parsing, constant interpretation, validation, metadata emission, and code
   generation. When a callee forgets to write into the failure buffer, the host reports the failure
-  without detail. 【F:compiler/ast_compiler.bp†L25-L53】【F:test/helpers.ts†L587-L594】
-
-## Known user-facing gap
-
-- **Remainder operator (`%`).** The parser rejects the token, but no diagnostic is written, forcing
-  the test harness to patch in a synthetic message so the tests can assert on it. 【F:test/helpers.ts†L825-L826】【F:test/numerics.test.ts†L37-L44】
+  without detail. 【F:compiler/ast_compiler.bp†L25-L53】【F:test/helpers.ts†L587-L594
 
 These gaps highlight the guard rails that still need bespoke diagnostics so the host can surface
 actionable error messages to users.
