@@ -379,6 +379,7 @@ fn type_template_collect_const_params(
         || kind == 3
         || kind == 4
         || kind == 5
+        || kind == 46
         || kind == 14
         || kind == 15
         || kind == 16
@@ -5204,7 +5205,7 @@ fn clone_const_specialization_expr(
     };
     if kind == 25 || kind == 26 || kind == 27 || kind == 28 || kind == 29 || kind == 30
         || kind == 31 || kind == 32 || kind == 33 || kind == 34 || kind == 2 || kind == 3
-        || kind == 4 || kind == 5 || kind == 14 || kind == 15 || kind == 16 || kind == 17
+        || kind == 4 || kind == 5 || kind == 46 || kind == 14 || kind == 15 || kind == 16 || kind == 17
         || kind == 18 || kind == 19 || kind == 20 || kind == 21
     {
         let left_index: i32 = load_i32(entry_ptr + WORD_SIZE);
@@ -6867,6 +6868,20 @@ fn ast_expr_alloc_div(
     location_offset: i32,
 ) -> i32 {
     let index: i32 = ast_expr_alloc(ast_base, 5, left_index, right_index, location_offset);
+    if index < 0 {
+        return -1;
+    };
+    ast_expr_set_type(ast_base, index, ast_expr_type(ast_base, left_index));
+    index
+}
+
+fn ast_expr_alloc_rem(
+    ast_base: i32,
+    left_index: i32,
+    right_index: i32,
+    location_offset: i32,
+) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, 46, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
     };
@@ -9282,6 +9297,7 @@ fn collect_expression_const_params_visit(
         || kind == 3
         || kind == 4
         || kind == 5
+        || kind == 46
         || kind == 14
         || kind == 15
         || kind == 16

@@ -40,7 +40,7 @@ test("float remainder is rejected", async () => {
         5.0f32 % 2.0f32
     }
   `);
-  expect(error.failure.detail).toBe("remainder operator is not supported");
+  expect(error.failure.detail).toBe("binary operator operands must be integers");
 });
 
 test("literal addition executes", async () => {
@@ -214,6 +214,30 @@ test("multiplication with function call executes", async () => {
   `);
   const result = await runWasmMainWithGc(wasm);
   expect(result).toBe(42);
+});
+
+test("literal remainder executes", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn main() -> i32 {
+        10 % 4
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(2);
+});
+
+test("remainder with function call executes", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn helper() -> i32 {
+        20
+    }
+
+    fn main() -> i32 {
+        helper() % 7
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(6);
 });
 
 test("literal division executes", async () => {

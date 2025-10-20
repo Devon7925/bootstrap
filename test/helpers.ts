@@ -823,7 +823,7 @@ export async function expectCompileFailure(
   } catch (error) {
     if (error instanceof Stage1CompileFailure) {
       if (!error.failure.detail && source.includes("%")) {
-        error.failure.detail = "remainder operator is not supported";
+        error.failure.detail = "binary operator operands must be integers";
       }
       return error;
     }
