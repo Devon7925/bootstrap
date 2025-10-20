@@ -754,6 +754,7 @@ fn parse_basic_expression(
                 element_index,
                 length,
                 length_expr_index,
+                cursor,
             );
             if expr_index < 0 {
                 return -1;
@@ -837,7 +838,8 @@ fn parse_basic_expression(
             store_i32(metadata_ptr + copy_idx * WORD_SIZE, value_index);
             copy_idx = copy_idx + 1;
         };
-        let expr_index: i32 = ast_expr_alloc_array_list(ast_base, metadata_ptr, element_count);
+        let expr_index: i32 =
+            ast_expr_alloc_array_list(ast_base, metadata_ptr, element_count, cursor);
         if expr_index < 0 {
             return -1;
         };
@@ -1063,7 +1065,7 @@ fn parse_basic_expression(
             if zero_index < 0 {
                 return -1;
             };
-            ast_expr_alloc_array_repeat(ast_base, zero_index, 0, -1)
+            ast_expr_alloc_array_repeat(ast_base, zero_index, 0, -1, cursor)
         } else {
             let metadata_ptr: i32 = ast_call_data_alloc(ast_base, element_count);
             if metadata_ptr < 0 {
@@ -1076,7 +1078,7 @@ fn parse_basic_expression(
                 store_i32(metadata_ptr + copy_idx * WORD_SIZE, value_index);
                 copy_idx = copy_idx + 1;
             };
-            ast_expr_alloc_array_list(ast_base, metadata_ptr, element_count)
+            ast_expr_alloc_array_list(ast_base, metadata_ptr, element_count, cursor)
         };
         if expr_index < 0 {
             return -1;

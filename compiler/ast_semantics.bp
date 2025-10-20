@@ -1719,15 +1719,15 @@ fn resolve_expression_internal(
         let length_expr_index: i32 = ast_expr_array_repeat_length_expr(ast_base, expr_index);
         if length < 0 {
             if length_expr_index < 0 {
-                        if out_ptr > 0 {
-                            if load_u8(out_ptr) == 0 {
-                                write_failure_detail(
-                                    out_ptr,
-                                    41,
-                                    "array literal length must be non-negative",
-                                );
-                            };
-                        };
+                let location_offset: i32 = ast_expr_array_repeat_location(ast_base, expr_index);
+                record_failure_with_location(
+                    out_ptr,
+                    ast_base,
+                    caller_func_index,
+                    location_offset,
+                    41,
+                    "array literal length must be non-negative",
+                );
                 return -1;
             };
         };
@@ -1764,7 +1764,15 @@ fn resolve_expression_internal(
         };
         let array_type_id: i32 = ast_register_array_type(ast_base, resolved_element, length);
         if array_type_id < 0 {
-            record_failure_detail(out_ptr, 34, "array type table capacity exceeded");
+            let location_offset: i32 = ast_expr_array_repeat_location(ast_base, expr_index);
+            record_failure_with_location(
+                out_ptr,
+                ast_base,
+                caller_func_index,
+                location_offset,
+                34,
+                "array type table capacity exceeded",
+            );
             return -1;
         };
         let resolved_array_type: i32 = resolve_type_id(out_ptr, ast_base, array_type_id);
@@ -1820,15 +1828,15 @@ fn resolve_expression_internal(
             if element_type < 0 {
                 element_type = resolved_current;
             } else if resolved_current != element_type {
-                if out_ptr > 0 {
-                    if load_u8(out_ptr) == 0 {
-                        write_failure_detail(
-                            out_ptr,
-                            45,
-                            "array literal elements must have uniform type",
-                        );
-                    };
-                };
+                let location_offset: i32 = ast_expr_array_list_location(ast_base, expr_index);
+                record_failure_with_location(
+                    out_ptr,
+                    ast_base,
+                    caller_func_index,
+                    location_offset,
+                    45,
+                    "array literal elements must have uniform type",
+                );
                 return -1;
             };
             idx = idx + 1;
@@ -1838,7 +1846,15 @@ fn resolve_expression_internal(
         };
         let array_type_id: i32 = ast_register_array_type(ast_base, element_type, element_count);
         if array_type_id < 0 {
-            record_failure_detail(out_ptr, 34, "array type table capacity exceeded");
+            let location_offset: i32 = ast_expr_array_list_location(ast_base, expr_index);
+            record_failure_with_location(
+                out_ptr,
+                ast_base,
+                caller_func_index,
+                location_offset,
+                34,
+                "array type table capacity exceeded",
+            );
             return -1;
         };
         let resolved_array_type: i32 = resolve_type_id(out_ptr, ast_base, array_type_id);
