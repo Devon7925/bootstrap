@@ -44,7 +44,7 @@ test("const arrays can hold type entries", async () => {
     expect(result).toBe(200);
 });
 
-test.todo("can make tuple from types", async () => {
+test("can make tuple from types", async () => {
     const wasm = await compileWithAstCompiler(`
     const TYPE_VALUE_PAIR: (type, type) = (i32, u8);
 
