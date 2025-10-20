@@ -3274,6 +3274,14 @@ fn module_ensure_state_initialized() {
     };
 }
 
+fn resolve_module_failure_detail_ptr(detail_ptr: i32) -> i32 {
+    if detail_ptr > 0 {
+        return detail_ptr;
+    };
+    module_set_storage_top(module_content_base());
+    module_storage_top()
+}
+
 fn module_allocate_bytes(len: i32) -> i32 {
     module_ensure_state_initialized();
     if len < 0 {

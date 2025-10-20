@@ -17,6 +17,9 @@ const MODULE_STORAGE_TOP_OFFSET = 4;
 const MODULE_TABLE_OFFSET = 8;
 const MODULE_CONTENT_PTR_OFFSET = 8;
 const MODULE_CONTENT_LEN_OFFSET = 12;
+const MODULE_ENTRY_SIZE = 20;
+const MODULE_MAX_COUNT = 256;
+const MODULE_CONTENT_BASE_OFFSET = MODULE_TABLE_OFFSET + MODULE_MAX_COUNT * MODULE_ENTRY_SIZE;
 
 let stage2WasmPromise: Promise<Uint8Array> | undefined;
 
@@ -215,6 +218,27 @@ test("loadModuleFromSource reports linear memory exhaustion", async () => {
 
   expect(failure).not.toBeNull();
   expect(failure?.detail).toBe("failed to reserve linear memory for module storage");
+});
+
+test("loadModuleFromSource reports allocation failure when module storage top is invalid", async () => {
+  const compiler = await instantiateStage2Compiler();
+  const pathPtr = 1_024;
+  const contentPtr = 4_096;
+
+  const moduleStorageTopPtr = MODULE_STATE_BASE + MODULE_STORAGE_TOP_OFFSET;
+  const moduleContentBasePtr = MODULE_STATE_BASE + MODULE_CONTENT_BASE_OFFSET;
+  const view = new DataView(compiler.memory.buffer);
+  view.setInt32(moduleStorageTopPtr, -4, true);
+  zeroMemory(compiler.memory, moduleContentBasePtr, 64);
+
+  writeString(compiler.memory, pathPtr, "/fixtures/broken-storage.bp");
+  writeString(compiler.memory, contentPtr, "fn main() -> i32 { 0 }");
+
+  const status = compiler.loadModuleFromSource(pathPtr, contentPtr);
+  expect(status).toBeLessThan(0);
+
+  const failure = readCompileFailure(compiler, status);
+  expect(failure.detail).toBe("module storage allocation failed");
 });
 
 test("loadModuleFromSource reports null module path pointer", async () => {
