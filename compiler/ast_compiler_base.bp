@@ -6740,7 +6740,7 @@ fn ast_extra_base(ast_base: i32) -> i32 {
 
 const AST_EXPR_ENTRY_SIZE: i32 = 16;
 
-const AST_EXPR_CAPACITY: i32 = 65536;
+const AST_EXPR_CAPACITY: i32 = 131072;
 
 fn ast_expr_count_ptr(ast_base: i32) -> i32 {
     ast_extra_base(ast_base)
