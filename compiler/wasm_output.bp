@@ -650,6 +650,7 @@ fn collect_local_counts_from_expression(
         || kind == 3
         || kind == 4
         || kind == 5
+        || kind == 46
         || kind == 14
         || kind == 15
         || kind == 16
@@ -1333,6 +1334,7 @@ fn expression_code_size(ast_base: i32, expr_index: i32) -> i32 {
         || kind == 3
         || kind == 4
         || kind == 5
+        || kind == 46
         || kind == 14
         || kind == 15
         || kind == 16
@@ -2232,6 +2234,7 @@ fn emit_expression(
         || kind == 3
         || kind == 4
         || kind == 5
+        || kind == 46
         || kind == 14
         || kind == 15
         || kind == 16
@@ -2276,6 +2279,14 @@ fn emit_expression(
                 109
             } else {
                 110
+            }
+        } else if kind == 46 {
+            if is_i64 {
+                if is_signed { 129 } else { 130 }
+            } else if is_signed {
+                111
+            } else {
+                112
             }
         } else if kind == 14 {
             if is_i64 { 81 } else { 70 }

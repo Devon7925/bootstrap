@@ -1663,7 +1663,7 @@ fn parse_multiplicative_expression(
     while current_cursor < len {
         let operator_location: i32 = current_cursor;
         let next_byte: i32 = load_u8(base + current_cursor);
-        if next_byte != '*' && next_byte != '/' {
+        if next_byte != '*' && next_byte != '/' && next_byte != '%' {
             break;
         };
         let operator: i32 = next_byte;
@@ -1708,8 +1708,10 @@ fn parse_multiplicative_expression(
 
         let new_index: i32 = if operator == '*' {
             ast_expr_alloc_mul(ast_base, left_index, right_index, operator_location)
-        } else {
+        } else if operator == '/' {
             ast_expr_alloc_div(ast_base, left_index, right_index, operator_location)
+        } else {
+            ast_expr_alloc_rem(ast_base, left_index, right_index, operator_location)
         };
         if new_index < 0 {
             return -1;
