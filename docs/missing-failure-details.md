@@ -21,9 +21,6 @@ paths never populate the diagnostic string. The situations below currently surfa
 
 ## Module loading API fallbacks
 
-- **`loadModuleFromSource` argument or storage failures.** The WebAssembly side returns `-1` for
-  invalid pointers, empty paths, exceeding the module cache capacity, or allocation failures, but it
-  never fills the failure buffer for those guard clauses. 【F:compiler/ast_compiler.bp†L63-L105】
 - **`compileFromPath` rejects invalid input.** Several early exits—such as a null path pointer, zero
   length, missing module content, or a failed memory reservation—return `-1` without emitting a
   diagnostic. Only the "module has not been loaded" branch writes a detail string today. 【F:compiler/ast_compiler.bp†L111-L149】
