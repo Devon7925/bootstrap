@@ -141,6 +141,29 @@ test("compileFromPath uses the latest module contents", async () => {
   expect(main2()).toBe(7);
 });
 
+test("loadModuleFromSource reports module table capacity reached", async () => {
+  const compiler = await instantiateStage2Compiler();
+  const pathPtr = 1_024;
+  const contentPtr = 4_096;
+  const source = "fn main() -> i32 { 0 }";
+
+  for (let index = 0; index < 256; index += 1) {
+    writeString(compiler.memory, pathPtr, `/fixtures/capacity-${index}.bp`);
+    writeString(compiler.memory, contentPtr, source);
+    const status = compiler.loadModuleFromSource(pathPtr, contentPtr);
+    expect(status).toBe(0);
+  }
+
+  writeString(compiler.memory, pathPtr, "/fixtures/capacity-overflow.bp");
+  writeString(compiler.memory, contentPtr, source);
+
+  const status = compiler.loadModuleFromSource(pathPtr, contentPtr);
+  expect(status).toBeLessThan(0);
+
+  const failure = readCompileFailure(compiler, status);
+  expect(failure.detail).toBe("module table capacity reached");
+});
+
 test("loadModuleFromSource reports linear memory exhaustion", async () => {
   const compiler = await instantiateStage2Compiler();
   const pathPtr = 1_024;
