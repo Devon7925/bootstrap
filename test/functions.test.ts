@@ -91,6 +91,16 @@ test("duplicate function names are rejected", async () => {
   );
 });
 
+test("parser reports diagnostic when function limit is exceeded", async () => {
+  const functionCount = 1_025;
+  const source = Array.from({ length: functionCount }, (_, index) => {
+    return `fn f${index}() -> i32 {\n    ${index}\n}`;
+  }).join("\n\n");
+  const failure = await expectCompileFailure(source);
+  expect(failure.failure.detail).toBeDefined();
+  expect(failure.failure.detail).toContain("function limit exceeded");
+});
+
 test("functions may omit return types", async () => {
   const wasm = await compileWithAstCompiler(`
     fn helper() {
