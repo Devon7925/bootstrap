@@ -139,6 +139,9 @@ fn compileFromPath(path_ptr: i32) -> i32 {
     let input_ptr: i32 = module_entry_content(index);
     let input_len: i32 = module_entry_content_len(index);
     if input_ptr <= 0 || input_len <= 0 {
+        if detail_out_ptr > 0 {
+            write_failure_detail(detail_out_ptr, 35, "cached module entry missing content");
+        };
         return -1;
     };
     let initial_top: i32 = module_storage_top();
