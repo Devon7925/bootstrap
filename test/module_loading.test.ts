@@ -194,6 +194,29 @@ test("loadModuleFromSource reports empty module path", async () => {
   expect(failure.detail).toBe("module path missing");
 });
 
+test("compileFromPath reports empty module path", async () => {
+  const compiler = await instantiateStage2Compiler();
+  const pathPtr = 1_024;
+
+  writeString(compiler.memory, pathPtr, "");
+
+  const producedLength = compiler.compileFromPath(pathPtr);
+  expect(producedLength).toBeLessThan(0);
+
+  const failure = readCompileFailure(compiler, producedLength);
+  expect(failure.detail).toBe("module path missing");
+});
+
+test("compileFromPath reports null module path pointer", async () => {
+  const compiler = await instantiateStage2Compiler();
+
+  const producedLength = compiler.compileFromPath(0);
+  expect(producedLength).toBeLessThan(0);
+
+  const failure = readCompileFailure(compiler, producedLength);
+  expect(failure.detail).toBe("module path missing");
+});
+
 test("compileFromPath returns failure for unknown modules", async () => {
   const compiler = await instantiateStage2Compiler();
   const pathPtr = 1_024;

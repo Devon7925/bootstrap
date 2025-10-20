@@ -106,13 +106,19 @@ fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
 // `loadModuleFromSource`.  The implementation ensures the module graph is loaded
 // only once and resolves imports transitively before running the main pipeline.
 fn compileFromPath(path_ptr: i32) -> i32 {
-    if path_ptr <= 0 {
-        return -1;
-    };
     module_ensure_state_initialized();
     let detail_out_ptr: i32 = module_storage_top();
+    if path_ptr <= 0 {
+        if detail_out_ptr > 0 {
+            write_failure_detail(detail_out_ptr, 19, "module path missing");
+        };
+        return -1;
+    };
     let path_len: i32 = string_length(path_ptr);
     if path_len <= 0 {
+        if detail_out_ptr > 0 {
+            write_failure_detail(detail_out_ptr, 19, "module path missing");
+        };
         return -1;
     };
     let index: i32 = module_find_index(path_ptr, path_len);
