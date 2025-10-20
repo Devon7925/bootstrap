@@ -8,11 +8,9 @@ below currently drop detail text and should be tackled individually so fixes rem
 
 ### `loadModuleFromSource`
 
-- **Module table capacity reached.** Hitting `MODULE_MAX_COUNT` silently rejects the registration
-  request. 【F:compiler/ast_compiler.bp†L77-L83】
 - **Memory allocation failures.** Allocation failures for either the stored path or the module
   contents return early without diagnostics, leaving the host with an empty detail string.
-  【F:compiler/ast_compiler.bp†L83-L104】
+  【F:compiler/ast_compiler.bp†L86-L107】
 
 ### `compileFromPath`
 
