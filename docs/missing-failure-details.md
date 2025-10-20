@@ -27,9 +27,6 @@ paths never populate the diagnostic string. The situations below currently surfa
 - **`compileFromPath` rejects invalid input.** Several early exits—such as a null path pointer, zero
   length, missing module content, or a failed memory reservation—return `-1` without emitting a
   diagnostic. Only the "module has not been loaded" branch writes a detail string today. 【F:compiler/ast_compiler.bp†L111-L149】
-- **Linear-memory growth failures.** If `ensure_memory_capacity` cannot satisfy the requested size,
-  it simply returns `-1`, so the caller propagates a failure with an empty detail field. 【F:compiler/ast_compiler_base.bp†L18-L39】
-
 ## Compiler pipeline entrypoints
 
 - **Downstream phases that return `< 0` without a diagnostic.** `compile_impl` simply forwards

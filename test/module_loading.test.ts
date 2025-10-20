@@ -141,6 +141,31 @@ test("compileFromPath uses the latest module contents", async () => {
   expect(main2()).toBe(7);
 });
 
+test("loadModuleFromSource reports linear memory exhaustion", async () => {
+  const compiler = await instantiateStage2Compiler();
+  const pathPtr = 1_024;
+  const contentPtr = 4_096;
+  const chunk = "fn main() -> i32 { 0 }\n";
+  const targetLength = 900_000;
+  const repeatCount = Math.ceil(targetLength / chunk.length);
+  const largeModule = chunk.repeat(repeatCount).slice(0, targetLength);
+
+  let failure: CompileFailureDetails | null = null;
+  for (let index = 0; index < 64; index += 1) {
+    writeString(compiler.memory, pathPtr, `/fixtures/huge-${index}.bp`);
+    writeString(compiler.memory, contentPtr, largeModule);
+    const status = compiler.loadModuleFromSource(pathPtr, contentPtr);
+    if (status < 0) {
+      failure = readCompileFailure(compiler, status);
+      break;
+    }
+    zeroMemory(compiler.memory, contentPtr, largeModule.length + 1);
+  }
+
+  expect(failure).not.toBeNull();
+  expect(failure?.detail).toBe("failed to reserve linear memory for module storage");
+});
+
 test("compileFromPath returns failure for unknown modules", async () => {
   const compiler = await instantiateStage2Compiler();
   const pathPtr = 1_024;
