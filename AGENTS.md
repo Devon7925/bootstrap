@@ -20,7 +20,7 @@ Bootstrap is an experimental compiler toolchain for a Rust-inspired systems lang
 
 ## General Contribution Guidelines
 - Prefer Bun's toolchain. Use `bun test` before submitting changes that affect TypeScript, compiler code, or runtime behaviour.
-- Rebuild the Stage2 compiler after modifying any `.bp` files under `compiler/` or `stdlib/` by running `bun ./src/cli.ts` (with no arguments). This regenerates `compiler.wasm`.
+- You can rebuild the Stage2 compiler after modifying `.bp` files under `compiler/` or `stdlib/` by running `bun ./src/cli.ts` (with no arguments). This regenerates `compiler.wasm`. Avoid doing this except when necessary.
 - Keep documentation in `docs/` up to date when altering the compilation pipeline or language semantics.
 - When adding tests, follow the existing structure in `test/`, using descriptive filenames and `describe`/`test` blocks.
 
