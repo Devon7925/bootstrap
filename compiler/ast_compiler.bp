@@ -58,9 +58,9 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
 // reuse the content without copying from the host again.
 fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
     module_ensure_state_initialized();
+    let detail_out_ptr: i32 = module_storage_top();
     let path_len: i32 = string_length(path_ptr);
     if path_len <= 0 {
-        let detail_out_ptr: i32 = module_storage_top();
         if detail_out_ptr > 0 {
             write_failure_detail(detail_out_ptr, 19, "module path missing");
         };
@@ -68,6 +68,9 @@ fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
     };
     let content_len: i32 = string_length(content_ptr);
     if content_len < 0 {
+        if detail_out_ptr > 0 {
+            write_failure_detail(detail_out_ptr, 22, "module content missing");
+        };
         return -1;
     };
     let existing_index: i32 = module_find_index(path_ptr, path_len);

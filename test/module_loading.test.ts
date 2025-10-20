@@ -194,6 +194,19 @@ test("loadModuleFromSource reports empty module path", async () => {
   expect(failure.detail).toBe("module path missing");
 });
 
+test("loadModuleFromSource reports null module content pointer", async () => {
+  const compiler = await instantiateStage2Compiler();
+  const pathPtr = 1_024;
+
+  writeString(compiler.memory, pathPtr, "/fixtures/module.bp");
+
+  const status = compiler.loadModuleFromSource(pathPtr, 0);
+  expect(status).toBeLessThan(0);
+
+  const failure = readCompileFailure(compiler, status);
+  expect(failure.detail).toBe("module content missing");
+});
+
 test("compileFromPath reports empty module path", async () => {
   const compiler = await instantiateStage2Compiler();
   const pathPtr = 1_024;

@@ -8,10 +8,6 @@ below currently drop detail text and should be tackled individually so fixes rem
 
 ### `loadModuleFromSource`
 
-- **Missing module content.** When the provided content pointer is zero or negative, the helper exits
-  without providing context for the failure. 【F:compiler/ast_compiler.bp†L69-L72】
-- **Negative content length.** If `string_length(content_ptr)` reports a negative length the function
-  returns `-1` without populating `failure.detail`. 【F:compiler/ast_compiler.bp†L69-L72】
 - **Module table capacity reached.** Hitting `MODULE_MAX_COUNT` silently rejects the registration
   request. 【F:compiler/ast_compiler.bp†L77-L83】
 - **Memory allocation failures.** Allocation failures for either the stored path or the module
