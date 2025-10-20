@@ -12,12 +12,12 @@ Attempting to extend `compiler/ast_compiler_base.bp` and `compiler/ast_parser.bp
 
 ## Root Cause
 
-Stage2’s memory layout only reserves space for 32,768 expression entries even though `AST_EXPR_CAPACITY` advertises support for 131,072 expressions. The expression arena begins at `ast_expr_count_ptr(ast_base)` and is expected to grow by `AST_EXPR_ENTRY_SIZE` (16 bytes) per expression. However, `ast_expr_types_base(ast_base)` advances the base pointer by a fixed `524292` bytes, which is exactly `WORD_SIZE + 32_768 * AST_EXPR_ENTRY_SIZE`. Once the parser produces more than 32,768 expressions—something the new helpers do by introducing additional call expressions—the expression table overflows into the adjacent expression-type metadata, corrupting the AST and causing the stage2 backend to abort before emitting any code.
+Stage2’s memory layout only reserves space for 32,768 expression entries even though `AST_EXPR_CAPACITY` advertises support for 131,072 expressions. The expression arena begins at `ast_expr_count_ptr(ast_base)` and is expected to grow by `AST_EXPR_ENTRY_SIZE` (16 bytes) per expression. However, `ast_expr_types_base(ast_base)` advanced the base pointer by a fixed `524292` bytes, which was exactly `WORD_SIZE + 32_768 * AST_EXPR_ENTRY_SIZE`. Once the parser produced more than 32,768 expressions—something the new helpers do by introducing additional call expressions—the expression table overflowed into the adjacent expression-type metadata, corrupting the AST and causing the stage2 backend to abort before emitting any code.
 
 ## Resolution
 
-* Expanded the expression arena to accommodate 65,536 entries—four times the original limit—by recalculating the offsets used by `ast_expr_types_base` and the scratch buffer, preventing expression metadata from overlapping adjacent sections while staying within stage1’s fixed 4 MB memory layout.【F:compiler/ast_compiler_base.bp†L3556-L3573】
-* Added a regression test that boots the stage1 compiler inside the test harness, recompiles the compiler sources, and asserts the recorded expression count exceeds 32,768 to guard against future regressions.【F:test/regressions.test.ts†L1-L24】
+* Expanded the expression arena to match the declared capacity (131,072 entries) by updating the offsets used by `ast_expr_types_base` and the scratch buffer, preventing expression metadata from overlapping adjacent sections while staying within stage1’s fixed 4 MB memory layout.【F:compiler/ast_compiler_base.bp†L6758-L6785】
+* Added a regression test that boots the stage1 compiler inside the test harness, recompiles the compiler sources, and asserts the recorded expression count exceeds 65,536 to guard against future regressions.【F:test/regressions.test.ts†L1-L28】
 
 ## Verification
 

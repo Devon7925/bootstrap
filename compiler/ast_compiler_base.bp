@@ -6756,7 +6756,9 @@ fn ast_expr_entry_ptr(ast_base: i32, index: i32) -> i32 {
 }
 
 fn ast_expr_types_base(ast_base: i32) -> i32 {
-    ast_extra_base(ast_base) + 1048580
+    // Reserve space for WORD_SIZE + AST_EXPR_CAPACITY * AST_EXPR_ENTRY_SIZE
+    // expression entries (2097156 bytes) before the type metadata section.
+    ast_extra_base(ast_base) + 2097156
 }
 
 fn ast_expr_type_entry_ptr(ast_base: i32, index: i32) -> i32 {
@@ -6778,7 +6780,9 @@ fn ast_expr_type(ast_base: i32, index: i32) -> i32 {
 }
 
 fn ast_temp_base(ast_base: i32) -> i32 {
-    ast_expr_types_base(ast_base) + 262144
+    // Reserve AST_EXPR_CAPACITY words (524288 bytes) for expression type IDs
+    // before the temporary workspace.
+    ast_expr_types_base(ast_base) + 524288
 }
 
 fn ast_expr_reset(ast_base: i32) {

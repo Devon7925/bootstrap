@@ -22,7 +22,7 @@ test("stage1 compiler handles expression-heavy programs", async () => {
   const sourceLength = encoder.encode(entry.source).length;
   const outputPtr = readModuleStorageTop(compiler.memory);
   const expressionCount = readExpressionCount(compiler.memory, outputPtr, sourceLength);
-  expect(expressionCount).toBeGreaterThan(32_768);
+  expect(expressionCount).toBeGreaterThan(65_536);
 });
 
 test("stage1 compiler handles modules with CRLF newlines", async () => {
