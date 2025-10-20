@@ -32,8 +32,6 @@ paths never populate the diagnostic string. The situations below currently surfa
 
 ## Compiler pipeline entrypoints
 
-- **Zero-length source modules.** `compile_impl` bails out immediately when `input_len <= 0` without
-  touching the failure buffer. 【F:compiler/ast_compiler.bp†L8-L33】
 - **Parser limits reached before diagnostics fire.** The top-level parser returns `-1` once the
   function count hits `AST_MAX_FUNCTIONS`, but no diagnostic is written for that boundary. 【F:compiler/ast_parser.bp†L3760-L3778】
 - **Downstream phases that return `< 0` without a diagnostic.** `compile_impl` simply forwards

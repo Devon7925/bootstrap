@@ -11,10 +11,6 @@ fn compile_impl(
     out_ptr: i32,
     current_module_index: i32,
 ) -> i32 {
-    if input_len <= 0 {
-        return -1;
-    };
-
     initialize_layout(out_ptr);
     store_i32(scratch_module_base_ptr(out_ptr), input_ptr);
     store_i32(scratch_module_len_ptr(out_ptr), input_len);
