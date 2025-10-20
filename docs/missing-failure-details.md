@@ -6,12 +6,6 @@ below currently drop detail text and should be tackled individually so fixes rem
 
 ## Module loading APIs
 
-### `loadModuleFromSource`
-
-- **Memory allocation failures.** Allocation failures for either the stored path or the module
-  contents return early without diagnostics, leaving the host with an empty detail string.
-  【F:compiler/ast_compiler.bp†L86-L107】
-
 ### `compileFromPath`
 
 - **Downstream pipeline status codes.** Any negative status propagated from `compile_impl`

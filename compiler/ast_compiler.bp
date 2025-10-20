@@ -58,7 +58,7 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
 // reuse the content without copying from the host again.
 fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
     module_ensure_state_initialized();
-    let detail_out_ptr: i32 = module_storage_top();
+    let mut detail_out_ptr: i32 = module_storage_top();
     let path_len: i32 = string_length(path_ptr);
     if path_len <= 0 {
         if detail_out_ptr > 0 {
@@ -85,6 +85,18 @@ fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
         };
         let allocated_path_ptr: i32 = module_allocate_bytes(path_len + 1);
         if allocated_path_ptr <= 0 {
+            let mut message_ptr: i32 = module_storage_top();
+            message_ptr = resolve_module_failure_detail_ptr(message_ptr);
+            detail_out_ptr = message_ptr;
+            if message_ptr > 0 {
+                if load_u8(message_ptr) == 0 {
+                    write_failure_detail(
+                        message_ptr,
+                        32,
+                        "module storage allocation failed",
+                    );
+                };
+            };
             return -1;
         };
         copy_bytes(allocated_path_ptr, path_ptr, path_len);
@@ -93,6 +105,18 @@ fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
     };
     let allocated_content_ptr: i32 = module_allocate_bytes(content_len + 1);
     if allocated_content_ptr <= 0 {
+        let mut message_ptr: i32 = module_storage_top();
+        message_ptr = resolve_module_failure_detail_ptr(message_ptr);
+        detail_out_ptr = message_ptr;
+        if message_ptr > 0 {
+            if load_u8(message_ptr) == 0 {
+                write_failure_detail(
+                    message_ptr,
+                    32,
+                    "module storage allocation failed",
+                );
+            };
+        };
         return -1;
     };
     copy_bytes(allocated_content_ptr, content_ptr, content_len);
