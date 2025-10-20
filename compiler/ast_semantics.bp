@@ -79,6 +79,122 @@ fn record_failure_with_location(
     0
 }
 
+fn store_call_failure_location(
+    out_ptr: i32,
+    ast_base: i32,
+    caller_func_index: i32,
+    location_offset: i32,
+) -> bool {
+    if out_ptr <= 0 {
+        return false;
+    };
+    if location_offset < 0 {
+        return false;
+    };
+    let mut module_base: i32 = scratch_module_base(out_ptr);
+    let mut module_len: i32 = scratch_module_len(out_ptr);
+    if caller_func_index >= 0 {
+        let func_base: i32 = ast_function_entry_module_base(ast_base, caller_func_index);
+        let func_len: i32 = ast_function_entry_module_len(ast_base, caller_func_index);
+        if func_base > 0 {
+            module_base = func_base;
+        };
+        if func_len > 0 {
+            module_len = func_len;
+        };
+    };
+    if module_base <= 0 {
+        return false;
+    };
+    if module_len <= 0 {
+        return false;
+    };
+    let effective_offset: i32 = if location_offset > module_len {
+        module_len
+    } else {
+        location_offset
+    };
+    let mut line: i32 = 1;
+    let mut column: i32 = 1;
+    let mut offset_idx: i32 = 0;
+    while offset_idx < effective_offset {
+        let byte: i32 = load_u8(module_base + offset_idx);
+        if byte == '\n' {
+            line = line + 1;
+            column = 1;
+        } else {
+            column = column + 1;
+        };
+        offset_idx = offset_idx + 1;
+    };
+    if line <= 0 {
+        return false;
+    };
+    if column <= 0 {
+        return false;
+    };
+    let mut path_ptr: i32 = scratch_failure_path_ptr(out_ptr);
+    let mut path_len: i32 = scratch_failure_path_len(out_ptr);
+    if path_ptr <= 0 || path_len <= 0 {
+        let module_index: i32 = scratch_module_index(out_ptr);
+        if module_index >= 0 {
+            let entry_path_ptr: i32 = module_entry_path(module_index);
+            let entry_path_len: i32 = module_entry_path_len(module_index);
+            if entry_path_ptr > 0 && entry_path_len > 0 {
+                path_ptr = entry_path_ptr;
+                path_len = entry_path_len;
+            };
+        };
+    };
+    store_i32(scratch_failure_path_ptr_ptr(out_ptr), path_ptr);
+    store_i32(scratch_failure_path_len_ptr(out_ptr), path_len);
+    store_i32(scratch_failure_line_ptr(out_ptr), line);
+    store_i32(scratch_failure_column_ptr(out_ptr), column);
+    store_i32(scratch_failure_character_ptr(out_ptr), effective_offset + 1);
+    store_i32(scratch_failure_offset_ptr(out_ptr), effective_offset);
+    true
+}
+
+fn try_record_call_failure_with_location(
+    out_ptr: i32,
+    ast_base: i32,
+    caller_func_index: i32,
+    location_offset: i32,
+    const MESSAGE_LEN: i32,
+    message: [u8; MESSAGE_LEN],
+) -> bool {
+    if !store_call_failure_location(out_ptr, ast_base, caller_func_index, location_offset) {
+        return false;
+    };
+    if load_u8(out_ptr) != 0 {
+        return true;
+    };
+    write_failure_detail(out_ptr, MESSAGE_LEN, message);
+    true
+}
+
+fn find_call_metadata_location(ast_base: i32, metadata_ptr: i32) -> i32 {
+    if metadata_ptr <= 0 {
+        return -1;
+    };
+    let expr_count: i32 = ast_expr_count(ast_base);
+    let mut expr_index: i32 = 0;
+    loop {
+        if expr_index >= expr_count {
+            break;
+        };
+        let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+        if load_i32(entry_ptr) == 1 {
+            let entry_metadata: i32 = load_i32(entry_ptr + WORD_SIZE);
+            if entry_metadata == metadata_ptr {
+                return load_i32(entry_ptr + 3 * WORD_SIZE);
+            };
+        };
+        expr_index = expr_index + 1;
+    };
+    -1
+}
+
 fn validate_function_type_template(
     ast_base: i32,
     func_index: i32,
@@ -293,10 +409,15 @@ fn resolve_call_metadata(
     func_count: i32,
     caller_is_const: bool,
     caller_func_index: i32,
+    call_location_offset: i32,
 ) -> i32 {
     let mut current_metadata: i32 = metadata_ptr;
     if current_metadata < 0 {
         return -1;
+    };
+    let mut resolved_location_offset: i32 = call_location_offset;
+    if resolved_location_offset < 0 {
+        resolved_location_offset = find_call_metadata_location(ast_base, metadata_ptr);
     };
     let mut arg_count: i32 = call_metadata_arg_count(current_metadata);
     if arg_count < 0 {
@@ -337,11 +458,21 @@ fn resolve_call_metadata(
             if identifiers_match(call_name_ptr, call_name_len, target_name_ptr, target_name_len) {
                 let expected_params: i32 = load_i32(target_entry_ptr + 8);
                 if expected_params != arg_count {
-                    record_failure_detail(
+                    let recorded: bool = try_record_call_failure_with_location(
                         out_ptr,
+                        ast_base,
+                        caller_func_index,
+                        resolved_location_offset,
                         28,
                         "call argument count mismatch",
                     );
+                    if !recorded {
+                        record_failure_detail(
+                            out_ptr,
+                            28,
+                            "call argument count mismatch",
+                        );
+                    };
                     return -1;
                 };
                 let param_types_ptr: i32 = load_i32(target_entry_ptr + 24);
@@ -358,11 +489,21 @@ fn resolve_call_metadata(
                 };
                 if caller_is_const {
                     if !ast_function_is_const(ast_base, target_idx) {
-                        record_failure_detail(
+                        let recorded: bool = try_record_call_failure_with_location(
                             out_ptr,
+                            ast_base,
+                            caller_func_index,
+                            resolved_location_offset,
                             45,
                             "const functions may only call const functions",
                         );
+                        if !recorded {
+                            record_failure_detail(
+                                out_ptr,
+                                45,
+                                "const functions may only call const functions",
+                            );
+                        };
                         return -1;
                     };
                 };
@@ -476,11 +617,21 @@ fn resolve_call_metadata(
                             return -1;
                         };
                         if resolved_expected != resolved_arg {
-                            record_failure_detail(
+                            let recorded: bool = try_record_call_failure_with_location(
                                 out_ptr,
+                                ast_base,
+                                caller_func_index,
+                                resolved_location_offset,
                                 27,
                                 "call argument type mismatch",
                             );
+                            if !recorded {
+                                record_failure_detail(
+                                    out_ptr,
+                                    27,
+                                    "call argument type mismatch",
+                                );
+                            };
                             return -1;
                         };
                     } else {
@@ -698,11 +849,21 @@ fn resolve_call_metadata(
         target_idx = target_idx + 1;
     };
     if found_idx < 0 {
-        record_failure_detail(
+        let recorded: bool = try_record_call_failure_with_location(
             out_ptr,
+            ast_base,
+            caller_func_index,
+            resolved_location_offset,
             34,
             "call references undefined function",
         );
+        if !recorded {
+            record_failure_detail(
+                out_ptr,
+                34,
+                "call references undefined function",
+            );
+        };
         return -1;
     };
     let callee_entry_ptr: i32 = ast_function_entry_ptr(ast_base, found_idx);
@@ -712,11 +873,21 @@ fn resolve_call_metadata(
     };
     if arg_count != runtime_param_count {
         if arg_count < runtime_param_count {
-            record_failure_detail(
+            let recorded: bool = try_record_call_failure_with_location(
                 out_ptr,
+                ast_base,
+                caller_func_index,
+                resolved_location_offset,
                 28,
                 "call argument count mismatch",
             );
+            if !recorded {
+                record_failure_detail(
+                    out_ptr,
+                    28,
+                    "call argument count mismatch",
+                );
+            };
             return -1;
         };
         if !ast_function_has_const_params(ast_base, found_idx) {
@@ -732,11 +903,21 @@ fn resolve_call_metadata(
             current_metadata = compacted;
             arg_count = runtime_param_count;
         } else {
-            record_failure_detail(
+            let recorded: bool = try_record_call_failure_with_location(
                 out_ptr,
+                ast_base,
+                caller_func_index,
+                resolved_location_offset,
                 28,
                 "call argument count mismatch",
             );
+            if !recorded {
+                record_failure_detail(
+                    out_ptr,
+                    28,
+                    "call argument count mismatch",
+                );
+            };
             return -1;
         };
     };
@@ -1043,6 +1224,8 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
 
         if body_kind == 1 {
             let metadata_ptr: i32 = load_i32(entry_ptr + 16);
+            let call_location_offset: i32 =
+                find_call_metadata_location(ast_base, metadata_ptr);
             let updated_metadata: i32 = resolve_call_metadata(
                 out_ptr,
                 ast_base,
@@ -1050,6 +1233,7 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
                 total_funcs,
                 caller_is_const,
                 idx,
+                call_location_offset,
             );
             if updated_metadata < 0 {
                 return -1;
@@ -1224,6 +1408,7 @@ fn resolve_expression_internal(
         if metadata_ptr < 0 {
             return -1;
         };
+        let call_location_offset: i32 = load_i32(entry_ptr + 12);
         let updated_metadata: i32 = resolve_call_metadata(
             out_ptr,
             ast_base,
@@ -1231,6 +1416,7 @@ fn resolve_expression_internal(
             func_count,
             caller_is_const,
             caller_func_index,
+            call_location_offset,
         );
         if updated_metadata < 0 {
             return -1;

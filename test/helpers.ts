@@ -32,6 +32,12 @@ const MODULE_CONTENT_PTR = 4_096;
 const DEFAULT_ENTRY_MODULE_PATH = "/entry.bp";
 const MEMORY_INTRINSICS_MODULE_PATH = "/stdlib/memory.bp";
 const FAILURE_DETAIL_CAPACITY = 64;
+const SCRATCH_FAILURE_PATH_PTR_OFFSET = 4_048;
+const SCRATCH_FAILURE_PATH_LEN_OFFSET = 4_052;
+const SCRATCH_FAILURE_LINE_OFFSET = 4_056;
+const SCRATCH_FAILURE_COLUMN_OFFSET = 4_060;
+const SCRATCH_FAILURE_CHARACTER_OFFSET = 4_064;
+const SCRATCH_FAILURE_OFFSET_OFFSET = 4_068;
 
 const WORD_SIZE = 4;
 const SCRATCH_INSTR_CAPACITY = 131_072;
@@ -910,6 +916,26 @@ export function describeCompilationFailure(
     const text = decoder.decode(slice).trim();
     if (text.length > 0) {
       detail = text;
+    }
+  }
+
+  const line = safeReadI32(view, outputPtr + SCRATCH_FAILURE_LINE_OFFSET);
+  const column = safeReadI32(view, outputPtr + SCRATCH_FAILURE_COLUMN_OFFSET);
+  if (line > 0 && column > 0) {
+    let path = "/entry.bp";
+    const pathPtr = safeReadI32(view, outputPtr + SCRATCH_FAILURE_PATH_PTR_OFFSET);
+    const pathLen = safeReadI32(view, outputPtr + SCRATCH_FAILURE_PATH_LEN_OFFSET);
+    if (pathPtr > 0 && pathLen > 0) {
+      try {
+        const bytes = new Uint8Array(memory.buffer, pathPtr, pathLen);
+        path = decoder.decode(bytes);
+      } catch {
+        path = "/entry.bp";
+      }
+    }
+    if (!detail || !detail.startsWith("/")) {
+      const message = detail && detail.length > 0 ? detail : "";
+      detail = `${path}:${line}:${column}: ${message}`.trimEnd();
     }
   }
 
