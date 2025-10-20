@@ -63,6 +63,10 @@ fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
     module_ensure_state_initialized();
     let path_len: i32 = string_length(path_ptr);
     if path_len <= 0 {
+        let detail_out_ptr: i32 = module_storage_top();
+        if detail_out_ptr > 0 {
+            write_failure_detail(detail_out_ptr, 10, "empty path");
+        };
         return -1;
     };
     let content_len: i32 = string_length(content_ptr);

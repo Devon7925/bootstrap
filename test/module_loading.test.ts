@@ -166,6 +166,21 @@ test("loadModuleFromSource reports linear memory exhaustion", async () => {
   expect(failure?.detail).toBe("failed to reserve linear memory for module storage");
 });
 
+test("loadModuleFromSource reports empty module path", async () => {
+  const compiler = await instantiateStage2Compiler();
+  const pathPtr = 1_024;
+  const contentPtr = 4_096;
+
+  writeString(compiler.memory, pathPtr, "");
+  writeString(compiler.memory, contentPtr, "fn main() -> i32 { 0 }");
+
+  const status = compiler.loadModuleFromSource(pathPtr, contentPtr);
+  expect(status).toBeLessThan(0);
+
+  const failure = readCompileFailure(compiler, status);
+  expect(failure.detail).toBe("empty path");
+});
+
 test("compileFromPath returns failure for unknown modules", async () => {
   const compiler = await instantiateStage2Compiler();
   const pathPtr = 1_024;
