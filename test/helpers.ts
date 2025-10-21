@@ -828,15 +828,6 @@ export async function expectCompileFailure(
     await tryCompileWithAstCompiler(source, options);
   } catch (error) {
     if (error instanceof Stage1CompileFailure) {
-      if (source.includes("%")) {
-        if (
-          !error.failure.detail ||
-          error.failure.detail.includes("module compilation failed") ||
-          error.failure.detail === "type metadata resolution failed"
-        ) {
-          error.failure.detail = "binary operator operands must be integers";
-        }
-      }
       return error;
     }
     throw error;
