@@ -5350,6 +5350,106 @@ fn clone_const_specialization_expr(
         if cloned_tuple < 0 {
             return -1;
         };
+        let tuple_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, cloned_tuple);
+        if load_i32(tuple_entry_ptr) == 0 {
+            let literal_value: i32 = load_i32(tuple_entry_ptr + WORD_SIZE);
+            let mut literal_type: i32 = ast_expr_type(ast_base, cloned_tuple);
+            if literal_type < 0 {
+                return -1;
+            };
+            if literal_type == BUILTIN_TYPE_ID_TYPE {
+                if literal_value < 0 {
+                    return -1;
+                };
+                if !type_id_is_tuple(literal_value) {
+                    return -1;
+                };
+                let resolved_tuple: i32 = resolve_type_id(0, ast_base, literal_value);
+                if resolved_tuple < 0 {
+                    return -1;
+                };
+                if !type_id_is_tuple(resolved_tuple) {
+                    return -1;
+                };
+                let tuple_idx: i32 = tuple_type_index(resolved_tuple);
+                if tuple_idx < 0 {
+                    return -1;
+                };
+                if tuple_idx >= ast_tuple_types_count(ast_base) {
+                    return -1;
+                };
+                if ensure_tuple_type_metadata(0, ast_base, tuple_idx, resolved_tuple) < 0 {
+                    return -1;
+                };
+                let element_count: i32 = ast_tuple_type_element_count(ast_base, tuple_idx);
+                if field_index < 0 || field_index >= element_count {
+                    return -1;
+                };
+                let elements_ptr: i32 = ast_tuple_type_elements_ptr(ast_base, tuple_idx);
+                if elements_ptr < 0 {
+                    return -1;
+                };
+                let element_type: i32 = load_i32(elements_ptr + field_index * WORD_SIZE);
+                if element_type < 0 {
+                    return -1;
+                };
+                let literal_index: i32 =
+                    ast_expr_alloc_literal(ast_base, element_type, BUILTIN_TYPE_ID_TYPE);
+                if literal_index < 0 {
+                    return -1;
+                };
+                return literal_index;
+            };
+            if type_id_is_tuple(literal_type) {
+                let resolved_tuple: i32 = resolve_type_id(0, ast_base, literal_type);
+                if resolved_tuple < 0 {
+                    return -1;
+                };
+                if resolved_tuple != literal_type {
+                    ast_expr_set_type(ast_base, cloned_tuple, resolved_tuple);
+                    literal_type = resolved_tuple;
+                };
+                let tuple_idx: i32 = tuple_type_index(literal_type);
+                if tuple_idx < 0 {
+                    return -1;
+                };
+                if tuple_idx >= ast_tuple_types_count(ast_base) {
+                    return -1;
+                };
+                if ensure_tuple_type_metadata(0, ast_base, tuple_idx, literal_type) < 0 {
+                    return -1;
+                };
+                let element_count: i32 = ast_tuple_type_element_count(ast_base, tuple_idx);
+                if field_index < 0 || field_index >= element_count {
+                    return -1;
+                };
+                let elements_ptr: i32 = ast_tuple_type_elements_ptr(ast_base, tuple_idx);
+                if elements_ptr < 0 {
+                    return -1;
+                };
+                let element_type: i32 = load_i32(elements_ptr + field_index * WORD_SIZE);
+                if element_type < 0 {
+                    return -1;
+                };
+                if element_count > 0 {
+                    if literal_value <= 0 {
+                        return -1;
+                    };
+                    let slot_ptr: i32 = literal_value + field_index * 2 * WORD_SIZE;
+                    let element_value: i32 = load_i32(slot_ptr);
+                    let element_value_type: i32 = load_i32(slot_ptr + WORD_SIZE);
+                    if element_value_type < 0 {
+                        return -1;
+                    };
+                    let literal_index: i32 =
+                        ast_expr_alloc_literal(ast_base, element_value, element_value_type);
+                    if literal_index < 0 {
+                        return -1;
+                    };
+                    return literal_index;
+                };
+            };
+        };
         let location_offset: i32 = load_i32(entry_ptr + 3 * WORD_SIZE);
         let new_index: i32 = ast_expr_alloc_tuple_get(
             ast_base,

@@ -90,6 +90,20 @@ test("const arrays of types can be bound to names", async () => {
     expect(result).toBe(200);
 });
 
+test("const parameters can read tuple value entries", async () => {
+    const wasm = await compileWithAstCompiler(`
+    fn use_pair(const PAIR: (type, i32)) -> i32 {
+        PAIR.1
+    }
+
+    fn main() -> i32 {
+        use_pair((i32, 3))
+    }
+  `);
+    const result = await runWasmMainWithGc(wasm);
+    expect(result).toBe(3);
+});
+
 test.todo("const parameters can accept tuples mixing types and values", async () => {
     const wasm = await compileWithAstCompiler(`
     fn use_pair(const PAIR: (type, i32)) -> i32 {
