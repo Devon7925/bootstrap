@@ -1495,7 +1495,7 @@ fn parse_block_expression_body(
                 };
                 after_return = skip_whitespace(base, len, after_return);
             };
-            let return_expr_index: i32 = ast_expr_alloc_return(ast_base, value_index);
+            let return_expr_index: i32 = ast_expr_alloc_return(ast_base, value_index, idx);
             if return_expr_index < 0 {
                 store_i32(locals_stack_count_ptr, saved_stack_count);
                 store_i32(locals_next_index_ptr, saved_next_index);
@@ -4810,7 +4810,8 @@ fn clone_const_specialization_expr(
         if cloned_value < 0 {
             return -1;
         };
-        let new_index: i32 = ast_expr_alloc_return(ast_base, cloned_value);
+        let location_offset: i32 = load_i32(entry_ptr + 3 * WORD_SIZE);
+        let new_index: i32 = ast_expr_alloc_return(ast_base, cloned_value, location_offset);
         if new_index < 0 {
             return -1;
         };
@@ -7868,8 +7869,8 @@ fn ast_expr_alloc_continue(ast_base: i32, location_offset: i32) -> i32 {
     index
 }
 
-fn ast_expr_alloc_return(ast_base: i32, value_index: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 23, value_index, 0, 0);
+fn ast_expr_alloc_return(ast_base: i32, value_index: i32, location_offset: i32) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, 23, value_index, 0, location_offset);
     if index < 0 {
         return -1;
     };

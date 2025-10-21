@@ -243,7 +243,7 @@ test("bare return is rejected for non-unit functions", async () => {
     }
   `);
   expect(failure.failure.detail).toBe(
-    "return expression type does not match function return type",
+    "/entry.bp:3:9: return expression type does not match function return type",
   );
 });
 

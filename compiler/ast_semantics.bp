@@ -2939,8 +2939,12 @@ fn resolve_expression_internal(
                 if value_type >= 0 && value_type != expected_return {
                     if out_ptr > 0 {
                         if load_u8(out_ptr) == 0 {
-                            write_failure_detail(
+                            let location_offset: i32 = load_i32(entry_ptr + 12);
+                            record_failure_with_location(
                                 out_ptr,
+                                ast_base,
+                                caller_func_index,
+                                location_offset,
                                 58,
                                 "return expression type does not match function return type",
                             );
