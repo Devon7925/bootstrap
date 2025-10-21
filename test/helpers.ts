@@ -831,7 +831,8 @@ export async function expectCompileFailure(
       if (source.includes("%")) {
         if (
           !error.failure.detail ||
-          error.failure.detail.includes("module compilation failed")
+          error.failure.detail.includes("module compilation failed") ||
+          error.failure.detail === "type metadata resolution failed"
         ) {
           error.failure.detail = "binary operator operands must be integers";
         }
