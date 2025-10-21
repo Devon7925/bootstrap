@@ -134,7 +134,7 @@ test("const parameters can accept arrays of types", async () => {
     expect(result).toBe(100);
 });
 
-test.todo("struct like function signiture compiles", async () => {
+test("struct like function signiture compiles", async () => {
     const wasm = await compileWithAstCompiler(`
     const fn struct_like(const STR_LEN: i32, const PROP_COUNT: i32, const PROPS: [([u8; STR_LEN], type); PROP_COUNT]) -> type {
         i32
