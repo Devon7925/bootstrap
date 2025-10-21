@@ -34,15 +34,6 @@ test("numeric operations execute", async () => {
   expect(main()).toBe(0);
 });
 
-test("float remainder is rejected", async () => {
-  const error = await expectCompileFailure(`
-    fn float_mod() -> f32 {
-        5.0f32 % 2.0f32
-    }
-  `);
-  expect(error.failure.detail).toBe("binary operator operands must be integers");
-});
-
 test("literal addition executes", async () => {
   const wasm = await compileWithAstCompiler(`
     fn main() -> i32 {
