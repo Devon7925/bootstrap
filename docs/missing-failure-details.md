@@ -1,24 +1,22 @@
-# Gaps in Stage1 Failure Diagnostics
+# Stage1 Failures Missing Diagnostics
 
-The Stage1 toolchain reports structured failures through `error.failure.detail`, but several code
-paths still return a `Stage1CompileFailure` without populating the diagnostic string. The situations
-below currently drop detail text and should be tackled individually so fixes remain tractable.
+This list tracks Stage1 failure paths that a user can trigger via a code-level
+regression test and that currently reach the host without populating
+`error.failure.detail`. Keeping the list focused on testable scenarios lets us
+add coverage alongside future fixes.
 
-## Module loading APIs
+## Inline `inline_wasm` argument validation
 
-### `compileFromPath`
+When `inline_wasm` receives anything other than a literal array of `u8`
+constants, the parser aborts by returning `-1` from
+`inline_wasm_collect_bytes`/`inline_wasm_literal_byte` without first writing a
+failure detail. That covers both non-literal inputs (for example passing a
+local variable) and literals that contain values outside the byte range. The
+host observes these cases as `Stage1CompileFailure` instances whose
+`failure.detail` field is empty, which is why the inline-wasm tests only assert
+on the thrown error message today.
 
-- **Memory reservation failures now emit detail.** The linear-memory reservation branch writes a
-  message today, so no additional work is required for this case. 【F:compiler/ast_compiler.bp†L149-L154】
-
-## Stage1 pipeline phases lacking guaranteed diagnostics
-
-`compile_impl` forwards negative statuses from each compilation phase. Several callees still return
-`-1` without guaranteeing that a detail string was written first, producing silent failures in the
-host wrapper.
-
-- **Code generation errors.** A non-positive byte count from `emit_program` is surfaced directly to
-  the host with no additional detail when the emitter stops early. 【F:compiler/ast_compiler.bp†L40-L47】【F:compiler/wasm_output.bp†L3301-L3358】
-
-These gaps highlight the remaining guardrails that need bespoke diagnostics so the host can surface
-actionable error messages to users.
+- Validation helpers: `compiler/ast_compiler_base.bp`
+  (`inline_wasm_literal_byte`, `inline_wasm_collect_bytes`).
+- Reproducible coverage: `test/inline_wasm.test.ts` "inline_wasm requires
+  literal u8 array" and "inline_wasm enforces u8 range".
