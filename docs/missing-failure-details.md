@@ -17,8 +17,5 @@ below currently drop detail text and should be tackled individually so fixes rem
 `-1` without guaranteeing that a detail string was written first, producing silent failures in the
 host wrapper.
 
-- **Code generation errors.** A non-positive byte count from `emit_program` is surfaced directly to
-  the host with no additional detail when the emitter stops early. 【F:compiler/ast_compiler.bp†L40-L47】【F:compiler/wasm_output.bp†L3301-L3358】
-
 These gaps highlight the remaining guardrails that need bespoke diagnostics so the host can surface
 actionable error messages to users.

@@ -6587,6 +6587,16 @@ fn record_type_metadata_failure(out_ptr: i32) {
     };
 }
 
+fn record_code_generation_failure(out_ptr: i32) {
+    if out_ptr > 0 {
+        if load_u8(out_ptr) == 0 {
+            clear_failure_location(out_ptr);
+            let message: [u8; 22] = "code generation failed";
+            write_failure_detail(out_ptr, 22, message);
+        };
+    };
+}
+
 fn array_type_cached_id(ast_base: i32, index: i32) -> i32 {
     load_i32(ast_array_type_entry_ptr(ast_base, index) + AST_ARRAY_TYPE_CACHE_OFFSET)
 }

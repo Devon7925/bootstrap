@@ -26,6 +26,7 @@ fn compile_impl(
         current_module_index,
     );
     if func_count <= 0 {
+        record_code_generation_failure(out_ptr);
         if ast_constants_count(ast_base) > 0 {
             record_type_metadata_failure(out_ptr);
         };
@@ -51,6 +52,7 @@ fn compile_impl(
 
     let produced_len: i32 = emit_program(out_ptr, ast_base, final_func_count);
     if produced_len <= 0 {
+        record_code_generation_failure(out_ptr);
         record_type_metadata_failure(out_ptr);
         return -1;
     };
