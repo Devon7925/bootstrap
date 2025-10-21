@@ -188,6 +188,23 @@ fn compileFromPath(path_ptr: i32) -> i32 {
     };
     let status: i32 = compile_impl(input_ptr, input_len, out_ptr, index);
     module_entry_set_flags(index, if status > 0 { MODULE_FLAG_IMPORTED } else { 0 });
+    if status <= 0 {
+        if out_ptr > 0 {
+            if load_u8(out_ptr) == 0 {
+                let module_index: i32 = index;
+                let message: [u8; 25] = "module compilation failed";
+                write_failure_detail_with_location(
+                    out_ptr,
+                    module_index,
+                    input_ptr,
+                    input_len,
+                    0,
+                    25,
+                    message,
+                );
+            };
+        };
+    };
     status
 }
 

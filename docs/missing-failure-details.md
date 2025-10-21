@@ -8,10 +8,6 @@ below currently drop detail text and should be tackled individually so fixes rem
 
 ### `compileFromPath`
 
-- **Downstream pipeline status codes.** Any negative status propagated from `compile_impl`
-  (parsing, constant evaluation, validation, metadata generation, or code emission) ultimately
-  surfaces through the host without extra context when the callee omits a detail message.
-  【F:compiler/ast_compiler.bp†L156-L158】
 - **Memory reservation failures now emit detail.** The linear-memory reservation branch writes a
   message today, so no additional work is required for this case. 【F:compiler/ast_compiler.bp†L149-L154】
 
