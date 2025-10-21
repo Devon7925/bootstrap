@@ -1200,6 +1200,7 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
         let const_type_id: i32 = load_i32(const_type_ptr);
         let resolved_const_type: i32 = resolve_type_id(out_ptr, ast_base, const_type_id);
         if resolved_const_type < 0 {
+            record_type_metadata_failure(out_ptr);
             return -1;
         };
         if resolved_const_type != const_type_id {
@@ -1211,6 +1212,7 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
     loop {
         let total_funcs: i32 = ast_functions_count(ast_base);
         if total_funcs < 0 {
+            record_type_metadata_failure(out_ptr);
             return -1;
         };
         if idx >= total_funcs {

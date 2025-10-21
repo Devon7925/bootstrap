@@ -26,24 +26,32 @@ fn compile_impl(
         current_module_index,
     );
     if func_count <= 0 {
+        if ast_constants_count(ast_base) > 0 {
+            record_type_metadata_failure(out_ptr);
+        };
         return -1;
     };
     if interpret_program_constants(out_ptr, ast_base, func_count) < 0 {
+        record_type_metadata_failure(out_ptr);
         return -1;
     };
     if validate_program(out_ptr, ast_base, func_count) < 0 {
+        record_type_metadata_failure(out_ptr);
         return -1;
     };
     let final_func_count: i32 = ast_functions_count(ast_base);
     if final_func_count < 0 {
+        record_type_metadata_failure(out_ptr);
         return -1;
     };
     if write_type_metadata(out_ptr, ast_base) < 0 {
+        record_type_metadata_failure(out_ptr);
         return -1;
     };
 
     let produced_len: i32 = emit_program(out_ptr, ast_base, final_func_count);
     if produced_len <= 0 {
+        record_type_metadata_failure(out_ptr);
         return -1;
     };
     produced_len

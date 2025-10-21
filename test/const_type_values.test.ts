@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 
 import {
     compileWithAstCompiler,
+    expectCompileFailure,
     runWasmMainWithGc,
 } from "./helpers";
 
@@ -130,4 +131,18 @@ test("nested const type functions support conditional selection", async () => {
   `);
     const result = await runWasmMainWithGc(wasm);
     expect(result).toBe(16);
+});
+
+test("cyclic const type aliases report metadata diagnostics", async () => {
+    const failure = await expectCompileFailure(`
+    const First: type = (Second,);
+    const Second: type = [First; 1];
+
+    fn main() -> i32 {
+        0
+    }
+  `);
+    expect(failure.failure.detail).toBe(
+        "type metadata resolution failed",
+    );
 });

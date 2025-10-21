@@ -6575,6 +6575,17 @@ fn tuple_type_set_cached_id(ast_base: i32, index: i32, type_id: i32) {
     store_i32(ast_tuple_type_entry_ptr(ast_base, index) + AST_TUPLE_TYPE_CACHE_OFFSET, type_id);
 }
 
+const TYPE_METADATA_CACHE_IN_PROGRESS: i32 = -2;
+
+fn record_type_metadata_failure(out_ptr: i32) {
+    if out_ptr > 0 {
+        if load_u8(out_ptr) == 0 {
+            let message: [u8; 31] = "type metadata resolution failed";
+            write_failure_detail(out_ptr, 31, message);
+        };
+    };
+}
+
 fn array_type_cached_id(ast_base: i32, index: i32) -> i32 {
     load_i32(ast_array_type_entry_ptr(ast_base, index) + AST_ARRAY_TYPE_CACHE_OFFSET)
 }
@@ -6990,18 +7001,32 @@ fn ensure_tuple_type_metadata(out_ptr: i32, ast_base: i32, index: i32, type_id: 
 
 fn resolve_array_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
     if !type_id_is_array(type_id) {
+        record_type_metadata_failure(out_ptr);
         return -1;
     };
     let index: i32 = array_type_index(type_id);
     if index < 0 {
+        record_type_metadata_failure(out_ptr);
         return -1;
     };
     if index >= ast_array_types_count(ast_base) {
+        record_type_metadata_failure(out_ptr);
         return -1;
     };
+    let cached: i32 = array_type_cached_id(ast_base, index);
+    if cached == type_id {
+        return type_id;
+    };
+    if cached == TYPE_METADATA_CACHE_IN_PROGRESS {
+        record_type_metadata_failure(out_ptr);
+        return -1;
+    };
+    array_type_set_cached_id(ast_base, index, TYPE_METADATA_CACHE_IN_PROGRESS);
     let mut element_type_id: i32 = ast_array_type_element_type(ast_base, index);
     let resolved_element: i32 = resolve_type_id(out_ptr, ast_base, element_type_id);
     if resolved_element < 0 {
+        array_type_set_cached_id(ast_base, index, 0);
+        record_type_metadata_failure(out_ptr);
         return -1;
     };
     if resolved_element != element_type_id {
@@ -7011,9 +7036,13 @@ fn resolve_array_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
     };
     let length: i32 = ast_array_type_length(ast_base, index);
     if length < 0 {
+        array_type_set_cached_id(ast_base, index, 0);
+        record_type_metadata_failure(out_ptr);
         return -1;
     };
     if ensure_array_type_metadata(out_ptr, ast_base, index, type_id) < 0 {
+        array_type_set_cached_id(ast_base, index, 0);
+        record_type_metadata_failure(out_ptr);
         return -1;
     };
     type_id
@@ -7021,22 +7050,38 @@ fn resolve_array_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
 
 fn resolve_tuple_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
     if !type_id_is_tuple(type_id) {
+        record_type_metadata_failure(out_ptr);
         return -1;
     };
     let index: i32 = tuple_type_index(type_id);
     if index < 0 {
+        record_type_metadata_failure(out_ptr);
         return -1;
     };
     if index >= ast_tuple_types_count(ast_base) {
+        record_type_metadata_failure(out_ptr);
         return -1;
     };
+    let cached: i32 = tuple_type_cached_id(ast_base, index);
+    if cached == type_id {
+        return type_id;
+    };
+    if cached == TYPE_METADATA_CACHE_IN_PROGRESS {
+        record_type_metadata_failure(out_ptr);
+        return -1;
+    };
+    tuple_type_set_cached_id(ast_base, index, TYPE_METADATA_CACHE_IN_PROGRESS);
     let element_count: i32 = ast_tuple_type_element_count(ast_base, index);
     if element_count < 0 {
+        tuple_type_set_cached_id(ast_base, index, 0);
+        record_type_metadata_failure(out_ptr);
         return -1;
     };
     if element_count > 0 {
         let elements_ptr: i32 = ast_tuple_type_elements_ptr(ast_base, index);
         if elements_ptr < 0 {
+            tuple_type_set_cached_id(ast_base, index, 0);
+            record_type_metadata_failure(out_ptr);
             return -1;
         };
         let mut elem_idx: i32 = 0;
@@ -7046,6 +7091,8 @@ fn resolve_tuple_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
             let resolved_element: i32 =
                 resolve_type_id(out_ptr, ast_base, element_type_id);
             if resolved_element < 0 {
+                tuple_type_set_cached_id(ast_base, index, 0);
+                record_type_metadata_failure(out_ptr);
                 return -1;
             };
             if resolved_element != element_type_id {
@@ -7055,6 +7102,8 @@ fn resolve_tuple_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
         };
     };
     if ensure_tuple_type_metadata(out_ptr, ast_base, index, type_id) < 0 {
+        tuple_type_set_cached_id(ast_base, index, 0);
+        record_type_metadata_failure(out_ptr);
         return -1;
     };
     type_id
