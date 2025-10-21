@@ -2526,6 +2526,114 @@ fn builtin_integer_type_keyword_to_id(base: i32, start: i32, ident_len: i32) -> 
     -1
 }
 
+fn parse_type_expression(
+    base: i32,
+    len: i32,
+    offset: i32,
+    ast_base: i32,
+    params_table_ptr: i32,
+    params_count: i32,
+    const_mask_table_ptr: i32,
+    type_template_sink_ptr: i32,
+    out_type_ptr: i32,
+) -> i32 {
+    let scratch_base: i32 = parser_temp_scratch_base(ast_base, params_table_ptr);
+    let expr_kind_ptr: i32 = scratch_base;
+    let expr_data0_ptr: i32 = expr_kind_ptr + 4;
+    let expr_data1_ptr: i32 = expr_data0_ptr + 4;
+    let locals_stack_count_ptr: i32 = expr_kind_ptr + 12;
+    let locals_table_ptr: i32 = locals_stack_count_ptr + 4;
+    let locals_next_index_ptr: i32 = locals_table_ptr + MAX_LOCALS * LOCALS_ENTRY_SIZE;
+    let loop_depth_ptr: i32 = locals_next_index_ptr + 4;
+    let expr_temp_base: i32 = loop_depth_ptr + 4;
+    store_i32(locals_stack_count_ptr, 0);
+    store_i32(locals_next_index_ptr, 0);
+    store_i32(loop_depth_ptr, 0);
+    let expr_cursor: i32 = parse_expression(
+        base,
+        len,
+        offset,
+        ast_base,
+        params_table_ptr,
+        params_count,
+        const_mask_table_ptr,
+        locals_table_ptr,
+        locals_stack_count_ptr,
+        locals_next_index_ptr,
+        expr_temp_base,
+        loop_depth_ptr,
+        type_template_sink_ptr,
+        expr_kind_ptr,
+        expr_data0_ptr,
+        expr_data1_ptr,
+    );
+    if expr_cursor < 0 {
+        return -1;
+    };
+    let value_ptr: i32 = expr_temp_base;
+    let type_ptr: i32 = value_ptr + 4;
+    let eval_scratch_base: i32 = type_ptr + 4;
+    if evaluate_expression_literal(
+        ast_base,
+        expr_kind_ptr,
+        expr_data0_ptr,
+        expr_data1_ptr,
+        eval_scratch_base,
+        value_ptr,
+        type_ptr,
+    ) < 0 {
+        if type_template_sink_ptr <= 0 {
+            return -1;
+        };
+        let template_handle: i32 = type_template_capture_expression_template(
+            ast_base,
+            expr_kind_ptr,
+            expr_data0_ptr,
+            expr_data1_ptr,
+            params_count,
+            const_mask_table_ptr,
+            -1,
+            eval_scratch_base,
+            TYPE_TEMPLATE_KIND_TYPE_EXPR,
+        );
+        if template_handle < 0 {
+            return -1;
+        };
+        store_i32(type_template_sink_ptr, template_handle);
+        store_i32(type_template_sink_ptr + 4, -1);
+        if out_type_ptr >= 0 {
+            store_i32(out_type_ptr, -1);
+        };
+        return expr_cursor;
+    };
+    let expr_type: i32 = load_i32(type_ptr);
+    if expr_type != BUILTIN_TYPE_ID_TYPE {
+        let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+        if detail_out_ptr > 0 {
+            if load_u8(detail_out_ptr) == 0 {
+                write_failure_detail_with_location(
+                    detail_out_ptr,
+                    scratch_module_index(detail_out_ptr),
+                    base,
+                    len,
+                    offset,
+                    42,
+                    "type annotations require const type values",
+                );
+            };
+        };
+        return -1;
+    };
+    let expr_value: i32 = load_i32(value_ptr);
+    if expr_value < 0 {
+        return -1;
+    };
+    if out_type_ptr >= 0 {
+        store_i32(out_type_ptr, expr_value);
+    };
+    expr_cursor
+}
+
 fn parse_type(
     base: i32,
     len: i32,
@@ -2563,7 +2671,24 @@ fn parse_type(
         };
         let element_type_id: i32 = load_i32(out_type_ptr);
         if element_type_id < 0 {
-            return -1;
+            if type_template_sink_ptr > 0 {
+                store_i32(type_template_sink_ptr, 0);
+                store_i32(type_template_sink_ptr + 4, 0);
+            };
+            if out_type_ptr >= 0 {
+                store_i32(out_type_ptr, 0);
+            };
+            return parse_type_expression(
+                base,
+                len,
+                offset,
+                ast_base,
+                params_table_ptr,
+                params_count,
+                const_mask_table_ptr,
+                type_template_sink_ptr,
+                out_type_ptr,
+            );
         };
         cursor = skip_whitespace(base, len, cursor);
         cursor = expect_char(base, len, cursor, ';');
@@ -2738,6 +2863,27 @@ fn parse_type(
             return -1;
         };
         let first_type_id: i32 = load_i32(out_type_ptr);
+        if first_type_id < 0 {
+            store_i32(call_data_used_ptr, saved_used);
+            if type_template_sink_ptr > 0 {
+                store_i32(type_template_sink_ptr, 0);
+                store_i32(type_template_sink_ptr + 4, 0);
+            };
+            if out_type_ptr >= 0 {
+                store_i32(out_type_ptr, 0);
+            };
+            return parse_type_expression(
+                base,
+                len,
+                offset,
+                ast_base,
+                params_table_ptr,
+                params_count,
+                const_mask_table_ptr,
+                type_template_sink_ptr,
+                out_type_ptr,
+            );
+        };
         cursor = skip_whitespace(base, len, cursor);
         if cursor >= len {
             store_i32(call_data_used_ptr, saved_used);
@@ -2792,6 +2938,28 @@ fn parse_type(
             if tuple_cursor < 0 {
                 store_i32(call_data_used_ptr, saved_used);
                 return -1;
+            };
+            let element_type_id: i32 = load_i32(element_ptr);
+            if element_type_id < 0 {
+                store_i32(call_data_used_ptr, saved_used);
+                if type_template_sink_ptr > 0 {
+                    store_i32(type_template_sink_ptr, 0);
+                    store_i32(type_template_sink_ptr + 4, 0);
+                };
+                if out_type_ptr >= 0 {
+                    store_i32(out_type_ptr, 0);
+                };
+                return parse_type_expression(
+                    base,
+                    len,
+                    offset,
+                    ast_base,
+                    params_table_ptr,
+                    params_count,
+                    const_mask_table_ptr,
+                    type_template_sink_ptr,
+                    out_type_ptr,
+                );
             };
             element_count = element_count + 1;
             tuple_cursor = skip_whitespace(base, len, tuple_cursor);
@@ -2939,19 +3107,7 @@ fn parse_type(
         };
         return next;
     };
-    let scratch_base: i32 = parser_temp_scratch_base(ast_base, params_table_ptr);
-    let expr_kind_ptr: i32 = scratch_base;
-    let expr_data0_ptr: i32 = expr_kind_ptr + 4;
-    let expr_data1_ptr: i32 = expr_kind_ptr + 8;
-    let locals_stack_count_ptr: i32 = expr_kind_ptr + 12;
-    let locals_table_ptr: i32 = locals_stack_count_ptr + 4;
-    let locals_next_index_ptr: i32 = locals_table_ptr + MAX_LOCALS * LOCALS_ENTRY_SIZE;
-    let loop_depth_ptr: i32 = locals_next_index_ptr + 4;
-    let expr_temp_base: i32 = loop_depth_ptr + 4;
-    store_i32(locals_stack_count_ptr, 0);
-    store_i32(locals_next_index_ptr, 0);
-    store_i32(loop_depth_ptr, 0);
-    let expr_cursor: i32 = parse_expression(
+    parse_type_expression(
         base,
         len,
         offset,
@@ -2959,81 +3115,9 @@ fn parse_type(
         params_table_ptr,
         params_count,
         const_mask_table_ptr,
-        locals_table_ptr,
-        locals_stack_count_ptr,
-        locals_next_index_ptr,
-        expr_temp_base,
-        loop_depth_ptr,
         type_template_sink_ptr,
-        expr_kind_ptr,
-        expr_data0_ptr,
-        expr_data1_ptr,
-    );
-    if expr_cursor < 0 {
-        return -1;
-    };
-    let value_ptr: i32 = expr_temp_base;
-    let type_ptr: i32 = value_ptr + 4;
-    let eval_scratch_base: i32 = type_ptr + 4;
-    if evaluate_expression_literal(
-        ast_base,
-        expr_kind_ptr,
-        expr_data0_ptr,
-        expr_data1_ptr,
-        eval_scratch_base,
-        value_ptr,
-        type_ptr,
-    ) < 0 {
-        if type_template_sink_ptr <= 0 {
-            return -1;
-        };
-        let template_handle: i32 = type_template_capture_expression_template(
-            ast_base,
-            expr_kind_ptr,
-            expr_data0_ptr,
-            expr_data1_ptr,
-            params_count,
-            const_mask_table_ptr,
-            -1,
-            eval_scratch_base,
-            TYPE_TEMPLATE_KIND_TYPE_EXPR,
-        );
-        if template_handle < 0 {
-            return -1;
-        };
-        store_i32(type_template_sink_ptr, template_handle);
-        store_i32(type_template_sink_ptr + 4, -1);
-        if out_type_ptr >= 0 {
-            store_i32(out_type_ptr, -1);
-        };
-        return expr_cursor;
-    };
-    let expr_type: i32 = load_i32(type_ptr);
-    if expr_type != BUILTIN_TYPE_ID_TYPE {
-        let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
-        if detail_out_ptr > 0 {
-            if load_u8(detail_out_ptr) == 0 {
-                write_failure_detail_with_location(
-                    detail_out_ptr,
-                    scratch_module_index(detail_out_ptr),
-                    base,
-                    len,
-                    offset,
-                    42,
-                    "type annotations require const type values",
-                );
-            };
-        };
-        return -1;
-    };
-    let expr_value: i32 = load_i32(value_ptr);
-    if expr_value < 0 {
-        return -1;
-    };
-    if out_type_ptr >= 0 {
-        store_i32(out_type_ptr, expr_value);
-    };
-    expr_cursor
+        out_type_ptr,
+    )
 }
 
 fn parse_i32_literal(base: i32, len: i32, offset: i32, out_value_ptr: i32) -> i32 {
