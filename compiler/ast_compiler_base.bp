@@ -3431,12 +3431,17 @@ fn scratch_failure_offset_ptr(out_ptr: i32) -> i32 {
 }
 
 fn clear_failure_location(out_ptr: i32) {
-    store_i32(scratch_failure_path_ptr_ptr(out_ptr), 0);
-    store_i32(scratch_failure_path_len_ptr(out_ptr), 0);
-    store_i32(scratch_failure_line_ptr(out_ptr), 0);
-    store_i32(scratch_failure_column_ptr(out_ptr), 0);
-    store_i32(scratch_failure_character_ptr(out_ptr), 0);
-    store_i32(scratch_failure_offset_ptr(out_ptr), 0);
+    if out_ptr > 0 {
+        let required: i32 = out_ptr + SCRATCH_FAILURE_OFFSET_OFFSET + WORD_SIZE;
+        if ensure_memory_capacity(required) >= 0 {
+            store_i32(scratch_failure_path_ptr_ptr(out_ptr), 0);
+            store_i32(scratch_failure_path_len_ptr(out_ptr), 0);
+            store_i32(scratch_failure_line_ptr(out_ptr), 0);
+            store_i32(scratch_failure_column_ptr(out_ptr), 0);
+            store_i32(scratch_failure_character_ptr(out_ptr), 0);
+            store_i32(scratch_failure_offset_ptr(out_ptr), 0);
+        };
+    };
 }
 
 fn store_failure_detail_location(

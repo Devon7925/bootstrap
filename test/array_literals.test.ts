@@ -193,7 +193,7 @@ test("array literal length must match declared type", async () => {
   `);
 
   expect(failure.failure.detail).toBe(
-    "array expression type does not match expected array type",
+    "/entry.bp:3:9: array expression type does not match expected array type",
   );
 });
 
@@ -205,7 +205,7 @@ test("array list literal length must match declared type", async () => {
   `);
 
   expect(failure.failure.detail).toBe(
-    "array expression type does not match expected array type",
+    "/entry.bp:3:9: array expression type does not match expected array type",
   );
 });
 
