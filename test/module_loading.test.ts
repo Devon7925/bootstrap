@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import {
+  FAILURE_DETAIL_CAPACITY,
   describeCompilationFailure,
   expectExportedFunction,
   expectExportedMemory,
@@ -163,13 +164,15 @@ test("compileFromPath reports invalid cached module entry", async () => {
   view.setInt32(entryPtr + MODULE_CONTENT_LEN_OFFSET, 0, true);
 
   const detailOutPtr = readModuleStorageTop(compiler.memory);
-  zeroMemory(compiler.memory, detailOutPtr, 64);
+  zeroMemory(compiler.memory, detailOutPtr, FAILURE_DETAIL_CAPACITY);
 
   const status = compiler.compileFromPath(pathPtr);
   expect(status).toBeLessThan(0);
 
   const failure = readCompileFailure(compiler, status);
-  expect(failure.detail).toBe("cached module entry missing content");
+  expect(failure.detail).toBe(
+    "/fixtures/invalid-cache.bp:1:1: cached module entry missing content",
+  );
 });
 
 test("compileFromPath reports downstream pipeline failures", async () => {
@@ -187,7 +190,7 @@ fn main() -> i32 {
   zeroMemory(compiler.memory, contentPtr, contentLength + 1);
 
   const detailOutPtr = readModuleStorageTop(compiler.memory);
-  zeroMemory(compiler.memory, detailOutPtr, 64);
+  zeroMemory(compiler.memory, detailOutPtr, FAILURE_DETAIL_CAPACITY);
 
   const status = compiler.compileFromPath(pathPtr);
   expect(status).toBeLessThan(0);
@@ -216,7 +219,9 @@ test("loadModuleFromSource reports module table capacity reached", async () => {
   expect(status).toBeLessThan(0);
 
   const failure = readCompileFailure(compiler, status);
-  expect(failure.detail).toBe("module table capacity reached");
+  expect(failure.detail).toBe(
+    "/fixtures/capacity-overflow.bp:1:1: module table capacity reached",
+  );
 });
 
 test("loadModuleFromSource reports linear memory exhaustion", async () => {
@@ -229,19 +234,25 @@ test("loadModuleFromSource reports linear memory exhaustion", async () => {
   const largeModule = chunk.repeat(repeatCount).slice(0, targetLength);
 
   let failure: CompileFailureDetails | null = null;
+  let failurePath: string | null = null;
   for (let index = 0; index < 64; index += 1) {
-    writeString(compiler.memory, pathPtr, `/fixtures/huge-${index}.bp`);
+    const path = `/fixtures/huge-${index}.bp`;
+    writeString(compiler.memory, pathPtr, path);
     writeString(compiler.memory, contentPtr, largeModule);
     const status = compiler.loadModuleFromSource(pathPtr, contentPtr);
     if (status < 0) {
       failure = readCompileFailure(compiler, status);
+      failurePath = path;
       break;
     }
     zeroMemory(compiler.memory, contentPtr, largeModule.length + 1);
   }
 
   expect(failure).not.toBeNull();
-  expect(failure?.detail).toBe("failed to reserve linear memory for module storage");
+  expect(failurePath).not.toBeNull();
+  expect(failure?.detail).toBe(
+    `${failurePath}:1:1: failed to reserve linear memory for module storage`,
+  );
 });
 
 test("loadModuleFromSource reports allocation failure when module storage top is invalid", async () => {
@@ -253,7 +264,7 @@ test("loadModuleFromSource reports allocation failure when module storage top is
   const moduleContentBasePtr = MODULE_STATE_BASE + MODULE_CONTENT_BASE_OFFSET;
   const view = new DataView(compiler.memory.buffer);
   view.setInt32(moduleStorageTopPtr, -4, true);
-  zeroMemory(compiler.memory, moduleContentBasePtr, 64);
+  zeroMemory(compiler.memory, moduleContentBasePtr, FAILURE_DETAIL_CAPACITY);
 
   writeString(compiler.memory, pathPtr, "/fixtures/broken-storage.bp");
   writeString(compiler.memory, contentPtr, "fn main() -> i32 { 0 }");
@@ -262,7 +273,9 @@ test("loadModuleFromSource reports allocation failure when module storage top is
   expect(status).toBeLessThan(0);
 
   const failure = readCompileFailure(compiler, status);
-  expect(failure.detail).toBe("module storage allocation failed");
+  expect(failure.detail).toBe(
+    "/fixtures/broken-storage.bp:1:1: module storage allocation failed",
+  );
 });
 
 test("loadModuleFromSource reports null module path pointer", async () => {
@@ -303,7 +316,9 @@ test("loadModuleFromSource reports null module content pointer", async () => {
   expect(status).toBeLessThan(0);
 
   const failure = readCompileFailure(compiler, status);
-  expect(failure.detail).toBe("module content missing");
+  expect(failure.detail).toBe(
+    "/fixtures/module.bp:1:1: module content missing",
+  );
 });
 
 test("compileFromPath reports empty module path", async () => {
@@ -335,7 +350,9 @@ test("compileFromPath returns failure for unknown modules", async () => {
   writeString(compiler.memory, pathPtr, "/fixtures/missing.bp");
   const producedLength = compiler.compileFromPath(pathPtr);
   const failure = readCompileFailure(compiler, producedLength);
-  expect(failure.detail).toBe("module has not been loaded");
+  expect(failure.detail).toBe(
+    "/fixtures/missing.bp:1:1: module has not been loaded",
+  );
 });
 
 test("compileFromPath resolves use imports relative to module", async () => {

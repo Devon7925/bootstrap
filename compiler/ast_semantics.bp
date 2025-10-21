@@ -17,7 +17,7 @@ fn identifiers_match(ptr_a: i32, len_a: i32, ptr_b: i32, len_b: i32) -> bool {
     true
 }
 
-const FAILURE_DETAIL_CAPACITY: i32 = 64;
+const FAILURE_DETAIL_CAPACITY: i32 = 256;
 const LOOP_STACK_FLAG_STRIDE: i32 = 65536;
 
 fn record_failure_detail(
@@ -1346,7 +1346,14 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
                     if expr_type >= 0 {
                         if expr_type != fn_return_type {
                             let expr_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
-                            let location_offset: i32 = load_i32(expr_entry_ptr + 12);
+                            let expr_kind: i32 = load_i32(expr_entry_ptr);
+                            let location_offset: i32 = if expr_kind == 35 {
+                                ast_expr_array_repeat_location(ast_base, expr_index)
+                            } else if expr_kind == 37 {
+                                ast_expr_array_list_location(ast_base, expr_index)
+                            } else {
+                                load_i32(expr_entry_ptr + 12)
+                            };
                             record_failure_with_location(
                                 out_ptr,
                                 ast_base,

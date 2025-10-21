@@ -62,6 +62,7 @@ fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
     let path_len: i32 = string_length(path_ptr);
     if path_len <= 0 {
         if detail_out_ptr > 0 {
+            clear_failure_location(detail_out_ptr);
             write_failure_detail(detail_out_ptr, 19, "module path missing");
         };
         return -1;
@@ -69,6 +70,7 @@ fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
     let content_len: i32 = string_length(content_ptr);
     if content_len < 0 {
         if detail_out_ptr > 0 {
+            store_failure_detail_location(detail_out_ptr, path_ptr, path_len, 1, 1);
             write_failure_detail(detail_out_ptr, 22, "module content missing");
         };
         return -1;
@@ -79,6 +81,7 @@ fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
     } else {
         if module_count() >= MODULE_MAX_COUNT {
             if detail_out_ptr > 0 {
+                store_failure_detail_location(detail_out_ptr, path_ptr, path_len, 1, 1);
                 write_failure_detail(detail_out_ptr, 29, "module table capacity reached");
             };
             return -1;
@@ -89,6 +92,7 @@ fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
             message_ptr = resolve_module_failure_detail_ptr(message_ptr);
             detail_out_ptr = message_ptr;
             if message_ptr > 0 {
+                store_failure_detail_location(message_ptr, path_ptr, path_len, 1, 1);
                 if load_u8(message_ptr) == 0 {
                     write_failure_detail(
                         message_ptr,
@@ -109,6 +113,12 @@ fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
         message_ptr = resolve_module_failure_detail_ptr(message_ptr);
         detail_out_ptr = message_ptr;
         if message_ptr > 0 {
+            let stored_path_len: i32 = if existing_index >= 0 {
+                module_entry_path_len(existing_index)
+            } else {
+                path_len
+            };
+            store_failure_detail_location(message_ptr, stored_path_ptr, stored_path_len, 1, 1);
             if load_u8(message_ptr) == 0 {
                 write_failure_detail(
                     message_ptr,
@@ -140,6 +150,7 @@ fn compileFromPath(path_ptr: i32) -> i32 {
     let detail_out_ptr: i32 = module_storage_top();
     if path_ptr <= 0 {
         if detail_out_ptr > 0 {
+            clear_failure_location(detail_out_ptr);
             write_failure_detail(detail_out_ptr, 19, "module path missing");
         };
         return -1;
@@ -147,6 +158,7 @@ fn compileFromPath(path_ptr: i32) -> i32 {
     let path_len: i32 = string_length(path_ptr);
     if path_len <= 0 {
         if detail_out_ptr > 0 {
+            clear_failure_location(detail_out_ptr);
             write_failure_detail(detail_out_ptr, 19, "module path missing");
         };
         return -1;
@@ -154,16 +166,20 @@ fn compileFromPath(path_ptr: i32) -> i32 {
     let index: i32 = module_find_index(path_ptr, path_len);
     if index < 0 {
         if detail_out_ptr > 0 {
+            store_failure_detail_location(detail_out_ptr, path_ptr, path_len, 1, 1);
             write_failure_detail(detail_out_ptr, 26, "module has not been loaded");
         };
         return -1;
     };
     module_clear_flags();
     module_entry_set_flags(index, MODULE_FLAG_IMPORTING);
+    let module_path_ptr: i32 = module_entry_path(index);
+    let module_path_len: i32 = module_entry_path_len(index);
     let input_ptr: i32 = module_entry_content(index);
     let input_len: i32 = module_entry_content_len(index);
     if input_ptr <= 0 || input_len <= 0 {
         if detail_out_ptr > 0 {
+            store_failure_detail_location(detail_out_ptr, module_path_ptr, module_path_len, 1, 1);
             write_failure_detail(detail_out_ptr, 35, "cached module entry missing content");
         };
         return -1;
@@ -182,6 +198,7 @@ fn compileFromPath(path_ptr: i32) -> i32 {
     let required: i32 = out_ptr + ast_output_reserve(input_len);
     if ensure_memory_capacity(required) < 0 {
         if out_ptr > 0 {
+            store_failure_detail_location(out_ptr, module_path_ptr, module_path_len, 1, 1);
             write_failure_detail(out_ptr, 54, "failed to reserve linear memory for module compilation");
         };
         return -1;
