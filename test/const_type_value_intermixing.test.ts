@@ -104,7 +104,7 @@ test("const parameters can read tuple value entries", async () => {
     expect(result).toBe(3);
 });
 
-test.todo("const parameters can accept tuples mixing types and values", async () => {
+test("const parameters can accept tuples mixing types and values", async () => {
     const wasm = await compileWithAstCompiler(`
     fn use_pair(const PAIR: (type, i32)) -> i32 {
         let value: PAIR.0 = PAIR.1;

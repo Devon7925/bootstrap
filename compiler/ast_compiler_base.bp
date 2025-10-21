@@ -314,6 +314,19 @@ fn type_template_collect_const_params(
             usage_count_ptr,
         );
     };
+    if kind == 41 {
+        let tuple_index: i32 = load_i32(entry_ptr + 4);
+        return type_template_collect_const_params(
+            ast_base,
+            tuple_index,
+            params_count,
+            const_mask_table_ptr,
+            usage_mask_low_ptr,
+            usage_mask_high_ptr,
+            usage_list_ptr,
+            usage_count_ptr,
+        );
+    };
     if kind == 35 {
         let element_index: i32 = load_i32(entry_ptr + 4);
         if type_template_collect_const_params(
@@ -388,6 +401,7 @@ fn type_template_collect_const_params(
         || kind == 19
         || kind == 20
         || kind == 21
+        || kind == 36
         || kind == 25
         || kind == 26
         || kind == 27
@@ -2851,7 +2865,6 @@ fn parse_type(
             find_parameter_index(base, params_table_ptr, params_count, offset, ident_len);
         if param_index >= 0 {
             if const_mask_table_ptr <= 0 { return -1; };
-            if type_template_sink_ptr <= 0 { return -1; };
             let mask_word_index: i32 = param_index >> 5;
             let mask_word_ptr: i32 = const_mask_table_ptr + mask_word_index * WORD_SIZE;
             let mask_word_value: i32 = load_i32(mask_word_ptr);
@@ -2861,33 +2874,35 @@ fn parse_type(
             let param_types_table_ptr: i32 = params_table_ptr + MAX_PARAMS * 8;
             let param_type_id: i32 =
                 load_i32(param_types_table_ptr + param_index * WORD_SIZE);
-            if param_type_id != BUILTIN_TYPE_ID_TYPE { return -1; };
-            let scratch_base: i32 = parser_temp_scratch_base(ast_base, params_table_ptr);
-            let expr_kind_ptr: i32 = scratch_base;
-            let expr_data0_ptr: i32 = expr_kind_ptr + 4;
-            let expr_data1_ptr: i32 = expr_kind_ptr + 8;
-            store_i32(expr_kind_ptr, 6);
-            store_i32(expr_data0_ptr, param_index);
-            store_i32(expr_data1_ptr, param_type_id);
-            let capture_scratch_base: i32 = expr_kind_ptr + 12;
-            let template_handle: i32 = type_template_capture_expression_template(
-                ast_base,
-                expr_kind_ptr,
-                expr_data0_ptr,
-                expr_data1_ptr,
-                params_count,
-                const_mask_table_ptr,
-                -1,
-                capture_scratch_base,
-                TYPE_TEMPLATE_KIND_TYPE_EXPR,
-            );
-            if template_handle < 0 { return -1; };
-            store_i32(type_template_sink_ptr, template_handle);
-            store_i32(type_template_sink_ptr + 4, -1);
-            if out_type_ptr >= 0 {
-                store_i32(out_type_ptr, -1);
+            if param_type_id == BUILTIN_TYPE_ID_TYPE {
+                if type_template_sink_ptr <= 0 { return -1; };
+                let scratch_base: i32 = parser_temp_scratch_base(ast_base, params_table_ptr);
+                let expr_kind_ptr: i32 = scratch_base;
+                let expr_data0_ptr: i32 = expr_kind_ptr + 4;
+                let expr_data1_ptr: i32 = expr_kind_ptr + 8;
+                store_i32(expr_kind_ptr, 6);
+                store_i32(expr_data0_ptr, param_index);
+                store_i32(expr_data1_ptr, param_type_id);
+                let capture_scratch_base: i32 = expr_kind_ptr + 12;
+                let template_handle: i32 = type_template_capture_expression_template(
+                    ast_base,
+                    expr_kind_ptr,
+                    expr_data0_ptr,
+                    expr_data1_ptr,
+                    params_count,
+                    const_mask_table_ptr,
+                    -1,
+                    capture_scratch_base,
+                    TYPE_TEMPLATE_KIND_TYPE_EXPR,
+                );
+                if template_handle < 0 { return -1; };
+                store_i32(type_template_sink_ptr, template_handle);
+                store_i32(type_template_sink_ptr + 4, -1);
+                if out_type_ptr >= 0 {
+                    store_i32(out_type_ptr, -1);
+                };
+                return next;
             };
-            return next;
         };
     };
     let const_index: i32 =
