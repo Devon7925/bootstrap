@@ -17,7 +17,7 @@ fn identifiers_match(ptr_a: i32, len_a: i32, ptr_b: i32, len_b: i32) -> bool {
     true
 }
 
-const FAILURE_DETAIL_CAPACITY: i32 = 64;
+const FAILURE_DETAIL_CAPACITY: i32 = 256;
 const LOOP_STACK_FLAG_STRIDE: i32 = 65536;
 
 fn record_failure_detail(

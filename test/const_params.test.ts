@@ -253,8 +253,8 @@ test("const argument metadata exhaustion reports diagnostic", async () => {
     `}`,
   ];
   const failure = await expectCompileFailure(sourceLines.join("\n"));
-  expect(failure.failure.detail).toMatch(
-    /\/entry\.bp:\d+:\d+: const argument metadata capacity exceeded$/,
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:154:5: const argument metadata capacity exceeded",
   );
 });
 
@@ -405,9 +405,9 @@ test("const parameters require compile-time constant arguments", async () => {
         scale(runtime, 7)
     }
   `);
-    expect(failure.failure.detail).toBe(
-      "/entry.bp:8:9: const parameter arguments must be compile-time constants",
-    );
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:8:9: const parameter arguments must be compile-time constants",
+  );
 });
 
 test("const parameters accept const fn results", async () => {

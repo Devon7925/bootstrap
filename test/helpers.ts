@@ -31,7 +31,7 @@ const MODULE_PATH_PTR = 1_024;
 const MODULE_CONTENT_PTR = 4_096;
 const DEFAULT_ENTRY_MODULE_PATH = "/entry.bp";
 const MEMORY_INTRINSICS_MODULE_PATH = "/stdlib/memory.bp";
-const FAILURE_DETAIL_CAPACITY = 64;
+export const FAILURE_DETAIL_CAPACITY = 256;
 const SCRATCH_FAILURE_PATH_PTR_OFFSET = 4_048;
 const SCRATCH_FAILURE_PATH_LEN_OFFSET = 4_052;
 const SCRATCH_FAILURE_LINE_OFFSET = 4_056;
@@ -913,7 +913,7 @@ export function describeCompilationFailure(
 
   let detail: string | undefined;
   const start = outputPtr;
-  const end = Math.min(outputPtr + 256, memory.buffer.byteLength);
+  const end = Math.min(outputPtr + FAILURE_DETAIL_CAPACITY, memory.buffer.byteLength);
   if (end > start) {
     const detailBytes = new Uint8Array(memory.buffer.slice(start, end));
     const zeroIndex = detailBytes.indexOf(0);

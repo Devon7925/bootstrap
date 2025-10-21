@@ -1,4 +1,4 @@
-const FAILURE_DETAIL_CAPACITY: i32 = 64;
+const FAILURE_DETAIL_CAPACITY: i32 = 256;
 
 fn compute_line_and_column(base: i32, len: i32, offset: i32) -> (i32, i32) {
     if base < 0 {
