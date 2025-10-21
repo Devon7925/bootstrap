@@ -59,7 +59,7 @@ test("can make tuple from types", async () => {
     expect(result).toBe(2);
 });
 
-test.todo("const tuple bindings can mix type and value entries", async () => {
+test("const tuple bindings can mix type and value entries", async () => {
     const wasm = await compileWithAstCompiler(`
     const TYPE_VALUE_PAIR: (type, i32) = (i32, 2);
 
@@ -75,7 +75,7 @@ test.todo("const tuple bindings can mix type and value entries", async () => {
     expect(result).toBe(2);
 });
 
-test.todo("const arrays of types can be bound to names", async () => {
+test("const arrays of types can be bound to names", async () => {
     const wasm = await compileWithAstCompiler(`
     const NUMERIC_TYPES: [type; 3] = [i32, u32, u8];
 
