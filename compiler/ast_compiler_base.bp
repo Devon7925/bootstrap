@@ -5606,6 +5606,129 @@ fn ast_function_clone_const_template(
     new_index
 }
 
+fn canonicalize_const_value(
+    ast_base: i32,
+    raw_value: i32,
+    raw_type: i32,
+    call_data_used_ptr: i32,
+    out_value_ptr: i32,
+    out_type_ptr: i32,
+) -> i32 {
+    if raw_type < 0 {
+        return -1;
+    };
+    if type_id_is_bool(raw_type) {
+        let normalized: i32 = if raw_value == 0 { 0 } else { 1 };
+        store_i32(out_value_ptr, normalized);
+        store_i32(out_type_ptr, BUILTIN_TYPE_ID_BOOL);
+        return 0;
+    };
+    if constant_eval_integer_type_supported(raw_type) {
+        let normalized: i32 = normalize_integer_value(raw_value, raw_type);
+        if normalized < 0 {
+            return -1;
+        };
+        store_i32(out_value_ptr, normalized);
+        store_i32(out_type_ptr, raw_type);
+        return 0;
+    };
+    if type_id_is_type(raw_type) {
+        if raw_value < 0 {
+            return -1;
+        };
+        store_i32(out_value_ptr, raw_value);
+        store_i32(out_type_ptr, BUILTIN_TYPE_ID_TYPE);
+        return 0;
+    };
+    if type_id_is_tuple(raw_type) {
+        let tuple_idx: i32 = tuple_type_index(raw_type);
+        if tuple_idx < 0 {
+            return -1;
+        };
+        if tuple_idx >= ast_tuple_types_count(ast_base) {
+            return -1;
+        };
+        let element_count: i32 = ast_tuple_type_element_count(ast_base, tuple_idx);
+        if element_count < 0 {
+            return -1;
+        };
+        if element_count == 0 {
+            store_i32(out_value_ptr, 0);
+            store_i32(out_type_ptr, raw_type);
+            return 0;
+        };
+        if raw_value <= 0 {
+            return -1;
+        };
+        let pair_words: i32 = element_count * 2;
+        if pair_words <= 0 {
+            return -1;
+        };
+        let canonical_ptr: i32 = ast_call_data_alloc(ast_base, pair_words);
+        if canonical_ptr < 0 {
+            return -1;
+        };
+        let mut idx: i32 = 0;
+        loop {
+            if idx >= element_count {
+                break;
+            };
+            let element_slot: i32 = raw_value + idx * 2 * WORD_SIZE;
+            let element_value: i32 = load_i32(element_slot);
+            let element_type: i32 = load_i32(element_slot + WORD_SIZE);
+            let canonical_slot: i32 = canonical_ptr + idx * 2 * WORD_SIZE;
+            store_i32(canonical_slot, element_value);
+            store_i32(canonical_slot + WORD_SIZE, element_type);
+            idx = idx + 1;
+        };
+        store_i32(out_value_ptr, canonical_ptr);
+        store_i32(out_type_ptr, raw_type);
+        return 0;
+    };
+    if type_id_is_array(raw_type) {
+        if array_type_element_type(ast_base, raw_type) < 0 {
+            return -1;
+        };
+        let length: i32 = array_type_length(ast_base, raw_type);
+        if length < 0 {
+            return -1;
+        };
+        if length == 0 {
+            store_i32(out_value_ptr, 0);
+            store_i32(out_type_ptr, raw_type);
+            return 0;
+        };
+        if raw_value <= 0 {
+            return -1;
+        };
+        let pair_words: i32 = length * 2;
+        if pair_words <= 0 {
+            return -1;
+        };
+        let canonical_ptr: i32 = ast_call_data_alloc(ast_base, pair_words);
+        if canonical_ptr < 0 {
+            return -1;
+        };
+        let mut idx: i32 = 0;
+        loop {
+            if idx >= length {
+                break;
+            };
+            let element_slot: i32 = raw_value + idx * 2 * WORD_SIZE;
+            let element_value: i32 = load_i32(element_slot);
+            let element_value_type: i32 = load_i32(element_slot + WORD_SIZE);
+            let canonical_slot: i32 = canonical_ptr + idx * 2 * WORD_SIZE;
+            store_i32(canonical_slot, element_value);
+            store_i32(canonical_slot + WORD_SIZE, element_value_type);
+            idx = idx + 1;
+        };
+        store_i32(out_value_ptr, canonical_ptr);
+        store_i32(out_type_ptr, raw_type);
+        return 0;
+    };
+    -1
+}
+
 fn ast_function_canonicalize_const_env(
     ast_base: i32,
     index: i32,
@@ -5655,28 +5778,19 @@ fn ast_function_canonicalize_const_env(
                 store_i32(call_data_used_ptr, saved_call_data_used);
                 return -1;
             };
-            let mut canonical_value: i32 = raw_value;
-            let mut canonical_type: i32 = raw_type;
-            if type_id_is_bool(raw_type) {
-                canonical_value = if raw_value == 0 { 0 } else { 1 };
-                canonical_type = BUILTIN_TYPE_ID_BOOL;
-            } else if constant_eval_integer_type_supported(raw_type) {
-                canonical_value = normalize_integer_value(raw_value, raw_type);
-            } else if type_id_is_type(raw_type) {
-                if raw_value < 0 {
-                    store_i32(call_data_used_ptr, saved_call_data_used);
-                    return -1;
-                };
-                canonical_value = raw_value;
-                canonical_type = BUILTIN_TYPE_ID_TYPE;
-            } else if raw_type < 0 {
+            let entry_ptr: i32 = payload_ptr + WORD_SIZE + collected * 3 * WORD_SIZE;
+            store_i32(entry_ptr, param_index);
+            if canonicalize_const_value(
+                ast_base,
+                raw_value,
+                raw_type,
+                call_data_used_ptr,
+                entry_ptr + WORD_SIZE,
+                entry_ptr + 2 * WORD_SIZE,
+            ) < 0 {
                 store_i32(call_data_used_ptr, saved_call_data_used);
                 return -1;
             };
-            let entry_ptr: i32 = payload_ptr + WORD_SIZE + collected * 3 * WORD_SIZE;
-            store_i32(entry_ptr, param_index);
-            store_i32(entry_ptr + WORD_SIZE, canonical_value);
-            store_i32(entry_ptr + 2 * WORD_SIZE, canonical_type);
             collected = collected + 1;
         };
         param_index = param_index + 1;
