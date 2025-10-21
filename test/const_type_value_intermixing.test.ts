@@ -119,7 +119,7 @@ test("const parameters can accept tuples mixing types and values", async () => {
     expect(result).toBe(3);
 });
 
-test.todo("const parameters can accept arrays of types", async () => {
+test("const parameters can accept arrays of types", async () => {
     const wasm = await compileWithAstCompiler(`
     fn use_types(const TYPES: [type; 3]) -> i32 {
         let value: TYPES[1] = 100;
@@ -132,4 +132,19 @@ test.todo("const parameters can accept arrays of types", async () => {
   `);
     const result = await runWasmMainWithGc(wasm);
     expect(result).toBe(100);
+});
+
+test.todo("struct like function signiture compiles", async () => {
+    const wasm = await compileWithAstCompiler(`
+    const fn struct_like(const STR_LEN: i32, const PROP_COUNT: i32, const PROPS: [([u8; STR_LEN], type); PROP_COUNT]) -> type {
+        i32
+    }
+
+    fn main() -> i32 {
+        let x: struct_like(3, 1, [("foo", i32)]) = 3;
+        x
+    }
+  `);
+    const result = await runWasmMainWithGc(wasm);
+    expect(result).toBe(3);
 });
