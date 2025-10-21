@@ -36,7 +36,9 @@ test("inline_wasm requires literal u8 array", async () => {
         inline_wasm([value])
     }
   `);
-  expect(failure.message).toContain("stage1 compilation failed");
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:4:9: inline_wasm argument must be an array literal of u8 values",
+  );
 });
 
 test("inline_wasm enforces u8 range", async () => {
@@ -45,5 +47,7 @@ test("inline_wasm enforces u8 range", async () => {
         inline_wasm([256])
     }
   `);
-  expect(failure.message).toContain("stage1 compilation failed");
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:3:9: inline_wasm argument must be an array literal of u8 values",
+  );
 });

@@ -1262,6 +1262,20 @@ fn parse_basic_expression(
                         bytes_ptr_ptr,
                         byte_count_ptr,
                     ) < 0 {
+                        let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+                        if detail_out_ptr > 0 {
+                            if load_u8(detail_out_ptr) == 0 {
+                                write_failure_detail_with_location(
+                                    detail_out_ptr,
+                                    scratch_module_index(detail_out_ptr),
+                                    base,
+                                    len,
+                                    ident_start,
+                                    58,
+                                    "inline_wasm argument must be an array literal of u8 values",
+                                );
+                            };
+                        };
                         return -1;
                     };
                     let bytes_ptr: i32 = load_i32(bytes_ptr_ptr);
