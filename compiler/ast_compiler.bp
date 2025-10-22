@@ -28,6 +28,18 @@ fn compile_impl(
     if func_count <= 0 {
         if ast_constants_count(ast_base) > 0 {
             record_type_metadata_failure(out_ptr);
+        } else if out_ptr > 0 {
+            if load_u8(out_ptr) == 0 {
+                write_failure_detail_with_location(
+                    out_ptr,
+                    current_module_index,
+                    input_ptr,
+                    input_len,
+                    0,
+                    21,
+                    "parsing source failed",
+                );
+            };
         };
         return -1;
     };

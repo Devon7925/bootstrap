@@ -28,7 +28,25 @@ const AST_TUPLE_TYPE_COUNT_OFFSET: i32 = 0;
 
 const AST_TUPLE_TYPE_ELEMENTS_PTR_OFFSET: i32 = 4;
 
+const AST_STRUCT_TYPE_FIELD_COUNT_OFFSET: i32 = 0;
+
+const AST_STRUCT_TYPE_FIELD_STRIDE_OFFSET: i32 = 8;
+
+const AST_STRUCT_TYPE_FIELDS_PTR_OFFSET: i32 = 12;
+
+const STRUCT_FIELD_METADATA_HEADER_WORDS: i32 = 2;
+
+const STRUCT_FIELD_TYPE_WORD_OFFSET: i32 = 0;
+
 const LOCAL_COUNTS_BASE: i32 = 1024;
+
+fn record_emit_failure(out_ptr: i32, const MESSAGE_LEN: i32, message: [u8; MESSAGE_LEN]) {
+    if out_ptr > 0 {
+        if load_u8(out_ptr) == 0 {
+            write_failure_detail(out_ptr, MESSAGE_LEN, message);
+        };
+    };
+}
 
 fn write_byte(base: i32, offset: i32, value: i32) -> i32 {
     store_u8(base + offset, value & 255);
@@ -159,7 +177,10 @@ fn type_id_to_wasm_value_type(type_id: i32) -> i32 {
 
 
 fn type_id_wasm_value_type_len(ast_base: i32, type_id: i32) -> i32 {
-    if type_id_is_array(type_id) || type_id_is_tuple(type_id) {
+    if type_id_is_array(type_id)
+        || type_id_is_tuple(type_id)
+        || type_id_is_struct(type_id)
+    {
         let heap_index: i32 = type_id_heap_type_index(ast_base, type_id);
         if heap_index < 0 {
             return -1;
@@ -175,7 +196,10 @@ fn type_id_wasm_value_type_len(ast_base: i32, type_id: i32) -> i32 {
 
 
 fn write_type_id_as_wasm_value_type(base: i32, offset: i32, ast_base: i32, type_id: i32) -> i32 {
-    if type_id_is_array(type_id) || type_id_is_tuple(type_id) {
+    if type_id_is_array(type_id)
+        || type_id_is_tuple(type_id)
+        || type_id_is_struct(type_id)
+    {
         let heap_index: i32 = type_id_heap_type_index(ast_base, type_id);
         if heap_index < 0 {
             return -1;
@@ -190,6 +214,8 @@ fn write_type_id_as_wasm_value_type(base: i32, offset: i32, ast_base: i32, type_
     };
     write_byte(base, offset, numeric)
 }
+
+
 
 
 fn integer_type_bit_width(type_id: i32) -> i32 {
@@ -776,6 +802,7 @@ fn collect_local_counts_from_expression(
         };
         let declaration_counts: i32 = if type_id_is_array(init_type_id)
             || type_id_is_tuple(init_type_id)
+            || type_id_is_struct(init_type_id)
         {
             local_counts_pack(0, 0, 1)
         } else {
@@ -895,6 +922,52 @@ fn collect_local_counts_from_expression(
             idx = idx + 1;
         };
         total
+    } else if kind == 47 {
+        let metadata_ptr: i32 = load_i32(entry_ptr + 8);
+        let field_count: i32 = load_i32(entry_ptr + 12);
+        if field_count < 0 {
+            return -1;
+        };
+        if field_count == 0 {
+            return 0;
+        };
+        if metadata_ptr <= 0 {
+            return -1;
+        };
+        let mut total: i32 = 0;
+        let mut idx: i32 = 0;
+        while idx < field_count {
+            let entry: i32 = struct_literal_field_entry_ptr(metadata_ptr, idx);
+            if entry <= 0 {
+                return -1;
+            };
+            let value_index: i32 = struct_literal_field_value_index(entry);
+            let value_counts: i32 = collect_local_counts_from_expression(
+                ast_base,
+                value_index,
+                param_count,
+                locals_end,
+                local_types_ptr,
+            );
+            if value_counts < 0 {
+                return -1;
+            };
+            total = local_counts_add(total, value_counts);
+            if total < 0 {
+                return -1;
+            };
+            idx = idx + 1;
+        };
+        total
+    } else if kind == 48 {
+        let struct_index: i32 = load_i32(entry_ptr + 4);
+        return collect_local_counts_from_expression(
+            ast_base,
+            struct_index,
+            param_count,
+            locals_end,
+            local_types_ptr,
+        );
     } else if kind == 42 {
         0
     } else if kind == 29 || kind == 30 || kind == 31 {
@@ -1232,6 +1305,30 @@ fn expression_code_size(ast_base: i32, expr_index: i32) -> i32 {
         };
         return tuple_size + 2 + leb_u32_len(type_index) + leb_u32_len(field_index);
     };
+    if kind == 48 {
+        let struct_index: i32 = load_i32(entry_ptr + 4);
+        let metadata_ptr: i32 = load_i32(entry_ptr + 8);
+        if metadata_ptr <= 0 {
+            return -1;
+        };
+        let struct_size: i32 = expression_code_size(ast_base, struct_index);
+        if struct_size < 0 {
+            return -1;
+        };
+        let struct_type: i32 = ast_expr_type(ast_base, struct_index);
+        if !type_id_is_struct(struct_type) {
+            return -1;
+        };
+        let field_index: i32 = struct_get_label_extra(metadata_ptr);
+        if field_index < 0 {
+            return -1;
+        };
+        let type_index: i32 = type_id_heap_type_index(ast_base, struct_type);
+        if type_index < 0 {
+            return -1;
+        };
+        return struct_size + 2 + leb_u32_len(type_index) + leb_u32_len(field_index);
+    };
     if kind == 40 {
         let values_ptr: i32 = load_i32(entry_ptr + 4);
         let element_count: i32 = load_i32(entry_ptr + 8);
@@ -1259,6 +1356,42 @@ fn expression_code_size(ast_base: i32, expr_index: i32) -> i32 {
             return -1;
         };
         let type_index: i32 = type_id_heap_type_index(ast_base, expr_type);
+        if type_index < 0 {
+            return -1;
+        };
+        return total + 2 + leb_u32_len(type_index);
+    };
+    if kind == 47 {
+        let metadata_ptr: i32 = load_i32(entry_ptr + 8);
+        let field_count: i32 = load_i32(entry_ptr + 12);
+        if field_count < 0 {
+            return -1;
+        };
+        let mut total: i32 = 0;
+        if field_count > 0 {
+            if metadata_ptr <= 0 {
+                return -1;
+            };
+            let mut idx: i32 = 0;
+            while idx < field_count {
+                let entry: i32 = struct_literal_field_entry_ptr(metadata_ptr, idx);
+                if entry <= 0 {
+                    return -1;
+                };
+                let value_index: i32 = struct_literal_field_value_index(entry);
+                let value_size: i32 = expression_code_size(ast_base, value_index);
+                if value_size < 0 {
+                    return -1;
+                };
+                total = total + value_size;
+                idx = idx + 1;
+            };
+        };
+        let struct_type: i32 = ast_expr_type(ast_base, expr_index);
+        if !type_id_is_struct(struct_type) {
+            return -1;
+        };
+        let type_index: i32 = type_id_heap_type_index(ast_base, struct_type);
         if type_index < 0 {
             return -1;
         };
@@ -1616,6 +1749,10 @@ fn remap_expression_calls(
         let tuple_index: i32 = load_i32(entry_ptr + 4);
         return remap_expression_calls(ast_base, tuple_index, runtime_map_ptr, func_index);
     };
+    if kind == 48 {
+        let struct_index: i32 = load_i32(entry_ptr + 4);
+        return remap_expression_calls(ast_base, struct_index, runtime_map_ptr, func_index);
+    };
     if kind == 40 {
         let values_ptr: i32 = load_i32(entry_ptr + 4);
         let element_count: i32 = load_i32(entry_ptr + 8);
@@ -1626,6 +1763,28 @@ fn remap_expression_calls(
             let mut idx: i32 = 0;
             while idx < element_count {
                 let value_index: i32 = load_i32(values_ptr + idx * WORD_SIZE);
+                if remap_expression_calls(ast_base, value_index, runtime_map_ptr, func_index) < 0 {
+                    return -1;
+                };
+                idx = idx + 1;
+            };
+        };
+        return 0;
+    };
+    if kind == 47 {
+        let metadata_ptr: i32 = load_i32(entry_ptr + 8);
+        let field_count: i32 = load_i32(entry_ptr + 12);
+        if field_count > 0 {
+            if metadata_ptr <= 0 {
+                return -1;
+            };
+            let mut idx: i32 = 0;
+            while idx < field_count {
+                let entry: i32 = struct_literal_field_entry_ptr(metadata_ptr, idx);
+                if entry <= 0 {
+                    return -1;
+                };
+                let value_index: i32 = struct_literal_field_value_index(entry);
                 if remap_expression_calls(ast_base, value_index, runtime_map_ptr, func_index) < 0 {
                     return -1;
                 };
@@ -2104,6 +2263,49 @@ fn emit_expression(
         out = write_u32_leb(base, out, field_index);
         return out;
     };
+    if kind == 48 {
+        let struct_index: i32 = load_i32(entry_ptr + 4);
+        let metadata_ptr: i32 = load_i32(entry_ptr + 8);
+        if metadata_ptr <= 0 {
+            return -1;
+        };
+        let start: i32 = offset;
+        let mut out: i32 = emit_expression(
+            base,
+            offset,
+            ast_base,
+            struct_index,
+            runtime_map_ptr,
+            runtime_func_count,
+        );
+        if out < 0 {
+            return -1;
+        };
+        let struct_type: i32 = ast_expr_type(ast_base, struct_index);
+        if !type_id_is_struct(struct_type) {
+            return -1;
+        };
+        let field_index: i32 = struct_get_label_extra(metadata_ptr);
+        if field_index < 0 {
+            return -1;
+        };
+        let type_index: i32 = type_id_heap_type_index(ast_base, struct_type);
+        if type_index < 0 {
+            return -1;
+        };
+        out = write_byte(base, out, 251);
+        out = write_byte(base, out, 2);
+        out = write_u32_leb(base, out, type_index);
+        out = write_u32_leb(base, out, field_index);
+        let expected: i32 = expression_code_size(ast_base, expr_index);
+        if expected < 0 {
+            return -1;
+        };
+        if out - start != expected {
+            return -1;
+        };
+        return out;
+    };
     if kind == 40 {
         let values_ptr: i32 = load_i32(entry_ptr + 4);
         let element_count: i32 = load_i32(entry_ptr + 8);
@@ -2136,6 +2338,59 @@ fn emit_expression(
         out = write_byte(base, out, 251);
         out = write_byte(base, out, 0);
         out = write_u32_leb(base, out, type_index);
+        return out;
+    };
+    if kind == 47 {
+        let metadata_ptr: i32 = load_i32(entry_ptr + 8);
+        let field_count: i32 = load_i32(entry_ptr + 12);
+        if field_count < 0 {
+            return -1;
+        };
+        let start: i32 = offset;
+        let mut out: i32 = offset;
+        if field_count > 0 {
+            if metadata_ptr <= 0 {
+                return -1;
+            };
+            let mut idx: i32 = 0;
+            while idx < field_count {
+                let entry: i32 = struct_literal_field_entry_ptr(metadata_ptr, idx);
+                if entry <= 0 {
+                    return -1;
+                };
+                let value_index: i32 = struct_literal_field_value_index(entry);
+                out = emit_expression(
+                    base,
+                    out,
+                    ast_base,
+                    value_index,
+                    runtime_map_ptr,
+                    runtime_func_count,
+                );
+                if out < 0 {
+                    return -1;
+                };
+                idx = idx + 1;
+            };
+        };
+        let struct_type: i32 = ast_expr_type(ast_base, expr_index);
+        if !type_id_is_struct(struct_type) {
+            return -1;
+        };
+        let type_index: i32 = type_id_heap_type_index(ast_base, struct_type);
+        if type_index < 0 {
+            return -1;
+        };
+        out = write_byte(base, out, 251);
+        out = write_byte(base, out, 0);
+        out = write_u32_leb(base, out, type_index);
+        let expected: i32 = expression_code_size(ast_base, expr_index);
+        if expected < 0 {
+            return -1;
+        };
+        if out - start != expected {
+            return -1;
+        };
         return out;
     };
     if kind == 42 {
@@ -2518,6 +2773,7 @@ fn emit_type_section(
     func_count: i32,
     array_count: i32,
     tuple_count: i32,
+    struct_count: i32,
     runtime_map_ptr: i32,
     runtime_func_count: i32,
 ) -> i32 {
@@ -2527,10 +2783,13 @@ fn emit_type_section(
     if tuple_count < 0 {
         return -1;
     };
-    let total_types: i32 = array_count + tuple_count + runtime_func_count;
+    if struct_count < 0 {
+        return -1;
+    };
+    let total_types: i32 = array_count + tuple_count + struct_count + runtime_func_count;
     let mut payload_size: i32 = leb_u32_len(total_types);
 
-    let composite_count: i32 = array_count + tuple_count;
+    let composite_count: i32 = array_count + tuple_count + struct_count;
     let mut heap_idx: i32 = 0;
     while heap_idx < composite_count {
         let mut handled: bool = false;
@@ -2595,6 +2854,53 @@ fn emit_type_section(
                 break;
             };
             tuple_idx = tuple_idx + 1;
+        };
+        if handled {
+            heap_idx = heap_idx + 1;
+            continue;
+        };
+        let mut struct_idx: i32 = 0;
+        while struct_idx < struct_count {
+            let current_heap: i32 = ast_struct_heap_index(ast_base, struct_idx);
+            if current_heap == heap_idx {
+                let field_count: i32 = ast_struct_type_field_count(ast_base, struct_idx);
+                if field_count < 0 {
+                    return -1;
+                };
+                let field_stride: i32 = ast_struct_type_field_stride(ast_base, struct_idx);
+                if field_stride < STRUCT_FIELD_METADATA_HEADER_WORDS {
+                    return -1;
+                };
+                let fields_ptr: i32 = ast_struct_type_fields_ptr(ast_base, struct_idx);
+                if field_count > 0 {
+                    if fields_ptr <= 0 {
+                        return -1;
+                    };
+                };
+                let mut entry_size: i32 =
+                    leb_i32_len(WASM_COMPOSITE_TYPE_STRUCT) + leb_u32_len(field_count);
+                if field_count > 0 {
+                    let stride_bytes: i32 = field_stride * WORD_SIZE;
+                    let mut field_idx: i32 = 0;
+                    while field_idx < field_count {
+                        let record_ptr: i32 = fields_ptr + field_idx * stride_bytes;
+                        let field_type_id: i32 = load_i32(
+                            record_ptr + STRUCT_FIELD_TYPE_WORD_OFFSET * WORD_SIZE,
+                        );
+                        let field_size: i32 =
+                            type_id_wasm_value_type_len(ast_base, field_type_id);
+                        if field_size < 0 {
+                            return -1;
+                        };
+                        entry_size = entry_size + field_size + 1;
+                        field_idx = field_idx + 1;
+                    };
+                };
+                payload_size = payload_size + entry_size;
+                handled = true;
+                break;
+            };
+            struct_idx = struct_idx + 1;
         };
         if !handled {
             return -1;
@@ -2718,6 +3024,54 @@ fn emit_type_section(
             };
             tuple_idx = tuple_idx + 1;
         };
+        if handled {
+            heap_idx = heap_idx + 1;
+            continue;
+        };
+        let mut struct_idx: i32 = 0;
+        while struct_idx < struct_count {
+            let current_heap: i32 = ast_struct_heap_index(ast_base, struct_idx);
+            if current_heap == heap_idx {
+                let field_count: i32 = ast_struct_type_field_count(ast_base, struct_idx);
+                if field_count < 0 {
+                    return -1;
+                };
+                out = write_i32_leb(base, out, WASM_COMPOSITE_TYPE_STRUCT);
+                out = write_u32_leb(base, out, field_count);
+                if field_count > 0 {
+                    let fields_ptr: i32 = ast_struct_type_fields_ptr(ast_base, struct_idx);
+                    if fields_ptr <= 0 {
+                        return -1;
+                    };
+                    let field_stride: i32 = ast_struct_type_field_stride(ast_base, struct_idx);
+                    if field_stride < STRUCT_FIELD_METADATA_HEADER_WORDS {
+                        return -1;
+                    };
+                    let stride_bytes: i32 = field_stride * WORD_SIZE;
+                    let mut field_idx: i32 = 0;
+                    while field_idx < field_count {
+                        let record_ptr: i32 = fields_ptr + field_idx * stride_bytes;
+                        let field_type_id: i32 = load_i32(
+                            record_ptr + STRUCT_FIELD_TYPE_WORD_OFFSET * WORD_SIZE,
+                        );
+                        let next: i32 = write_type_id_as_wasm_value_type(
+                            base,
+                            out,
+                            ast_base,
+                            field_type_id,
+                        );
+                        if next < 0 {
+                            return -1;
+                        };
+                        out = write_byte(base, next, WASM_MUTABILITY_VAR);
+                        field_idx = field_idx + 1;
+                    };
+                };
+                handled = true;
+                break;
+            };
+            struct_idx = struct_idx + 1;
+        };
         if !handled {
             return -1;
         };
@@ -2788,11 +3142,15 @@ fn emit_function_section(
     runtime_func_count: i32,
     array_count: i32,
     tuple_count: i32,
+    struct_count: i32,
 ) -> i32 {
     if runtime_func_count > 0 {
         if runtime_map_ptr <= 0 {
             return -1;
         };
+    };
+    if struct_count < 0 {
+        return -1;
     };
     let mut payload_size: i32 = leb_u32_len(runtime_func_count);
     let mut idx: i32 = 0;
@@ -2806,7 +3164,7 @@ fn emit_function_section(
             idx = idx + 1;
             continue;
         };
-        let type_index: i32 = array_count + tuple_count + runtime_index;
+        let type_index: i32 = array_count + tuple_count + struct_count + runtime_index;
         payload_size = payload_size + leb_u32_len(type_index);
         idx = idx + 1;
     };
@@ -2826,7 +3184,7 @@ fn emit_function_section(
             idx = idx + 1;
             continue;
         };
-        let type_index: i32 = array_count + tuple_count + runtime_index;
+        let type_index: i32 = array_count + tuple_count + struct_count + runtime_index;
         out = write_u32_leb(base, out, type_index);
         idx = idx + 1;
     };
@@ -3288,6 +3646,15 @@ fn write_type_metadata(out_ptr: i32, ast_base: i32) -> i32 {
         };
         tuple_idx = tuple_idx + 1;
     };
+    let struct_count: i32 = ast_struct_types_count(ast_base);
+    let mut struct_idx: i32 = 0;
+    while struct_idx < struct_count {
+        let type_id: i32 = struct_type_id(struct_idx);
+        if resolve_struct_type_id(out_ptr, ast_base, type_id) < 0 {
+            return -1;
+        };
+        struct_idx = struct_idx + 1;
+    };
     if assign_heap_type_indices(out_ptr, ast_base) < 0 {
         return -1;
     };
@@ -3326,6 +3693,7 @@ fn emit_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
     };
     let array_count: i32 = ast_array_types_count(ast_base);
     let tuple_count: i32 = ast_tuple_types_count(ast_base);
+    let struct_count: i32 = ast_struct_types_count(ast_base);
     offset = emit_type_section(
         out_ptr,
         offset,
@@ -3333,9 +3701,15 @@ fn emit_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
         func_count,
         array_count,
         tuple_count,
+        struct_count,
         runtime_map_ptr,
         runtime_func_count,
     );
+    if offset < 0 {
+        let message: [u8; 34] = "failed to emit WebAssembly type section";
+        record_emit_failure(out_ptr, 34, message);
+        return -1;
+    };
     offset = emit_function_section(
         out_ptr,
         offset,
@@ -3344,9 +3718,25 @@ fn emit_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
         runtime_func_count,
         array_count,
         tuple_count,
+        struct_count,
     );
+    if offset < 0 {
+        let message: [u8; 38] = "failed to emit WebAssembly function section";
+        record_emit_failure(out_ptr, 38, message);
+        return -1;
+    };
     offset = emit_memory_section(out_ptr, offset);
+    if offset < 0 {
+        let message: [u8; 36] = "failed to emit WebAssembly memory section";
+        record_emit_failure(out_ptr, 36, message);
+        return -1;
+    };
     offset = emit_export_section(out_ptr, offset, ast_base, func_count, runtime_map_ptr);
+    if offset < 0 {
+        let message: [u8; 37] = "failed to emit WebAssembly export section";
+        record_emit_failure(out_ptr, 37, message);
+        return -1;
+    };
     offset = emit_code_section(
         out_ptr,
         offset,
@@ -3355,6 +3745,11 @@ fn emit_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
         runtime_map_ptr,
         runtime_func_count,
     );
+    if offset < 0 {
+        let message: [u8; 34] = "failed to emit WebAssembly code section";
+        record_emit_failure(out_ptr, 34, message);
+        return -1;
+    };
     offset
 }
 

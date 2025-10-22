@@ -79,6 +79,483 @@ fn record_failure_with_location(
     0
 }
 
+fn append_struct_field_name_to_failure(
+    out_ptr: i32,
+    ast_base: i32,
+    struct_index: i32,
+    field_index: i32,
+) -> i32 {
+    if out_ptr <= 0 {
+        return 0;
+    };
+    let trimmed_len: i32 = struct_field_trimmed_length(ast_base, struct_index, field_index);
+    if trimmed_len <= 0 {
+        return 0;
+    };
+    let mut write_offset: i32 = 0;
+    loop {
+        if write_offset >= FAILURE_DETAIL_CAPACITY {
+            return 0;
+        };
+        let existing: i32 = load_u8(out_ptr + write_offset);
+        if existing == 0 {
+            break;
+        };
+        write_offset = write_offset + 1;
+    };
+    let mut byte_idx: i32 = 0;
+    while byte_idx < trimmed_len {
+        if write_offset >= FAILURE_DETAIL_CAPACITY {
+            return 0;
+        };
+        let canonical_byte: i32 = ast_struct_type_field_canonical_byte(
+            ast_base,
+            struct_index,
+            field_index,
+            byte_idx,
+        );
+        if canonical_byte < 0 {
+            return 0;
+        };
+        store_u8(out_ptr + write_offset, canonical_byte);
+        write_offset = write_offset + 1;
+        byte_idx = byte_idx + 1;
+    };
+    if write_offset < FAILURE_DETAIL_CAPACITY {
+        store_u8(out_ptr + write_offset, 0);
+        write_offset = write_offset + 1;
+    };
+    while write_offset < FAILURE_DETAIL_CAPACITY {
+        store_u8(out_ptr + write_offset, 0);
+        write_offset = write_offset + 1;
+    };
+    0
+}
+
+fn record_struct_literal_field_mismatch(
+    out_ptr: i32,
+    ast_base: i32,
+    caller_func_index: i32,
+    location_offset: i32,
+    struct_index: i32,
+    field_index: i32,
+) {
+    if out_ptr > 0 {
+        let initial: i32 = load_u8(out_ptr);
+        let message: [u8; 57] =
+            "struct literal field name does not match canonical field ";
+        record_failure_with_location(
+            out_ptr,
+            ast_base,
+            caller_func_index,
+            location_offset,
+            57,
+            message,
+        );
+        if initial == 0 {
+            append_struct_field_name_to_failure(out_ptr, ast_base, struct_index, field_index);
+        };
+    };
+}
+
+fn record_struct_literal_missing_field(
+    out_ptr: i32,
+    ast_base: i32,
+    caller_func_index: i32,
+    location_offset: i32,
+    struct_index: i32,
+    field_index: i32,
+) {
+    if out_ptr > 0 {
+        let initial: i32 = load_u8(out_ptr);
+        let message: [u8; 29] = "struct literal missing field ";
+        record_failure_with_location(
+            out_ptr,
+            ast_base,
+            caller_func_index,
+            location_offset,
+            29,
+            message,
+        );
+        if initial == 0 {
+            append_struct_field_name_to_failure(out_ptr, ast_base, struct_index, field_index);
+        };
+    };
+}
+
+fn struct_label_expression_normalized_byte(value_ptr: i32, index: i32) -> i32 {
+    if index < 0 {
+        return -1;
+    };
+    if value_ptr <= 0 {
+        return -1;
+    };
+    let slot_ptr: i32 = value_ptr + index * 2 * WORD_SIZE;
+    let char_value: i32 = load_i32(slot_ptr);
+    let char_type: i32 = load_i32(slot_ptr + WORD_SIZE);
+    if !constant_eval_integer_type_supported(char_type) {
+        return -1;
+    };
+    let normalized: i32 = normalize_integer_value(char_value, char_type);
+    if normalized < 0 {
+        return -1;
+    };
+    if normalized > 255 {
+        return -1;
+    };
+    normalized
+}
+
+fn struct_label_expression_trimmed_length(value_ptr: i32, element_count: i32) -> i32 {
+    if element_count <= 0 {
+        return 0;
+    };
+    if value_ptr <= 0 {
+        return -1;
+    };
+    let mut trimmed: i32 = element_count;
+    loop {
+        if trimmed <= 0 {
+            break;
+        };
+        let normalized: i32 = struct_label_expression_normalized_byte(value_ptr, trimmed - 1);
+        if normalized < 0 {
+            return -1;
+        };
+        if normalized != 0 {
+            break;
+        };
+        trimmed = trimmed - 1;
+    };
+    trimmed
+}
+
+fn resolve_struct_get_expression(
+    out_ptr: i32,
+    ast_base: i32,
+    expr_index: i32,
+    struct_index_expr: i32,
+    metadata_ptr: i32,
+    func_count: i32,
+    control_stack_base: i32,
+    control_stack_count_ptr: i32,
+    loop_stack_base: i32,
+    loop_stack_count_ptr: i32,
+    local_stack_base: i32,
+    local_stack_count_ptr: i32,
+    caller_func_index: i32,
+    caller_is_const: bool,
+) -> i32 {
+    if metadata_ptr <= 0 {
+        return -1;
+    };
+    let struct_type_id: i32 = ast_expr_type(ast_base, struct_index_expr);
+    let resolved_struct: i32 = resolve_type_id(out_ptr, ast_base, struct_type_id);
+    if resolved_struct < 0 {
+        return -1;
+    };
+    if resolved_struct != struct_type_id {
+        ast_expr_set_type(ast_base, struct_index_expr, resolved_struct);
+    };
+    if !type_id_is_struct(resolved_struct) {
+        return -1;
+    };
+    let struct_index: i32 = struct_type_index(resolved_struct);
+    if struct_index < 0 {
+        return -1;
+    };
+    if ensure_struct_type_metadata(out_ptr, ast_base, struct_index, resolved_struct) < 0 {
+        return -1;
+    };
+    let label_kind: i32 = struct_get_label_kind(metadata_ptr);
+    if label_kind == STRUCT_LITERAL_LABEL_KIND_EXPRESSION {
+        let label_expr: i32 = struct_get_label_data(metadata_ptr);
+        if resolve_expression_internal(
+            out_ptr,
+            ast_base,
+            label_expr,
+            func_count,
+            control_stack_base,
+            control_stack_count_ptr,
+            loop_stack_base,
+            loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
+            caller_func_index,
+            caller_is_const,
+        ) < 0 {
+            return -1;
+        };
+        let access_location: i32 = ast_expr_struct_get_location(ast_base, expr_index);
+        let eval_base: i32 = ast_temp_base(ast_base) + CONSTANT_EVAL_SCRATCH_OFFSET;
+        let eval_value_ptr: i32 = eval_base;
+        let eval_type_ptr: i32 = eval_value_ptr + WORD_SIZE;
+        let eval_stack_top_ptr: i32 = eval_type_ptr + WORD_SIZE;
+        let eval_stack_base: i32 = eval_stack_top_ptr + WORD_SIZE;
+        let saved_eval_top: i32 = load_i32(eval_stack_top_ptr);
+        store_i32(eval_stack_top_ptr, 0);
+        let eval_status: i32 = interpret_constant_expression(
+            ast_base,
+            label_expr,
+            eval_stack_base,
+            eval_stack_top_ptr,
+            eval_value_ptr,
+            eval_type_ptr,
+            0,
+            0,
+            0,
+        );
+        store_i32(eval_stack_top_ptr, saved_eval_top);
+        if eval_status < 0 {
+            record_failure_with_location(
+                out_ptr,
+                ast_base,
+                caller_func_index,
+                access_location,
+                33,
+                "struct field identifier not found",
+            );
+            return -1;
+        };
+        if eval_status != CONST_EVAL_STATUS_OK {
+            record_failure_with_location(
+                out_ptr,
+                ast_base,
+                caller_func_index,
+                access_location,
+                33,
+                "struct field identifier not found",
+            );
+            return -1;
+        };
+        let mut label_type: i32 = load_i32(eval_type_ptr);
+        let resolved_label_type: i32 = resolve_type_id(out_ptr, ast_base, label_type);
+        if resolved_label_type < 0 {
+            record_failure_with_location(
+                out_ptr,
+                ast_base,
+                caller_func_index,
+                access_location,
+                33,
+                "struct field identifier not found",
+            );
+            return -1;
+        };
+        label_type = resolved_label_type;
+        ast_expr_set_type(ast_base, label_expr, label_type);
+        if !type_id_is_array(label_type) {
+            record_failure_with_location(
+                out_ptr,
+                ast_base,
+                caller_func_index,
+                access_location,
+                33,
+                "struct field identifier not found",
+            );
+            return -1;
+        };
+        let element_type: i32 = array_type_element_type(ast_base, label_type);
+        if element_type < 0 {
+            record_failure_with_location(
+                out_ptr,
+                ast_base,
+                caller_func_index,
+                access_location,
+                33,
+                "struct field identifier not found",
+            );
+            return -1;
+        };
+        if element_type != BUILTIN_TYPE_ID_U8 {
+            record_failure_with_location(
+                out_ptr,
+                ast_base,
+                caller_func_index,
+                access_location,
+                33,
+                "struct field identifier not found",
+            );
+            return -1;
+        };
+        let element_count: i32 = array_type_length(ast_base, label_type);
+        if element_count < 0 {
+            record_failure_with_location(
+                out_ptr,
+                ast_base,
+                caller_func_index,
+                access_location,
+                33,
+                "struct field identifier not found",
+            );
+            return -1;
+        };
+        let label_value_ptr: i32 = load_i32(eval_value_ptr);
+        if label_value_ptr <= 0 {
+            record_failure_with_location(
+                out_ptr,
+                ast_base,
+                caller_func_index,
+                access_location,
+                33,
+                "struct field identifier not found",
+            );
+            return -1;
+        };
+        let trimmed_length: i32 =
+            struct_label_expression_trimmed_length(label_value_ptr, element_count);
+        if trimmed_length < 0 {
+            record_failure_with_location(
+                out_ptr,
+                ast_base,
+                caller_func_index,
+                access_location,
+                33,
+                "struct field identifier not found",
+            );
+            return -1;
+        };
+        let field_count: i32 = ast_struct_type_field_count(ast_base, struct_index);
+        if field_count < 0 {
+            return -1;
+        };
+        let mut field_idx: i32 = 0;
+        while field_idx < field_count {
+            let canonical_length: i32 =
+                struct_field_trimmed_length(ast_base, struct_index, field_idx);
+            if canonical_length < 0 {
+                return -1;
+            };
+            if canonical_length == trimmed_length {
+                let mut compare_idx: i32 = 0;
+                let mut matches: bool = true;
+                while compare_idx < canonical_length {
+                    let normalized_char: i32 = struct_label_expression_normalized_byte(
+                        label_value_ptr,
+                        compare_idx,
+                    );
+                    if normalized_char < 0 {
+                        matches = false;
+                        break;
+                    };
+                    let canonical_char: i32 = ast_struct_type_field_canonical_byte(
+                        ast_base,
+                        struct_index,
+                        field_idx,
+                        compare_idx,
+                    );
+                    if canonical_char < 0 {
+                        return -1;
+                    };
+                    if canonical_char != normalized_char {
+                        matches = false;
+                        break;
+                    };
+                    compare_idx = compare_idx + 1;
+                };
+                if matches {
+                    let matched_type: i32 =
+                        ast_struct_type_field_type(ast_base, struct_index, field_idx);
+                    if matched_type < 0 {
+                        return -1;
+                    };
+                    let resolved_field: i32 =
+                        resolve_type_id(out_ptr, ast_base, matched_type);
+                    if resolved_field < 0 {
+                        return -1;
+                    };
+                    struct_get_label_set_extra(metadata_ptr, field_idx);
+                    ast_expr_set_type(ast_base, expr_index, resolved_field);
+                    return 0;
+                };
+            };
+            field_idx = field_idx + 1;
+        };
+        record_failure_with_location(
+            out_ptr,
+            ast_base,
+            caller_func_index,
+            access_location,
+            33,
+            "struct field identifier not found",
+        );
+        return -1;
+    } else if label_kind == STRUCT_LITERAL_LABEL_KIND_IDENTIFIER {
+        let ident_ptr: i32 = struct_get_label_data(metadata_ptr);
+        let ident_len: i32 = struct_get_label_extra(metadata_ptr);
+        if ident_ptr <= 0 {
+            return -1;
+        };
+        if ident_len < 0 {
+            return -1;
+        };
+        let field_count: i32 = ast_struct_type_field_count(ast_base, struct_index);
+        if field_count < 0 {
+            return -1;
+        };
+        let mut field_idx: i32 = 0;
+        let mut matched_type: i32 = -1;
+        while field_idx < field_count {
+            if struct_field_identifier_matches(
+                ast_base,
+                struct_index,
+                field_idx,
+                ident_ptr,
+                ident_len,
+            ) {
+                matched_type = ast_struct_type_field_type(ast_base, struct_index, field_idx);
+                break;
+            };
+            field_idx = field_idx + 1;
+        };
+        if matched_type >= 0 {
+            let resolved_field: i32 = resolve_type_id(out_ptr, ast_base, matched_type);
+            if resolved_field < 0 {
+                return -1;
+            };
+            struct_get_label_set_extra(metadata_ptr, field_idx);
+            ast_expr_set_type(ast_base, expr_index, resolved_field);
+            return 0;
+        };
+        let access_location: i32 = ast_expr_struct_get_location(ast_base, expr_index);
+        record_failure_with_location(
+            out_ptr,
+            ast_base,
+            caller_func_index,
+            access_location,
+            33,
+            "struct field identifier not found",
+        );
+        return -1;
+    };
+    -1
+}
+
+fn record_struct_literal_type_mismatch(
+    out_ptr: i32,
+    ast_base: i32,
+    caller_func_index: i32,
+    location_offset: i32,
+    struct_index: i32,
+    field_index: i32,
+) {
+    if out_ptr > 0 {
+        let initial: i32 = load_u8(out_ptr);
+        let message: [u8; 63] =
+            "struct literal field value type does not match canonical field ";
+        record_failure_with_location(
+            out_ptr,
+            ast_base,
+            caller_func_index,
+            location_offset,
+            63,
+            message,
+        );
+        if initial == 0 {
+            append_struct_field_name_to_failure(out_ptr, ast_base, struct_index, field_index);
+        };
+    };
+}
+
 fn store_call_failure_location(
     out_ptr: i32,
     ast_base: i32,
@@ -456,6 +933,8 @@ fn collect_call_const_arguments(
     env_copy_ptr
 }
 
+const CALL_METADATA_INTRINSIC_STRUCT: i32 = -2;
+
 fn resolve_call_metadata(
     out_ptr: i32,
     ast_base: i32,
@@ -499,6 +978,71 @@ fn resolve_call_metadata(
 
     let call_name_ptr: i32 = call_metadata_name_ptr(current_metadata);
     let call_name_len: i32 = call_metadata_name_len(current_metadata);
+    if call_name_ptr <= 0 {
+        return -1;
+    };
+    if call_name_len < 0 {
+        return -1;
+    };
+    if call_name_len == 6 {
+        let mut match_idx: i32 = 0;
+        let literal: [u8; 6] = "struct";
+        loop {
+            if match_idx >= 6 {
+                break;
+            };
+            let stored: i32 = load_u8(call_name_ptr + match_idx);
+            let expected: i32 = literal[match_idx] as i32;
+            if stored != expected {
+                match_idx = -1;
+                break;
+            };
+            match_idx = match_idx + 1;
+        };
+        if match_idx == 6 {
+            if !caller_is_const {
+                let recorded: bool = try_record_call_failure_with_location(
+                    out_ptr,
+                    ast_base,
+                    caller_func_index,
+                    resolved_location_offset,
+                    51,
+                    "struct intrinsic must be evaluated in const context",
+                );
+                if !recorded {
+                    record_failure_detail(
+                        out_ptr,
+                        51,
+                        "struct intrinsic must be evaluated in const context",
+                    );
+                };
+                return -1;
+            };
+            if arg_count != 3 {
+                let recorded: bool = try_record_call_failure_with_location(
+                    out_ptr,
+                    ast_base,
+                    caller_func_index,
+                    resolved_location_offset,
+                    40,
+                    "struct intrinsic expects three arguments",
+                );
+                if !recorded {
+                    record_failure_detail(
+                        out_ptr,
+                        40,
+                        "struct intrinsic expects three arguments",
+                    );
+                };
+                return -1;
+            };
+            store_i32(
+                call_metadata_callee_index_ptr(current_metadata),
+                CALL_METADATA_INTRINSIC_STRUCT,
+            );
+            return current_metadata;
+        };
+    };
     let mut target_idx: i32 = 0;
     let mut found_idx: i32 = -1;
     loop {
@@ -855,15 +1399,35 @@ fn resolve_call_metadata(
                             return -1;
                         };
                         if resolved_specialized != expected_arg_type {
-                            record_failure_with_location(
-                                out_ptr,
+                            let is_const_param: bool = ast_function_param_is_const(
                                 ast_base,
-                                caller_func_index,
-                                resolved_location_offset,
-                                47,
-                                "const parameter template expected type mismatch",
+                                target_idx,
+                                param_index,
                             );
-                            return -1;
+                            if !is_const_param {
+                                record_failure_with_location(
+                                    out_ptr,
+                                    ast_base,
+                                    caller_func_index,
+                                    resolved_location_offset,
+                                    47,
+                                    "const parameter template expected type mismatch",
+                                );
+                                return -1;
+                            };
+                            let arg_expr_index: i32 =
+                                load_i32(args_base + param_index * WORD_SIZE);
+                            if arg_expr_index >= 0 {
+                                ast_expr_set_type(
+                                    ast_base,
+                                    arg_expr_index,
+                                    resolved_specialized,
+                                );
+                            };
+                            store_i32(
+                                specialization_temp_base + spec_idx * 8 + 4,
+                                resolved_specialized,
+                            );
                         };
                         spec_idx = spec_idx + 1;
                     };
@@ -1044,6 +1608,194 @@ fn interpret_constants_visit_call_metadata(ast_base: i32, metadata_ptr: i32) -> 
     0
 }
 
+fn try_convert_constant_value(
+    ast_base: i32,
+    value_ptr: i32,
+    value_type: i32,
+    target_type: i32,
+) -> i32 {
+    if target_type < 0 {
+        return -1;
+    };
+    if value_type < 0 {
+        return -1;
+    };
+    if value_type == target_type {
+        if type_id_is_integer(target_type) {
+            let normalized: i32 = normalize_integer_value(load_i32(value_ptr), target_type);
+            store_i32(value_ptr, normalized);
+            return 0;
+        };
+        if target_type == BUILTIN_TYPE_ID_BOOL {
+            let normalized: i32 = if load_i32(value_ptr) != 0 { 1 } else { 0 };
+            store_i32(value_ptr, normalized);
+            return 0;
+        };
+        if type_id_is_array(target_type) {
+            let length: i32 = array_type_length(ast_base, target_type);
+            if length <= 0 {
+                return 0;
+            };
+            let data_ptr: i32 = load_i32(value_ptr);
+            if data_ptr <= 0 {
+                return -1;
+            };
+            let element_type: i32 = array_type_element_type(ast_base, target_type);
+            if element_type < 0 {
+                return -1;
+            };
+            let mut idx: i32 = 0;
+            while idx < length {
+                let slot_ptr: i32 = data_ptr + idx * 2 * WORD_SIZE;
+                let element_value_ptr: i32 = slot_ptr;
+                let element_type_ptr: i32 = slot_ptr + WORD_SIZE;
+                let current_type: i32 = load_i32(element_type_ptr);
+                if try_convert_constant_value(
+                    ast_base,
+                    element_value_ptr,
+                    current_type,
+                    element_type,
+                ) < 0 {
+                    return -1;
+                };
+                store_i32(element_type_ptr, element_type);
+                idx = idx + 1;
+            };
+            return 0;
+        };
+        if type_id_is_tuple(target_type) {
+            let tuple_idx: i32 = tuple_type_index(target_type);
+            if tuple_idx < 0 {
+                return -1;
+            };
+            let element_count: i32 = ast_tuple_type_element_count(ast_base, tuple_idx);
+            if element_count <= 0 {
+                return 0;
+            };
+            let tuple_data_ptr: i32 = load_i32(value_ptr);
+            if tuple_data_ptr <= 0 {
+                return -1;
+            };
+            let elements_ptr: i32 = ast_tuple_type_elements_ptr(ast_base, tuple_idx);
+            if elements_ptr < 0 {
+                return -1;
+            };
+            let mut idx: i32 = 0;
+            while idx < element_count {
+                let slot_ptr: i32 = tuple_data_ptr + idx * 2 * WORD_SIZE;
+                let element_value_ptr: i32 = slot_ptr;
+                let element_type_ptr: i32 = slot_ptr + WORD_SIZE;
+                let current_type: i32 = load_i32(element_type_ptr);
+                let field_type: i32 = load_i32(elements_ptr + idx * WORD_SIZE);
+                if try_convert_constant_value(
+                    ast_base,
+                    element_value_ptr,
+                    current_type,
+                    field_type,
+                ) < 0 {
+                    return -1;
+                };
+                store_i32(element_type_ptr, field_type);
+                idx = idx + 1;
+            };
+            return 0;
+        };
+        return 0;
+    };
+    if type_id_is_integer(value_type) && type_id_is_integer(target_type) {
+        let normalized: i32 = normalize_integer_value(load_i32(value_ptr), value_type);
+        let cast_value: i32 = normalize_integer_value(normalized, target_type);
+        store_i32(value_ptr, cast_value);
+        return 0;
+    };
+    if value_type == BUILTIN_TYPE_ID_BOOL && target_type == BUILTIN_TYPE_ID_BOOL {
+        let normalized: i32 = if load_i32(value_ptr) != 0 { 1 } else { 0 };
+        store_i32(value_ptr, normalized);
+        return 0;
+    };
+    if type_id_is_array(value_type) && type_id_is_array(target_type) {
+        let value_length: i32 = array_type_length(ast_base, value_type);
+        let target_length: i32 = array_type_length(ast_base, target_type);
+        if value_length != target_length {
+            return -1;
+        };
+        let data_ptr: i32 = load_i32(value_ptr);
+        if value_length > 0 {
+            if data_ptr <= 0 {
+                return -1;
+            };
+        };
+        let value_element_type: i32 = array_type_element_type(ast_base, value_type);
+        let target_element_type: i32 = array_type_element_type(ast_base, target_type);
+        if value_element_type < 0 || target_element_type < 0 {
+            return -1;
+        };
+        let mut idx: i32 = 0;
+        while idx < value_length {
+            let slot_ptr: i32 = data_ptr + idx * 2 * WORD_SIZE;
+            let element_value_ptr: i32 = slot_ptr;
+            let element_type_ptr: i32 = slot_ptr + WORD_SIZE;
+            let current_type: i32 = load_i32(element_type_ptr);
+            if try_convert_constant_value(
+                ast_base,
+                element_value_ptr,
+                current_type,
+                target_element_type,
+            ) < 0 {
+                return -1;
+            };
+            store_i32(element_type_ptr, target_element_type);
+            idx = idx + 1;
+        };
+        store_i32(value_ptr, data_ptr);
+        return 0;
+    };
+    if type_id_is_tuple(value_type) && type_id_is_tuple(target_type) {
+        let value_idx: i32 = tuple_type_index(value_type);
+        let target_idx: i32 = tuple_type_index(target_type);
+        if value_idx < 0 || target_idx < 0 {
+            return -1;
+        };
+        let value_count: i32 = ast_tuple_type_element_count(ast_base, value_idx);
+        let target_count: i32 = ast_tuple_type_element_count(ast_base, target_idx);
+        if value_count != target_count {
+            return -1;
+        };
+        let tuple_data_ptr: i32 = load_i32(value_ptr);
+        if value_count > 0 {
+            if tuple_data_ptr <= 0 {
+                return -1;
+            };
+        };
+        let value_elements_ptr: i32 = ast_tuple_type_elements_ptr(ast_base, value_idx);
+        let target_elements_ptr: i32 = ast_tuple_type_elements_ptr(ast_base, target_idx);
+        if value_elements_ptr < 0 || target_elements_ptr < 0 {
+            return -1;
+        };
+        let mut idx: i32 = 0;
+        while idx < value_count {
+            let slot_ptr: i32 = tuple_data_ptr + idx * 2 * WORD_SIZE;
+            let element_value_ptr: i32 = slot_ptr;
+            let element_type_ptr: i32 = slot_ptr + WORD_SIZE;
+            let current_type: i32 = load_i32(element_type_ptr);
+            let field_type: i32 = load_i32(target_elements_ptr + idx * WORD_SIZE);
+            if try_convert_constant_value(
+                ast_base,
+                element_value_ptr,
+                current_type,
+                field_type,
+            ) < 0 {
+                return -1;
+            };
+            store_i32(element_type_ptr, field_type);
+            idx = idx + 1;
+        };
+        store_i32(value_ptr, tuple_data_ptr);
+        return 0;
+    };
+    -1
+}
+
 fn interpret_constant_entry(ast_base: i32, const_entry_ptr: i32) -> i32 {
     if const_entry_ptr < 0 {
         return -1;
@@ -1092,24 +1844,187 @@ fn interpret_constant_entry(ast_base: i32, const_entry_ptr: i32) -> i32 {
     let mut literal_value: i32 = load_i32(eval_value_ptr);
     let literal_type: i32 = load_i32(eval_type_ptr);
     target_type = load_i32(const_type_ptr);
-    if literal_type == target_type {
-        if type_id_is_integer(target_type) {
-            literal_value = normalize_integer_value(literal_value, target_type);
-        } else if target_type == BUILTIN_TYPE_ID_BOOL {
-            literal_value = if literal_value != 0 { 1 } else { 0 };
-        } else if type_id_is_type(target_type) {
-            // Type values already represent resolved type identifiers.
-        };
-    } else if type_id_is_integer(literal_type) && type_id_is_integer(target_type) {
-        literal_value = normalize_integer_value(literal_value, target_type);
-    } else {
+    if target_type < 0 {
+        target_type = literal_type;
+    };
+    if try_convert_constant_value(ast_base, eval_value_ptr, literal_type, target_type) < 0 {
         ast_constant_entry_set_eval_state(const_entry_ptr, AST_CONSTANT_EVAL_STATE_UNEVALUATED);
         return -1;
     };
+    literal_value = load_i32(eval_value_ptr);
     store_i32(ast_constant_entry_value_ptr(const_entry_ptr), literal_value);
     store_i32(const_type_ptr, target_type);
     ast_constant_entry_set_eval_state(const_entry_ptr, AST_CONSTANT_EVAL_STATE_EVALUATED);
     0
+}
+
+fn append_failure_canonical_bytes(out_ptr: i32, bytes_ptr: i32, length: i32) -> i32 {
+    if out_ptr <= 0 {
+        return 0;
+    };
+    if length <= 0 {
+        return 0;
+    };
+    let mut write_offset: i32 = 0;
+    loop {
+        if write_offset >= FAILURE_DETAIL_CAPACITY {
+            return 0;
+        };
+        let existing: i32 = load_u8(out_ptr + write_offset);
+        if existing == 0 {
+            break;
+        };
+        write_offset = write_offset + 1;
+    };
+    let mut idx: i32 = 0;
+    while idx < length {
+        if write_offset >= FAILURE_DETAIL_CAPACITY {
+            return 0;
+        };
+        let byte_value: i32 = load_i32(bytes_ptr + idx * WORD_SIZE);
+        store_u8(out_ptr + write_offset, byte_value);
+        write_offset = write_offset + 1;
+        idx = idx + 1;
+    };
+    if write_offset < FAILURE_DETAIL_CAPACITY {
+        store_u8(out_ptr + write_offset, 0);
+        write_offset = write_offset + 1;
+    };
+    while write_offset < FAILURE_DETAIL_CAPACITY {
+        store_u8(out_ptr + write_offset, 0);
+        write_offset = write_offset + 1;
+    };
+    0
+}
+
+fn try_record_struct_intrinsic_failure(
+    out_ptr: i32,
+    ast_base: i32,
+    const_entry_ptr: i32,
+) -> bool {
+    if out_ptr <= 0 {
+        return false;
+    };
+    if load_u8(out_ptr) != 0 {
+        return false;
+    };
+    let expr_index: i32 = ast_constant_entry_expr_index(const_entry_ptr);
+    if expr_index < 0 {
+        return false;
+    };
+    if expr_index >= ast_expr_count(ast_base) {
+        return false;
+    };
+    let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+    let expr_kind: i32 = load_i32(entry_ptr);
+    if expr_kind != 1 {
+        return false;
+    };
+    let metadata_ptr: i32 = ast_expr_call_metadata(ast_base, expr_index);
+    if metadata_ptr <= 0 {
+        return false;
+    };
+    let callee_ptr: i32 = call_metadata_callee_index_ptr(metadata_ptr);
+    if callee_ptr <= 0 {
+        return false;
+    };
+    let callee_index: i32 = load_i32(callee_ptr);
+    if callee_index != CALL_METADATA_INTRINSIC_STRUCT {
+        return false;
+    };
+    let payload_slot_ptr: i32 = call_metadata_template_payload_ptr(metadata_ptr);
+    if payload_slot_ptr <= 0 {
+        return false;
+    };
+    let failure_ptr: i32 = load_i32(payload_slot_ptr);
+    if failure_ptr <= 0 {
+        return false;
+    };
+    let failure_kind: i32 = load_i32(failure_ptr);
+    if failure_kind == STRUCT_INTRINSIC_FAILURE_DUPLICATE_FIELD {
+        let name_location: i32 = load_i32(failure_ptr + WORD_SIZE);
+        let str_length: i32 = load_i32(failure_ptr + 2 * WORD_SIZE);
+        if str_length <= 0 {
+            return false;
+        };
+        let canonical_bytes_ptr: i32 = failure_ptr + 3 * WORD_SIZE;
+        let mut trimmed_len: i32 = str_length;
+        loop {
+            if trimmed_len <= 0 {
+                break;
+            };
+            let last_byte: i32 =
+                load_i32(canonical_bytes_ptr + (trimmed_len - 1) * WORD_SIZE);
+            if last_byte == 0 {
+                trimmed_len = trimmed_len - 1;
+                continue;
+            };
+            break;
+        };
+        if trimmed_len < 0 {
+            trimmed_len = 0;
+        };
+        let mut location_offset: i32 = name_location;
+        if location_offset < 0 {
+            location_offset = ast_expr_location(ast_base, expr_index);
+        };
+        let mut module_index: i32 = ast_constant_entry_module_index(const_entry_ptr);
+        let mut module_base: i32 = 0;
+        let mut module_len: i32 = 0;
+        if module_index >= 0 {
+            module_base = module_entry_content(module_index);
+            module_len = module_entry_content_len(module_index);
+        } else {
+            module_index = scratch_module_index(out_ptr);
+            module_base = scratch_module_base(out_ptr);
+            module_len = scratch_module_len(out_ptr);
+        };
+        let message: [u8; 23] = "duplicate struct field ";
+        write_failure_detail_with_location(
+            out_ptr,
+            module_index,
+            module_base,
+            module_len,
+            location_offset,
+            23,
+            message,
+        );
+        if trimmed_len > 0 {
+            append_failure_canonical_bytes(out_ptr, canonical_bytes_ptr, trimmed_len);
+        };
+        return true;
+    };
+    if failure_kind != STRUCT_INTRINSIC_FAILURE_INVALID_PROPS {
+        return false;
+    };
+    let props_location: i32 = load_i32(failure_ptr + WORD_SIZE);
+    let mut location_offset: i32 = props_location;
+    if location_offset < 0 {
+        location_offset = ast_expr_location(ast_base, expr_index);
+    };
+    let mut module_index: i32 = ast_constant_entry_module_index(const_entry_ptr);
+    let mut module_base: i32 = 0;
+    let mut module_len: i32 = 0;
+    if module_index >= 0 {
+        module_base = module_entry_content(module_index);
+        module_len = module_entry_content_len(module_index);
+    } else {
+        module_index = scratch_module_index(out_ptr);
+        module_base = scratch_module_base(out_ptr);
+        module_len = scratch_module_len(out_ptr);
+    };
+    let message: [u8; 60] =
+        "struct intrinsic properties must be an array of field tuples";
+    write_failure_detail_with_location(
+        out_ptr,
+        module_index,
+        module_base,
+        module_len,
+        location_offset,
+        60,
+        message,
+    );
+    true
 }
 
 fn interpret_program_constants(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
@@ -1121,6 +2036,9 @@ fn interpret_program_constants(out_ptr: i32, ast_base: i32, func_count: i32) -> 
         };
         let const_entry_ptr: i32 = ast_constant_entry_ptr(ast_base, const_idx);
         if interpret_constant_entry(ast_base, const_entry_ptr) < 0 {
+            if try_record_struct_intrinsic_failure(out_ptr, ast_base, const_entry_ptr) {
+                return -1;
+            };
             if out_ptr > 0 {
                 if load_u8(out_ptr) == 0 {
                     let message: [u8; 48] =
@@ -1519,7 +2437,12 @@ fn resolve_expression_internal(
         if updated_metadata != metadata_ptr {
             store_i32(entry_ptr + 4, updated_metadata);
         };
-        let callee_index: i32 = load_i32(call_metadata_callee_index_ptr(updated_metadata));
+        let callee_index: i32 =
+            load_i32(call_metadata_callee_index_ptr(updated_metadata));
+        if callee_index == CALL_METADATA_INTRINSIC_STRUCT {
+            ast_expr_set_type(ast_base, expr_index, BUILTIN_TYPE_ID_TYPE);
+            return 0;
+        };
         if callee_index < 0 {
             return -1;
         };
@@ -1619,6 +2542,7 @@ fn resolve_expression_internal(
     if kind == 8 {
         let mut expr_type: i32 = ast_expr_type(ast_base, expr_index);
         let initial_type: i32 = expr_type;
+        let mut resolved_initial_type: i32 = -1;
         let mut recorded_type: i32 = -1;
         let mut recorded_entry_offset: i32 = -1;
         let mut init_expr_index: i32 = -1;
@@ -1668,6 +2592,7 @@ fn resolve_expression_internal(
                 ast_expr_set_type(ast_base, expr_index, resolved_type);
                 expr_type = resolved_type;
             };
+            resolved_initial_type = resolved_type;
             if initial_type >= 0 && recorded_type >= 0 {
                 let mut validate_const_template: bool = false;
                 if init_expr_index >= 0 {
@@ -1705,7 +2630,9 @@ fn resolve_expression_internal(
                             store_i32(recorded_entry_offset + 8, resolved_recorded);
                         };
                     };
-                    if resolved_recorded != expr_type {
+                    if resolved_initial_type >= 0
+                        && resolved_initial_type != resolved_recorded
+                    {
                         let location_offset: i32 = load_i32(entry_ptr + 12);
                         record_failure_with_location(
                             out_ptr,
@@ -1716,6 +2643,10 @@ fn resolve_expression_internal(
                             "const parameter template expected type mismatch",
                         );
                         return -1;
+                    };
+                    if resolved_recorded != expr_type {
+                        ast_expr_set_type(ast_base, expr_index, resolved_recorded);
+                        expr_type = resolved_recorded;
                     };
                 };
             };
@@ -2048,6 +2979,38 @@ fn resolve_expression_internal(
         };
         if resolved_array_type != array_type {
             ast_expr_set_type(ast_base, array_index, resolved_array_type);
+        };
+        if type_id_is_struct(resolved_array_type) {
+            let metadata_ptr: i32 = ast_call_data_alloc(ast_base, STRUCT_GET_LABEL_ENTRY_WORDS);
+            if metadata_ptr < 0 {
+                return -1;
+            };
+            struct_get_label_set_kind(metadata_ptr, STRUCT_LITERAL_LABEL_KIND_EXPRESSION);
+            struct_get_label_set_data(metadata_ptr, index_index);
+            struct_get_label_set_extra(metadata_ptr, -1);
+            let expr_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+            store_i32(expr_entry_ptr, 48);
+            store_i32(expr_entry_ptr + WORD_SIZE, array_index);
+            store_i32(expr_entry_ptr + 2 * WORD_SIZE, metadata_ptr);
+            if resolve_struct_get_expression(
+                out_ptr,
+                ast_base,
+                expr_index,
+                array_index,
+                metadata_ptr,
+                func_count,
+                control_stack_base,
+                control_stack_count_ptr,
+                loop_stack_base,
+                loop_stack_count_ptr,
+                local_stack_base,
+                local_stack_count_ptr,
+                caller_func_index,
+                caller_is_const,
+            ) < 0 {
+                return -1;
+            };
+            return 0;
         };
         if !type_id_is_array(resolved_array_type) {
             return -1;
@@ -2580,6 +3543,447 @@ fn resolve_expression_internal(
             return -1;
         };
         ast_expr_set_type(ast_base, expr_index, resolved_tuple);
+        return 0;
+    };
+    if kind == 47 {
+        let type_expr_index: i32 = ast_expr_struct_literal_type_expr(ast_base, expr_index);
+        if resolve_expression_internal(
+            out_ptr,
+            ast_base,
+            type_expr_index,
+            func_count,
+            control_stack_base,
+            control_stack_count_ptr,
+            loop_stack_base,
+            loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
+            caller_func_index,
+            caller_is_const,
+        ) < 0 {
+            return -1;
+        };
+        let type_expr_type: i32 = ast_expr_type(ast_base, type_expr_index);
+        if type_expr_type != BUILTIN_TYPE_ID_TYPE {
+            let literal_location: i32 = ast_expr_struct_literal_location(ast_base, expr_index);
+            record_failure_with_location(
+                out_ptr,
+                ast_base,
+                caller_func_index,
+                literal_location,
+                41,
+                "struct literal base must be a struct type",
+            );
+            return -1;
+        };
+        let type_expr_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, type_expr_index);
+        if load_i32(type_expr_entry_ptr) != 0 {
+            return -1;
+        };
+        let struct_type_id: i32 = load_i32(type_expr_entry_ptr + WORD_SIZE);
+        if struct_type_id < 0 {
+            return -1;
+        };
+        let resolved_struct: i32 = resolve_type_id(out_ptr, ast_base, struct_type_id);
+        if resolved_struct < 0 {
+            return -1;
+        };
+        if !type_id_is_struct(resolved_struct) {
+            let literal_location: i32 = ast_expr_struct_literal_location(ast_base, expr_index);
+            record_failure_with_location(
+                out_ptr,
+                ast_base,
+                caller_func_index,
+                literal_location,
+                41,
+                "struct literal base must be a struct type",
+            );
+            return -1;
+        };
+        let struct_index: i32 = struct_type_index(resolved_struct);
+        if struct_index < 0 {
+            return -1;
+        };
+        if ensure_struct_type_metadata(out_ptr, ast_base, struct_index, resolved_struct) < 0 {
+            return -1;
+        };
+        let metadata_ptr: i32 = ast_expr_struct_literal_metadata(ast_base, expr_index);
+        let field_count: i32 = ast_expr_struct_literal_field_count(ast_base, expr_index);
+        if field_count < 0 {
+            return -1;
+        };
+        let struct_field_count: i32 = ast_struct_type_field_count(ast_base, struct_index);
+        if struct_field_count < 0 {
+            return -1;
+        };
+        if field_count > struct_field_count {
+            let mut location: i32 = ast_expr_struct_literal_location(ast_base, expr_index);
+            if struct_field_count >= 0 {
+                let extra_entry: i32 = struct_literal_field_entry_ptr(metadata_ptr, struct_field_count);
+                if extra_entry > 0 {
+                    let extra_location: i32 = struct_literal_field_location(extra_entry);
+                    if extra_location >= 0 {
+                        location = extra_location;
+                    };
+                };
+            };
+            let message: [u8; 40] = "struct literal specifies too many fields";
+            record_failure_with_location(
+                out_ptr,
+                ast_base,
+                caller_func_index,
+                location,
+                40,
+                message,
+            );
+            return -1;
+        };
+        let mut field_idx: i32 = 0;
+        while field_idx < field_count {
+            let entry_ptr: i32 = struct_literal_field_entry_ptr(metadata_ptr, field_idx);
+            if entry_ptr <= 0 {
+                return -1;
+            };
+            let label_kind: i32 = struct_literal_field_label_kind(entry_ptr);
+            if label_kind == STRUCT_LITERAL_LABEL_KIND_IDENTIFIER {
+                let ident_ptr: i32 = struct_literal_field_label_data(entry_ptr);
+                let ident_len: i32 = struct_literal_field_label_extra(entry_ptr);
+                if ident_ptr <= 0 {
+                    let field_location: i32 = struct_literal_field_location(entry_ptr);
+                    record_struct_literal_field_mismatch(
+                        out_ptr,
+                        ast_base,
+                        caller_func_index,
+                        field_location,
+                        struct_index,
+                        field_idx,
+                    );
+                    return -1;
+                };
+                if ident_len < 0 {
+                    let field_location: i32 = struct_literal_field_location(entry_ptr);
+                    record_struct_literal_field_mismatch(
+                        out_ptr,
+                        ast_base,
+                        caller_func_index,
+                        field_location,
+                        struct_index,
+                        field_idx,
+                    );
+                    return -1;
+                };
+                if !struct_field_identifier_matches(
+                    ast_base,
+                    struct_index,
+                    field_idx,
+                    ident_ptr,
+                    ident_len,
+                ) {
+                    let field_location: i32 = struct_literal_field_location(entry_ptr);
+                    record_struct_literal_field_mismatch(
+                        out_ptr,
+                        ast_base,
+                        caller_func_index,
+                        field_location,
+                        struct_index,
+                        field_idx,
+                    );
+                    return -1;
+                };
+            };
+            if label_kind == STRUCT_LITERAL_LABEL_KIND_EXPRESSION {
+                let label_expr: i32 = struct_literal_field_label_data(entry_ptr);
+                if resolve_expression_internal(
+                    out_ptr,
+                    ast_base,
+                    label_expr,
+                    func_count,
+                    control_stack_base,
+                    control_stack_count_ptr,
+                    loop_stack_base,
+                    loop_stack_count_ptr,
+                    local_stack_base,
+                    local_stack_count_ptr,
+                    caller_func_index,
+                    caller_is_const,
+                ) < 0 {
+                    return -1;
+                };
+                let field_location: i32 = struct_literal_field_location(entry_ptr);
+                let eval_base: i32 = ast_temp_base(ast_base) + CONSTANT_EVAL_SCRATCH_OFFSET;
+                let eval_value_ptr: i32 = eval_base;
+                let eval_type_ptr: i32 = eval_value_ptr + WORD_SIZE;
+                let eval_stack_top_ptr: i32 = eval_type_ptr + WORD_SIZE;
+                let eval_stack_base: i32 = eval_stack_top_ptr + WORD_SIZE;
+                let saved_eval_top: i32 = load_i32(eval_stack_top_ptr);
+                store_i32(eval_stack_top_ptr, 0);
+                let eval_status: i32 = interpret_constant_expression(
+                    ast_base,
+                    label_expr,
+                    eval_stack_base,
+                    eval_stack_top_ptr,
+                    eval_value_ptr,
+                    eval_type_ptr,
+                    0,
+                    0,
+                    0,
+                );
+                store_i32(eval_stack_top_ptr, saved_eval_top);
+                if eval_status < 0 {
+                    record_struct_literal_field_mismatch(
+                        out_ptr,
+                        ast_base,
+                        caller_func_index,
+                        field_location,
+                        struct_index,
+                        field_idx,
+                    );
+                    return -1;
+                };
+                if eval_status != CONST_EVAL_STATUS_OK {
+                    record_struct_literal_field_mismatch(
+                        out_ptr,
+                        ast_base,
+                        caller_func_index,
+                        field_location,
+                        struct_index,
+                        field_idx,
+                    );
+                    return -1;
+                };
+                let mut label_type: i32 = load_i32(eval_type_ptr);
+                let resolved_label_type: i32 = resolve_type_id(out_ptr, ast_base, label_type);
+                if resolved_label_type < 0 {
+                    record_struct_literal_field_mismatch(
+                        out_ptr,
+                        ast_base,
+                        caller_func_index,
+                        field_location,
+                        struct_index,
+                        field_idx,
+                    );
+                    return -1;
+                };
+                label_type = resolved_label_type;
+                ast_expr_set_type(ast_base, label_expr, label_type);
+                if !type_id_is_array(label_type) {
+                    record_struct_literal_field_mismatch(
+                        out_ptr,
+                        ast_base,
+                        caller_func_index,
+                        field_location,
+                        struct_index,
+                        field_idx,
+                    );
+                    return -1;
+                };
+                let element_type: i32 = array_type_element_type(ast_base, label_type);
+                if element_type != BUILTIN_TYPE_ID_U8 {
+                    record_struct_literal_field_mismatch(
+                        out_ptr,
+                        ast_base,
+                        caller_func_index,
+                        field_location,
+                        struct_index,
+                        field_idx,
+                    );
+                    return -1;
+                };
+                let element_count: i32 = array_type_length(ast_base, label_type);
+                if element_count < 0 {
+                    record_struct_literal_field_mismatch(
+                        out_ptr,
+                        ast_base,
+                        caller_func_index,
+                        field_location,
+                        struct_index,
+                        field_idx,
+                    );
+                    return -1;
+                };
+                let label_value_ptr: i32 = load_i32(eval_value_ptr);
+                if element_count > 0 {
+                    if label_value_ptr <= 0 {
+                        record_struct_literal_field_mismatch(
+                            out_ptr,
+                            ast_base,
+                            caller_func_index,
+                            field_location,
+                            struct_index,
+                            field_idx,
+                        );
+                        return -1;
+                    };
+                };
+                let trimmed_length: i32 =
+                    struct_label_expression_trimmed_length(label_value_ptr, element_count);
+                if trimmed_length < 0 {
+                    record_struct_literal_field_mismatch(
+                        out_ptr,
+                        ast_base,
+                        caller_func_index,
+                        field_location,
+                        struct_index,
+                        field_idx,
+                    );
+                    return -1;
+                };
+                let canonical_length: i32 =
+                    struct_field_trimmed_length(ast_base, struct_index, field_idx);
+                if canonical_length < 0 {
+                    return -1;
+                };
+                if trimmed_length != canonical_length {
+                    record_struct_literal_field_mismatch(
+                        out_ptr,
+                        ast_base,
+                        caller_func_index,
+                        field_location,
+                        struct_index,
+                        field_idx,
+                    );
+                    return -1;
+                };
+                let mut compare_idx: i32 = 0;
+                while compare_idx < canonical_length {
+                    let normalized_char: i32 =
+                        struct_label_expression_normalized_byte(label_value_ptr, compare_idx);
+                    if normalized_char < 0 {
+                        record_struct_literal_field_mismatch(
+                            out_ptr,
+                            ast_base,
+                            caller_func_index,
+                            field_location,
+                            struct_index,
+                            field_idx,
+                        );
+                        return -1;
+                    };
+                    let canonical_char: i32 = ast_struct_type_field_canonical_byte(
+                        ast_base,
+                        struct_index,
+                        field_idx,
+                        compare_idx,
+                    );
+                    if canonical_char < 0 {
+                        return -1;
+                    };
+                    if canonical_char != normalized_char {
+                        record_struct_literal_field_mismatch(
+                            out_ptr,
+                            ast_base,
+                            caller_func_index,
+                            field_location,
+                            struct_index,
+                            field_idx,
+                        );
+                        return -1;
+                    };
+                    compare_idx = compare_idx + 1;
+                };
+            };
+            let value_index: i32 = struct_literal_field_value_index(entry_ptr);
+            if resolve_expression_internal(
+                out_ptr,
+                ast_base,
+                value_index,
+                func_count,
+                control_stack_base,
+                control_stack_count_ptr,
+                loop_stack_base,
+                loop_stack_count_ptr,
+                local_stack_base,
+                local_stack_count_ptr,
+                caller_func_index,
+                caller_is_const,
+            ) < 0 {
+                return -1;
+            };
+            let field_type: i32 = ast_struct_type_field_type(ast_base, struct_index, field_idx);
+            if field_type < 0 {
+                return -1;
+            };
+            let resolved_field_type: i32 = resolve_type_id(out_ptr, ast_base, field_type);
+            if resolved_field_type < 0 {
+                return -1;
+            };
+            let value_type: i32 = ast_expr_type(ast_base, value_index);
+            if value_type < 0 {
+                return -1;
+            };
+            let resolved_value: i32 = resolve_type_id(out_ptr, ast_base, value_type);
+            if resolved_value < 0 {
+                return -1;
+            };
+            if resolved_value != value_type {
+                ast_expr_set_type(ast_base, value_index, resolved_value);
+            };
+            if resolved_value != resolved_field_type {
+                let field_location: i32 = struct_literal_field_location(entry_ptr);
+                record_struct_literal_type_mismatch(
+                    out_ptr,
+                    ast_base,
+                    caller_func_index,
+                    field_location,
+                    struct_index,
+                    field_idx,
+                );
+                return -1;
+            };
+            field_idx = field_idx + 1;
+        };
+        if field_count < struct_field_count {
+            let literal_location: i32 = ast_expr_struct_literal_location(ast_base, expr_index);
+            record_struct_literal_missing_field(
+                out_ptr,
+                ast_base,
+                caller_func_index,
+                literal_location,
+                struct_index,
+                field_count,
+            );
+            return -1;
+        };
+        ast_expr_set_type(ast_base, expr_index, resolved_struct);
+        return 0;
+    };
+    if kind == 48 {
+        let struct_index_expr: i32 = ast_expr_struct_get_base(ast_base, expr_index);
+        if resolve_expression_internal(
+            out_ptr,
+            ast_base,
+            struct_index_expr,
+            func_count,
+            control_stack_base,
+            control_stack_count_ptr,
+            loop_stack_base,
+            loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
+            caller_func_index,
+            caller_is_const,
+        ) < 0 {
+            return -1;
+        };
+        let metadata_ptr: i32 = ast_expr_struct_get_metadata(ast_base, expr_index);
+        if resolve_struct_get_expression(
+            out_ptr,
+            ast_base,
+            expr_index,
+            struct_index_expr,
+            metadata_ptr,
+            func_count,
+            control_stack_base,
+            control_stack_count_ptr,
+            loop_stack_base,
+            loop_stack_count_ptr,
+            local_stack_base,
+            local_stack_count_ptr,
+            caller_func_index,
+            caller_is_const,
+        ) < 0 {
+            return -1;
+        };
         return 0;
     };
     if kind == 42 {

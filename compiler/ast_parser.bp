@@ -1,5 +1,7 @@
 const FAILURE_DETAIL_CAPACITY: i32 = 256;
 
+const CALL_METADATA_INTRINSIC_STRUCT: i32 = -2;
+
 fn compute_line_and_column(base: i32, len: i32, offset: i32) -> (i32, i32) {
     if base < 0 {
         return (0, 0);
@@ -1317,6 +1319,26 @@ fn parse_basic_expression(
             store_i32(const_usage_slot + 8, 0);
             store_i32(const_usage_slot + 12, 0);
             store_i32(const_usage_slot + 16, 0);
+            if ident_len == 6 {
+                let literal: [u8; 6] = "struct";
+                let mut match_idx: i32 = 0;
+                loop {
+                    if match_idx >= 6 {
+                        break;
+                    };
+                    let stored: i32 = load_u8(base + ident_start + match_idx);
+                    let expected: i32 = literal[match_idx] as i32;
+                    if stored != expected {
+                        match_idx = -1;
+                        break;
+                    };
+                    match_idx = match_idx + 1;
+                };
+                if match_idx == 6 {
+                    let callee_ptr: i32 = call_metadata_callee_index_ptr(metadata_ptr);
+                    store_i32(callee_ptr, CALL_METADATA_INTRINSIC_STRUCT);
+                };
+            };
             store_i32(out_kind_ptr, 1);
             store_i32(out_data0_ptr, metadata_ptr);
             store_i32(out_data1_ptr, ident_start);
@@ -1528,67 +1550,323 @@ fn parse_unary_expression(
             resolved_cursor = skip_whitespace(base, len, index_cursor);
             continue;
         };
+        if next_byte == '{' {
+            let struct_parts: (i32, i32, i32) =
+                load_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr);
+            let struct_expr_index: i32 =
+                expression_index_from_parts(ast_base, struct_parts);
+            if struct_expr_index < 0 {
+                return -1;
+            };
+            let struct_type_hint: i32 = ast_expr_type(ast_base, struct_expr_index);
+            if struct_type_hint != BUILTIN_TYPE_ID_TYPE {
+                break;
+            };
+            let literal_start: i32 = resolved_cursor;
+            let mut field_cursor: i32 = skip_whitespace(base, len, resolved_cursor + 1);
+            let field_kind_list_ptr: i32 = index_temp_base;
+            let field_data_list_ptr: i32 =
+                field_kind_list_ptr + MAX_STRUCT_LITERAL_FIELDS * WORD_SIZE;
+            let field_extra_list_ptr: i32 =
+                field_data_list_ptr + MAX_STRUCT_LITERAL_FIELDS * WORD_SIZE;
+            let field_location_list_ptr: i32 =
+                field_extra_list_ptr + MAX_STRUCT_LITERAL_FIELDS * WORD_SIZE;
+            let value_list_ptr: i32 =
+                field_location_list_ptr + MAX_STRUCT_LITERAL_FIELDS * WORD_SIZE;
+            let label_expr_kind_ptr: i32 = value_list_ptr + MAX_STRUCT_LITERAL_FIELDS * WORD_SIZE;
+            let label_expr_data0_ptr: i32 = label_expr_kind_ptr + 4;
+            let label_expr_data1_ptr: i32 = label_expr_data0_ptr + 4;
+            let value_kind_ptr: i32 = label_expr_data1_ptr + 4;
+            let value_data0_ptr: i32 = value_kind_ptr + 4;
+            let value_data1_ptr: i32 = value_data0_ptr + 4;
+            let literal_temp_base: i32 = value_data1_ptr + 4;
+            let mut field_count: i32 = 0;
+            loop {
+                field_cursor = skip_whitespace(base, len, field_cursor);
+                if field_cursor >= len {
+                    return -1;
+                };
+                let close_byte: i32 = load_u8(base + field_cursor);
+                if close_byte == '}' {
+                    field_cursor = field_cursor + 1;
+                    break;
+                };
+                if field_count >= MAX_STRUCT_LITERAL_FIELDS {
+                    return -1;
+                };
+                let label_start: i32 = field_cursor;
+                let mut label_kind: i32 = STRUCT_LITERAL_LABEL_KIND_IDENTIFIER;
+                let mut label_data: i32 = 0;
+                let mut label_extra: i32 = 0;
+                if close_byte == '[' {
+                    let mut label_expr_cursor: i32 = skip_whitespace(base, len, field_cursor + 1);
+                    label_expr_cursor = parse_expression(
+                        base,
+                        len,
+                        label_expr_cursor,
+                        ast_base,
+                        params_table_ptr,
+                        params_count,
+                        const_mask_table_ptr,
+                        locals_table_ptr,
+                        locals_stack_count_ptr,
+                        locals_next_index_ptr,
+                        label_expr_kind_ptr,
+                        loop_depth_ptr,
+                        type_template_sink_ptr,
+                        label_expr_kind_ptr,
+                        label_expr_data0_ptr,
+                        label_expr_data1_ptr,
+                    );
+                    if label_expr_cursor < 0 {
+                        return -1;
+                    };
+                    label_expr_cursor = skip_whitespace(base, len, label_expr_cursor);
+                    label_expr_cursor = expect_char(base, len, label_expr_cursor, ']');
+                    if label_expr_cursor < 0 {
+                        return -1;
+                    };
+                    let label_parts: (i32, i32, i32) = load_expression_parts(
+                        label_expr_kind_ptr,
+                        label_expr_data0_ptr,
+                        label_expr_data1_ptr,
+                    );
+                    let label_expr_index: i32 =
+                        expression_index_from_parts(ast_base, label_parts);
+                    if label_expr_index < 0 {
+                        return -1;
+                    };
+                    label_kind = STRUCT_LITERAL_LABEL_KIND_EXPRESSION;
+                    label_data = label_expr_index;
+                    label_extra = 0;
+                    field_cursor = skip_whitespace(base, len, label_expr_cursor);
+                } else {
+                    if !is_identifier_start(close_byte) {
+                        return -1;
+                    };
+                    let label_ident: (i32, i32, i32) =
+                        parse_identifier(base, len, field_cursor);
+                    let after_label: i32 = label_ident.0;
+                    if after_label < 0 {
+                        return -1;
+                    };
+                    label_data = ast_store_name(ast_base, base, label_ident.1, label_ident.2);
+                    if label_data < 0 {
+                        return -1;
+                    };
+                    label_extra = label_ident.2;
+                    field_cursor = skip_whitespace(base, len, after_label);
+                };
+                field_cursor = expect_char(base, len, field_cursor, ':');
+                if field_cursor < 0 {
+                    return -1;
+                };
+                field_cursor = skip_whitespace(base, len, field_cursor);
+                field_cursor = parse_expression(
+                    base,
+                    len,
+                    field_cursor,
+                    ast_base,
+                    params_table_ptr,
+                    params_count,
+                    const_mask_table_ptr,
+                    locals_table_ptr,
+                    locals_stack_count_ptr,
+                    locals_next_index_ptr,
+                    literal_temp_base,
+                    loop_depth_ptr,
+                    type_template_sink_ptr,
+                    value_kind_ptr,
+                    value_data0_ptr,
+                    value_data1_ptr,
+                );
+                if field_cursor < 0 {
+                    return -1;
+                };
+                let value_parts: (i32, i32, i32) =
+                    load_expression_parts(value_kind_ptr, value_data0_ptr, value_data1_ptr);
+                let value_expr_index: i32 =
+                    expression_index_from_parts(ast_base, value_parts);
+                if value_expr_index < 0 {
+                    return -1;
+                };
+                store_i32(field_kind_list_ptr + field_count * WORD_SIZE, label_kind);
+                store_i32(field_data_list_ptr + field_count * WORD_SIZE, label_data);
+                store_i32(field_extra_list_ptr + field_count * WORD_SIZE, label_extra);
+                store_i32(field_location_list_ptr + field_count * WORD_SIZE, label_start);
+                store_i32(value_list_ptr + field_count * WORD_SIZE, value_expr_index);
+                field_count = field_count + 1;
+                field_cursor = skip_whitespace(base, len, field_cursor);
+                if field_cursor >= len {
+                    return -1;
+                };
+                let delimiter: i32 = load_u8(base + field_cursor);
+                if delimiter == ',' {
+                    field_cursor = field_cursor + 1;
+                    continue;
+                };
+                if delimiter == '}' {
+                    field_cursor = field_cursor + 1;
+                    break;
+                };
+                return -1;
+            };
+            let metadata_words: i32 =
+                STRUCT_LITERAL_METADATA_HEADER_WORDS
+                    + field_count * STRUCT_LITERAL_FIELD_ENTRY_WORDS;
+            let metadata_ptr: i32 = if metadata_words > 0 {
+                ast_call_data_alloc(ast_base, metadata_words)
+            } else {
+                0
+            };
+            if metadata_words > 0 {
+                if metadata_ptr < 0 {
+                    return -1;
+                };
+            };
+            if metadata_ptr > 0 {
+                store_i32(metadata_ptr, literal_start);
+            };
+            let mut store_idx: i32 = 0;
+            while store_idx < field_count {
+                let entry_ptr: i32 = struct_literal_field_entry_ptr(metadata_ptr, store_idx);
+                struct_literal_field_set_label_kind(
+                    entry_ptr,
+                    load_i32(field_kind_list_ptr + store_idx * WORD_SIZE),
+                );
+                struct_literal_field_set_label_data(
+                    entry_ptr,
+                    load_i32(field_data_list_ptr + store_idx * WORD_SIZE),
+                );
+                struct_literal_field_set_label_extra(
+                    entry_ptr,
+                    load_i32(field_extra_list_ptr + store_idx * WORD_SIZE),
+                );
+                struct_literal_field_set_location(
+                    entry_ptr,
+                    load_i32(field_location_list_ptr + store_idx * WORD_SIZE),
+                );
+                struct_literal_field_set_value(
+                    entry_ptr,
+                    load_i32(value_list_ptr + store_idx * WORD_SIZE),
+                );
+                store_idx = store_idx + 1;
+            };
+            let literal_index: i32 = ast_expr_alloc_struct_literal(
+                ast_base,
+                struct_expr_index,
+                metadata_ptr,
+                field_count,
+                literal_start,
+            );
+            if literal_index < 0 {
+                return -1;
+            };
+            store_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr, (2, literal_index, 0));
+            resolved_cursor = skip_whitespace(base, len, field_cursor);
+            continue;
+        };
         if next_byte != '.' {
             break;
         };
-        let mut field_cursor: i32 = resolved_cursor + 1;
+        let mut field_cursor: i32 = skip_whitespace(base, len, resolved_cursor + 1);
         if field_cursor >= len {
             return -1;
         };
-        let mut field_index: i32 = 0;
-        let mut digits: i32 = 0;
-        while field_cursor < len {
-            let digit_byte: i32 = load_u8(base + field_cursor);
-            if !is_digit(digit_byte) {
-                break;
+        let first_field_byte: i32 = load_u8(base + field_cursor);
+        if is_digit(first_field_byte) {
+            let mut field_index: i32 = 0;
+            let mut digits: i32 = 0;
+            while field_cursor < len {
+                let digit_byte: i32 = load_u8(base + field_cursor);
+                if !is_digit(digit_byte) {
+                    break;
+                };
+                field_index = field_index * 10 + (digit_byte - '0');
+                field_cursor = field_cursor + 1;
+                digits = digits + 1;
             };
-            field_index = field_index * 10 + (digit_byte - '0');
-            field_cursor = field_cursor + 1;
-            digits = digits + 1;
-        };
-        if digits == 0 {
-            return -1;
-        };
+            if digits == 0 {
+                return -1;
+            };
 
-        let tuple_parts: (i32, i32, i32) =
-            load_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr);
-        let tuple_expr_index: i32 = expression_index_from_parts(ast_base, tuple_parts);
-        if tuple_expr_index < 0 {
-            return -1;
-        };
+            let tuple_parts: (i32, i32, i32) =
+                load_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr);
+            let tuple_expr_index: i32 = expression_index_from_parts(ast_base, tuple_parts);
+            if tuple_expr_index < 0 {
+                return -1;
+            };
 
-        let field_start: i32 = field_cursor - digits;
-        let get_index: i32 = ast_expr_alloc_tuple_get(
-            ast_base,
-            tuple_expr_index,
-            field_index,
-            field_start,
-        );
-        if get_index < 0 {
-            return -1;
-        };
+            let field_start: i32 = field_cursor - digits;
+            let get_index: i32 = ast_expr_alloc_tuple_get(
+                ast_base,
+                tuple_expr_index,
+                field_index,
+                field_start,
+            );
+            if get_index < 0 {
+                return -1;
+            };
 
-        let tuple_type_id: i32 = ast_expr_type(ast_base, tuple_expr_index);
-        if type_id_is_tuple(tuple_type_id) {
-            let tuple_idx: i32 = tuple_type_index(tuple_type_id);
-            if tuple_idx >= 0 {
-                let element_count: i32 = ast_tuple_type_element_count(ast_base, tuple_idx);
-                if field_index < element_count {
-                    let elements_ptr: i32 = ast_tuple_type_elements_ptr(ast_base, tuple_idx);
-                    if elements_ptr >= 0 {
-                        let field_type_id: i32 =
-                            load_i32(elements_ptr + field_index * WORD_SIZE);
-                        if field_type_id >= 0 {
-                            ast_expr_set_type(ast_base, get_index, field_type_id);
+            let tuple_type_id: i32 = ast_expr_type(ast_base, tuple_expr_index);
+            if type_id_is_tuple(tuple_type_id) {
+                let tuple_idx: i32 = tuple_type_index(tuple_type_id);
+                if tuple_idx >= 0 {
+                    let element_count: i32 = ast_tuple_type_element_count(ast_base, tuple_idx);
+                    if field_index < element_count {
+                        let elements_ptr: i32 = ast_tuple_type_elements_ptr(ast_base, tuple_idx);
+                        if elements_ptr >= 0 {
+                            let field_type_id: i32 =
+                                load_i32(elements_ptr + field_index * WORD_SIZE);
+                            if field_type_id >= 0 {
+                                ast_expr_set_type(ast_base, get_index, field_type_id);
+                            };
                         };
                     };
                 };
             };
+
+            store_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr, (2, get_index, 0));
+
+            resolved_cursor = skip_whitespace(base, len, field_cursor);
+            continue;
         };
-
+        if !is_identifier_start(first_field_byte) {
+            return -1;
+        };
+        let label_ident: (i32, i32, i32) = parse_identifier(base, len, field_cursor);
+        let after_label: i32 = label_ident.0;
+        if after_label < 0 {
+            return -1;
+        };
+        let label_name_ptr: i32 = ast_store_name(ast_base, base, label_ident.1, label_ident.2);
+        if label_name_ptr < 0 {
+            return -1;
+        };
+        let metadata_ptr: i32 = ast_call_data_alloc(ast_base, STRUCT_GET_LABEL_ENTRY_WORDS);
+        if metadata_ptr < 0 {
+            return -1;
+        };
+        struct_get_label_set_kind(metadata_ptr, STRUCT_LITERAL_LABEL_KIND_IDENTIFIER);
+        struct_get_label_set_data(metadata_ptr, label_name_ptr);
+        struct_get_label_set_extra(metadata_ptr, label_ident.2);
+        let struct_parts: (i32, i32, i32) =
+            load_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr);
+        let struct_expr_index: i32 = expression_index_from_parts(ast_base, struct_parts);
+        if struct_expr_index < 0 {
+            return -1;
+        };
+        let get_index: i32 = ast_expr_alloc_struct_get(
+            ast_base,
+            struct_expr_index,
+            metadata_ptr,
+            label_ident.1,
+        );
+        if get_index < 0 {
+            return -1;
+        };
         store_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr, (2, get_index, 0));
-
-        resolved_cursor = skip_whitespace(base, len, field_cursor);
+        resolved_cursor = skip_whitespace(base, len, after_label);
     };
 
     if (not_count & 1) != 0 {
@@ -3296,26 +3574,37 @@ fn parse_constant_declaration(
     };
 
     idx = skip_whitespace(base, len, idx);
-    idx = expect_char(base, len, idx, ':');
-    if idx < 0 {
+    let mut type_id: i32 = -1;
+    if idx >= len {
         return -1;
     };
-    idx = skip_whitespace(base, len, idx);
-    idx = parse_type(
-        base,
-        len,
-        idx,
-        ast_base,
-        params_table_ptr,
-        0,
-        const_mask_table_ptr,
-        type_template_sink_ptr,
-        type_ptr,
-    );
-    if idx < 0 {
+    let next_char: i32 = load_u8(base + idx);
+    if next_char == ':' {
+        idx = expect_char(base, len, idx, ':');
+        if idx < 0 {
+            return -1;
+        };
+        idx = skip_whitespace(base, len, idx);
+        idx = parse_type(
+            base,
+            len,
+            idx,
+            ast_base,
+            params_table_ptr,
+            0,
+            const_mask_table_ptr,
+            type_template_sink_ptr,
+            type_ptr,
+        );
+        if idx < 0 {
+            return -1;
+        };
+        type_id = load_i32(type_ptr);
+    } else if next_char == '=' {
+        type_id = BUILTIN_TYPE_ID_TYPE;
+    } else {
         return -1;
     };
-    let type_id: i32 = load_i32(type_ptr);
 
     idx = skip_whitespace(base, len, idx);
     idx = expect_char(base, len, idx, '=');
