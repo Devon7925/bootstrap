@@ -2265,6 +2265,8 @@ const ARRAY_TYPE_CAPACITY: i32 = 256;
 
 const TUPLE_TYPE_CAPACITY: i32 = 256;
 
+const STRUCT_TYPE_CAPACITY: i32 = 256;
+
 const TYPE_ID_KIND_SHIFT: i32 = 24;
 
 const TYPE_ID_KIND_USER_COMPOSITE: i32 = 1;
@@ -2281,6 +2283,10 @@ const TYPE_ID_ARRAY_LIMIT: i32 = TYPE_ID_TUPLE_BASE;
 
 const TYPE_ID_TUPLE_LIMIT: i32 = TYPE_ID_TUPLE_BASE + TUPLE_TYPE_CAPACITY;
 
+const TYPE_ID_STRUCT_BASE: i32 = TYPE_ID_TUPLE_LIMIT;
+
+const TYPE_ID_STRUCT_LIMIT: i32 = TYPE_ID_STRUCT_BASE + STRUCT_TYPE_CAPACITY;
+
 fn type_id_is_builtin(type_id: i32) -> bool {
     type_id >= 0 && type_id <= BUILTIN_TYPE_ID_MAX
 }
@@ -2291,6 +2297,10 @@ fn type_id_is_array(type_id: i32) -> bool {
 
 fn type_id_is_tuple(type_id: i32) -> bool {
     type_id >= TYPE_ID_TUPLE_BASE && type_id < TYPE_ID_TUPLE_LIMIT
+}
+
+fn type_id_is_struct(type_id: i32) -> bool {
+    type_id >= TYPE_ID_STRUCT_BASE && type_id < TYPE_ID_STRUCT_LIMIT
 }
 
 fn type_id_is_bool(type_id: i32) -> bool {
@@ -6185,6 +6195,7 @@ fn ast_reset(ast_base: i32) {
     ast_constants_reset(ast_base);
     ast_array_types_reset(ast_base);
     ast_tuple_types_reset(ast_base);
+    ast_struct_types_reset(ast_base);
     ast_expr_reset(ast_base);
 }
 
@@ -6682,6 +6693,10 @@ fn tuple_type_metadata_index(index: i32) -> i32 {
     ARRAY_TYPE_CAPACITY + index
 }
 
+fn struct_type_metadata_index(index: i32) -> i32 {
+    ARRAY_TYPE_CAPACITY + TUPLE_TYPE_CAPACITY + index
+}
+
 fn ast_array_type_payload_ptr(ast_base: i32, index: i32) -> i32 {
     ast_array_type_entry_ptr(ast_base, index)
 }
@@ -6711,10 +6726,31 @@ fn ast_tuple_types_count_ptr(ast_base: i32) -> i32 {
     ast_array_types_count_ptr(ast_base) + AST_ARRAY_TYPES_SECTION_SIZE
 }
 
+const AST_STRUCT_TYPES_CAPACITY: i32 = STRUCT_TYPE_CAPACITY;
+
+const AST_STRUCT_TYPE_ENTRY_SIZE: i32 = 16;
+
+const AST_STRUCT_TYPE_FIELD_COUNT_OFFSET: i32 = 0;
+
+const AST_STRUCT_TYPE_FIELDS_PTR_OFFSET: i32 = 4;
+
+const AST_STRUCT_TYPE_LAYOUT_PTR_OFFSET: i32 = 8;
+
+const AST_STRUCT_TYPE_CACHE_OFFSET: i32 = 12;
+
+const AST_STRUCT_TYPES_SECTION_SIZE: i32 =
+    WORD_SIZE + AST_STRUCT_TYPES_CAPACITY * AST_STRUCT_TYPE_ENTRY_SIZE;
+
+const AST_STRUCT_FIELD_ENTRY_SIZE: i32 = 2 * WORD_SIZE;
+
+fn ast_struct_types_count_ptr(ast_base: i32) -> i32 {
+    ast_tuple_types_count_ptr(ast_base) + AST_TUPLE_TYPES_SECTION_SIZE
+}
+
 const AST_ARRAY_HEAP_INDEX_SECTION_SIZE: i32 = ARRAY_TYPE_CAPACITY * WORD_SIZE;
 
 fn ast_array_heap_indices_base(ast_base: i32) -> i32 {
-    ast_tuple_types_count_ptr(ast_base) + AST_TUPLE_TYPES_SECTION_SIZE
+    ast_struct_types_count_ptr(ast_base) + AST_STRUCT_TYPES_SECTION_SIZE
 }
 
 fn ast_array_heap_index_ptr(ast_base: i32, index: i32) -> i32 {
@@ -6765,6 +6801,88 @@ fn ast_tuple_type_element_count(ast_base: i32, index: i32) -> i32 {
 
 fn ast_tuple_type_elements_ptr(ast_base: i32, index: i32) -> i32 {
     load_i32(ast_tuple_type_entry_ptr(ast_base, index) + AST_TUPLE_TYPE_ELEMENTS_PTR_OFFSET)
+}
+
+const AST_STRUCT_HEAP_INDEX_SECTION_SIZE: i32 = STRUCT_TYPE_CAPACITY * WORD_SIZE;
+
+fn ast_struct_heap_indices_base(ast_base: i32) -> i32 {
+    ast_tuple_heap_indices_base(ast_base) + AST_TUPLE_HEAP_INDEX_SECTION_SIZE
+}
+
+fn ast_struct_heap_index_ptr(ast_base: i32, index: i32) -> i32 {
+    ast_struct_heap_indices_base(ast_base) + index * WORD_SIZE
+}
+
+fn ast_struct_heap_index(ast_base: i32, index: i32) -> i32 {
+    load_i32(ast_struct_heap_index_ptr(ast_base, index))
+}
+
+fn ast_struct_heap_index_set(ast_base: i32, index: i32, heap_index: i32) {
+    store_i32(ast_struct_heap_index_ptr(ast_base, index), heap_index);
+}
+
+fn ast_struct_type_entry_ptr(ast_base: i32, index: i32) -> i32 {
+    ast_struct_types_count_ptr(ast_base) + WORD_SIZE + index * AST_STRUCT_TYPE_ENTRY_SIZE
+}
+
+fn ast_struct_types_count(ast_base: i32) -> i32 {
+    load_i32(ast_struct_types_count_ptr(ast_base))
+}
+
+fn ast_struct_types_reset(ast_base: i32) {
+    store_i32(ast_struct_types_count_ptr(ast_base), 0);
+}
+
+fn ast_struct_type_field_count(ast_base: i32, index: i32) -> i32 {
+    load_i32(ast_struct_type_entry_ptr(ast_base, index) + AST_STRUCT_TYPE_FIELD_COUNT_OFFSET)
+}
+
+fn ast_struct_type_fields_ptr(ast_base: i32, index: i32) -> i32 {
+    load_i32(ast_struct_type_entry_ptr(ast_base, index) + AST_STRUCT_TYPE_FIELDS_PTR_OFFSET)
+}
+
+fn ast_struct_type_layout_ptr(ast_base: i32, index: i32) -> i32 {
+    load_i32(ast_struct_type_entry_ptr(ast_base, index) + AST_STRUCT_TYPE_LAYOUT_PTR_OFFSET)
+}
+
+fn ast_struct_type_set_layout_ptr(ast_base: i32, index: i32, layout_ptr: i32) {
+    store_i32(
+        ast_struct_type_entry_ptr(ast_base, index) + AST_STRUCT_TYPE_LAYOUT_PTR_OFFSET,
+        layout_ptr,
+    );
+}
+
+fn struct_type_cached_id(ast_base: i32, index: i32) -> i32 {
+    load_i32(ast_struct_type_entry_ptr(ast_base, index) + AST_STRUCT_TYPE_CACHE_OFFSET)
+}
+
+fn struct_type_set_cached_id(ast_base: i32, index: i32, type_id: i32) {
+    store_i32(ast_struct_type_entry_ptr(ast_base, index) + AST_STRUCT_TYPE_CACHE_OFFSET, type_id);
+}
+
+fn ast_struct_type_field_entry_ptr(ast_base: i32, index: i32, field_index: i32) -> i32 {
+    let fields_ptr: i32 = ast_struct_type_fields_ptr(ast_base, index);
+    fields_ptr + field_index * AST_STRUCT_FIELD_ENTRY_SIZE
+}
+
+fn ast_struct_type_field_name_ptr(ast_base: i32, index: i32, field_index: i32) -> i32 {
+    load_i32(ast_struct_type_field_entry_ptr(ast_base, index, field_index))
+}
+
+fn ast_struct_type_field_type(ast_base: i32, index: i32, field_index: i32) -> i32 {
+    load_i32(ast_struct_type_field_entry_ptr(ast_base, index, field_index) + WORD_SIZE)
+}
+
+fn ast_struct_type_set_field_type(
+    ast_base: i32,
+    index: i32,
+    field_index: i32,
+    type_id: i32,
+) {
+    store_i32(
+        ast_struct_type_field_entry_ptr(ast_base, index, field_index) + WORD_SIZE,
+        type_id,
+    );
 }
 
 fn tuple_type_cached_id(ast_base: i32, index: i32) -> i32 {
@@ -6838,6 +6956,14 @@ fn tuple_type_index(type_id: i32) -> i32 {
     type_id - TYPE_ID_TUPLE_BASE
 }
 
+fn struct_type_id(index: i32) -> i32 {
+    TYPE_ID_STRUCT_BASE + index
+}
+
+fn struct_type_index(type_id: i32) -> i32 {
+    type_id - TYPE_ID_STRUCT_BASE
+}
+
 fn array_type_heap_index(ast_base: i32, type_id: i32) -> i32 {
     if !type_id_is_array(type_id) {
         return -1;
@@ -6874,12 +7000,33 @@ fn tuple_type_heap_index(ast_base: i32, type_id: i32) -> i32 {
     heap_index
 }
 
+fn struct_type_heap_index(ast_base: i32, type_id: i32) -> i32 {
+    if !type_id_is_struct(type_id) {
+        return -1;
+    };
+    let index: i32 = struct_type_index(type_id);
+    if index < 0 {
+        return -1;
+    };
+    if index >= ast_struct_types_count(ast_base) {
+        return -1;
+    };
+    let heap_index: i32 = ast_struct_heap_index(ast_base, index);
+    if heap_index < 0 {
+        return -1;
+    };
+    heap_index
+}
+
 fn type_id_heap_type_index(ast_base: i32, type_id: i32) -> i32 {
     if type_id_is_array(type_id) {
         return array_type_heap_index(ast_base, type_id);
     };
     if type_id_is_tuple(type_id) {
         return tuple_type_heap_index(ast_base, type_id);
+    };
+    if type_id_is_struct(type_id) {
+        return struct_type_heap_index(ast_base, type_id);
     };
     -1
 }
@@ -6888,6 +7035,7 @@ fn composite_type_dependency_resolved(
     ast_base: i32,
     array_count: i32,
     tuple_count: i32,
+    struct_count: i32,
     resolved_ptr: i32,
     type_id: i32,
 ) -> bool {
@@ -6914,6 +7062,19 @@ fn composite_type_dependency_resolved(
             load_i32(resolved_ptr + (array_count + dep_index) * WORD_SIZE);
         return resolved != 0;
     };
+    if type_id_is_struct(type_id) {
+        let dep_index: i32 = struct_type_index(type_id);
+        if dep_index < 0 {
+            return false;
+        };
+        if dep_index >= struct_count {
+            return false;
+        };
+        let resolved: i32 = load_i32(
+            resolved_ptr + (array_count + tuple_count + dep_index) * WORD_SIZE,
+        );
+        return resolved != 0;
+    };
     true
 }
 
@@ -6921,6 +7082,7 @@ fn composite_type_dependencies_resolved(
     ast_base: i32,
     array_count: i32,
     tuple_count: i32,
+    struct_count: i32,
     resolved_ptr: i32,
     node_index: i32,
 ) -> bool {
@@ -6933,31 +7095,66 @@ fn composite_type_dependencies_resolved(
             ast_base,
             array_count,
             tuple_count,
+            struct_count,
             resolved_ptr,
             element_type_id,
         );
     };
     let tuple_idx: i32 = node_index - array_count;
-    if tuple_idx < 0 {
-        return false;
-    };
-    if tuple_idx >= tuple_count {
-        return false;
-    };
-    let element_count: i32 = ast_tuple_type_element_count(ast_base, tuple_idx);
-    if element_count < 0 {
-        return false;
-    };
-    if element_count == 0 {
+    if tuple_idx < tuple_count {
+        let element_count: i32 = ast_tuple_type_element_count(ast_base, tuple_idx);
+        if element_count < 0 {
+            return false;
+        };
+        if element_count == 0 {
+            return true;
+        };
+        let elements_ptr: i32 = ast_tuple_type_elements_ptr(ast_base, tuple_idx);
+        if elements_ptr < 0 {
+            return false;
+        };
+        let mut field_idx: i32 = 0;
+        while field_idx < element_count {
+            let field_type_id: i32 = load_i32(elements_ptr + field_idx * WORD_SIZE);
+            if field_type_id < 0 {
+                return false;
+            };
+            if !composite_type_dependency_resolved(
+                ast_base,
+                array_count,
+                tuple_count,
+                struct_count,
+                resolved_ptr,
+                field_type_id,
+            ) {
+                return false;
+            };
+            field_idx = field_idx + 1;
+        };
         return true;
     };
-    let elements_ptr: i32 = ast_tuple_type_elements_ptr(ast_base, tuple_idx);
-    if elements_ptr < 0 {
+    let struct_idx: i32 = tuple_idx - tuple_count;
+    if struct_idx < 0 {
         return false;
     };
-    let mut field_idx: i32 = 0;
-    while field_idx < element_count {
-        let field_type_id: i32 = load_i32(elements_ptr + field_idx * WORD_SIZE);
+    if struct_idx >= struct_count {
+        return false;
+    };
+    let field_count: i32 = ast_struct_type_field_count(ast_base, struct_idx);
+    if field_count < 0 {
+        return false;
+    };
+    if field_count == 0 {
+        return true;
+    };
+    let fields_ptr: i32 = ast_struct_type_fields_ptr(ast_base, struct_idx);
+    if fields_ptr < 0 {
+        return false;
+    };
+    let mut struct_field_idx: i32 = 0;
+    while struct_field_idx < field_count {
+        let field_type_id: i32 =
+            ast_struct_type_field_type(ast_base, struct_idx, struct_field_idx);
         if field_type_id < 0 {
             return false;
         };
@@ -6965,12 +7162,13 @@ fn composite_type_dependencies_resolved(
             ast_base,
             array_count,
             tuple_count,
+            struct_count,
             resolved_ptr,
             field_type_id,
         ) {
             return false;
         };
-        field_idx = field_idx + 1;
+        struct_field_idx = struct_field_idx + 1;
     };
     true
 }
@@ -6984,7 +7182,14 @@ fn assign_heap_type_indices(out_ptr: i32, ast_base: i32) -> i32 {
     if tuple_count < 0 {
         return -1;
     };
-    let total: i32 = array_count + tuple_count;
+    let struct_count: i32 = ast_struct_types_count(ast_base);
+    if struct_count < 0 {
+        return -1;
+    };
+    if struct_count > AST_STRUCT_TYPES_CAPACITY {
+        return -1;
+    };
+    let total: i32 = array_count + tuple_count + struct_count;
     let mut idx: i32 = 0;
     while idx < array_count {
         ast_array_heap_index_set(ast_base, idx, -1);
@@ -6993,6 +7198,11 @@ fn assign_heap_type_indices(out_ptr: i32, ast_base: i32) -> i32 {
     idx = 0;
     while idx < tuple_count {
         ast_tuple_heap_index_set(ast_base, idx, -1);
+        idx = idx + 1;
+    };
+    idx = 0;
+    while idx < struct_count {
+        ast_struct_heap_index_set(ast_base, idx, -1);
         idx = idx + 1;
     };
     if total <= 0 {
@@ -7021,6 +7231,7 @@ fn assign_heap_type_indices(out_ptr: i32, ast_base: i32) -> i32 {
                 ast_base,
                 array_count,
                 tuple_count,
+                struct_count,
                 resolved_ptr,
                 node,
             ) {
@@ -7053,6 +7264,16 @@ fn assign_heap_type_indices(out_ptr: i32, ast_base: i32) -> i32 {
             return -1;
         };
         ast_tuple_heap_index_set(ast_base, idx, heap_index);
+        idx = idx + 1;
+    };
+    idx = 0;
+    while idx < struct_count {
+        let node: i32 = array_count + tuple_count + idx;
+        let heap_index: i32 = load_i32(indices_ptr + node * WORD_SIZE);
+        if heap_index < 0 {
+            return -1;
+        };
+        ast_struct_heap_index_set(ast_base, idx, heap_index);
         idx = idx + 1;
     };
     0
@@ -7141,6 +7362,71 @@ fn ast_register_tuple_type(ast_base: i32, elements_ptr: i32, element_count: i32)
     tuple_type_id(count)
 }
 
+fn ast_register_struct_type(ast_base: i32, fields_ptr: i32, field_count: i32) -> i32 {
+    if field_count < 0 {
+        return -1;
+    };
+    if field_count > 0 && fields_ptr <= 0 {
+        return -1;
+    };
+    let count_ptr: i32 = ast_struct_types_count_ptr(ast_base);
+    let count: i32 = load_i32(count_ptr);
+    let mut idx: i32 = 0;
+    while idx < count {
+        let entry_ptr: i32 = ast_struct_type_entry_ptr(ast_base, idx);
+        let existing_count: i32 =
+            load_i32(entry_ptr + AST_STRUCT_TYPE_FIELD_COUNT_OFFSET);
+        if existing_count != field_count {
+            idx = idx + 1;
+            continue;
+        };
+        if field_count == 0 {
+            return struct_type_id(idx);
+        };
+        let existing_ptr: i32 =
+            load_i32(entry_ptr + AST_STRUCT_TYPE_FIELDS_PTR_OFFSET);
+        if existing_ptr < 0 {
+            return -1;
+        };
+        let mut match_idx: i32 = 0;
+        let mut matches: bool = true;
+        while match_idx < field_count {
+            let existing_entry_ptr: i32 =
+                existing_ptr + match_idx * AST_STRUCT_FIELD_ENTRY_SIZE;
+            let new_entry_ptr: i32 =
+                fields_ptr + match_idx * AST_STRUCT_FIELD_ENTRY_SIZE;
+            let existing_name_ptr: i32 = load_i32(existing_entry_ptr);
+            let new_name_ptr: i32 = load_i32(new_entry_ptr);
+            if existing_name_ptr != new_name_ptr {
+                matches = false;
+                break;
+            };
+            let existing_type: i32 = load_i32(existing_entry_ptr + WORD_SIZE);
+            let new_type: i32 = load_i32(new_entry_ptr + WORD_SIZE);
+            if existing_type != new_type {
+                matches = false;
+                break;
+            };
+            match_idx = match_idx + 1;
+        };
+        if matches {
+            return struct_type_id(idx);
+        };
+        idx = idx + 1;
+    };
+    if count >= AST_STRUCT_TYPES_CAPACITY {
+        return -1;
+    };
+    let entry_ptr: i32 = ast_struct_type_entry_ptr(ast_base, count);
+    let stored_ptr: i32 = if field_count == 0 { 0 } else { fields_ptr };
+    store_i32(entry_ptr + AST_STRUCT_TYPE_FIELD_COUNT_OFFSET, field_count);
+    store_i32(entry_ptr + AST_STRUCT_TYPE_FIELDS_PTR_OFFSET, stored_ptr);
+    store_i32(entry_ptr + AST_STRUCT_TYPE_LAYOUT_PTR_OFFSET, 0);
+    store_i32(entry_ptr + AST_STRUCT_TYPE_CACHE_OFFSET, 0);
+    store_i32(count_ptr, count + 1);
+    struct_type_id(count)
+}
+
 fn ensure_array_type_metadata(out_ptr: i32, ast_base: i32, index: i32, type_id: i32) -> i32 {
     if index < 0 {
         return -1;
@@ -7192,6 +7478,37 @@ fn ensure_tuple_type_metadata(out_ptr: i32, ast_base: i32, index: i32, type_id: 
         ast_tuple_type_entry_ptr(ast_base, index),
     );
     tuple_type_set_cached_id(ast_base, index, type_id);
+    let current_count: i32 = scratch_types_count(out_ptr);
+    if metadata_index + 1 > current_count {
+        scratch_types_set_count(out_ptr, metadata_index + 1);
+    };
+    0
+}
+
+fn ensure_struct_type_metadata(out_ptr: i32, ast_base: i32, index: i32, type_id: i32) -> i32 {
+    if index < 0 {
+        return -1;
+    };
+    let metadata_index: i32 = struct_type_metadata_index(index);
+    if metadata_index < 0 {
+        return -1;
+    };
+    if metadata_index >= SCRATCH_TYPES_CAPACITY {
+        return -1;
+    };
+    let cached: i32 = struct_type_cached_id(ast_base, index);
+    if cached == type_id {
+        return 0;
+    };
+    let scratch_entry_ptr: i32 = scratch_type_entry_ptr(out_ptr, metadata_index);
+    store_i32(scratch_entry_ptr + TYPE_ENTRY_TYPE_ID_OFFSET, type_id);
+    store_i32(scratch_entry_ptr + TYPE_ENTRY_NAME_PTR_OFFSET, 0);
+    store_i32(scratch_entry_ptr + TYPE_ENTRY_NAME_LEN_OFFSET, 0);
+    store_i32(
+        scratch_entry_ptr + TYPE_ENTRY_EXTRA_OFFSET,
+        ast_struct_type_entry_ptr(ast_base, index),
+    );
+    struct_type_set_cached_id(ast_base, index, type_id);
     let current_count: i32 = scratch_types_count(out_ptr);
     if metadata_index + 1 > current_count {
         scratch_types_set_count(out_ptr, metadata_index + 1);
@@ -7309,6 +7626,75 @@ fn resolve_tuple_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
     type_id
 }
 
+fn resolve_struct_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
+    if !type_id_is_struct(type_id) {
+        record_type_metadata_failure(out_ptr);
+        return -1;
+    };
+    let index: i32 = struct_type_index(type_id);
+    if index < 0 {
+        record_type_metadata_failure(out_ptr);
+        return -1;
+    };
+    if index >= ast_struct_types_count(ast_base) {
+        record_type_metadata_failure(out_ptr);
+        return -1;
+    };
+    let cached: i32 = struct_type_cached_id(ast_base, index);
+    if cached == type_id {
+        return type_id;
+    };
+    if cached == TYPE_METADATA_CACHE_IN_PROGRESS {
+        record_type_metadata_failure(out_ptr);
+        return -1;
+    };
+    struct_type_set_cached_id(ast_base, index, TYPE_METADATA_CACHE_IN_PROGRESS);
+    let field_count: i32 = ast_struct_type_field_count(ast_base, index);
+    if field_count < 0 {
+        struct_type_set_cached_id(ast_base, index, 0);
+        record_type_metadata_failure(out_ptr);
+        return -1;
+    };
+    if field_count > 0 {
+        let fields_ptr: i32 = ast_struct_type_fields_ptr(ast_base, index);
+        if fields_ptr < 0 {
+            struct_type_set_cached_id(ast_base, index, 0);
+            record_type_metadata_failure(out_ptr);
+            return -1;
+        };
+        let mut field_idx: i32 = 0;
+        while field_idx < field_count {
+            let entry_ptr: i32 =
+                fields_ptr + field_idx * AST_STRUCT_FIELD_ENTRY_SIZE;
+            let name_ptr: i32 = load_i32(entry_ptr);
+            if name_ptr <= 0 {
+                struct_type_set_cached_id(ast_base, index, 0);
+                record_type_metadata_failure(out_ptr);
+                return -1;
+            };
+            let field_type_ptr: i32 = entry_ptr + WORD_SIZE;
+            let field_type_id: i32 = load_i32(field_type_ptr);
+            let resolved_field: i32 =
+                resolve_type_id(out_ptr, ast_base, field_type_id);
+            if resolved_field < 0 {
+                struct_type_set_cached_id(ast_base, index, 0);
+                record_type_metadata_failure(out_ptr);
+                return -1;
+            };
+            if resolved_field != field_type_id {
+                store_i32(field_type_ptr, resolved_field);
+            };
+            field_idx = field_idx + 1;
+        };
+    };
+    if ensure_struct_type_metadata(out_ptr, ast_base, index, type_id) < 0 {
+        struct_type_set_cached_id(ast_base, index, 0);
+        record_type_metadata_failure(out_ptr);
+        return -1;
+    };
+    type_id
+}
+
 fn resolve_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
     if type_id < 0 {
         return -1;
@@ -7319,6 +7705,9 @@ fn resolve_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
     if type_id_is_tuple(type_id) {
         return resolve_tuple_type_id(out_ptr, ast_base, type_id);
     };
+    if type_id_is_struct(type_id) {
+        return resolve_struct_type_id(out_ptr, ast_base, type_id);
+    };
     if type_id_is_builtin(type_id) {
         return type_id;
     };
@@ -7326,7 +7715,7 @@ fn resolve_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
 }
 
 fn ast_extra_base(ast_base: i32) -> i32 {
-    ast_tuple_heap_indices_base(ast_base) + AST_TUPLE_HEAP_INDEX_SECTION_SIZE
+    ast_struct_heap_indices_base(ast_base) + AST_STRUCT_HEAP_INDEX_SECTION_SIZE
 }
 
 const AST_EXPR_ENTRY_SIZE: i32 = 20;

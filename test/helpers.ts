@@ -52,9 +52,12 @@ const AST_ARRAY_TYPES_CAPACITY = 256;
 const AST_ARRAY_TYPE_ENTRY_SIZE = 12;
 const AST_TUPLE_TYPES_CAPACITY = 256;
 const AST_TUPLE_TYPE_ENTRY_SIZE = 12;
+const AST_STRUCT_TYPES_CAPACITY = 256;
+const AST_STRUCT_TYPE_ENTRY_SIZE = 16;
 const AST_ARRAY_HEAP_INDEX_SECTION_SIZE = AST_ARRAY_TYPES_CAPACITY * WORD_SIZE;
 const AST_TUPLE_HEAP_INDEX_SECTION_SIZE = AST_TUPLE_TYPES_CAPACITY * WORD_SIZE;
-const AST_EXPR_ENTRY_SIZE = 16;
+const AST_STRUCT_HEAP_INDEX_SECTION_SIZE = AST_STRUCT_TYPES_CAPACITY * WORD_SIZE;
+const AST_EXPR_ENTRY_SIZE = 20;
 const AST_EXPR_CAPACITY = 131_072;
 
 const AST_CONSTANTS_SECTION_SIZE =
@@ -65,6 +68,8 @@ const AST_ARRAY_TYPES_SECTION_SIZE =
   WORD_SIZE + AST_ARRAY_TYPES_CAPACITY * AST_ARRAY_TYPE_ENTRY_SIZE;
 const AST_TUPLE_TYPES_SECTION_SIZE =
   WORD_SIZE + AST_TUPLE_TYPES_CAPACITY * AST_TUPLE_TYPE_ENTRY_SIZE;
+const AST_STRUCT_TYPES_SECTION_SIZE =
+  WORD_SIZE + AST_STRUCT_TYPES_CAPACITY * AST_STRUCT_TYPE_ENTRY_SIZE;
 const memoryIntrinsicsSourceUrl = new URL("../stdlib/memory.bp", import.meta.url);
 
 const encoder = new TextEncoder();
@@ -162,16 +167,24 @@ function astTupleTypesCountPtr(astBasePtr: number): number {
   return astArrayTypesCountPtr(astBasePtr) + AST_ARRAY_TYPES_SECTION_SIZE;
 }
 
-function astArrayHeapIndicesBase(astBasePtr: number): number {
+function astStructTypesCountPtr(astBasePtr: number): number {
   return astTupleTypesCountPtr(astBasePtr) + AST_TUPLE_TYPES_SECTION_SIZE;
+}
+
+function astArrayHeapIndicesBase(astBasePtr: number): number {
+  return astStructTypesCountPtr(astBasePtr) + AST_STRUCT_TYPES_SECTION_SIZE;
 }
 
 function astTupleHeapIndicesBase(astBasePtr: number): number {
   return astArrayHeapIndicesBase(astBasePtr) + AST_ARRAY_HEAP_INDEX_SECTION_SIZE;
 }
 
-function astExtraBase(astBasePtr: number): number {
+function astStructHeapIndicesBase(astBasePtr: number): number {
   return astTupleHeapIndicesBase(astBasePtr) + AST_TUPLE_HEAP_INDEX_SECTION_SIZE;
+}
+
+function astExtraBase(astBasePtr: number): number {
+  return astStructHeapIndicesBase(astBasePtr) + AST_STRUCT_HEAP_INDEX_SECTION_SIZE;
 }
 
 function astExprCountPtr(astBasePtr: number): number {
@@ -226,6 +239,7 @@ export interface ExpressionEntry {
   readonly data0: number;
   readonly data1: number;
   readonly data2: number;
+  readonly extra: number;
 }
 
 export function readExpressionEntry(
@@ -242,6 +256,7 @@ export function readExpressionEntry(
     data0: view.getInt32(4, true),
     data1: view.getInt32(8, true),
     data2: view.getInt32(12, true),
+    extra: view.getInt32(16, true),
   };
 }
 
