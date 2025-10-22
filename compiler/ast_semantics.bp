@@ -1852,6 +1852,18 @@ fn interpret_constant_entry(ast_base: i32, const_entry_ptr: i32) -> i32 {
         return -1;
     };
     literal_value = load_i32(eval_value_ptr);
+    if target_type == BUILTIN_TYPE_ID_TYPE {
+        if literal_value < 0 {
+            ast_constant_entry_set_eval_state(const_entry_ptr, AST_CONSTANT_EVAL_STATE_UNEVALUATED);
+            return -1;
+        };
+        let resolved_literal: i32 = resolve_type_id(0, ast_base, literal_value);
+        if resolved_literal < 0 {
+            ast_constant_entry_set_eval_state(const_entry_ptr, AST_CONSTANT_EVAL_STATE_UNEVALUATED);
+            return -1;
+        };
+        literal_value = resolved_literal;
+    };
     store_i32(ast_constant_entry_value_ptr(const_entry_ptr), literal_value);
     store_i32(const_type_ptr, target_type);
     ast_constant_entry_set_eval_state(const_entry_ptr, AST_CONSTANT_EVAL_STATE_EVALUATED);
