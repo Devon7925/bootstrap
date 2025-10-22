@@ -6136,6 +6136,16 @@ fn ast_function_clone_const_template(
                 if func_len > 0 { module_len = func_len; };
                 if func_index >= 0 { module_index = func_index; };
             };
+            if module_index >= 0 {
+                if module_base <= 0 {
+                    let entry_base: i32 = module_entry_content(module_index);
+                    if entry_base > 0 { module_base = entry_base; };
+                };
+                if module_len <= 0 {
+                    let entry_len: i32 = module_entry_content_len(module_index);
+                    if entry_len > 0 { module_len = entry_len; };
+                };
+            };
             if location_offset >= 0 {
                 write_failure_detail_with_location(
                     detail_out_ptr,
