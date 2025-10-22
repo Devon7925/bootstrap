@@ -6136,7 +6136,7 @@ fn ast_function_clone_const_template(
                 if func_len > 0 { module_len = func_len; };
                 if func_index >= 0 { module_index = func_index; };
             };
-            if location_offset >= 0 && module_base > 0 && module_len > 0 {
+            if location_offset >= 0 {
                 write_failure_detail_with_location(
                     detail_out_ptr,
                     module_index,
