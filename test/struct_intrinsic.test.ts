@@ -1,8 +1,36 @@
 import { describe, expect, test } from "bun:test";
 
-import { compileWithAstCompiler, runWasmMainWithGc } from "./helpers";
+import { compileWithAstCompiler, expectCompileFailure, runWasmMainWithGc } from "./helpers";
 
 describe("struct intrinsic with const type values", () => {
+    test("registers struct types when field names are canonical", async () => {
+        const wasm = await compileWithAstCompiler(`
+        const FIRST: [u8; 6] = [102, 105, 114, 115, 116, 0];
+        const SECOND: [u8; 6] = [115, 101, 99, 111, 110, 0];
+
+        const Pair = struct(6, 2, [
+            (FIRST, i32),
+            (SECOND, i32),
+        ]);
+
+        fn main() -> i32 { 0 }
+      `);
+        expect(wasm.byteLength).toBeGreaterThan(0);
+    });
+
+    test("struct intrinsic rejects field names without null terminators", async () => {
+        const failure = await expectCompileFailure(`
+        const FIRST_BAD: [u8; 6] = [102, 105, 114, 115, 116, 33];
+
+        const Pair = struct(6, 1, [
+            (FIRST_BAD, i32),
+        ]);
+
+        fn main() -> i32 { 0 }
+      `);
+        expect(failure.failure.detail).toContain("struct field names must be null terminated");
+    });
+
     test.todo("constructs a static pair with dot and bracket access", async () => {
         const wasm = await compileWithAstCompiler(`
         const Pair = struct(6, 2, [

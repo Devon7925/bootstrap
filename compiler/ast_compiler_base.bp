@@ -8555,6 +8555,333 @@ const CONST_EVAL_LOOP_LIMIT: i32 = 1048576;
 
 const CONSTANT_EVAL_SCRATCH_OFFSET: i32 = 32768;
 
+fn constant_eval_failure_detail_ptr(ast_base: i32) -> i32 {
+    let out_ptr: i32 = ast_base - (SCRATCH_FN_BASE_OFFSET + 16384);
+    if out_ptr > 0 { out_ptr } else { 0 }
+}
+
+fn constant_intrinsic_matches(
+    name_ptr: i32,
+    name_len: i32,
+    const TARGET_LEN: i32,
+    target: [u8; TARGET_LEN],
+) -> bool {
+    if name_ptr <= 0 { return false; };
+    if name_len != TARGET_LEN { return false; };
+    let mut idx: i32 = 0;
+    while idx < TARGET_LEN {
+        let byte: i32 = load_u8(name_ptr + idx);
+        if byte != target[idx] as i32 { return false; };
+        idx = idx + 1;
+    };
+    true
+}
+
+fn interpret_const_intrinsic_struct(
+    ast_base: i32,
+    metadata_ptr: i32,
+    arg_count: i32,
+    out_value_ptr: i32,
+    out_type_ptr: i32,
+) -> i32 {
+    let detail_out_ptr: i32 = constant_eval_failure_detail_ptr(ast_base);
+    if arg_count != 3 {
+        record_failure_detail(
+            detail_out_ptr,
+            53,
+            "struct intrinsic expects (STR_LEN, PROP_COUNT, PROPS)",
+        );
+        return -1;
+    };
+    let env_ptr: i32 = call_metadata_const_env_ptr(metadata_ptr);
+    if env_ptr <= 0 {
+        record_failure_detail(detail_out_ptr, 34, "struct intrinsic missing const env");
+        return -1;
+    };
+    let env_param_total: i32 = load_i32(env_ptr);
+    if env_param_total < 3 {
+        record_failure_detail(
+            detail_out_ptr,
+            52,
+            "struct intrinsic requires all parameters to be const",
+        );
+        return -1;
+    };
+    let env_values_ptr: i32 = env_ptr + WORD_SIZE;
+    let str_len_value: i32 = load_i32(env_values_ptr);
+    let str_len_type: i32 = load_i32(env_values_ptr + WORD_SIZE);
+    if !constant_eval_integer_type_supported(str_len_type) {
+        record_failure_detail(
+            detail_out_ptr,
+            36,
+            "struct intrinsic STR_LEN must be i32",
+        );
+        return -1;
+    };
+    let normalized_str_len: i32 = normalize_integer_value(str_len_value, str_len_type);
+    if normalized_str_len <= 0 {
+        record_failure_detail(
+            detail_out_ptr,
+            53,
+            "struct intrinsic STR_LEN must include null terminator",
+        );
+        return -1;
+    };
+    let prop_count_slot: i32 = env_values_ptr + 2 * WORD_SIZE;
+    let prop_count_value: i32 = load_i32(prop_count_slot);
+    let prop_count_type: i32 = load_i32(prop_count_slot + WORD_SIZE);
+    if !constant_eval_integer_type_supported(prop_count_type) {
+        record_failure_detail(
+            detail_out_ptr,
+            43,
+            "struct intrinsic PROP_COUNT must be integer",
+        );
+        return -1;
+    };
+    let normalized_prop_count: i32 = normalize_integer_value(prop_count_value, prop_count_type);
+    if normalized_prop_count < 0 {
+        record_failure_detail(
+            detail_out_ptr,
+            48,
+            "struct intrinsic PROP_COUNT must be non-negative",
+        );
+        return -1;
+    };
+    let props_slot: i32 = env_values_ptr + 4 * WORD_SIZE;
+    let props_value: i32 = load_i32(props_slot);
+    let props_type: i32 = load_i32(props_slot + WORD_SIZE);
+    if !type_id_is_array(props_type) {
+        record_failure_detail(
+            detail_out_ptr,
+            49,
+            "struct intrinsic PROPS must be an array of tuples",
+        );
+        return -1;
+    };
+    let props_length: i32 = array_type_length(ast_base, props_type);
+    if props_length < 0 {
+        record_failure_detail(detail_out_ptr, 37, "struct intrinsic PROPS length invalid");
+        return -1;
+    };
+    if props_length != normalized_prop_count {
+        record_failure_detail(
+            detail_out_ptr,
+            48,
+            "struct intrinsic PROP_COUNT does not match PROPS",
+        );
+        return -1;
+    };
+    let props_element_type: i32 = array_type_element_type(ast_base, props_type);
+    if props_element_type < 0 {
+        record_failure_detail(detail_out_ptr, 38, "struct intrinsic PROPS element invalid");
+        return -1;
+    };
+    if !type_id_is_tuple(props_element_type) {
+        record_failure_detail(
+            detail_out_ptr,
+            52,
+            "struct intrinsic PROPS must be ([u8; STR_LEN], type)",
+        );
+        return -1;
+    };
+    let tuple_idx: i32 = tuple_type_index(props_element_type);
+    if tuple_idx < 0 {
+        record_failure_detail(detail_out_ptr, 39, "struct intrinsic tuple metadata missing");
+        return -1;
+    };
+    if tuple_idx >= ast_tuple_types_count(ast_base) {
+        record_failure_detail(detail_out_ptr, 41, "struct intrinsic tuple index out of range");
+        return -1;
+    };
+    if ensure_tuple_type_metadata(0, ast_base, tuple_idx, props_element_type) < 0 {
+        record_failure_detail(detail_out_ptr, 37, "struct intrinsic tuple metadata error");
+        return -1;
+    };
+    let tuple_element_count: i32 = ast_tuple_type_element_count(ast_base, tuple_idx);
+    if tuple_element_count != 2 {
+        record_failure_detail(
+            detail_out_ptr,
+            52,
+            "struct intrinsic PROPS must be ([u8; STR_LEN], type)",
+        );
+        return -1;
+    };
+    let tuple_elements_ptr: i32 = ast_tuple_type_elements_ptr(ast_base, tuple_idx);
+    if tuple_elements_ptr < 0 {
+        record_failure_detail(detail_out_ptr, 39, "struct intrinsic tuple metadata missing");
+        return -1;
+    };
+    let name_array_type: i32 = load_i32(tuple_elements_ptr);
+    if !type_id_is_array(name_array_type) {
+        record_failure_detail(detail_out_ptr, 39, "struct field name must be [u8; STR_LEN]");
+        return -1;
+    };
+    let name_array_length: i32 = array_type_length(ast_base, name_array_type);
+    if name_array_length < 0 {
+        record_failure_detail(detail_out_ptr, 32, "struct field name length invalid");
+        return -1;
+    };
+    if name_array_length != normalized_str_len {
+        record_failure_detail(detail_out_ptr, 33, "struct field name length mismatch");
+        return -1;
+    };
+    let name_element_type: i32 = array_type_element_type(ast_base, name_array_type);
+    if name_element_type != BUILTIN_TYPE_ID_U8 {
+        record_failure_detail(detail_out_ptr, 35, "struct field name must use u8 bytes");
+        return -1;
+    };
+    let field_type_expectation: i32 = load_i32(tuple_elements_ptr + WORD_SIZE);
+    if field_type_expectation != BUILTIN_TYPE_ID_TYPE {
+        record_failure_detail(detail_out_ptr, 32, "struct field type must be `type`");
+        return -1;
+    };
+    if normalized_prop_count > 0 && props_value <= 0 {
+        record_failure_detail(detail_out_ptr, 38, "struct intrinsic PROPS storage missing");
+        return -1;
+    };
+    let call_data_used_ptr: i32 = ast_call_data_len_ptr(ast_base);
+    let saved_call_data_used: i32 = load_i32(call_data_used_ptr);
+    let fields_ptr: i32 = if normalized_prop_count > 0 {
+        ast_call_data_alloc(ast_base, normalized_prop_count * 2)
+    } else {
+        0
+    };
+    if normalized_prop_count > 0 {
+        if fields_ptr < 0 {
+            record_failure_detail(detail_out_ptr, 36, "struct field table allocation failed");
+            store_i32(call_data_used_ptr, saved_call_data_used);
+            return -1;
+        };
+    };
+    let mut field_idx: i32 = 0;
+    while field_idx < normalized_prop_count {
+        let tuple_slot_ptr: i32 = props_value + field_idx * 2 * WORD_SIZE;
+        let tuple_value: i32 = load_i32(tuple_slot_ptr);
+        let tuple_type: i32 = load_i32(tuple_slot_ptr + WORD_SIZE);
+        if tuple_type != props_element_type {
+            record_failure_detail(detail_out_ptr, 34, "struct PROPS element type mismatch");
+            store_i32(call_data_used_ptr, saved_call_data_used);
+            return -1;
+        };
+        if tuple_value <= 0 {
+            record_failure_detail(detail_out_ptr, 34, "struct PROPS element missing value");
+            store_i32(call_data_used_ptr, saved_call_data_used);
+            return -1;
+        };
+        let tuple_data_ptr: i32 = tuple_value;
+        let name_slot_ptr: i32 = tuple_data_ptr;
+        let name_value: i32 = load_i32(name_slot_ptr);
+        let name_type: i32 = load_i32(name_slot_ptr + WORD_SIZE);
+        if name_type != name_array_type {
+            record_failure_detail(detail_out_ptr, 31, "struct field name type mismatch");
+            store_i32(call_data_used_ptr, saved_call_data_used);
+            return -1;
+        };
+        if name_value <= 0 {
+            record_failure_detail(detail_out_ptr, 33, "struct field name storage missing");
+            store_i32(call_data_used_ptr, saved_call_data_used);
+            return -1;
+        };
+        let type_slot_ptr: i32 = tuple_data_ptr + 2 * WORD_SIZE;
+        let field_type_value: i32 = load_i32(type_slot_ptr);
+        let field_type_type: i32 = load_i32(type_slot_ptr + WORD_SIZE);
+        if field_type_type != BUILTIN_TYPE_ID_TYPE {
+            record_failure_detail(detail_out_ptr, 32, "struct field type must be `type`");
+            store_i32(call_data_used_ptr, saved_call_data_used);
+            return -1;
+        };
+        if field_type_value < 0 {
+            record_failure_detail(detail_out_ptr, 31, "struct field type value invalid");
+            store_i32(call_data_used_ptr, saved_call_data_used);
+            return -1;
+        };
+        let resolved_field_type: i32 = resolve_type_id(0, ast_base, field_type_value);
+        if resolved_field_type < 0 {
+            record_failure_detail(detail_out_ptr, 35, "struct field type resolution failed");
+            store_i32(call_data_used_ptr, saved_call_data_used);
+            return -1;
+        };
+        let mut byte_idx: i32 = 0;
+        let mut first_null: i32 = -1;
+        while byte_idx < normalized_str_len {
+            let byte_slot_ptr: i32 = name_value + byte_idx * 2 * WORD_SIZE;
+            let byte_value: i32 = load_i32(byte_slot_ptr);
+            let byte_type: i32 = load_i32(byte_slot_ptr + WORD_SIZE);
+            if byte_type != BUILTIN_TYPE_ID_U8 {
+                record_failure_detail(detail_out_ptr, 35, "struct field name must use u8 bytes");
+                store_i32(call_data_used_ptr, saved_call_data_used);
+                return -1;
+            };
+            let normalized_byte: i32 = normalize_integer_value(byte_value, byte_type);
+            if normalized_byte < 0 {
+                record_failure_detail(detail_out_ptr, 30, "struct field name byte invalid");
+                store_i32(call_data_used_ptr, saved_call_data_used);
+                return -1;
+            };
+            if normalized_byte == 0 {
+                if first_null < 0 {
+                    first_null = byte_idx;
+                };
+            } else {
+                if first_null >= 0 {
+                    record_failure_detail(
+                        detail_out_ptr,
+                        45,
+                        "struct field names must end with null padding",
+                    );
+                    store_i32(call_data_used_ptr, saved_call_data_used);
+                    return -1;
+                };
+            };
+            byte_idx = byte_idx + 1;
+        };
+        if first_null < 0 {
+            record_failure_detail(
+                detail_out_ptr,
+                42,
+                "struct field names must be null terminated",
+            );
+            store_i32(call_data_used_ptr, saved_call_data_used);
+            return -1;
+        };
+        let stored_len: i32 = first_null + 1;
+        let name_words: i32 = (stored_len + 3) >> 2;
+        let name_storage_ptr: i32 = ast_call_data_alloc(ast_base, name_words);
+        if name_storage_ptr < 0 {
+            record_failure_detail(detail_out_ptr, 35, "struct field name allocation failed");
+            store_i32(call_data_used_ptr, saved_call_data_used);
+            return -1;
+        };
+        let mut zero_idx: i32 = 0;
+        while zero_idx < name_words * WORD_SIZE {
+            store_u8(name_storage_ptr + zero_idx, 0);
+            zero_idx = zero_idx + 1;
+        };
+        let mut copy_idx: i32 = 0;
+        while copy_idx < stored_len {
+            let byte_slot_ptr: i32 = name_value + copy_idx * 2 * WORD_SIZE;
+            let byte_value: i32 = load_i32(byte_slot_ptr);
+            let byte_type: i32 = load_i32(byte_slot_ptr + WORD_SIZE);
+            let normalized_byte: i32 = normalize_integer_value(byte_value, byte_type);
+            store_u8(name_storage_ptr + copy_idx, normalized_byte);
+            copy_idx = copy_idx + 1;
+        };
+        let entry_ptr: i32 = fields_ptr + field_idx * AST_STRUCT_FIELD_ENTRY_SIZE;
+        store_i32(entry_ptr, name_storage_ptr);
+        store_i32(entry_ptr + WORD_SIZE, resolved_field_type);
+        field_idx = field_idx + 1;
+    };
+    let struct_type_id: i32 = ast_register_struct_type(ast_base, fields_ptr, normalized_prop_count);
+    if struct_type_id < 0 {
+        record_failure_detail(detail_out_ptr, 37, "struct type registry capacity reached");
+        store_i32(call_data_used_ptr, saved_call_data_used);
+        return -1;
+    };
+    store_i32(out_value_ptr, struct_type_id);
+    store_i32(out_type_ptr, BUILTIN_TYPE_ID_TYPE);
+    CONST_EVAL_STATUS_OK
+}
+
 fn interpret_constant_expression(
     ast_base: i32,
     expr_index: i32,
@@ -9284,10 +9611,16 @@ fn interpret_constant_expression(
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         };
+        let call_name_ptr: i32 = call_metadata_name_ptr(metadata_ptr);
+        let call_name_len: i32 = call_metadata_name_len(metadata_ptr);
+        let is_struct_intrinsic: bool = constant_intrinsic_matches(
+            call_name_ptr,
+            call_name_len,
+            6,
+            "struct",
+        );
         let mut callee_index: i32 = load_i32(call_metadata_callee_index_ptr(metadata_ptr));
         if callee_index < 0 {
-            let call_name_ptr: i32 = call_metadata_name_ptr(metadata_ptr);
-            let call_name_len: i32 = call_metadata_name_len(metadata_ptr);
             if call_name_ptr < 0 {
                 store_i32(scratch_top_ptr, saved_top);
                 return -1;
@@ -9462,6 +9795,17 @@ fn interpret_constant_expression(
                 return arg_status;
             };
             arg_idx = arg_idx + 1;
+        };
+        if is_struct_intrinsic {
+            let struct_status: i32 = interpret_const_intrinsic_struct(
+                ast_base,
+                metadata_ptr,
+                arg_count,
+                out_value_ptr,
+                out_type_ptr,
+            );
+            store_i32(scratch_top_ptr, saved_top);
+            return struct_status;
         };
         let mut runtime_idx: i32 = arg_count;
         if has_const_params {
