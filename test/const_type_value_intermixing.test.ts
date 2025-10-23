@@ -286,6 +286,24 @@ test("const fn with only const parameters can return composed tuple-array partia
     expect(result).toBe(42);
 });
 
+test.todo("const fn with only const parameters can return usable composed tuple-array partial type", async () => {
+    const wasm = await compileWithAstCompiler(`
+    const fn foo(const STR_LEN: i32) -> ([u8; STR_LEN], type) {
+        let entries: ([u8; STR_LEN], type) =
+            ([0 as u8; STR_LEN], i32);
+        entries
+    }
+
+    const BAR: ([u8; 3], type) = foo(3);
+
+    fn main() -> BAR.1 {
+        42
+    }
+    `);
+    const result = await runWasmMainWithGc(wasm);
+    expect(result).toBe(42);
+});
+
 test("const fn with only const parameters can return composed array-tuple partial type", async () => {
     const wasm = await compileWithAstCompiler(`
     const KEY_COUNT: i32 = 12;
