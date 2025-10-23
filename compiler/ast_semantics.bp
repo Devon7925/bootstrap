@@ -1702,6 +1702,19 @@ fn try_convert_constant_value(
         };
         return 0;
     };
+    if value_type == BUILTIN_TYPE_ID_TYPE {
+        let recorded_type_id: i32 = load_i32(value_ptr);
+        if materialize_type_like_value_into(
+            ast_base,
+            recorded_type_id,
+            target_type,
+            value_ptr,
+            0,
+        ) < 0 {
+            return -1;
+        };
+        return 0;
+    };
     if type_id_is_integer(value_type) && type_id_is_integer(target_type) {
         let normalized: i32 = normalize_integer_value(load_i32(value_ptr), value_type);
         let cast_value: i32 = normalize_integer_value(normalized, target_type);
