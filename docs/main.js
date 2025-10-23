@@ -17,7 +17,7 @@ fn main() -> i32 {
     return fib(10);
 }`;
 
-const WABT_MODULE_URL = "https://unpkg.com/wabt@1.0.34?module";
+const WABT_MODULE_URL = "https://unpkg.com/wabt@1.0.38?module";
 
 const encoder = new TextEncoder();
 let downloadUrl = null;
@@ -260,18 +260,90 @@ async function renderWat(wasmBytes) {
   }
 }
 
+function unwrapWabtCandidate(candidate) {
+  if (!candidate) {
+    return null;
+  }
+
+  const visited = new Set();
+  let current = candidate;
+  while (
+    current &&
+    typeof current === "object" &&
+    "default" in current &&
+    !visited.has(current)
+  ) {
+    visited.add(current);
+    current = current.default;
+  }
+
+  return current;
+}
+
+async function instantiateWabtCandidate(candidate) {
+  let current = unwrapWabtCandidate(candidate);
+  if (!current) {
+    return null;
+  }
+
+  try {
+    if (typeof current === "function") {
+      current = current();
+    }
+  } catch (error) {
+    console.warn("failed to invoke wabt factory", error);
+    return null;
+  }
+
+  if (current && typeof current.then === "function") {
+    try {
+      current = await current;
+    } catch (error) {
+      console.warn("wabt factory promise rejected", error);
+      return null;
+    }
+  }
+
+  if (current && typeof current.instantiateWabt === "function") {
+    try {
+      current = await current.instantiateWabt();
+    } catch (error) {
+      console.warn("instantiateWabt call failed", error);
+      return null;
+    }
+  }
+
+  if (current && typeof current.ready === "object") {
+    const { ready } = current;
+    if (ready && typeof ready.then === "function") {
+      try {
+        await ready;
+      } catch (error) {
+        console.warn("wabt ready promise rejected", error);
+        return null;
+      }
+    }
+  }
+
+  if (current && typeof current.readWasm === "function") {
+    return current;
+  }
+
+  return null;
+}
+
 async function loadWabt() {
   if (!wabtInstancePromise) {
     const promise = (async () => {
       const module = await import(WABT_MODULE_URL);
-      const candidate = module.default ?? module.wabt ?? module;
-      if (typeof candidate === "function") {
-        return await candidate();
+      const candidates = [module, module.default, module.wabt];
+      for (const candidate of candidates) {
+        const wabt = await instantiateWabtCandidate(candidate);
+        if (wabt) {
+          return wabt;
+        }
       }
-      if (candidate && typeof candidate.then === "function") {
-        return await candidate;
-      }
-      throw new Error("wabt module did not export a factory function");
+      throw new Error("wabt module did not export a usable instance");
     })();
     promise.catch(() => {
       if (wabtInstancePromise === promise) {
