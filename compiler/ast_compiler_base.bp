@@ -5676,6 +5676,71 @@ fn clone_const_specialization_expr(
         let expr_type: i32 = ast_expr_type(ast_base, expr_index);
         if expr_type >= 0 {
             ast_expr_set_type(ast_base, new_index, expr_type);
+        } else {
+            if count == 0 {
+                let tuple_type_id: i32 = ast_register_tuple_type(ast_base, 0, 0);
+                if tuple_type_id >= 0 {
+                    let resolved_tuple: i32 = resolve_type_id(0, ast_base, tuple_type_id);
+                    if resolved_tuple >= 0 {
+                        ast_expr_set_type(ast_base, new_index, resolved_tuple);
+                    };
+                };
+            } else {
+                let call_data_used_ptr: i32 = ast_call_data_len_ptr(ast_base);
+                let saved_used: i32 = load_i32(call_data_used_ptr);
+                let element_types_ptr: i32 = ast_call_data_alloc(ast_base, count);
+                if element_types_ptr >= 0 {
+                    let mut idx: i32 = 0;
+                    let mut all_resolved: bool = true;
+                    loop {
+                        if idx >= count {
+                            break;
+                        };
+                        let cloned_value_index: i32 =
+                            load_i32(cloned_ptr + idx * WORD_SIZE);
+                        let cloned_value_type: i32 =
+                            ast_expr_type(ast_base, cloned_value_index);
+                        if cloned_value_type < 0 {
+                            all_resolved = false;
+                            break;
+                        };
+                        let resolved_element: i32 =
+                            resolve_type_id(0, ast_base, cloned_value_type);
+                        if resolved_element < 0 {
+                            all_resolved = false;
+                            break;
+                        };
+                        store_i32(
+                            element_types_ptr + idx * WORD_SIZE,
+                            resolved_element,
+                        );
+                        idx = idx + 1;
+                    };
+                    if all_resolved {
+                        let before_count: i32 = ast_tuple_types_count(ast_base);
+                        let tuple_type_id: i32 = ast_register_tuple_type(
+                            ast_base,
+                            element_types_ptr,
+                            count,
+                        );
+                        if tuple_type_id >= 0 {
+                            let after_count: i32 = ast_tuple_types_count(ast_base);
+                            if after_count == before_count {
+                                store_i32(call_data_used_ptr, saved_used);
+                            };
+                            let resolved_tuple: i32 =
+                                resolve_type_id(0, ast_base, tuple_type_id);
+                            if resolved_tuple >= 0 {
+                                ast_expr_set_type(ast_base, new_index, resolved_tuple);
+                            };
+                        } else {
+                            store_i32(call_data_used_ptr, saved_used);
+                        };
+                    } else {
+                        store_i32(call_data_used_ptr, saved_used);
+                    };
+                };
+            };
         };
         return new_index;
     };

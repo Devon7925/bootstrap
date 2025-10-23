@@ -2463,6 +2463,29 @@ fn resolve_local_array_repeat_init_index(
     };
 }
 
+fn tuple_literal_element_requires_const_specialization(
+    ast_base: i32,
+    value_index: i32,
+) -> bool {
+    if value_index < 0 {
+        return false;
+    };
+    let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, value_index);
+    let kind: i32 = load_i32(entry_ptr);
+    if kind == 35 {
+        let length: i32 = ast_expr_array_repeat_length(ast_base, value_index);
+        if length >= 0 {
+            return false;
+        };
+        let length_expr_index: i32 = ast_expr_array_repeat_length_expr(ast_base, value_index);
+        if length_expr_index < 0 {
+            return false;
+        };
+        return true;
+    };
+    false
+}
+
 fn resolve_expression_internal(
     out_ptr: i32,
     ast_base: i32,
@@ -3609,6 +3632,7 @@ fn resolve_expression_internal(
             return -1;
         };
         let mut idx: i32 = 0;
+        let mut requires_specialization: bool = false;
         loop {
             if idx >= element_count {
                 break;
@@ -3631,6 +3655,16 @@ fn resolve_expression_internal(
                 store_i32(call_data_used_ptr, saved_used);
                 return -1;
             };
+            let defer_element: bool = if caller_is_const {
+                tuple_literal_element_requires_const_specialization(ast_base, value_index)
+            } else {
+                false
+            };
+            if defer_element {
+                requires_specialization = true;
+                idx = idx + 1;
+                continue;
+            };
             let element_type: i32 = ast_expr_type(ast_base, value_index);
             if element_type < 0 {
                 store_i32(call_data_used_ptr, saved_used);
@@ -3646,6 +3680,10 @@ fn resolve_expression_internal(
             };
             store_i32(elements_ptr + idx * WORD_SIZE, resolved_element);
             idx = idx + 1;
+        };
+        if requires_specialization {
+            store_i32(call_data_used_ptr, saved_used);
+            return 0;
         };
         let before_count: i32 = ast_tuple_types_count(ast_base);
         let tuple_type_id: i32 =
