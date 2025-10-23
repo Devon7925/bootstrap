@@ -121,6 +121,92 @@ describe("struct intrinsic with const type values", () => {
         ).rejects.toThrow("/entry.bp:8:39: struct literal missing field second");
     });
 
+    test("const fn can return struct data", async () => {
+        const wasm = await compileWithAstCompiler(`
+        const fn struct_data() -> [([u8;3], type); 12] {
+            [
+                ("k0\\0", i32),
+                ("k1\\0", i32),
+                ("k2\\0", i32),
+                ("k3\\0", i32),
+                ("k4\\0", i32),
+                ("k5\\0", i32),
+                ("k6\\0", i32),
+                ("k7\\0", i32),
+                ("k8\\0", i32),
+                ("k9\\0", i32),
+                ("k10", i32),
+                ("k11", i32),
+            ]
+        }
+
+        const TwelveKeys = struct(3, 12, struct_data());
+
+        fn main() -> i32 {
+            let set: TwelveKeys = TwelveKeys {
+                k0: 0,
+                k1: 1,
+                k2: 2,
+                k3: 3,
+                k4: 4,
+                k5: 5,
+                k6: 6,
+                k7: 7,
+                k8: 8,
+                k9: 9,
+                k10: 10,
+                k11: 11,
+            };
+            set.k1 + set.k11 + 3 * set.k10
+        }
+      `);
+        const result = await runWasmMainWithGc(wasm);
+        expect(result).toBe(42);
+    });
+
+    test.todo("const fn can return struct", async () => {
+        const wasm = await compileWithAstCompiler(`
+        const fn dynamic_struct() -> type {
+            struct(3, 12, [
+                ("k0\\0", i32),
+                ("k1\\0", i32),
+                ("k2\\0", i32),
+                ("k3\\0", i32),
+                ("k4\\0", i32),
+                ("k5\\0", i32),
+                ("k6\\0", i32),
+                ("k7\\0", i32),
+                ("k8\\0", i32),
+                ("k9\\0", i32),
+                ("k10", i32),
+                ("k11", i32),
+            ])
+        }
+
+        const TwelveKeys = dynamic_struct();
+
+        fn main() -> i32 {
+            let set: TwelveKeys = TwelveKeys {
+                k0: 0,
+                k1: 1,
+                k2: 2,
+                k3: 3,
+                k4: 4,
+                k5: 5,
+                k6: 6,
+                k7: 7,
+                k8: 8,
+                k9: 9,
+                k10: 10,
+                k11: 11,
+            };
+            set.k1 + set.k11 + 3 * set.k10
+        }
+      `);
+        const result = await runWasmMainWithGc(wasm);
+        expect(result).toBe(42);
+    });
+
     test.todo("dynamic struct factories build property names programmatically", async () => {
         const wasm = await compileWithAstCompiler(`
         const KEY_COUNT: i32 = 12;
