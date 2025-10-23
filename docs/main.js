@@ -260,90 +260,25 @@ async function renderWat(wasmBytes) {
   }
 }
 
-function unwrapWabtCandidate(candidate) {
-  if (!candidate) {
-    return null;
-  }
-
-  const visited = new Set();
-  let current = candidate;
-  while (
-    current &&
-    typeof current === "object" &&
-    "default" in current &&
-    !visited.has(current)
-  ) {
-    visited.add(current);
-    current = current.default;
-  }
-
-  return current;
-}
-
-async function instantiateWabtCandidate(candidate) {
-  let current = unwrapWabtCandidate(candidate);
-  if (!current) {
-    return null;
-  }
-
-  try {
-    if (typeof current === "function") {
-      current = current();
-    }
-  } catch (error) {
-    console.warn("failed to invoke wabt factory", error);
-    return null;
-  }
-
-  if (current && typeof current.then === "function") {
-    try {
-      current = await current;
-    } catch (error) {
-      console.warn("wabt factory promise rejected", error);
-      return null;
-    }
-  }
-
-  if (current && typeof current.instantiateWabt === "function") {
-    try {
-      current = await current.instantiateWabt();
-    } catch (error) {
-      console.warn("instantiateWabt call failed", error);
-      return null;
-    }
-  }
-
-  if (current && typeof current.ready === "object") {
-    const { ready } = current;
-    if (ready && typeof ready.then === "function") {
-      try {
-        await ready;
-      } catch (error) {
-        console.warn("wabt ready promise rejected", error);
-        return null;
-      }
-    }
-  }
-
-  if (current && typeof current.readWasm === "function") {
-    return current;
-  }
-
-  return null;
-}
-
 async function loadWabt() {
   if (!wabtInstancePromise) {
     const promise = (async () => {
       const module = await import(WABT_MODULE_URL);
-      const candidates = collectWabtCandidates(module);
-      for (const candidate of candidates) {
-        const wabt = await instantiateWabtCandidate(candidate);
-        if (wabt) {
-          return wabt;
-        }
+      const factory = extractWabtFactory(module);
+      if (typeof factory !== "function") {
+        throw new Error("wabt module did not export a factory function");
       }
-      throw new Error("wabt module did not export a usable instance");
+
+      let instance = factory();
+      if (instance && typeof instance.then === "function") {
+        instance = await instance;
+      }
+
+      if (!instance || typeof instance.readWasm !== "function") {
+        throw new Error("wabt factory did not return a usable instance");
+      }
+
+      return instance;
     })();
     promise.catch(() => {
       if (wabtInstancePromise === promise) {
@@ -356,65 +291,35 @@ async function loadWabt() {
   return wabtInstancePromise;
 }
 
-function collectWabtCandidates(root) {
-  const queue = [];
-  const visited = new Set();
-  const ordered = [];
-
-  function enqueue(value) {
-    if (!value) {
-      return;
-    }
-
-    const type = typeof value;
-    if (type !== "object" && type !== "function") {
-      return;
-    }
-
-    if (visited.has(value)) {
-      return;
-    }
-
-    visited.add(value);
-    queue.push(value);
+function extractWabtFactory(candidate) {
+  if (!candidate) {
+    return null;
   }
 
-  enqueue(root);
+  if (typeof candidate === "function") {
+    return candidate;
+  }
 
-  while (queue.length > 0) {
-    const current = queue.shift();
-    ordered.push(current);
+  if (candidate && typeof candidate === "object") {
+    if (typeof candidate.default === "function") {
+      return candidate.default;
+    }
 
-    const keys = new Set();
-    if (typeof current === "function" || (typeof current === "object" && current)) {
-      for (const key of Reflect.ownKeys(current)) {
-        if (typeof key === "string") {
-          keys.add(key);
-        }
+    if (candidate.default && typeof candidate.default === "object") {
+      const nested = extractWabtFactory(candidate.default);
+      if (nested) {
+        return nested;
       }
     }
 
-    const prioritized = [
-      "default",
-      "wabt",
-      "instantiateWabt",
-      "instance",
-      "module",
-    ];
-
-    for (const key of prioritized) {
-      if (keys.delete(key)) {
-        enqueue(current[key]);
-      }
+    if (typeof candidate.wabt === "function") {
+      return candidate.wabt;
     }
 
-    for (const key of keys) {
-      if (key === "arguments" || key === "caller" || key === "prototype") {
-        continue;
-      }
-      enqueue(current[key]);
+    if (typeof candidate.instantiateWabt === "function") {
+      return () => candidate.instantiateWabt();
     }
   }
 
-  return ordered;
+  return null;
 }
