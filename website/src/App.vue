@@ -86,6 +86,26 @@ fn main() -> i32 {
 
 const STAGE2_MODULE_URL = stage2ModuleUrl;
 
+const WABT_FEATURES = {
+  annotations: true,
+  bulk_memory: true,
+  code_metadata: true,
+  exceptions: true,
+  extended_const: true,
+  function_references: true,
+  gc: true,
+  memory64: true,
+  multi_value: true,
+  mutable_globals: true,
+  reference_types: true,
+  relaxed_simd: true,
+  sat_float_to_int: true,
+  sign_extension: true,
+  simd: true,
+  tail_call: true,
+  threads: true,
+};
+
 const encoder = new TextEncoder();
 
 const source = ref(DEFAULT_PROGRAM);
@@ -278,7 +298,7 @@ async function renderWat(wasmBytes) {
     const bytes = wasmBytes instanceof Uint8Array ? wasmBytes : new Uint8Array(wasmBytes);
     let parsed = null;
     try {
-      parsed = wabt.readWasm(bytes, { readDebugNames: true });
+      parsed = wabt.readWasm(bytes, { readDebugNames: true, ...WABT_FEATURES });
     } catch (readError) {
       throw readError instanceof Error ? readError : new Error(String(readError));
     }
