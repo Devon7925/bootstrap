@@ -385,6 +385,27 @@ test("const fn with only const parameters can return spaced composed array-tuple
     expect(result).toBe(42);
 });
 
+test.todo("const fn with only const parameters can return usable composed array-tuple-array partial type from spaced binding", async () => {
+    const wasm = await compileWithAstCompiler(`
+    const KEY_COUNT: i32 = 12;
+    const KEY_NAME_CAP: i32 = 4;
+
+    const fn foo(const COUNT: i32) -> [([i32; KEY_NAME_CAP], type); COUNT] {
+        let mut entries: [([i32; KEY_NAME_CAP], type); COUNT] =
+            [([42; KEY_NAME_CAP], i32); COUNT];
+        let mut idx = 0;
+        entries
+    }
+
+    const BAR: [([i32; KEY_NAME_CAP], type); KEY_COUNT] = foo(KEY_COUNT);
+
+    fn main() -> i32 {
+        BAR[0].0[0] as i32
+    }
+    `);
+    const result = await runWasmMainWithGc(wasm);
+    expect(result).toBe(42);
+});
 test.todo("const fn with only const parameters can process composed array-tuple-array partial type", async () => {
     const wasm = await compileWithAstCompiler(`
     const KEY_COUNT: i32 = 12;
