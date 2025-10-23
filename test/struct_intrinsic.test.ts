@@ -164,7 +164,7 @@ describe("struct intrinsic with const type values", () => {
         expect(result).toBe(42);
     });
 
-    test.todo("const fn can return struct", async () => {
+    test("const fn can return struct", async () => {
         const wasm = await compileWithAstCompiler(`
         const fn dynamic_struct() -> type {
             struct(3, 12, [
@@ -299,7 +299,7 @@ describe("struct intrinsic with const type values", () => {
     test("incorrect parameter specialization raises diagnostic", async () => {
         await expect(
             compileWithAstCompiler(`
-            const Pair = struct(5, 1, [
+            const Pair = struct(4, 1, [
                 ("first\\0", i32),
             ]);
 
