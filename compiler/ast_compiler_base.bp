@@ -11680,24 +11680,12 @@ fn interpret_constant_expression(
         return CONST_EVAL_STATUS_OK;
     };
     if kind == 9 {
-        if param_values_ptr < 0 {
-            store_i32(scratch_top_ptr, saved_top);
-            return -1;
-        };
-        if env_values_count <= 0 {
-            store_i32(scratch_top_ptr, saved_top);
-            return -1;
-        };
         let local_index: i32 = load_i32(entry_ptr + 4);
         if local_index < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         };
         if local_index < param_count {
-            store_i32(scratch_top_ptr, saved_top);
-            return -1;
-        };
-        if local_index >= env_values_count {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         };
@@ -11711,8 +11699,26 @@ fn interpret_constant_expression(
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         };
-        let local_ptr: i32 = param_values_ptr + local_index * 8;
-        let local_type_ptr: i32 = local_ptr + 4;
+        let mut has_env_slot: bool = true;
+        if param_values_ptr < 0 {
+            has_env_slot = false;
+        } else if env_values_count <= 0 {
+            has_env_slot = false;
+        } else if local_index >= env_values_count {
+            has_env_slot = false;
+        };
+        let mut init_offset: i32 = -1;
+        let mut local_ptr: i32 = 0;
+        let mut local_type_ptr: i32 = 0;
+        if has_env_slot {
+            local_ptr = param_values_ptr + local_index * 8;
+            local_type_ptr = local_ptr + 4;
+        } else {
+            init_offset = load_i32(scratch_top_ptr);
+            local_ptr = scratch_base + init_offset;
+            local_type_ptr = local_ptr + 4;
+            store_i32(scratch_top_ptr, init_offset + 8);
+        };
         let init_status: i32 = interpret_constant_expression(
             ast_base,
             init_index,
@@ -11724,13 +11730,20 @@ fn interpret_constant_expression(
             param_count,
             env_values_count,
         );
+        if !has_env_slot {
+            store_i32(scratch_top_ptr, init_offset);
+        };
         if init_status < 0 {
-            store_i32(local_type_ptr, -1);
+            if has_env_slot {
+                store_i32(local_type_ptr, -1);
+            };
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         };
         if init_status != CONST_EVAL_STATUS_OK {
-            store_i32(local_type_ptr, -1);
+            if has_env_slot {
+                store_i32(local_type_ptr, -1);
+            };
             store_i32(scratch_top_ptr, saved_top);
             return init_status;
         };
@@ -11762,6 +11775,15 @@ fn interpret_constant_expression(
             env_values_count,
         );
         if body_status < 0 {
+            if has_env_slot {
+                let stored_type: i32 = load_i32(local_type_ptr);
+                if stored_type >= 0 {
+                    store_i32(out_value_ptr, load_i32(local_ptr));
+                    store_i32(out_type_ptr, stored_type);
+                    store_i32(scratch_top_ptr, saved_top);
+                    return CONST_EVAL_STATUS_OK;
+                };
+            };
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         };
