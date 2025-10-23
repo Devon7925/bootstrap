@@ -17,6 +17,8 @@ fn main() -> i32 {
     return fib(10);
 }`;
 
+const WABT_MODULE_URL = "https://unpkg.com/wabt@1.0.34?module";
+
 const encoder = new TextEncoder();
 let downloadUrl = null;
 
@@ -25,11 +27,14 @@ const elements = {
   compileButton: document.getElementById("compile"),
   status: document.getElementById("status"),
   compileOutput: document.getElementById("compile-output"),
+  watOutput: document.getElementById("wat-output"),
   executionOutput: document.getElementById("execution-output"),
   downloadLink: document.getElementById("download-link"),
 };
 
 elements.editor.value = DEFAULT_PROGRAM;
+
+let wabtInstancePromise = null;
 
 const stage2ModulePromise = fetch("compiler.wasm")
   .then((response) => {
@@ -136,9 +141,15 @@ function safeReadI32(view, offset) {
 async function executeModule(wasmBytes) {
   try {
     const { instance } = await WebAssembly.instantiate(wasmBytes, {});
-    const main = instance.exports.main;
+    const exportsRecord = instance.exports;
+    const main = exportsRecord.main;
     if (typeof main !== "function") {
-      elements.executionOutput.textContent = "Compiled module has no exported 'main' function.";
+      const exportedNames = Object.keys(exportsRecord ?? {});
+      if (exportedNames.length === 0) {
+        elements.executionOutput.textContent = "Module instantiated successfully (no exports to run).";
+      } else {
+        elements.executionOutput.textContent = "Module instantiated successfully (no exported 'main' function).";
+      }
       return;
     }
 
@@ -157,14 +168,17 @@ async function executeModule(wasmBytes) {
 
 function reportCompilationSuccess(wasmBytes) {
   elements.compileOutput.textContent = `Produced ${wasmBytes.length} bytes of WebAssembly.`;
+  elements.watOutput.textContent = "Generating WAT…";
   setStatus("Compilation finished.");
   publishDownload(wasmBytes);
+  void renderWat(wasmBytes);
 }
 
 function reportError(error) {
   console.error(error);
   const message = error instanceof Error ? error.message : String(error);
   elements.compileOutput.textContent = message;
+  elements.watOutput.textContent = "";
   elements.executionOutput.textContent = "";
   setStatus("Compilation failed.");
   hideDownload();
@@ -201,6 +215,7 @@ function disableUi(disabled) {
 
 function clearOutputs() {
   elements.compileOutput.textContent = "";
+  elements.watOutput.textContent = "";
   elements.executionOutput.textContent = "";
   hideDownload();
 }
@@ -210,3 +225,53 @@ window.addEventListener("beforeunload", () => {
     URL.revokeObjectURL(downloadUrl);
   }
 });
+
+async function renderWat(wasmBytes) {
+  try {
+    const wabt = await loadWabt();
+    const bytes = wasmBytes instanceof Uint8Array ? wasmBytes : new Uint8Array(wasmBytes);
+    let parsed = null;
+    try {
+      parsed = wabt.readWasm(bytes, { readDebugNames: true });
+    } catch (readError) {
+      throw readError instanceof Error ? readError : new Error(String(readError));
+    }
+    try {
+      parsed.generateNames();
+      parsed.applyNames();
+      const wat = parsed.toText({ foldExprs: false, inlineExport: false });
+      elements.watOutput.textContent = wat;
+    } finally {
+      if (parsed) {
+        parsed.destroy();
+      }
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    elements.watOutput.textContent = `Failed to render WAT: ${message}`;
+  }
+}
+
+async function loadWabt() {
+  if (!wabtInstancePromise) {
+    const promise = (async () => {
+      const module = await import(WABT_MODULE_URL);
+      const candidate = module.default ?? module.wabt ?? module;
+      if (typeof candidate === "function") {
+        return await candidate();
+      }
+      if (candidate && typeof candidate.then === "function") {
+        return await candidate;
+      }
+      throw new Error("wabt module did not export a factory function");
+    })();
+    promise.catch(() => {
+      if (wabtInstancePromise === promise) {
+        wabtInstancePromise = null;
+      }
+    });
+    wabtInstancePromise = promise;
+  }
+
+  return wabtInstancePromise;
+}

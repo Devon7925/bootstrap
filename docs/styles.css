@@ -116,6 +116,12 @@ button:disabled {
   margin-top: 1.5rem;
 }
 
+.result-subheading {
+  margin: 1rem 0 0.75rem;
+  font-size: 0.95rem;
+  color: #94a3b8;
+}
+
 .output {
   margin: 0;
   white-space: pre-wrap;
@@ -125,6 +131,15 @@ button:disabled {
   border-radius: 8px;
   padding: 1rem;
   min-height: 4rem;
+}
+
+.output.wat-output {
+  font-family: "Fira Code", "SFMono-Regular", ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.85rem;
+  white-space: pre;
+  word-break: normal;
+  overflow: auto;
+  max-height: 24rem;
 }
 
 .download-link {
