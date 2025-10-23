@@ -10373,8 +10373,11 @@ fn interpret_constant_expression(
             let converted_type: i32 =
                 convert_constant_value(ast_base, slot_ptr, value_type, expr_type);
             if converted_type < 0 {
+                ast_expr_set_type(ast_base, expr_index, value_type);
+                store_i32(out_value_ptr, load_i32(slot_ptr));
+                store_i32(out_type_ptr, value_type);
                 store_i32(scratch_top_ptr, saved_top);
-                return -1;
+                return CONST_EVAL_STATUS_OK;
             };
             value_type = converted_type;
             value = load_i32(slot_ptr);
@@ -11662,8 +11665,12 @@ fn interpret_constant_expression(
         let result_type: i32 = load_i32(out_type_ptr);
         if call_type >= 0 && result_type >= 0 {
             if call_type != result_type {
-                store_i32(scratch_top_ptr, saved_top);
-                return -1;
+                if has_const_params {
+                    ast_expr_set_type(ast_base, expr_index, result_type);
+                } else {
+                    store_i32(scratch_top_ptr, saved_top);
+                    return -1;
+                };
             };
         };
         store_i32(scratch_top_ptr, saved_top);
@@ -11726,6 +11733,22 @@ fn interpret_constant_expression(
             store_i32(local_type_ptr, -1);
             store_i32(scratch_top_ptr, saved_top);
             return init_status;
+        };
+        let body_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, body_index);
+        let body_kind: i32 = load_i32(body_entry_ptr);
+        if body_kind == 8 {
+            let body_local_index: i32 = load_i32(body_entry_ptr + 4);
+            if body_local_index == local_index {
+                let stored_type: i32 = load_i32(local_type_ptr);
+                if stored_type < 0 {
+                    store_i32(scratch_top_ptr, saved_top);
+                    return -1;
+                };
+                store_i32(out_value_ptr, load_i32(local_ptr));
+                store_i32(out_type_ptr, stored_type);
+                store_i32(scratch_top_ptr, saved_top);
+                return CONST_EVAL_STATUS_OK;
+            };
         };
         let body_status: i32 = interpret_constant_expression(
             ast_base,
