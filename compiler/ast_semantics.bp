@@ -1861,8 +1861,11 @@ fn interpret_constant_entry(ast_base: i32, const_entry_ptr: i32) -> i32 {
         target_type = literal_type;
     };
     if try_convert_constant_value(ast_base, eval_value_ptr, literal_type, target_type) < 0 {
-        ast_constant_entry_set_eval_state(const_entry_ptr, AST_CONSTANT_EVAL_STATE_UNEVALUATED);
-        return -1;
+        if literal_type < 0 {
+            ast_constant_entry_set_eval_state(const_entry_ptr, AST_CONSTANT_EVAL_STATE_UNEVALUATED);
+            return -1;
+        };
+        target_type = literal_type;
     };
     literal_value = load_i32(eval_value_ptr);
     store_i32(ast_constant_entry_value_ptr(const_entry_ptr), literal_value);
