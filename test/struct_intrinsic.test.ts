@@ -43,9 +43,9 @@ describe("struct intrinsic with const type values", () => {
         expect(result).toBe(3);
     });
 
-    test.todo("use constants for struct props definition", async () => {
+    test("use constants for struct props definition", async () => {
         const wasm = await compileWithAstCompiler(`
-        const PROP1: [i32; 6] = "first\\0";
+        const PROP1: [u8; 6] = "first\\0";
         const Pair = struct(6, 2, [
             (PROP1, i32),
             ("second", i32),
