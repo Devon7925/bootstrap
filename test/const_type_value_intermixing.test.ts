@@ -134,7 +134,7 @@ test("const parameters can accept arrays of types", async () => {
     expect(result).toBe(100);
 });
 
-test.todo("const parameter templates returning type rejects mismatched parameter arrays", async () => {
+test("const parameter templates returning type rejects mismatched parameter arrays", async () => {
     const failure = await expectCompileFailure(`
     const fn sum(const N: i32, values: [i32; N]) -> type {
         i32

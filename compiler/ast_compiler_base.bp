@@ -2805,6 +2805,48 @@ fn parse_type_expression(
             TYPE_TEMPLATE_KIND_TYPE_EXPR,
         );
         if template_handle < 0 {
+            let expr_kind: i32 = load_i32(expr_kind_ptr);
+            let expr_data0: i32 = load_i32(expr_data0_ptr);
+            let expr_data1: i32 = load_i32(expr_data1_ptr);
+            let mut expr_index: i32 = -1;
+            if expr_kind == 2 {
+                expr_index = expr_data0;
+            } else {
+                expr_index = expression_node_from_parts(
+                    ast_base,
+                    expr_kind,
+                    expr_data0,
+                    expr_data1,
+                );
+                if expr_index >= 0 {
+                    store_expression_parts(
+                        expr_kind_ptr,
+                        expr_data0_ptr,
+                        expr_data1_ptr,
+                        (2, expr_index, 0),
+                    );
+                };
+            };
+            if expr_index >= 0 {
+                let expr_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+                if load_i32(expr_entry_ptr) == 1 {
+                    let location_offset: i32 = load_i32(expr_entry_ptr + 12);
+                    let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+                    if detail_out_ptr > 0 {
+                        if load_u8(detail_out_ptr) == 0 {
+                            write_failure_detail_with_location(
+                                detail_out_ptr,
+                                scratch_module_index(detail_out_ptr),
+                                base,
+                                len,
+                                location_offset,
+                                47,
+                                "const parameter template expected type mismatch",
+                            );
+                        };
+                    };
+                };
+            };
             return -1;
         };
         store_i32(type_template_sink_ptr, template_handle);
