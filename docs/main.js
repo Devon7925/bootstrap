@@ -336,7 +336,7 @@ async function loadWabt() {
   if (!wabtInstancePromise) {
     const promise = (async () => {
       const module = await import(WABT_MODULE_URL);
-      const candidates = [module, module.default, module.wabt];
+      const candidates = collectWabtCandidates(module);
       for (const candidate of candidates) {
         const wabt = await instantiateWabtCandidate(candidate);
         if (wabt) {
@@ -354,4 +354,67 @@ async function loadWabt() {
   }
 
   return wabtInstancePromise;
+}
+
+function collectWabtCandidates(root) {
+  const queue = [];
+  const visited = new Set();
+  const ordered = [];
+
+  function enqueue(value) {
+    if (!value) {
+      return;
+    }
+
+    const type = typeof value;
+    if (type !== "object" && type !== "function") {
+      return;
+    }
+
+    if (visited.has(value)) {
+      return;
+    }
+
+    visited.add(value);
+    queue.push(value);
+  }
+
+  enqueue(root);
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    ordered.push(current);
+
+    const keys = new Set();
+    if (typeof current === "function" || (typeof current === "object" && current)) {
+      for (const key of Reflect.ownKeys(current)) {
+        if (typeof key === "string") {
+          keys.add(key);
+        }
+      }
+    }
+
+    const prioritized = [
+      "default",
+      "wabt",
+      "instantiateWabt",
+      "instance",
+      "module",
+    ];
+
+    for (const key of prioritized) {
+      if (keys.delete(key)) {
+        enqueue(current[key]);
+      }
+    }
+
+    for (const key of keys) {
+      if (key === "arguments" || key === "caller" || key === "prototype") {
+        continue;
+      }
+      enqueue(current[key]);
+    }
+  }
+
+  return ordered;
 }
