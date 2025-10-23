@@ -250,6 +250,24 @@ test("const fn with only const parameters can return type array", async () => {
     expect(result).toBe(42);
 });
 
+test.todo("const fn with only const parameters can return usable type array", async () => {
+    const wasm = await compileWithAstCompiler(`
+    const fn foo(const STR_LEN: i32) -> [type; STR_LEN] {
+        let entries: [type; STR_LEN] =
+            [i32; STR_LEN];
+        entries
+    }
+
+    const BAR: [type; 3] = foo(3);
+
+    fn main() -> BAR[0] {
+        42
+    }
+    `);
+    const result = await runWasmMainWithGc(wasm);
+    expect(result).toBe(42);
+});
+
 test("const fn with only const parameters can return composed tuple-array partial type", async () => {
     const wasm = await compileWithAstCompiler(`
     const fn foo(const STR_LEN: i32) -> ([u8; STR_LEN], type) {
@@ -329,4 +347,38 @@ test("const fn with only const parameters can return spaced composed array-tuple
     `);
     const result = await runWasmMainWithGc(wasm);
     expect(result).toBe(42);
+});
+
+test.todo("const fn with only const parameters can process composed array-tuple-array partial type", async () => {
+    const wasm = await compileWithAstCompiler(`
+    const KEY_COUNT: i32 = 12;
+    const KEY_NAME_CAP: i32 = 4;
+
+    const fn foo(const COUNT: i32) -> [([u8; KEY_NAME_CAP], type); COUNT] {
+        let mut entries: [([u8; KEY_NAME_CAP], type); COUNT] =
+            [([0 as u8; KEY_NAME_CAP], i32); COUNT];
+        let mut idx = 0;
+        while idx < COUNT {
+            entries[idx].0[0] = ('k' as u8);
+            let mut place = 1;
+            let tens = idx / 10;
+            if tens > 0 {
+                entries[idx].0[place] = (48 + tens) as u8;
+                place = place + 1;
+            };
+            let ones = idx - tens * 10;
+            entries[idx].0[place] = (48 + ones) as u8;
+            idx = idx + 1;
+        }
+        entries
+    }
+
+    const BAR: [([u8; KEY_NAME_CAP], type); KEY_COUNT] = foo(KEY_COUNT);
+
+    fn main() -> i32 {
+        BAR[0].0[0] as i32
+    }
+    `);
+    const result = await runWasmMainWithGc(wasm);
+    expect(result).toBe(107);
 });

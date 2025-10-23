@@ -221,11 +221,11 @@ describe("struct intrinsic with const type values", () => {
                 let mut place = 1;
                 let tens = idx / 10;
                 if tens > 0 {
-                    entries[idx].0[place] = 48 + tens;
+                    entries[idx].0[place] = (48 + tens) as u8;
                     place = place + 1;
                 }
                 let ones = idx - tens * 10;
-                entries[idx].0[place] = 48 + ones;
+                entries[idx].0[place] = (48 + ones) as u8;
                 idx = idx + 1;
             }
             struct(KEY_NAME_CAP, COUNT, entries)
