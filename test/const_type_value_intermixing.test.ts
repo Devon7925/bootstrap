@@ -249,3 +249,21 @@ test("const fn with only const parameters can return type array", async () => {
     const result = await runWasmMainWithGc(wasm);
     expect(result).toBe(42);
 });
+
+test.todo("const fn with only const parameters can return composed partial type", async () => {
+    const wasm = await compileWithAstCompiler(`
+    const fn foo(const STR_LEN: i32) -> ([u8; STR_LEN], type) {
+        let entries: ([u8; STR_LEN], type) =
+            ([0 as u8; STR_LEN], i32);
+        entries
+    }
+
+    const BAR: ([u8; STR_LEN], type) = foo(3);
+
+    fn main() -> i32 {
+        42
+    }
+    `);
+    const result = await runWasmMainWithGc(wasm);
+    expect(result).toBe(42);
+});
