@@ -214,7 +214,7 @@ describe("struct intrinsic with const type values", () => {
 
         const fn dynamic_struct(const COUNT: i32) -> type {
             let mut entries: [([u8; KEY_NAME_CAP], type); COUNT] =
-                [([0; KEY_NAME_CAP], i32); COUNT];
+                [([0 as u8; KEY_NAME_CAP], i32); COUNT];
             let mut idx = 0;
             while idx < COUNT {
                 entries[idx].0[0] = ('k' as u8);
@@ -296,7 +296,7 @@ describe("struct intrinsic with const type values", () => {
         expect(result).toBe(42);
     });
 
-    test.todo("incorrect parameter specialization raises diagnostic", async () => {
+    test("incorrect parameter specialization raises diagnostic", async () => {
         await expect(
             compileWithAstCompiler(`
             const Pair = struct(5, 1, [
@@ -305,7 +305,7 @@ describe("struct intrinsic with const type values", () => {
 
             fn main() -> i32 { 0 }
           `),
-        ).rejects.toThrow("/entry.bp:2:13: const parameter template expected type mismatch");
+        ).rejects.toThrow("/entry.bp:2:26: const parameter template expected type mismatch");
     });
 
     test("duplicate property names raise diagnostics", async () => {
