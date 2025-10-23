@@ -3345,31 +3345,149 @@ fn parse_type(
             return -1;
         };
         let const_type: i32 = ast_constant_entry_type(const_entry_ptr);
-        if const_type != BUILTIN_TYPE_ID_TYPE {
-            let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
-            if detail_out_ptr > 0 {
-                if load_u8(detail_out_ptr) == 0 {
-                    write_failure_detail_with_location(
-                        detail_out_ptr,
-                        scratch_module_index(detail_out_ptr),
+        if const_type == BUILTIN_TYPE_ID_TYPE {
+            let const_value: i32 = ast_constant_entry_value(const_entry_ptr);
+            if const_value < 0 {
+                return -1;
+            };
+            if out_type_ptr >= 0 {
+                store_i32(out_type_ptr, const_value);
+            };
+            return next;
+        };
+        let mut suffix_cursor: i32 = skip_whitespace(base, len, next);
+        if suffix_cursor < len {
+            let suffix_byte: i32 = load_u8(base + suffix_cursor);
+            if suffix_byte == '[' {
+                if !type_id_is_array(const_type) {
+                    return parse_type_expression(
                         base,
                         len,
                         offset,
-                        42,
-                        "type annotations require const type values",
+                        ast_base,
+                        params_table_ptr,
+                        params_count,
+                        const_mask_table_ptr,
+                        type_template_sink_ptr,
+                        out_type_ptr,
                     );
                 };
+                let element_type_id: i32 = array_type_element_type(ast_base, const_type);
+                if element_type_id < 0 {
+                    return -1;
+                };
+                if !type_id_contains_only_type_values(ast_base, element_type_id) {
+                    return -1;
+                };
+                suffix_cursor = expect_char(base, len, suffix_cursor, '[');
+                if suffix_cursor < 0 {
+                    return -1;
+                };
+                suffix_cursor = skip_whitespace(base, len, suffix_cursor);
+                let temp_base: i32 = parser_temp_scratch_base(ast_base, params_table_ptr);
+                let expr_kind_ptr: i32 = temp_base;
+                let expr_data0_ptr: i32 = expr_kind_ptr + 4;
+                let expr_data1_ptr: i32 = expr_data0_ptr + 4;
+                let locals_stack_count_ptr: i32 = expr_kind_ptr + 12;
+                let locals_table_ptr: i32 = locals_stack_count_ptr + 4;
+                let locals_next_index_ptr: i32 =
+                    locals_table_ptr + MAX_LOCALS * LOCALS_ENTRY_SIZE;
+                let loop_depth_ptr: i32 = locals_next_index_ptr + 4;
+                let expr_temp_base: i32 = loop_depth_ptr + 4;
+                store_i32(locals_stack_count_ptr, 0);
+                store_i32(locals_next_index_ptr, 0);
+                store_i32(loop_depth_ptr, 0);
+                let expr_cursor: i32 = parse_expression(
+                    base,
+                    len,
+                    suffix_cursor,
+                    ast_base,
+                    params_table_ptr,
+                    params_count,
+                    const_mask_table_ptr,
+                    locals_table_ptr,
+                    locals_stack_count_ptr,
+                    locals_next_index_ptr,
+                    expr_temp_base,
+                    loop_depth_ptr,
+                    type_template_sink_ptr,
+                    expr_kind_ptr,
+                    expr_data0_ptr,
+                    expr_data1_ptr,
+                );
+                if expr_cursor < 0 {
+                    return -1;
+                };
+                let index_value_ptr: i32 = expr_temp_base;
+                let index_type_ptr: i32 = index_value_ptr + 4;
+                let eval_scratch_base: i32 = index_type_ptr + 4;
+                if evaluate_expression_literal(
+                    ast_base,
+                    expr_kind_ptr,
+                    expr_data0_ptr,
+                    expr_data1_ptr,
+                    eval_scratch_base,
+                    index_value_ptr,
+                    index_type_ptr,
+                ) < 0 {
+                    return -1;
+                };
+                let index_type: i32 = load_i32(index_type_ptr);
+                if !constant_eval_integer_type_supported(index_type) {
+                    return -1;
+                };
+                let normalized_index: i32 = normalize_integer_value(
+                    load_i32(index_value_ptr),
+                    index_type,
+                );
+                if normalized_index < 0 {
+                    return -1;
+                };
+                suffix_cursor = skip_whitespace(base, len, expr_cursor);
+                suffix_cursor = expect_char(base, len, suffix_cursor, ']');
+                if suffix_cursor < 0 {
+                    return -1;
+                };
+                let array_length: i32 = array_type_length(ast_base, const_type);
+                if array_length < 0 {
+                    return -1;
+                };
+                if normalized_index >= array_length {
+                    return -1;
+                };
+                let array_value_ptr: i32 = ast_constant_entry_value(const_entry_ptr);
+                if array_length > 0 {
+                    if array_value_ptr <= 0 {
+                        return -1;
+                    };
+                };
+                let slot_ptr: i32 =
+                    array_value_ptr + normalized_index * 2 * WORD_SIZE;
+                let recorded_type_id: i32 = load_i32(slot_ptr + WORD_SIZE);
+                if recorded_type_id != BUILTIN_TYPE_ID_TYPE {
+                    return -1;
+                };
+                let element_value: i32 = load_i32(slot_ptr);
+                if element_value < 0 {
+                    return -1;
+                };
+                if out_type_ptr >= 0 {
+                    store_i32(out_type_ptr, element_value);
+                };
+                return suffix_cursor;
             };
-            return -1;
         };
-        let const_value: i32 = ast_constant_entry_value(const_entry_ptr);
-        if const_value < 0 {
-            return -1;
-        };
-        if out_type_ptr >= 0 {
-            store_i32(out_type_ptr, const_value);
-        };
-        return next;
+        return parse_type_expression(
+            base,
+            len,
+            offset,
+            ast_base,
+            params_table_ptr,
+            params_count,
+            const_mask_table_ptr,
+            type_template_sink_ptr,
+            out_type_ptr,
+        );
     };
     parse_type_expression(
         base,
