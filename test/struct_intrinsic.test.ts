@@ -22,6 +22,67 @@ describe("struct intrinsic with const type values", () => {
         expect(result).toBe(5);
     });
 
+    test("use constants for struct type integers definition", async () => {
+        const wasm = await compileWithAstCompiler(`
+        const STR_LEN: i32 = 6;
+        const PROP_COUNT: i32 = 2;
+        const Pair = struct(STR_LEN, PROP_COUNT, [
+            ("first\\0", i32),
+            ("second", i32),
+        ]);
+
+        fn main() -> i32 {
+            let pair: Pair = Pair {
+                first: 1,
+                second: 2,
+            };
+            pair.first + pair.second
+        }
+      `);
+        const result = await runWasmMainWithGc(wasm);
+        expect(result).toBe(3);
+    });
+
+    test.todo("use constants for struct props definition", async () => {
+        const wasm = await compileWithAstCompiler(`
+        const PROP1: [i32; 6] = "first\\0";
+        const Pair = struct(6, 2, [
+            (PROP1, i32),
+            ("second", i32),
+        ]);
+
+        fn main() -> i32 {
+            let pair: Pair = Pair {
+                first: 1,
+                second: 2,
+            };
+            pair.first + pair.second
+        }
+      `);
+        const result = await runWasmMainWithGc(wasm);
+        expect(result).toBe(3);
+    });
+
+    test("use constants for struct array definition", async () => {
+        const wasm = await compileWithAstCompiler(`
+        const PairData: [([u8;6], type); 2] = [
+            ("first\\0", i32),
+            ("second", i32),
+        ];
+        const Pair = struct(6, 2, PairData);
+
+        fn main() -> i32 {
+            let pair: Pair = Pair {
+                first: 1,
+                second: 2,
+            };
+            pair.first + pair.second
+        }
+      `);
+        const result = await runWasmMainWithGc(wasm);
+        expect(result).toBe(3);
+    });
+
     test("rejects struct literal labels that do not match canonical names", async () => {
         await expect(
             compileWithAstCompiler(`
@@ -147,6 +208,18 @@ describe("struct intrinsic with const type values", () => {
       `);
         const result = await runWasmMainWithGc(wasm);
         expect(result).toBe(42);
+    });
+
+    test.todo("incorrect parameter specialization raises diagnostic", async () => {
+        await expect(
+            compileWithAstCompiler(`
+            const Pair = struct(5, 1, [
+                ("first\\0", i32),
+            ]);
+
+            fn main() -> i32 { 0 }
+          `),
+        ).rejects.toThrow("/entry.bp:2:13: const parameter template expected type mismatch");
     });
 
     test("duplicate property names raise diagnostics", async () => {

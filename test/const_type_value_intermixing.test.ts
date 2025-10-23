@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { compileWithAstCompiler, runWasmMainWithGc } from "./helpers";
+import { compileWithAstCompiler, expectCompileFailure, runWasmMainWithGc } from "./helpers";
 
 test("const tuples can mix type and value entries", async () => {
     const wasm = await compileWithAstCompiler(`
@@ -132,6 +132,22 @@ test("const parameters can accept arrays of types", async () => {
   `);
     const result = await runWasmMainWithGc(wasm);
     expect(result).toBe(100);
+});
+
+test.todo("const parameter templates returning type rejects mismatched parameter arrays", async () => {
+    const failure = await expectCompileFailure(`
+    const fn sum(const N: i32, values: [i32; N]) -> type {
+        i32
+    }
+
+    fn main() -> i32 {
+        let x: sum(4, [5, 6, 7]) = 5;
+        0
+    }
+  `);
+    expect(failure.failure.detail).toBe(
+        "/entry.bp:7:16: const parameter template expected type mismatch",
+    );
 });
 
 test("struct like function signiture compiles", async () => {
