@@ -9605,7 +9605,7 @@ fn evaluate_struct_intrinsic(
     };
     let canonical_name_length: i32 =
         array_type_length(ast_base, name_field_type);
-    if canonical_name_length != str_length {
+    if canonical_name_length < str_length {
         record_struct_intrinsic_type_mismatch_failure(
             ast_base,
             metadata_ptr,
@@ -9688,6 +9688,36 @@ fn evaluate_struct_intrinsic(
                 store_i32(call_data_used_ptr, saved_call_data_used);
                 store_i32(scratch_top_ptr, saved_top);
                 return -1;
+            };
+        };
+        if canonical_name_length > str_length {
+            let mut extra_idx: i32 = str_length;
+            while extra_idx < canonical_name_length {
+                let char_slot_ptr: i32 = field_name_ptr + extra_idx * 2 * WORD_SIZE;
+                let char_value: i32 = load_i32(char_slot_ptr);
+                let char_type: i32 = load_i32(char_slot_ptr + WORD_SIZE);
+                if !constant_eval_integer_type_supported(char_type) {
+                    store_i32(call_data_used_ptr, saved_call_data_used);
+                    store_i32(scratch_top_ptr, saved_top);
+                    record_struct_intrinsic_type_mismatch_failure(
+                        ast_base,
+                        metadata_ptr,
+                        props_expr_index,
+                    );
+                    return -1;
+                };
+                let normalized_char: i32 = normalize_integer_value(char_value, char_type);
+                if normalized_char != 0 {
+                    store_i32(call_data_used_ptr, saved_call_data_used);
+                    store_i32(scratch_top_ptr, saved_top);
+                    record_struct_intrinsic_type_mismatch_failure(
+                        ast_base,
+                        metadata_ptr,
+                        props_expr_index,
+                    );
+                    return -1;
+                };
+                extra_idx = extra_idx + 1;
             };
         };
         let type_slot_ptr: i32 = tuple_value_ptr + 2 * WORD_SIZE;
