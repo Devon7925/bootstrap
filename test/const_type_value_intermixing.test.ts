@@ -164,3 +164,70 @@ test("struct like function signiture compiles", async () => {
     const result = await runWasmMainWithGc(wasm);
     expect(result).toBe(3);
 });
+
+test("const fn with only const parameters can use let for array types", async () => {
+    const wasm = await compileWithAstCompiler(`
+    const fn foo(const STR_LEN: i32) -> type {
+        let entries: [type; STR_LEN] = [i32; STR_LEN];
+        i32
+    }
+
+    fn main() -> i32 {
+        let set: foo(3) = 42;
+        set
+    }
+    `);
+    const result = await runWasmMainWithGc(wasm);
+    expect(result).toBe(42);
+});
+
+test("const fn with only const parameters can use let for tuple types", async () => {
+    const wasm = await compileWithAstCompiler(`
+    const fn foo(const STR_LEN: i32) -> type {
+        let entries: (type, type) =
+            (u32, i32);
+        i32
+    }
+
+    fn main() -> i32 {
+        let set: foo(3) = 42;
+        set
+    }
+    `);
+    const result = await runWasmMainWithGc(wasm);
+    expect(result).toBe(42);
+});
+
+test.todo("const fn with only const parameters can use let for array in tuple types", async () => {
+    const wasm = await compileWithAstCompiler(`
+    const fn foo(const STR_LEN: i32) -> type {
+        let entries: ([type; STR_LEN], type) =
+            ([i32; STR_LEN], i32);
+        i32
+    }
+
+    fn main() -> i32 {
+        let set: foo(3) = 42;
+        set
+    }
+    `);
+    const result = await runWasmMainWithGc(wasm);
+    expect(result).toBe(42);
+});
+
+test("const fn with only const parameters can use let for tuple in array types", async () => {
+    const wasm = await compileWithAstCompiler(`
+    const fn foo(const STR_LEN: i32) -> type {
+        let entries: [(type, type); STR_LEN] =
+            [(i32, i32); STR_LEN];
+        i32
+    }
+
+    fn main() -> i32 {
+        let set: foo(3) = 42;
+        set
+    }
+    `);
+    const result = await runWasmMainWithGc(wasm);
+    expect(result).toBe(42);
+});
