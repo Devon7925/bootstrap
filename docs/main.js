@@ -22,6 +22,18 @@ const WABT_MODULE_URL = "https://unpkg.com/wabt@1.0.34?module";
 const encoder = new TextEncoder();
 let downloadUrl = null;
 
+function ensureCapacity(memory, required) {
+  const pageSize = 65_536;
+  const current = memory.buffer.byteLength;
+  if (current >= required) {
+    return;
+  }
+
+  const additional = required - current;
+  const pagesNeeded = Math.ceil(additional / pageSize);
+  memory.grow(pagesNeeded);
+}
+
 const elements = {
   editor: document.getElementById("source"),
   compileButton: document.getElementById("compile"),
@@ -88,27 +100,23 @@ async function compileAndRun() {
 
 function compileWithStage2(memory, compile, source) {
   const reserved = FUNCTIONS_BASE_OFFSET + STAGE1_MAX_FUNCTIONS * FUNCTION_ENTRY_SIZE;
-  const buffer = memory.buffer;
-  const memorySize = buffer.byteLength;
-  if (memorySize <= reserved) {
-    throw new Error("stage2 compiler memory layout is smaller than expected");
-  }
-
-  const outputPtr = memorySize - reserved;
   const sourceBytes = encoder.encode(source);
-  if (sourceBytes.length >= outputPtr) {
-    throw new Error("source is too large for the stage2 compiler memory");
-  }
+  const outputPtr = sourceBytes.length;
 
-  new Uint8Array(buffer, STAGE1_INPUT_PTR, sourceBytes.length).set(sourceBytes);
+  ensureCapacity(memory, outputPtr + reserved + 1);
+
+  let view = new Uint8Array(memory.buffer);
+  view.set(sourceBytes, STAGE1_INPUT_PTR);
+
   const result = compile(STAGE1_INPUT_PTR, sourceBytes.length, outputPtr) | 0;
+  view = new Uint8Array(memory.buffer);
+
   if (result <= 0) {
     const failure = describeStage2Failure(memory, outputPtr, result);
     throw new Error(failure);
   }
 
-  const view = new Uint8Array(buffer, outputPtr, result);
-  return new Uint8Array(view);
+  return view.slice(outputPtr, outputPtr + result);
 }
 
 function describeStage2Failure(memory, outputPtr, status) {
