@@ -211,6 +211,7 @@ const INTRINSIC_KIND_INLINE_WASM: i32 = 1;
 const CALL_METADATA_INTRINSIC_STRUCT: i32 = -2;
 const STRUCT_INTRINSIC_FAILURE_DUPLICATE_FIELD: i32 = 1;
 const STRUCT_INTRINSIC_FAILURE_INVALID_PROPS: i32 = 2;
+const STRUCT_INTRINSIC_FAILURE_TEMPLATE_TYPE_MISMATCH: i32 = 3;
 
 fn identifier_matches_keyword(
     base: i32,
@@ -9325,6 +9326,30 @@ fn record_struct_intrinsic_invalid_props_failure(
     };
 }
 
+fn record_struct_intrinsic_type_mismatch_failure(
+    ast_base: i32,
+    metadata_ptr: i32,
+    props_expr_index: i32,
+) {
+    let payload_slot_ptr: i32 = call_metadata_template_payload_ptr(metadata_ptr);
+    if payload_slot_ptr > 0 {
+        let failure_ptr: i32 = ast_call_data_alloc(ast_base, 2);
+        if failure_ptr >= 0 {
+            let location: i32 = if props_expr_index >= 0 {
+                ast_expr_location(ast_base, props_expr_index)
+            } else {
+                -1
+            };
+            store_i32(
+                failure_ptr,
+                STRUCT_INTRINSIC_FAILURE_TEMPLATE_TYPE_MISMATCH,
+            );
+            store_i32(failure_ptr + WORD_SIZE, location);
+            store_i32(payload_slot_ptr, failure_ptr);
+        };
+    };
+}
+
 fn evaluate_struct_intrinsic(
     ast_base: i32,
     metadata_ptr: i32,
@@ -9539,7 +9564,11 @@ fn evaluate_struct_intrinsic(
     let canonical_name_length: i32 =
         array_type_length(ast_base, name_field_type);
     if canonical_name_length != str_length {
-        record_struct_intrinsic_invalid_props_failure(ast_base, metadata_ptr, props_expr_index);
+        record_struct_intrinsic_type_mismatch_failure(
+            ast_base,
+            metadata_ptr,
+            props_expr_index,
+        );
         store_i32(scratch_top_ptr, saved_top);
         return -1;
     };
@@ -9549,12 +9578,11 @@ fn evaluate_struct_intrinsic(
         store_i32(scratch_top_ptr, saved_top);
         return -1;
     };
-    store_i32(scratch_top_ptr, props_offset);
-
     let mut tuple_expr_list_ptr: i32 = 0;
     if props_expr_index >= 0 {
         tuple_expr_list_ptr = ast_expr_array_list_values_ptr(ast_base, props_expr_index);
     };
+    store_i32(scratch_top_ptr, props_offset);
 
     let field_stride_words: i32 = STRUCT_FIELD_METADATA_HEADER_WORDS + str_length;
     if field_stride_words <= 0 {

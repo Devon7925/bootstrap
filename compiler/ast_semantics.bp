@@ -1994,6 +1994,38 @@ fn try_record_struct_intrinsic_failure(
         };
         return true;
     };
+    if failure_kind == STRUCT_INTRINSIC_FAILURE_TEMPLATE_TYPE_MISMATCH {
+        let mut location_offset: i32 = find_call_metadata_location(ast_base, metadata_ptr);
+        if location_offset < 0 {
+            location_offset = load_i32(failure_ptr + WORD_SIZE);
+        };
+        if location_offset < 0 {
+            location_offset = ast_expr_location(ast_base, expr_index);
+        };
+        let mut module_index: i32 = ast_constant_entry_module_index(const_entry_ptr);
+        let mut module_base: i32 = 0;
+        let mut module_len: i32 = 0;
+        if module_index >= 0 {
+            module_base = module_entry_content(module_index);
+            module_len = module_entry_content_len(module_index);
+        } else {
+            module_index = scratch_module_index(out_ptr);
+            module_base = scratch_module_base(out_ptr);
+            module_len = scratch_module_len(out_ptr);
+        };
+        let message: [u8; 47] =
+            "const parameter template expected type mismatch";
+        write_failure_detail_with_location(
+            out_ptr,
+            module_index,
+            module_base,
+            module_len,
+            location_offset,
+            47,
+            message,
+        );
+        return true;
+    };
     if failure_kind != STRUCT_INTRINSIC_FAILURE_INVALID_PROPS {
         return false;
     };
