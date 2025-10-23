@@ -3195,6 +3195,47 @@ fn resolve_expression_internal(
             return -1;
         };
         ast_expr_set_type(ast_base, expr_index, resolved_element);
+        let array_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, array_index);
+        let array_expr_kind: i32 = load_i32(array_entry_ptr);
+        if array_expr_kind == 0 {
+            let array_literal_value: i32 = load_i32(array_entry_ptr + WORD_SIZE);
+            let length: i32 = array_type_length(ast_base, resolved_array_type);
+            if length > 0 {
+                if array_literal_value > 0 {
+                    let index_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, index_index);
+                    let index_expr_kind: i32 = load_i32(index_entry_ptr);
+                    if index_expr_kind == 0 {
+                        let mut index_value: i32 = load_i32(index_entry_ptr + WORD_SIZE);
+                        index_value = normalize_integer_value(index_value, BUILTIN_TYPE_ID_I32);
+                        if index_value >= 0 {
+                            if index_value < length {
+                                let slot_ptr: i32 =
+                                    array_literal_value + index_value * 2 * WORD_SIZE;
+                                let element_value_ptr: i32 = slot_ptr;
+                                let element_type_ptr: i32 = slot_ptr + WORD_SIZE;
+                                let current_element_type: i32 = load_i32(element_type_ptr);
+                                let converted_element: i32 = convert_constant_value(
+                                    ast_base,
+                                    element_value_ptr,
+                                    current_element_type,
+                                    resolved_element,
+                                );
+                                if converted_element >= 0 {
+                                    let literal_value: i32 = load_i32(element_value_ptr);
+                                    let expr_entry_ptr: i32 =
+                                        ast_expr_entry_ptr(ast_base, expr_index);
+                                    store_i32(expr_entry_ptr, 0);
+                                    store_i32(expr_entry_ptr + WORD_SIZE, literal_value);
+                                    store_i32(expr_entry_ptr + 2 * WORD_SIZE, 0);
+                                    store_i32(expr_entry_ptr + 3 * WORD_SIZE, 0);
+                                    ast_expr_set_type(ast_base, expr_index, converted_element);
+                                };
+                            };
+                        };
+                    };
+                };
+            };
+        };
         return 0;
     };
     if kind == 44 {
@@ -3617,6 +3658,34 @@ fn resolve_expression_internal(
             store_i32(element_type_ptr, resolved_element);
         };
         ast_expr_set_type(ast_base, expr_index, resolved_element);
+        let tuple_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, tuple_index);
+        let tuple_expr_kind: i32 = load_i32(tuple_entry_ptr);
+        if tuple_expr_kind == 0 {
+            let tuple_literal_value: i32 = load_i32(tuple_entry_ptr + WORD_SIZE);
+            if element_count > 0 {
+                if tuple_literal_value > 0 {
+                    let slot_ptr: i32 = tuple_literal_value + field_index * 2 * WORD_SIZE;
+                    let element_value_ptr: i32 = slot_ptr;
+                    let element_type_slot_ptr: i32 = slot_ptr + WORD_SIZE;
+                    let current_element_type: i32 = load_i32(element_type_slot_ptr);
+                    let converted_element: i32 = convert_constant_value(
+                        ast_base,
+                        element_value_ptr,
+                        current_element_type,
+                        resolved_element,
+                    );
+                    if converted_element >= 0 {
+                        let literal_value: i32 = load_i32(element_value_ptr);
+                        let expr_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+                        store_i32(expr_entry_ptr, 0);
+                        store_i32(expr_entry_ptr + WORD_SIZE, literal_value);
+                        store_i32(expr_entry_ptr + 2 * WORD_SIZE, 0);
+                        store_i32(expr_entry_ptr + 3 * WORD_SIZE, 0);
+                        ast_expr_set_type(ast_base, expr_index, converted_element);
+                    };
+                };
+            };
+        };
         return 0;
     };
     if kind == 40 {
