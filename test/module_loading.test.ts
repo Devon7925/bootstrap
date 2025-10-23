@@ -196,7 +196,7 @@ fn main() -> i32 {
   expect(status).toBeLessThan(0);
 
   const failure = readCompileFailure(compiler, status);
-  expect(failure.detail).toBe("/fixtures/invalid-use.bp:1:1: module compilation failed");
+  expect(failure.detail).toBe("/fixtures/invalid-use.bp:1:1: parsing source failed");
 });
 
 test("loadModuleFromSource reports module table capacity reached", async () => {
