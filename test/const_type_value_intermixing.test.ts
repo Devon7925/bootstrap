@@ -232,7 +232,7 @@ test("const fn with only const parameters can use let for tuple in array types",
     expect(result).toBe(42);
 });
 
-test.todo("const fn with only const parameters can return type array", async () => {
+test("const fn with only const parameters can return type array", async () => {
     const wasm = await compileWithAstCompiler(`
     const fn foo(const STR_LEN: i32) -> [type; STR_LEN] {
         let entries: [type; STR_LEN] =
