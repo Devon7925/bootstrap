@@ -286,7 +286,7 @@ test("const fn with only const parameters can return composed tuple-array partia
     expect(result).toBe(42);
 });
 
-test.todo("const fn with only const parameters can return usable composed tuple-array partial type", async () => {
+test("const fn with only const parameters can return usable composed tuple-array partial type", async () => {
     const wasm = await compileWithAstCompiler(`
     const fn foo(const STR_LEN: i32) -> ([u8; STR_LEN], type) {
         let entries: ([u8; STR_LEN], type) =

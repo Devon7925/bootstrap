@@ -3476,6 +3476,89 @@ fn parse_type(
                 };
                 return suffix_cursor;
             };
+            if suffix_byte == '.' {
+                if !type_id_is_tuple(const_type) {
+                    return parse_type_expression(
+                        base,
+                        len,
+                        offset,
+                        ast_base,
+                        params_table_ptr,
+                        params_count,
+                        const_mask_table_ptr,
+                        type_template_sink_ptr,
+                        out_type_ptr,
+                    );
+                };
+                let tuple_index: i32 = tuple_type_index(const_type);
+                if tuple_index < 0 {
+                    return -1;
+                };
+                if ensure_tuple_type_metadata(0, ast_base, tuple_index, const_type) < 0 {
+                    return -1;
+                };
+                let element_count: i32 = ast_tuple_type_element_count(ast_base, tuple_index);
+                if element_count < 0 {
+                    return -1;
+                };
+                let elements_ptr: i32 = ast_tuple_type_elements_ptr(ast_base, tuple_index);
+                if elements_ptr < 0 {
+                    return -1;
+                };
+                let field_start: i32 = skip_whitespace(base, len, suffix_cursor + 1);
+                if field_start >= len {
+                    return -1;
+                };
+                let mut field_cursor: i32 = field_start;
+                let mut field_digits: i32 = 0;
+                while field_cursor < len {
+                    let field_byte: i32 = load_u8(base + field_cursor);
+                    if field_byte < '0' || field_byte > '9' {
+                        break;
+                    };
+                    field_cursor = field_cursor + 1;
+                    field_digits = field_digits + 1;
+                };
+                if field_digits <= 0 {
+                    return -1;
+                };
+                let mut field_index: i32 = 0;
+                let mut digit_idx: i32 = 0;
+                while digit_idx < field_digits {
+                    let digit_byte: i32 = load_u8(base + field_start + digit_idx);
+                    field_index = field_index * 10 + (digit_byte - '0');
+                    digit_idx = digit_idx + 1;
+                };
+                if field_index < 0 {
+                    return -1;
+                };
+                if field_index >= element_count {
+                    return -1;
+                };
+                let field_type_id: i32 = load_i32(elements_ptr + field_index * WORD_SIZE);
+                if !type_id_contains_only_type_values(ast_base, field_type_id) {
+                    return -1;
+                };
+                let tuple_value_ptr: i32 = ast_constant_entry_value(const_entry_ptr);
+                if element_count > 0 {
+                    if tuple_value_ptr <= 0 {
+                        return -1;
+                    };
+                };
+                let slot_ptr: i32 = tuple_value_ptr + field_index * 2 * WORD_SIZE;
+                let recorded_type_id: i32 = load_i32(slot_ptr + WORD_SIZE);
+                if recorded_type_id != BUILTIN_TYPE_ID_TYPE {
+                    return -1;
+                };
+                let element_value: i32 = load_i32(slot_ptr);
+                if element_value < 0 {
+                    return -1;
+                };
+                if out_type_ptr >= 0 {
+                    store_i32(out_type_ptr, element_value);
+                };
+                return field_cursor;
+            };
         };
         return parse_type_expression(
             base,
