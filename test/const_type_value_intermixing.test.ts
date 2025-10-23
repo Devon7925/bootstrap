@@ -250,7 +250,7 @@ test("const fn with only const parameters can return type array", async () => {
     expect(result).toBe(42);
 });
 
-test.todo("const fn with only const parameters can return composed partial type", async () => {
+test("const fn with only const parameters can return composed tuple-array partial type", async () => {
     const wasm = await compileWithAstCompiler(`
     const fn foo(const STR_LEN: i32) -> ([u8; STR_LEN], type) {
         let entries: ([u8; STR_LEN], type) =
@@ -258,7 +258,27 @@ test.todo("const fn with only const parameters can return composed partial type"
         entries
     }
 
-    const BAR: ([u8; STR_LEN], type) = foo(3);
+    const BAR: ([u8; 3], type) = foo(3);
+
+    fn main() -> i32 {
+        42
+    }
+    `);
+    const result = await runWasmMainWithGc(wasm);
+    expect(result).toBe(42);
+});
+
+test.todo("const fn with only const parameters can return composed array-tuple partial type", async () => {
+    const wasm = await compileWithAstCompiler(`
+    const KEY_COUNT: i32 = 12;
+
+    const fn foo(const COUNT: i32) -> [(type, type); COUNT] {
+        let entries: [(type, type); COUNT] =
+            [(u32, i32); COUNT];
+        entries
+    }
+
+    const BAR: [(type, type); KEY_COUNT] = foo(KEY_COUNT);
 
     fn main() -> i32 {
         42
