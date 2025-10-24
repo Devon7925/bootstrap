@@ -765,22 +765,12 @@ fn collect_call_const_arguments(
         return -1;
     }
     let temp_base: i32 = ast_temp_base(ast_base) + CONSTANT_EVAL_SCRATCH_OFFSET;
-    let env_ptr: i32 = temp_base;
-    let eval_value_ptr: i32 = env_ptr + MAX_PARAMS * 8;
+    let eval_value_ptr: i32 = temp_base;
     let eval_type_ptr: i32 = eval_value_ptr + 4;
     let eval_stack_top_ptr: i32 = eval_type_ptr + 4;
     let eval_stack_base: i32 = eval_stack_top_ptr + 4;
-    let default_entry: ConstEnvEntry = ConstEnvEntry { value: 0, type: -1 };
-    let mut init_idx: i32 = 0;
-    loop {
-        if init_idx >= param_count {
-            break;
-        }
-        let slot_ptr: i32 = env_ptr + init_idx * 8;
-        store_i32(slot_ptr, default_entry.value);
-        store_i32(slot_ptr + WORD_SIZE, default_entry.type);
-        init_idx = init_idx + 1;
-    };
+    let mut env_entries: [ConstEnvEntry; MAX_PARAMS] =
+        [ConstEnvEntry { value: 0, type: -1 }; MAX_PARAMS];
     let mut resolved_location_offset: i32 = call_location_offset;
     if resolved_location_offset < 0 {
         resolved_location_offset = find_call_metadata_location(ast_base, metadata_ptr);
@@ -884,13 +874,10 @@ fn collect_call_const_arguments(
                 }
                 const_value = resolved_type;
             }
-            let entry: ConstEnvEntry = ConstEnvEntry {
+            env_entries[param_idx] = ConstEnvEntry {
                 value: const_value,
                 type: const_type,
             };
-            let slot_ptr: i32 = env_ptr + param_idx * 8;
-            store_i32(slot_ptr, entry.value);
-            store_i32(slot_ptr + WORD_SIZE, entry.type);
         }
         param_idx = param_idx + 1;
     };
@@ -929,12 +916,8 @@ fn collect_call_const_arguments(
         if copy_idx >= param_count {
             break;
         }
-        let src_ptr: i32 = env_ptr + copy_idx * 8;
         let dst_ptr: i32 = env_copy_ptr + WORD_SIZE + copy_idx * 8;
-        let entry: ConstEnvEntry = ConstEnvEntry {
-            value: load_i32(src_ptr),
-            type: load_i32(src_ptr + WORD_SIZE),
-        };
+        let entry: ConstEnvEntry = env_entries[copy_idx];
         store_i32(dst_ptr, entry.value);
         store_i32(dst_ptr + WORD_SIZE, entry.type);
         copy_idx = copy_idx + 1;
