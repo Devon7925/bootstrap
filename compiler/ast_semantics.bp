@@ -154,6 +154,24 @@ fn append_struct_field_name_to_failure(
     0
 }
 
+fn resolve_constant_failure_module_context(
+    out_ptr: i32,
+    const_entry_ptr: i32,
+) -> (i32, i32, i32) {
+    let mut module_index: i32 = ast_constant_entry_module_index(const_entry_ptr);
+    let mut module_base: i32 = 0;
+    let mut module_len: i32 = 0;
+    if module_index >= 0 {
+        module_base = module_entry_content(module_index);
+        module_len = module_entry_content_len(module_index);
+    } else {
+        module_index = scratch_module_index(out_ptr);
+        module_base = scratch_module_base(out_ptr);
+        module_len = scratch_module_len(out_ptr);
+    }
+    (module_index, module_base, module_len)
+}
+
 fn record_struct_literal_field_mismatch(
     out_ptr: i32,
     ast_base: i32,
@@ -2252,17 +2270,11 @@ fn try_record_struct_intrinsic_failure(
         if location_offset < 0 {
             location_offset = ast_expr_location(ast_base, expr_index);
         }
-        let mut module_index: i32 = ast_constant_entry_module_index(const_entry_ptr);
-        let mut module_base: i32 = 0;
-        let mut module_len: i32 = 0;
-        if module_index >= 0 {
-            module_base = module_entry_content(module_index);
-            module_len = module_entry_content_len(module_index);
-        } else {
-            module_index = scratch_module_index(out_ptr);
-            module_base = scratch_module_base(out_ptr);
-            module_len = scratch_module_len(out_ptr);
-        }
+        let module_context: (i32, i32, i32) =
+            resolve_constant_failure_module_context(out_ptr, const_entry_ptr);
+        let module_index: i32 = module_context.0;
+        let module_base: i32 = module_context.1;
+        let module_len: i32 = module_context.2;
         let message: [u8; 23] = "duplicate struct field ";
         write_failure_detail_with_location(
             out_ptr,
@@ -2286,17 +2298,11 @@ fn try_record_struct_intrinsic_failure(
         if location_offset < 0 {
             location_offset = ast_expr_location(ast_base, expr_index);
         }
-        let mut module_index: i32 = ast_constant_entry_module_index(const_entry_ptr);
-        let mut module_base: i32 = 0;
-        let mut module_len: i32 = 0;
-        if module_index >= 0 {
-            module_base = module_entry_content(module_index);
-            module_len = module_entry_content_len(module_index);
-        } else {
-            module_index = scratch_module_index(out_ptr);
-            module_base = scratch_module_base(out_ptr);
-            module_len = scratch_module_len(out_ptr);
-        }
+        let module_context: (i32, i32, i32) =
+            resolve_constant_failure_module_context(out_ptr, const_entry_ptr);
+        let module_index: i32 = module_context.0;
+        let module_base: i32 = module_context.1;
+        let module_len: i32 = module_context.2;
         let message: [u8; 47] =
             "const parameter template expected type mismatch";
         write_failure_detail_with_location(
@@ -2318,17 +2324,11 @@ fn try_record_struct_intrinsic_failure(
     if location_offset < 0 {
         location_offset = ast_expr_location(ast_base, expr_index);
     }
-    let mut module_index: i32 = ast_constant_entry_module_index(const_entry_ptr);
-    let mut module_base: i32 = 0;
-    let mut module_len: i32 = 0;
-    if module_index >= 0 {
-        module_base = module_entry_content(module_index);
-        module_len = module_entry_content_len(module_index);
-    } else {
-        module_index = scratch_module_index(out_ptr);
-        module_base = scratch_module_base(out_ptr);
-        module_len = scratch_module_len(out_ptr);
-    }
+    let module_context: (i32, i32, i32) =
+        resolve_constant_failure_module_context(out_ptr, const_entry_ptr);
+    let module_index: i32 = module_context.0;
+    let module_base: i32 = module_context.1;
+    let module_len: i32 = module_context.2;
     let message: [u8; 60] =
         "struct intrinsic properties must be an array of field tuples";
     write_failure_detail_with_location(
@@ -2359,17 +2359,11 @@ fn interpret_program_constants(out_ptr: i32, ast_base: i32, func_count: i32) -> 
                 if load_u8(out_ptr) == 0 {
                     let message: [u8; 48] =
                         "const initializer must be compile-time evaluable";
-                    let mut module_index: i32 =
-                        ast_constant_entry_module_index(const_entry_ptr);
-                    let mut module_base: i32 = 0;
-                    let mut module_len: i32 = 0;
-                    if module_index >= 0 {
-                        module_base = module_entry_content(module_index);
-                        module_len = module_entry_content_len(module_index);
-                    } else {
-                        module_base = scratch_module_base(out_ptr);
-                        module_len = scratch_module_len(out_ptr);
-                    }
+                    let module_context: (i32, i32, i32) =
+                        resolve_constant_failure_module_context(out_ptr, const_entry_ptr);
+                    let module_index: i32 = module_context.0;
+                    let module_base: i32 = module_context.1;
+                    let module_len: i32 = module_context.2;
                     let location_offset: i32 =
                         ast_constant_entry_name_start(const_entry_ptr);
                     write_failure_detail_with_location(
