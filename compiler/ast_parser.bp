@@ -850,6 +850,68 @@ fn parse_basic_expression(
         store_i32(out_data1_ptr, 0);
         return skip_whitespace(base, len, array_cursor);
     }
+    if first_byte == 'l' {
+        let mut loop_cursor: i32 = expect_keyword_loop(base, len, cursor);
+        if loop_cursor >= 0 {
+            let body_kind_ptr: i32 = nested_temp_base;
+            let body_data0_ptr: i32 = nested_temp_base + 4;
+            let body_data1_ptr: i32 = nested_temp_base + 8;
+            let body_status_ptr: i32 = nested_temp_base + 12;
+            let body_temp_base: i32 = nested_temp_base + 64;
+            let mut after_loop: i32 = skip_whitespace(base, len, loop_cursor);
+            after_loop = expect_char(base, len, after_loop, '{');
+            if after_loop < 0 {
+                return -1;
+            }
+            let saved_loop_depth: i32 = load_i32(loop_depth_ptr);
+            store_i32(loop_depth_ptr, saved_loop_depth + 1);
+            let block_cursor: i32 = parse_block_expression_body(
+                base,
+                len,
+                after_loop,
+                ast_base,
+                params_table_ptr,
+                params_count,
+                const_mask_table_ptr,
+                locals_table_ptr,
+                locals_stack_count_ptr,
+                locals_next_index_ptr,
+                literal_ptr,
+                body_temp_base,
+                1,
+                loop_depth_ptr,
+                type_template_sink_ptr,
+                body_kind_ptr,
+                body_data0_ptr,
+                body_data1_ptr,
+                body_status_ptr,
+            );
+            store_i32(loop_depth_ptr, saved_loop_depth);
+            if block_cursor < 0 {
+                return -1;
+            }
+            let body_kind: i32 = load_i32(body_kind_ptr);
+            let body_data0: i32 = load_i32(body_data0_ptr);
+            let body_data1: i32 = load_i32(body_data1_ptr);
+            let body_index: i32 = expression_node_from_parts(
+                ast_base,
+                body_kind,
+                body_data0,
+                body_data1,
+            );
+            if body_index < 0 {
+                return -1;
+            }
+            let loop_expr_index: i32 = ast_expr_alloc_loop(ast_base, body_index, 0);
+            if loop_expr_index < 0 {
+                return -1;
+            }
+            store_i32(out_kind_ptr, 12);
+            store_i32(out_data0_ptr, loop_expr_index);
+            store_i32(out_data1_ptr, 0);
+            return skip_whitespace(base, len, block_cursor);
+        }
+    }
     if first_byte == '(' {
         let mut paren_cursor: i32 = cursor + 1;
         paren_cursor = skip_whitespace(base, len, paren_cursor);

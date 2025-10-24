@@ -171,7 +171,7 @@ test("loop allows final if without semicolon", async () => {
   expect(result).toBe(4);
 });
 
-test.todo("loop expressions can initialize locals", async () => {
+test("loop expressions can initialize locals", async () => {
   const wasm = await compileWithAstCompiler(`
     fn main() -> i32 {
         let value: i32 = loop {
