@@ -293,6 +293,26 @@ describe("struct intrinsic with const type values", () => {
         expect(result).toBe(42);
     });
 
+    test("const parameters can select struct fields", async () => {
+        const wasm = await compileWithAstCompiler(`
+        const Pair = struct(6, 2, [
+            ("first\\0", i32),
+            ("second", i32),
+        ]);
+
+        fn select(const FIELD: [u8; 6], pair: Pair) -> i32 {
+            pair[FIELD]
+        }
+
+        fn main() -> i32 {
+            let pair: Pair = Pair { first: 1, second: 2 };
+            select("first\\0", pair)
+        }
+      `);
+        const result = await runWasmMainWithGc(wasm);
+        expect(result).toBe(1);
+    });
+
     test("struct values can be stored inside arrays", async () => {
         const wasm = await compileWithAstCompiler(`
         const Pair = struct(6, 2, [
