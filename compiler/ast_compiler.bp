@@ -82,6 +82,17 @@ fn report_missing_module_path(detail_out_ptr: i32) {
     }
 }
 
+fn prepare_module_path(path_ptr: i32) -> (i32, i32) {
+    module_ensure_state_initialized();
+    let detail_out_ptr: i32 = module_storage_top();
+    let path_len: i32 = string_length(path_ptr);
+    if path_len <= 0 {
+        report_missing_module_path(detail_out_ptr);
+        return (-1, detail_out_ptr);
+    }
+    (path_len, detail_out_ptr)
+}
+
 fn write_module_failure_with_location(
     detail_out_ptr: i32,
     path_ptr: i32,
@@ -125,11 +136,10 @@ fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
 // cache.  The storage is owned by the compiler runtime so subsequent imports can
 // reuse the content without copying from the host again.
 fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
-    module_ensure_state_initialized();
-    let mut detail_out_ptr: i32 = module_storage_top();
-    let path_len: i32 = string_length(path_ptr);
+    let prepare_result: (i32, i32) = prepare_module_path(path_ptr);
+    let path_len: i32 = prepare_result.0;
+    let mut detail_out_ptr: i32 = prepare_result.1;
     if path_len <= 0 {
-        report_missing_module_path(detail_out_ptr);
         return -1;
     }
     if path_len > MODULE_PATH_MAX_LENGTH {
@@ -212,11 +222,10 @@ fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
 // `loadModuleFromSource`.  The implementation ensures the module graph is loaded
 // only once and resolves imports transitively before running the main pipeline.
 fn compileFromPath(path_ptr: i32) -> i32 {
-    module_ensure_state_initialized();
-    let detail_out_ptr: i32 = module_storage_top();
-    let path_len: i32 = string_length(path_ptr);
+    let prepare_result: (i32, i32) = prepare_module_path(path_ptr);
+    let path_len: i32 = prepare_result.0;
+    let detail_out_ptr: i32 = prepare_result.1;
     if path_len <= 0 {
-        report_missing_module_path(detail_out_ptr);
         return -1;
     }
     let index: i32 = module_find_index(path_ptr, path_len);
