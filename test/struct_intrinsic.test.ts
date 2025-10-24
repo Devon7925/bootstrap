@@ -121,7 +121,7 @@ describe("struct intrinsic with const type values", () => {
         ).rejects.toThrow("/entry.bp:8:39: struct literal missing field second");
     });
 
-    test.todo("struct literals accept fields in any order", async () => {
+    test("struct literals accept fields in any order", async () => {
         const wasm = await compileWithAstCompiler(`
         const Pair = struct(6, 2, [
             ("first\\0", i32),
@@ -140,7 +140,7 @@ describe("struct intrinsic with const type values", () => {
         expect(result).toBe(38);
     });
 
-    test.todo("struct literals accept bracket labels out of canonical order", async () => {
+    test("struct literals accept bracket labels out of canonical order", async () => {
         const wasm = await compileWithAstCompiler(`
         const Pair = struct(6, 2, [
             ("first\\0", i32),
@@ -488,7 +488,7 @@ describe("struct intrinsic with const type values", () => {
     });
 });
 
-test.todo("struct literals accept fields in any order", async () => {
+test("struct literals accept fields in any order", async () => {
     const wasm = await compileWithAstCompiler(`
     const Pair = struct(6, 2, [
         ("first\\0", i32),
@@ -507,7 +507,7 @@ test.todo("struct literals accept fields in any order", async () => {
     expect(result).toBe(2);
 });
 
-test.todo("struct literal bracket labels can appear before canonical order", async () => {
+test("struct literal bracket labels can appear before canonical order", async () => {
     const wasm = await compileWithAstCompiler(`
     const Pair = struct(6, 2, [
         ("first\\0", i32),
