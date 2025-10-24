@@ -129,4 +129,7 @@ test("boolean locals reject integer initializers", async () => {
     }
   `);
   expect(failure.failure.detail).toBeDefined();
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:3:26: boolean local initializer must be boolean",
+  );
 });
