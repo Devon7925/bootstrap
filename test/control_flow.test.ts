@@ -243,10 +243,10 @@ test("if statements inside blocks execute", async () => {
         let mut value: i32 = input;
         if value > 0 {
             value = value - 1;
-        };
+        }
         if value < 0 {
             value = 0;
-        };
+        }
         value
     }
 
@@ -256,6 +256,26 @@ test("if statements inside blocks execute", async () => {
   `);
   const result = await runWasmMainWithGc(wasm);
   expect(result).toBe(1);
+});
+
+test("if statements with else branches do not require semicolons", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn branch(flag: bool) -> i32 {
+        let mut result: i32 = 0;
+        if flag {
+            result = result + 1;
+        } else {
+            result = result + 2;
+        }
+        result
+    }
+
+    fn main() -> i32 {
+        branch(true) + branch(false)
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(3);
 });
 
 test("loop breaks can return values", async () => {
