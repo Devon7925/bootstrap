@@ -42,6 +42,18 @@ const ConstParamSpecialization = struct(
     ],
 );
 
+fn const_env_entry_store(ptr: i32, entry: ConstEnvEntry) {
+    store_i32(ptr, entry.value);
+    store_i32(ptr + WORD_SIZE, entry.type);
+}
+
+fn const_env_entry_load(ptr: i32) -> ConstEnvEntry {
+    ConstEnvEntry {
+        value: load_i32(ptr),
+        type: load_i32(ptr + WORD_SIZE),
+    }
+}
+
 fn record_failure_detail(
     out_ptr: i32,
     const MESSAGE_LEN: i32,
@@ -984,10 +996,9 @@ fn collect_call_const_arguments(
         if copy_idx >= param_count {
             break;
         }
-        let dst_ptr: i32 = env_copy_ptr + WORD_SIZE + copy_idx * 8;
+        let dst_ptr: i32 = env_copy_ptr + WORD_SIZE + copy_idx * 2 * WORD_SIZE;
         let entry: ConstEnvEntry = env_entries[copy_idx];
-        store_i32(dst_ptr, entry.value);
-        store_i32(dst_ptr + WORD_SIZE, entry.type);
+        const_env_entry_store(dst_ptr, entry);
         copy_idx = copy_idx + 1;
     };
     store_i32(env_slot_ptr, env_copy_ptr);
@@ -2986,15 +2997,17 @@ fn resolve_expression_internal(
                                 let values_ptr: i32 = env_ptr + WORD_SIZE;
                                 let mut param_idx: i32 = 0;
                                 while param_idx < total_param_count {
-                                    let dst_ptr: i32 = param_values_ptr + param_idx * 8;
-                                    let arg_value: i32 = load_i32(values_ptr + param_idx * 8);
-                                    let arg_type: i32 = load_i32(values_ptr + param_idx * 8 + 4);
-                                    if arg_type < 0 {
+                                    let dst_ptr: i32 =
+                                        param_values_ptr + param_idx * 2 * WORD_SIZE;
+                                    let entry_ptr: i32 =
+                                        values_ptr + param_idx * 2 * WORD_SIZE;
+                                    let arg_entry: ConstEnvEntry =
+                                        const_env_entry_load(entry_ptr);
+                                    if arg_entry.type < 0 {
                                         evaluation_failed = true;
                                         break;
                                     }
-                                    store_i32(dst_ptr, arg_value);
-                                    store_i32(dst_ptr + 4, arg_type);
+                                    const_env_entry_store(dst_ptr, arg_entry);
                                     param_idx = param_idx + 1;
                                 };
                             }
@@ -3026,17 +3039,23 @@ fn resolve_expression_internal(
                                 param_values_ptr = env_base;
                                 let mut init_idx: i32 = 0;
                                 while init_idx < total_param_count {
-                                    let dst_ptr: i32 = param_values_ptr + init_idx * 8;
-                                    store_i32(dst_ptr, 0);
-                                    store_i32(dst_ptr + 4, -1);
+                                    let dst_ptr: i32 =
+                                        param_values_ptr + init_idx * 2 * WORD_SIZE;
+                                    const_env_entry_store(
+                                        dst_ptr,
+                                        ConstEnvEntry { value: 0, type: -1 },
+                                    );
                                     init_idx = init_idx + 1;
                                 };
                             }
                             let mut fill_idx: i32 = total_param_count;
                             while fill_idx < env_total {
-                                let dst_ptr: i32 = param_values_ptr + fill_idx * 8;
-                                store_i32(dst_ptr, 0);
-                                store_i32(dst_ptr + 4, -1);
+                                let dst_ptr: i32 =
+                                    param_values_ptr + fill_idx * 2 * WORD_SIZE;
+                                const_env_entry_store(
+                                    dst_ptr,
+                                    ConstEnvEntry { value: 0, type: -1 },
+                                );
                                 fill_idx = fill_idx + 1;
                             };
                         }
