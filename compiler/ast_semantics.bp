@@ -5329,6 +5329,48 @@ fn resolve_expression_internal(
         ) < 0 {
             return -1;
         }
+        if caller_func_index >= 0 {
+            let init_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, init_index);
+            let init_kind: i32 = load_i32(init_entry_ptr);
+            if init_kind == 1 {
+                let metadata_ptr: i32 = load_i32(init_entry_ptr + 4);
+                if metadata_ptr >= 0 {
+                    let callee_index: i32 = load_i32(call_metadata_callee_index_ptr(metadata_ptr));
+                    if callee_index >= 0 {
+                        let mut unit_result: bool = false;
+                        if ast_function_has_implicit_unit_return(ast_base, callee_index) {
+                            unit_result = true;
+                        } else {
+                            let init_type: i32 = ast_expr_type(ast_base, init_index);
+                            if init_type >= 0 {
+                                if type_id_is_tuple(init_type) {
+                                    let tuple_idx: i32 = tuple_type_index(init_type);
+                                    if tuple_idx >= 0 {
+                                        if ast_tuple_type_element_count(ast_base, tuple_idx) == 0 {
+                                            unit_result = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if unit_result {
+                            let location: i32 = ast_expr_location(ast_base, init_index);
+                            let message: [u8; 46] =
+                                "unit function results cannot initialize locals";
+                            record_failure_with_location(
+                                out_ptr,
+                                ast_base,
+                                caller_func_index,
+                                location,
+                                46,
+                                message,
+                            );
+                            return -1;
+                        }
+                    }
+                }
+            }
+        }
         let mut pushed: bool = false;
         if local_stack_base > 0 && local_stack_count_ptr > 0 {
             let stack_count: i32 = load_i32(local_stack_count_ptr);

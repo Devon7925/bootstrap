@@ -276,7 +276,7 @@ test("unit functions reject return values", async () => {
   );
 });
 
-test.todo("unit function results cannot initialize locals", async () => {
+test("unit function results cannot initialize locals", async () => {
   const failure = await expectCompileFailure(`
     fn helper() {
     }
@@ -286,7 +286,9 @@ test.todo("unit function results cannot initialize locals", async () => {
         value
     }
   `);
-  expect(failure.failure.detail).toBeDefined();
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:6:26: unit function results cannot initialize locals",
+  );
 });
 
 test("functions can use local variables", async () => {
