@@ -159,17 +159,6 @@ async function instantiateCompiler(): Promise<WebAssembly.Instance> {
   return instance;
 }
 
-function ensureCapacity(memory: WebAssembly.Memory, required: number) {
-  const current = memory.buffer.byteLength;
-  try {
-    growMemoryIfRequired(memory, required);
-  } catch {
-    throw new CompileError(
-      `stage2 compiler memory layout does not leave space for output buffer (required ${required}, current ${current})`,
-    );
-  }
-}
-
 function readStageFailure(
   stage: "stage1" | "stage2",
   memory: WebAssembly.Memory,
@@ -241,9 +230,6 @@ export async function compile(
 
   const instance = await instantiateCompiler();
   const memory = instance.exports.memory as WebAssembly.Memory | undefined;
-  const compileExport = instance.exports.compile as
-    | ((inputPtr: number, inputLen: number, outputPtr: number) => number)
-    | undefined;
   const loadModuleFromSourceExport = instance.exports.loadModuleFromSource as
     | ((pathPtr: number, contentPtr: number) => number | bigint)
     | undefined;
@@ -254,97 +240,72 @@ export async function compile(
   if (!memory) {
     throw new CompileError("stage2 compiler must export memory");
   }
-  if (!compileExport) {
-    throw new CompileError("stage2 compiler missing compile export");
+  if (
+    typeof loadModuleFromSourceExport !== "function" ||
+    typeof compileFromPathExport !== "function"
+  ) {
+    throw new CompileError("stage2 compiler missing module loading exports");
   }
 
-  if (typeof loadModuleFromSourceExport === "function" && typeof compileFromPathExport === "function") {
-    const loadModuleFromSource = loadModuleFromSourceExport;
-    const compileFromPath = compileFromPathExport;
-    const memoryIntrinsicsSource = await loadMemoryIntrinsicsSource();
+  const loadModuleFromSource = loadModuleFromSourceExport;
+  const compileFromPath = compileFromPathExport;
+  const memoryIntrinsicsSource = await loadMemoryIntrinsicsSource();
 
-    const loadModule = (path: string, contents: string) => {
-      let contentLength: number;
-      writeModuleString(memory, MODULE_PATH_PTR, path);
-      contentLength = writeModuleString(memory, MODULE_CONTENT_PTR, contents);
-      let status: number;
-      try {
-        const result = loadModuleFromSource(MODULE_PATH_PTR, MODULE_CONTENT_PTR);
-        status = coerceToI32(result);
-      } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
-        throw new CompileError(
-          `stage2 compiler failed to load module '${path}': ${detail}`,
-        );
-      }
-      if (!Number.isFinite(status) || status < 0) {
-        const top = readModuleStorageTop(memory);
-        throw new CompileError(readStageFailure("stage2", memory, top, status));
-      }
-      zeroModuleMemory(memory, MODULE_CONTENT_PTR, contentLength + 1);
-    };
-
-    const moduleSources: CompilerModuleSource[] = [
-      { path: MEMORY_INTRINSICS_MODULE_PATH, source: memoryIntrinsicsSource },
-      ...extraModules.filter((module) => {
-        if (module.path === MEMORY_INTRINSICS_MODULE_PATH) {
-          return false;
-        }
-        if (module.path === entryPath) {
-          return false;
-        }
-        return true;
-      }),
-    ];
-
-    for (const module of moduleSources) {
-      loadModule(module.path, module.source);
-    }
-
-    loadModule(entryPath, source);
-
-    let producedLen: number;
+  const loadModule = (path: string, contents: string) => {
+    writeModuleString(memory, MODULE_PATH_PTR, path);
+    const contentLength = writeModuleString(memory, MODULE_CONTENT_PTR, contents);
+    let status: number;
     try {
-      const result = compileFromPath(MODULE_PATH_PTR);
-      producedLen = coerceToI32(result);
+      const result = loadModuleFromSource(MODULE_PATH_PTR, MODULE_CONTENT_PTR);
+      status = coerceToI32(result);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      throw new CompileError(`stage2 compiler failed: ${detail}`);
+      throw new CompileError(
+        `stage2 compiler failed to load module '${path}': ${detail}`,
+      );
     }
-
-    const outputPtr = readModuleStorageTop(memory);
-    if (!Number.isFinite(producedLen) || producedLen <= 0) {
-      throw new CompileError(readStageFailure("stage2", memory, outputPtr, producedLen));
+    if (!Number.isFinite(status) || status < 0) {
+      const top = readModuleStorageTop(memory);
+      throw new CompileError(readStageFailure("stage2", memory, top, status));
     }
+    zeroModuleMemory(memory, MODULE_CONTENT_PTR, contentLength + 1);
+  };
 
-    const view = new Uint8Array(memory.buffer);
-    const wasm = view.slice(outputPtr, outputPtr + producedLen);
-    return new Compilation(target, wasm);
+  const moduleSources: CompilerModuleSource[] = [
+    { path: MEMORY_INTRINSICS_MODULE_PATH, source: memoryIntrinsicsSource },
+    ...extraModules.filter((module) => {
+      if (module.path === MEMORY_INTRINSICS_MODULE_PATH) {
+        return false;
+      }
+      if (module.path === entryPath) {
+        return false;
+      }
+      return true;
+    }),
+  ];
+
+  for (const module of moduleSources) {
+    loadModule(module.path, module.source);
   }
 
-  const reserved = FUNCTIONS_BASE_OFFSET + STAGE1_MAX_FUNCTIONS * FUNCTION_ENTRY_SIZE;
-  if (memory.buffer.byteLength <= reserved) {
-    throw new CompileError(
-      "stage2 compiler memory layout does not leave space for output buffer",
-    );
+  loadModule(entryPath, source);
+
+  let producedLen: number;
+  try {
+    const result = compileFromPath(MODULE_PATH_PTR);
+    producedLen = coerceToI32(result);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new CompileError(`stage2 compiler failed: ${detail}`);
   }
 
-  const sourceBytes = encoder.encode(source);
-  const outputPtr = sourceBytes.length;
-
-  ensureCapacity(memory, outputPtr + reserved + 1);
-
-  let memoryView = new Uint8Array(memory.buffer);
-  memoryView.set(sourceBytes, COMPILER_INPUT_PTR);
-
-  const producedLen = compileExport(COMPILER_INPUT_PTR, sourceBytes.length, outputPtr);
-  memoryView = new Uint8Array(memory.buffer);
-
-  if (producedLen <= 0) {
+  const outputPtr = readModuleStorageTop(memory);
+  if (!Number.isFinite(producedLen) || producedLen <= 0) {
     throw new CompileError(readStageFailure("stage2", memory, outputPtr, producedLen));
   }
 
-  const wasm = memoryView.slice(outputPtr, outputPtr + producedLen);
+  const view = new Uint8Array(memory.buffer);
+  const wasm = view.slice(outputPtr, outputPtr + producedLen);
   return new Compilation(target, wasm);
 }
 
