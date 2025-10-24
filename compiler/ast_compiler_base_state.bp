@@ -967,19 +967,30 @@ fn ast_function_register_const_specialization(
     new_entry_ptr
 }
 
+const CONST_SPECIALIZATION_ENTRY_NAME_CAP: i32 = 5;
+
+const ConstSpecializationEntry = struct(
+    CONST_SPECIALIZATION_ENTRY_NAME_CAP,
+    2,
+    [
+        ("value", i32),
+        ("type\0", i32),
+    ],
+);
+
 fn const_specialization_lookup_entry(
     key_ptr: i32,
     param_index: i32,
-) -> (i32, i32) {
+) -> ConstSpecializationEntry {
     if key_ptr <= 0 {
-        return (-1, -1);
+        return ConstSpecializationEntry { value: -1, type: -1 };
     }
     if param_index < 0 {
-        return (-1, -1);
+        return ConstSpecializationEntry { value: -1, type: -1 };
     }
     let entry_count: i32 = load_i32(key_ptr);
     if entry_count <= 0 {
-        return (-1, -1);
+        return ConstSpecializationEntry { value: -1, type: -1 };
     }
     let mut scan_index: i32 = 0;
     while scan_index < entry_count {
@@ -989,11 +1000,14 @@ fn const_specialization_lookup_entry(
         if recorded_param == param_index {
             let value: i32 = load_i32(entry_ptr + WORD_SIZE);
             let value_type: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
-            return (value, value_type);
+            return ConstSpecializationEntry {
+                value: value,
+                type: value_type,
+            };
         }
         scan_index = scan_index + 1;
     };
-    (-1, -1)
+    ConstSpecializationEntry { value: -1, type: -1 }
 }
 
 const CONST_SPECIALIZATION_LOCAL_STACK_ENTRY_SIZE: i32 = 8;
@@ -1236,15 +1250,15 @@ fn clone_const_specialization_expr(
         let mut expr_type: i32 = ast_expr_type(ast_base, expr_index);
         if template_index >= 0 {
             if ast_function_param_is_const(ast_base, template_index, param_index) {
-                let entry: (i32, i32) =
+                let entry: ConstSpecializationEntry =
                     const_specialization_lookup_entry(key_ptr, param_index);
-                if entry.1 < 0 {
+                if entry.type < 0 {
                     return -1;
                 }
                 let literal_index: i32 = ast_expr_alloc_literal(
                     ast_base,
-                    entry.0,
-                    entry.1,
+                    entry.value,
+                    entry.type,
                 );
                 if literal_index < 0 {
                     return -1;
@@ -1767,12 +1781,15 @@ fn clone_const_specialization_expr(
                 if usage_count == 1 && usage_list_ptr > 0 && key_ptr > 0 {
                     let recorded_param: i32 = load_i32(usage_list_ptr);
                     if recorded_param >= 0 {
-                        let const_entry: (i32, i32) =
+                        let const_entry: ConstSpecializationEntry =
                             const_specialization_lookup_entry(key_ptr, recorded_param);
-                        if const_entry.1 >= 0 {
-                            if constant_eval_integer_type_supported(const_entry.1) {
+                        if const_entry.type >= 0 {
+                            if constant_eval_integer_type_supported(const_entry.type) {
                                 let normalized: i32 =
-                                    normalize_integer_value(const_entry.0, const_entry.1);
+                                    normalize_integer_value(
+                                        const_entry.value,
+                                        const_entry.type,
+                                    );
                                 if normalized >= 0 {
                                     length = normalized;
                                     resolved_length = true;
