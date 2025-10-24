@@ -205,7 +205,8 @@ fn module_allocate_bytes(len: i32) -> i32 {
     if ensure_memory_capacity(end + 1) < 0 {
         let detail_out_ptr: i32 = module_storage_top();
         if detail_out_ptr > 0 {
-            write_failure_detail(detail_out_ptr, 50, "failed to reserve linear memory for module storage");
+            let message: [u8; 50] = "failed to reserve linear memory for module storage";
+            write_failure_detail(detail_out_ptr, 50, message);
         }
         return -1;
     }
@@ -2732,6 +2733,7 @@ fn ast_function_clone_const_template(
     }
     if current_count >= AST_MAX_FUNCTIONS {
         if detail_out_ptr > 0 {
+            let message: [u8; 44] = "const specialization function limit exceeded";
             let mut module_base: i32 = scratch_module_base(detail_out_ptr);
             let mut module_len: i32 = scratch_module_len(detail_out_ptr);
             let mut module_index: i32 = scratch_module_index(detail_out_ptr);
@@ -2751,14 +2753,10 @@ fn ast_function_clone_const_template(
                     module_len,
                     location_offset,
                     44,
-                    "const specialization function limit exceeded",
+                    message,
                 );
             } else {
-                write_failure_detail(
-                    detail_out_ptr,
-                    44,
-                    "const specialization function limit exceeded",
-                );
+                write_failure_detail(detail_out_ptr, 44, message);
             }
         }
         return -1;
