@@ -4129,27 +4129,18 @@ fn tuple_type_set_cached_id(ast_base: i32, index: i32, type_id: i32) {
 const TYPE_METADATA_CACHE_IN_PROGRESS: i32 = -2;
 
 fn record_type_metadata_debug(out_ptr: i32, context: i32, subject: i32, extra: i32) {
-    if out_ptr > 0 {
-        store_i32(out_ptr + SCRATCH_TYPE_METADATA_DEBUG_CONTEXT_OFFSET, context);
-        store_i32(out_ptr + SCRATCH_TYPE_METADATA_DEBUG_SUBJECT_OFFSET, subject);
-        store_i32(out_ptr + SCRATCH_TYPE_METADATA_DEBUG_EXTRA_OFFSET, extra);
-    } else {
-        store_i32(SCRATCH_TYPE_METADATA_DEBUG_CONTEXT_OFFSET, context);
-        store_i32(SCRATCH_TYPE_METADATA_DEBUG_SUBJECT_OFFSET, subject);
-        store_i32(SCRATCH_TYPE_METADATA_DEBUG_EXTRA_OFFSET, extra);
-    };
+    let scratch_base: i32 = if out_ptr > 0 { out_ptr } else { 0 };
+    store_i32(scratch_base + SCRATCH_TYPE_METADATA_DEBUG_CONTEXT_OFFSET, context);
+    store_i32(scratch_base + SCRATCH_TYPE_METADATA_DEBUG_SUBJECT_OFFSET, subject);
+    store_i32(scratch_base + SCRATCH_TYPE_METADATA_DEBUG_EXTRA_OFFSET, extra);
 }
 
 fn record_type_metadata_failure(out_ptr: i32) {
     record_type_metadata_debug(out_ptr, 255, 0, 0);
-    if out_ptr > 0 {
-        let current: i32 =
-            load_i32(out_ptr + SCRATCH_TYPE_METADATA_DEBUG_FAILURE_COUNT_OFFSET);
-        store_i32(out_ptr + SCRATCH_TYPE_METADATA_DEBUG_FAILURE_COUNT_OFFSET, current + 1);
-    } else {
-        let current: i32 = load_i32(SCRATCH_TYPE_METADATA_DEBUG_FAILURE_COUNT_OFFSET);
-        store_i32(SCRATCH_TYPE_METADATA_DEBUG_FAILURE_COUNT_OFFSET, current + 1);
-    };
+    let scratch_base: i32 = if out_ptr > 0 { out_ptr } else { 0 };
+    let failure_count_ptr: i32 = scratch_base + SCRATCH_TYPE_METADATA_DEBUG_FAILURE_COUNT_OFFSET;
+    let current: i32 = load_i32(failure_count_ptr);
+    store_i32(failure_count_ptr, current + 1);
     if out_ptr > 0 {
         if load_u8(out_ptr) == 0 {
             let message: [u8; 31] = "type metadata resolution failed";
