@@ -3162,6 +3162,7 @@ fn resolve_expression_internal(
         let mut recorded_type: i32 = -1;
         let mut recorded_entry_offset: i32 = -1;
         let mut init_expr_index: i32 = -1;
+        let mut resolved_recorded: i32 = -1;
         if local_stack_base > 0 && local_stack_count_ptr > 0 {
             let local_index: i32 = load_i32(entry_ptr + 4);
             if local_index >= 0 {
@@ -3199,6 +3200,30 @@ fn resolve_expression_internal(
                 };
             }
         }
+        let mut validate_const_template: bool = false;
+        if init_expr_index >= 0 {
+            let init_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, init_expr_index);
+            let init_kind: i32 = load_i32(init_entry_ptr);
+            if init_kind == 1 {
+                let metadata_ptr: i32 = load_i32(init_entry_ptr + 4);
+                if metadata_ptr > 0 {
+                    let template_slot_ptr: i32 =
+                        call_metadata_template_payload_ptr(metadata_ptr);
+                    if template_slot_ptr > 0 {
+                        let payload_ptr: i32 = load_i32(template_slot_ptr);
+                        if payload_ptr > 0 {
+                            let return_handle: i32 = load_i32(
+                                payload_ptr
+                                    + TYPE_TEMPLATE_PAYLOAD_RETURN_HANDLE_INDEX * WORD_SIZE,
+                            );
+                            if return_handle > 0 {
+                                validate_const_template = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
         if expr_type >= 0 {
             let resolved_type: i32 = resolve_type_id(out_ptr, ast_base, expr_type);
             if resolved_type < 0 {
@@ -3209,63 +3234,63 @@ fn resolve_expression_internal(
                 expr_type = resolved_type;
             }
             resolved_initial_type = resolved_type;
-            if initial_type >= 0 && recorded_type >= 0 {
-                let mut validate_const_template: bool = false;
-                if init_expr_index >= 0 {
-                    let init_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, init_expr_index);
-                    let init_kind: i32 = load_i32(init_entry_ptr);
-                    if init_kind == 1 {
-                        let metadata_ptr: i32 = load_i32(init_entry_ptr + 4);
-                        if metadata_ptr > 0 {
-                            let template_slot_ptr: i32 =
-                                call_metadata_template_payload_ptr(metadata_ptr);
-                            if template_slot_ptr > 0 {
-                                let payload_ptr: i32 = load_i32(template_slot_ptr);
-                                if payload_ptr > 0 {
-                                    let return_handle: i32 = load_i32(
-                                        payload_ptr
-                                            + TYPE_TEMPLATE_PAYLOAD_RETURN_HANDLE_INDEX
-                                                * WORD_SIZE,
-                                    );
-                                    if return_handle > 0 {
-                                        validate_const_template = true;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                if validate_const_template {
-                    let resolved_recorded: i32 =
-                        resolve_type_id(out_ptr, ast_base, recorded_type);
-                    if resolved_recorded < 0 {
-                        return -1;
-                    }
-                    if recorded_entry_offset >= 0 {
-                        if resolved_recorded != recorded_type {
-                            store_i32(recorded_entry_offset + 8, resolved_recorded);
-                        }
-                    }
-                    if resolved_initial_type >= 0
-                        && resolved_initial_type != resolved_recorded
-                    {
-                        let location_offset: i32 = load_i32(entry_ptr + 12);
-                        record_failure_with_location(
-                            out_ptr,
-                            ast_base,
-                            caller_func_index,
-                            location_offset,
-                            47,
-                            "const parameter template expected type mismatch",
-                        );
-                        return -1;
-                    }
-                    if resolved_recorded != expr_type {
-                        ast_expr_set_type(ast_base, expr_index, resolved_recorded);
-                        expr_type = resolved_recorded;
-                    }
+        }
+        if recorded_type >= 0 {
+            let resolved: i32 = resolve_type_id(out_ptr, ast_base, recorded_type);
+            if resolved < 0 {
+                return -1;
+            }
+            if recorded_entry_offset >= 0 {
+                if resolved != recorded_type {
+                    store_i32(recorded_entry_offset + 8, resolved);
                 }
             }
+            resolved_recorded = resolved;
+        }
+        if validate_const_template {
+            if initial_type >= 0
+                && resolved_initial_type >= 0
+                && resolved_recorded >= 0
+                && resolved_initial_type != resolved_recorded
+            {
+                let location_offset: i32 = load_i32(entry_ptr + 12);
+                record_failure_with_location(
+                    out_ptr,
+                    ast_base,
+                    caller_func_index,
+                    location_offset,
+                    47,
+                    "const parameter template expected type mismatch",
+                );
+                return -1;
+            }
+            if resolved_recorded >= 0 && resolved_recorded != expr_type {
+                ast_expr_set_type(ast_base, expr_index, resolved_recorded);
+                expr_type = resolved_recorded;
+            }
+        } else if initial_type >= 0
+            && resolved_initial_type >= 0
+            && resolved_recorded >= 0
+            && resolved_initial_type != resolved_recorded
+        {
+            let mut location_offset: i32 = -1;
+            if init_expr_index >= 0 {
+                location_offset = ast_expr_location(ast_base, init_expr_index);
+            }
+            if location_offset < 0 {
+                location_offset = load_i32(entry_ptr + 12);
+            }
+            let message: [u8; 51] =
+                "local initializer type does not match declared type";
+            record_failure_with_location(
+                out_ptr,
+                ast_base,
+                caller_func_index,
+                location_offset,
+                51,
+                message,
+            );
+            return -1;
         }
         return 0;
     }
