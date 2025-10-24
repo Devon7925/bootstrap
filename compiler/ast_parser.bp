@@ -1624,8 +1624,7 @@ fn parse_unary_expression(
                     }
                     let label_ident: IdentifierParse =
                         parse_identifier(base, len, field_cursor);
-                    let after_label: i32 = label_ident.cursor;
-                    if after_label < 0 {
+                    if label_ident.cursor < 0 {
                         return -1;
                     }
                     label_data = ast_store_name(ast_base, base, label_ident.start, label_ident.length);
@@ -1633,7 +1632,7 @@ fn parse_unary_expression(
                         return -1;
                     }
                     label_extra = label_ident.length;
-                    field_cursor = skip_whitespace(base, len, after_label);
+                    field_cursor = skip_whitespace(base, len, label_ident.cursor);
                 }
                 field_cursor = expect_char(base, len, field_cursor, ':');
                 if field_cursor < 0 {
@@ -1813,8 +1812,7 @@ fn parse_unary_expression(
             return -1;
         }
         let label_ident: IdentifierParse = parse_identifier(base, len, field_cursor);
-        let after_label: i32 = label_ident.cursor;
-        if after_label < 0 {
+        if label_ident.cursor < 0 {
             return -1;
         }
         let label_name_ptr: i32 =
@@ -1845,7 +1843,7 @@ fn parse_unary_expression(
             return -1;
         }
         store_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr, ExpressionParts { kind: 2, data0: get_index, data1: 0 });
-        resolved_cursor = skip_whitespace(base, len, after_label);
+        resolved_cursor = skip_whitespace(base, len, label_ident.cursor);
     };
 
     if (not_count & 1) != 0 {

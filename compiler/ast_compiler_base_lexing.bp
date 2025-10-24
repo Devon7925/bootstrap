@@ -1161,15 +1161,14 @@ fn parse_block_expression_body(
             }
 
             let ident: IdentifierParse = parse_identifier(base, len, idx);
-            let next_idx: i32 = ident.cursor;
-            if next_idx < 0 {
+            if ident.cursor < 0 {
                 store_i32(locals_stack_count_ptr, saved_stack_count);
                 store_i32(locals_next_index_ptr, saved_next_index);
                 return -1;
             }
             let name_start: i32 = ident.start;
             let name_len: i32 = ident.length;
-            idx = next_idx;
+            idx = ident.cursor;
 
             let current_stack: i32 = load_i32(locals_stack_count_ptr);
             let existing: i32 = find_local_entry_index_in_scope(
