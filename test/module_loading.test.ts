@@ -21,6 +21,7 @@ const MODULE_CONTENT_LEN_OFFSET = 12;
 const MODULE_ENTRY_SIZE = 20;
 const MODULE_MAX_COUNT = 256;
 const MODULE_CONTENT_BASE_OFFSET = MODULE_TABLE_OFFSET + MODULE_MAX_COUNT * MODULE_ENTRY_SIZE;
+const MODULE_PATH_MAX_LENGTH = 1_024;
 
 let stage2WasmPromise: Promise<Uint8Array> | undefined;
 
@@ -304,6 +305,22 @@ test("loadModuleFromSource reports empty module path", async () => {
 
   const failure = readCompileFailure(compiler, status);
   expect(failure.detail).toBe("module path missing");
+});
+
+test("loadModuleFromSource reports module path exceeding maximum length", async () => {
+  const compiler = await instantiateStage2Compiler();
+  const pathPtr = 1_024;
+  const contentPtr = 4_096;
+
+  const overlongPath = "a".repeat(MODULE_PATH_MAX_LENGTH + 1);
+  writeString(compiler.memory, pathPtr, overlongPath);
+  writeString(compiler.memory, contentPtr, "fn main() -> i32 { 0 }");
+
+  const status = compiler.loadModuleFromSource(pathPtr, contentPtr);
+  expect(status).toBeLessThan(0);
+
+  const failure = readCompileFailure(compiler, status);
+  expect(failure.detail).toBe("module path exceeds maximum length");
 });
 
 test("loadModuleFromSource reports null module content pointer", async () => {
