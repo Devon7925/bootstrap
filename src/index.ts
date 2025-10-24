@@ -95,19 +95,20 @@ function loadMemoryIntrinsicsSource(): Promise<string> {
   return memoryIntrinsicsSourcePromise;
 }
 
-function ensureModuleMemoryCapacity(memory: WebAssembly.Memory, required: number) {
-  if (required <= memory.buffer.byteLength) {
+function growMemoryIfRequired(memory: WebAssembly.Memory, required: number) {
+  const current = memory.buffer.byteLength;
+  if (required <= current) {
     return;
   }
   const pageSize = 65_536;
-  const additional = required - memory.buffer.byteLength;
+  const additional = required - current;
   const pagesNeeded = Math.ceil(additional / pageSize);
   memory.grow(pagesNeeded);
 }
 
 function writeModuleString(memory: WebAssembly.Memory, ptr: number, text: string): number {
   const bytes = encoder.encode(text);
-  ensureModuleMemoryCapacity(memory, ptr + bytes.length + 1);
+  growMemoryIfRequired(memory, ptr + bytes.length + 1);
   const view = new Uint8Array(memory.buffer);
   view.set(bytes, ptr);
   view[ptr + bytes.length] = 0;
@@ -118,7 +119,7 @@ function zeroModuleMemory(memory: WebAssembly.Memory, ptr: number, length: numbe
   if (length <= 0) {
     return;
   }
-  ensureModuleMemoryCapacity(memory, ptr + length);
+  growMemoryIfRequired(memory, ptr + length);
   new Uint8Array(memory.buffer).fill(0, ptr, ptr + length);
 }
 
@@ -159,16 +160,9 @@ async function instantiateCompiler(): Promise<WebAssembly.Instance> {
 }
 
 function ensureCapacity(memory: WebAssembly.Memory, required: number) {
-  const pageSize = 65_536;
   const current = memory.buffer.byteLength;
-  if (current >= required) {
-    return;
-  }
-
-  const additional = required - current;
-  const pagesNeeded = Math.ceil(additional / pageSize);
   try {
-    memory.grow(pagesNeeded);
+    growMemoryIfRequired(memory, required);
   } catch {
     throw new CompileError(
       `stage2 compiler memory layout does not leave space for output buffer (required ${required}, current ${current})`,
