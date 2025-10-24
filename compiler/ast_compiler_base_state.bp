@@ -82,30 +82,18 @@ const MODULE_MAX_COUNT: i32 = 256;
 
 const MODULE_ENTRY_SIZE: i32 = 20;
 
-const MODULE_PATH_PTR_OFFSET: i32 = 0;
-
-const MODULE_PATH_LEN_OFFSET: i32 = 4;
-
-const MODULE_CONTENT_PTR_OFFSET: i32 = 8;
-
-const MODULE_CONTENT_LEN_OFFSET: i32 = 12;
-
-const MODULE_FLAGS_OFFSET: i32 = 16;
-
 const MODULE_FLAG_IMPORTED: i32 = 1;
 
 const MODULE_FLAG_IMPORTING: i32 = 2;
 
 const MODULE_PATH_MAX_LENGTH: i32 = 1024;
 
+const MODULE_ENTRY_FIELD_COUNT: i32 = 5;
+
 const MODULE_CONTENT_BASE_OFFSET: i32 = MODULE_TABLE_OFFSET + MODULE_MAX_COUNT * MODULE_ENTRY_SIZE;
 
-fn module_count_ptr() -> i32 {
-    MODULE_STATE_BASE + MODULE_COUNT_OFFSET
-}
-
-fn module_storage_top_ptr() -> i32 {
-    MODULE_STATE_BASE + MODULE_STORAGE_TOP_OFFSET
+fn module_state_header_ptr() -> i32 {
+    MODULE_STATE_BASE
 }
 
 fn module_table_base() -> i32 {
@@ -116,34 +104,38 @@ fn module_entry_ptr(index: i32) -> i32 {
     module_table_base() + index * MODULE_ENTRY_SIZE
 }
 
-fn module_entry_path_ptr(entry_ptr: i32) -> i32 {
-    entry_ptr + MODULE_PATH_PTR_OFFSET
+fn module_entry_store(index: i32, entry: [i32; MODULE_ENTRY_FIELD_COUNT]) {
+    let entry_ptr: i32 = module_entry_ptr(index);
+    let mut field: i32 = 0;
+    while field < MODULE_ENTRY_FIELD_COUNT {
+        store_i32(entry_ptr + field * WORD_SIZE, entry[field]);
+        field = field + 1;
+    };
 }
 
-fn module_entry_path_len_ptr(entry_ptr: i32) -> i32 {
-    entry_ptr + MODULE_PATH_LEN_OFFSET
-}
-
-fn module_entry_content_ptr_ptr(entry_ptr: i32) -> i32 {
-    entry_ptr + MODULE_CONTENT_PTR_OFFSET
-}
-
-fn module_entry_content_len_ptr(entry_ptr: i32) -> i32 {
-    entry_ptr + MODULE_CONTENT_LEN_OFFSET
-}
-
-fn module_entry_flags_ptr(entry_ptr: i32) -> i32 {
-    entry_ptr + MODULE_FLAGS_OFFSET
+fn module_entry_field(index: i32, field: i32) -> i32 {
+    if field < 0 || field >= MODULE_ENTRY_FIELD_COUNT {
+        return 0;
+    }
+    let entry_ptr: i32 = module_entry_ptr(index);
+    load_i32(entry_ptr + field * WORD_SIZE)
 }
 
 fn module_entry_flags(index: i32) -> i32 {
-    let entry_ptr: i32 = module_entry_ptr(index);
-    load_i32(module_entry_flags_ptr(entry_ptr))
+    module_entry_field(index, 4)
 }
 
 fn module_entry_set_flags(index: i32, flags: i32) {
-    let entry_ptr: i32 = module_entry_ptr(index);
-    store_i32(module_entry_flags_ptr(entry_ptr), flags);
+    module_entry_store(
+        index,
+        [
+            module_entry_field(index, 0),
+            module_entry_field(index, 1),
+            module_entry_field(index, 2),
+            module_entry_field(index, 3),
+            flags,
+        ],
+    );
 }
 
 fn module_clear_flags() {
@@ -160,19 +152,19 @@ fn module_content_base() -> i32 {
 }
 
 fn module_count() -> i32 {
-    load_i32(module_count_ptr())
+    load_i32(module_state_header_ptr() + MODULE_COUNT_OFFSET)
 }
 
 fn module_set_count(count: i32) {
-    store_i32(module_count_ptr(), count);
+    store_i32(module_state_header_ptr() + MODULE_COUNT_OFFSET, count);
 }
 
 fn module_storage_top() -> i32 {
-    load_i32(module_storage_top_ptr())
+    load_i32(module_state_header_ptr() + MODULE_STORAGE_TOP_OFFSET)
 }
 
 fn module_set_storage_top(value: i32) {
-    store_i32(module_storage_top_ptr(), value);
+    store_i32(module_state_header_ptr() + MODULE_STORAGE_TOP_OFFSET, value);
 }
 
 fn module_ensure_state_initialized() {
@@ -221,10 +213,9 @@ fn module_find_index(path_ptr: i32, path_len: i32) -> i32 {
     }
     let mut index: i32 = 0;
     while index < count {
-        let entry_ptr: i32 = module_entry_ptr(index);
-        let stored_len: i32 = load_i32(module_entry_path_len_ptr(entry_ptr));
+        let stored_len: i32 = module_entry_field(index, 1);
         if stored_len == path_len {
-            let stored_ptr: i32 = load_i32(module_entry_path_ptr(entry_ptr));
+            let stored_ptr: i32 = module_entry_field(index, 0);
             if stored_ptr > 0 && memory_equal(stored_ptr, path_ptr, path_len) {
                 return index;
             }
@@ -253,32 +244,23 @@ fn module_find_index_by_content_ptr(content_ptr: i32) -> i32 {
 }
 
 fn module_entry_path(index: i32) -> i32 {
-    let entry_ptr: i32 = module_entry_ptr(index);
-    load_i32(module_entry_path_ptr(entry_ptr))
+    module_entry_field(index, 0)
 }
 
 fn module_entry_path_len(index: i32) -> i32 {
-    let entry_ptr: i32 = module_entry_ptr(index);
-    load_i32(module_entry_path_len_ptr(entry_ptr))
+    module_entry_field(index, 1)
 }
 
 fn module_entry_content(index: i32) -> i32 {
-    let entry_ptr: i32 = module_entry_ptr(index);
-    load_i32(module_entry_content_ptr_ptr(entry_ptr))
+    module_entry_field(index, 2)
 }
 
 fn module_entry_content_len(index: i32) -> i32 {
-    let entry_ptr: i32 = module_entry_ptr(index);
-    load_i32(module_entry_content_len_ptr(entry_ptr))
+    module_entry_field(index, 3)
 }
 
 fn module_write_entry(index: i32, path_ptr: i32, path_len: i32, content_ptr: i32, content_len: i32) {
-    let entry_ptr: i32 = module_entry_ptr(index);
-    store_i32(module_entry_path_ptr(entry_ptr), path_ptr);
-    store_i32(module_entry_path_len_ptr(entry_ptr), path_len);
-    store_i32(module_entry_content_ptr_ptr(entry_ptr), content_ptr);
-    store_i32(module_entry_content_len_ptr(entry_ptr), content_len);
-    store_i32(module_entry_flags_ptr(entry_ptr), 0);
+    module_entry_store(index, [path_ptr, path_len, content_ptr, content_len, 0]);
 }
 
 fn scratch_instr_offset_ptr(out_ptr: i32) -> i32 {
