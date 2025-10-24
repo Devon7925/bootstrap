@@ -886,10 +886,7 @@ fn constant_entry_name_matches(
     }
     let entry_module_index: i32 = ast_constant_entry_module_index(entry_ptr);
     let const_start: i32 = ast_constant_entry_name_start(entry_ptr);
-    if entry_module_index < 0 {
-        return identifiers_match_source(base, const_start, const_len, ident_start, ident_len);
-    }
-    if entry_module_index == current_module_index {
+    if entry_module_index < 0 || entry_module_index == current_module_index {
         return identifiers_match_source(base, const_start, const_len, ident_start, ident_len);
     }
     let module_base: i32 = module_entry_content(entry_module_index);
