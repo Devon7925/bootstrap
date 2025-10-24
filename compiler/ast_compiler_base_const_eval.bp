@@ -33,48 +33,51 @@ fn constant_value_requires_deep_copy(type_id: i32) -> bool {
     false
 }
 
+fn clone_constant_value_elements(ast_base: i32, value: i32, element_count: i32) -> i32 {
+    if element_count < 0 {
+        return -1;
+    }
+    if element_count == 0 {
+        return value;
+    }
+    if value <= 0 {
+        return -1;
+    }
+    let clone_ptr: i32 = ast_call_data_alloc(ast_base, element_count * 2);
+    if clone_ptr < 0 {
+        return -1;
+    }
+    let mut idx: i32 = 0;
+    while idx < element_count {
+        let source_slot: i32 = value + idx * 2 * WORD_SIZE;
+        let source_value: i32 = load_i32(source_slot);
+        let source_type: i32 = load_i32(source_slot + WORD_SIZE);
+        if source_type < 0 {
+            return -1;
+        }
+        let stored_value: i32 = if constant_value_requires_deep_copy(source_type) {
+            let nested_clone: i32 = clone_constant_value_deep(ast_base, source_value, source_type);
+            if nested_clone < 0 {
+                return -1;
+            }
+            nested_clone
+        } else {
+            source_value
+        };
+        store_i32(clone_ptr + idx * 2 * WORD_SIZE, stored_value);
+        store_i32(clone_ptr + idx * 2 * WORD_SIZE + WORD_SIZE, source_type);
+        idx = idx + 1;
+    };
+    clone_ptr
+}
+
 fn clone_constant_value_deep(ast_base: i32, value: i32, type_id: i32) -> i32 {
     if type_id < 0 {
         return -1;
     }
     if type_id_is_array(type_id) {
         let length: i32 = array_type_length(ast_base, type_id);
-        if length < 0 {
-            return -1;
-        }
-        if length == 0 {
-            return value;
-        }
-        if value <= 0 {
-            return -1;
-        }
-        let pair_words: i32 = length * 2;
-        let clone_ptr: i32 = ast_call_data_alloc(ast_base, pair_words);
-        if clone_ptr < 0 {
-            return -1;
-        }
-        let mut idx: i32 = 0;
-        while idx < length {
-            let source_slot: i32 = value + idx * 2 * WORD_SIZE;
-            let source_value: i32 = load_i32(source_slot);
-            let source_type: i32 = load_i32(source_slot + WORD_SIZE);
-            if source_type < 0 {
-                return -1;
-            }
-            let stored_value: i32 = if constant_value_requires_deep_copy(source_type) {
-                let nested_clone: i32 = clone_constant_value_deep(ast_base, source_value, source_type);
-                if nested_clone < 0 {
-                    return -1;
-                }
-                nested_clone
-            } else {
-                source_value
-            };
-            store_i32(clone_ptr + idx * 2 * WORD_SIZE, stored_value);
-            store_i32(clone_ptr + idx * 2 * WORD_SIZE + WORD_SIZE, source_type);
-            idx = idx + 1;
-        };
-        return clone_ptr;
+        return clone_constant_value_elements(ast_base, value, length);
     }
     if type_id_is_tuple(type_id) {
         let tuple_index: i32 = tuple_type_index(type_id);
@@ -82,41 +85,7 @@ fn clone_constant_value_deep(ast_base: i32, value: i32, type_id: i32) -> i32 {
             return -1;
         }
         let element_count: i32 = ast_tuple_type_element_count(ast_base, tuple_index);
-        if element_count < 0 {
-            return -1;
-        }
-        if element_count == 0 {
-            return value;
-        }
-        if value <= 0 {
-            return -1;
-        }
-        let clone_ptr: i32 = ast_call_data_alloc(ast_base, element_count * 2);
-        if clone_ptr < 0 {
-            return -1;
-        }
-        let mut idx: i32 = 0;
-        while idx < element_count {
-            let source_slot: i32 = value + idx * 2 * WORD_SIZE;
-            let source_value: i32 = load_i32(source_slot);
-            let source_type: i32 = load_i32(source_slot + WORD_SIZE);
-            if source_type < 0 {
-                return -1;
-            }
-            let stored_value: i32 = if constant_value_requires_deep_copy(source_type) {
-                let nested_clone: i32 = clone_constant_value_deep(ast_base, source_value, source_type);
-                if nested_clone < 0 {
-                    return -1;
-                }
-                nested_clone
-            } else {
-                source_value
-            };
-            store_i32(clone_ptr + idx * 2 * WORD_SIZE, stored_value);
-            store_i32(clone_ptr + idx * 2 * WORD_SIZE + WORD_SIZE, source_type);
-            idx = idx + 1;
-        };
-        return clone_ptr;
+        return clone_constant_value_elements(ast_base, value, element_count);
     }
     value
 }
