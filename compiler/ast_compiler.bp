@@ -189,10 +189,6 @@ fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
 fn compileFromPath(path_ptr: i32) -> i32 {
     module_ensure_state_initialized();
     let detail_out_ptr: i32 = module_storage_top();
-    if path_ptr <= 0 {
-        report_missing_module_path(detail_out_ptr);
-        return -1;
-    }
     let path_len: i32 = string_length(path_ptr);
     if path_len <= 0 {
         report_missing_module_path(detail_out_ptr);
