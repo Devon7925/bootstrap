@@ -49,7 +49,7 @@ const SCRATCH_TYPES_BASE_OFFSET = SCRATCH_FN_BASE_OFFSET - SCRATCH_TYPES_CAPACIT
 const SCRATCH_TYPES_COUNT_OFFSET = SCRATCH_TYPES_BASE_OFFSET - WORD_SIZE;
 
 const AST_MAX_FUNCTIONS = 1_024;
-const AST_FUNCTION_ENTRY_SIZE = 60;
+const AST_FUNCTION_ENTRY_SIZE = 68;
 const AST_NAMES_CAPACITY = 131_072;
 const AST_CONSTANTS_CAPACITY = 1_024;
 const AST_CONSTANT_ENTRY_SIZE = 28;
@@ -408,6 +408,9 @@ export interface FunctionEntryInfo {
   readonly constParamsCount: number;
   readonly constParamMask: readonly number[];
   readonly templateOwnerIndex: number;
+  readonly docPtr: number;
+  readonly docLength: number;
+  readonly doc: string | null;
 }
 
 export function readFunctionCount(
@@ -440,6 +443,8 @@ export function readFunctionEntry(
   const flags = safeReadI32(view, entryPtr + 8 * WORD_SIZE);
   const constParamsPtr = safeReadI32(view, entryPtr + 9 * WORD_SIZE);
   const templateOwnerIndex = safeReadI32(view, entryPtr + 10 * WORD_SIZE);
+  const docPtr = safeReadI32(view, entryPtr + 15 * WORD_SIZE);
+  const docLengthRaw = safeReadI32(view, entryPtr + 16 * WORD_SIZE);
 
   let name: string | null = null;
   if (namePtr > 0 && nameLength > 0) {
@@ -448,6 +453,19 @@ export function readFunctionEntry(
       name = decoder.decode(bytes);
     } catch {
       name = null;
+    }
+  }
+
+  let doc: string | null = null;
+  let docLength = docLengthRaw;
+  if (docPtr <= 0 || docLengthRaw <= 0) {
+    docLength = 0;
+  } else {
+    try {
+      const bytes = new Uint8Array(memory.buffer, docPtr, docLengthRaw);
+      doc = decoder.decode(bytes);
+    } catch {
+      doc = null;
     }
   }
 
@@ -482,6 +500,9 @@ export function readFunctionEntry(
     constParamsCount,
     constParamMask,
     templateOwnerIndex,
+    docPtr,
+    docLength,
+    doc,
   };
 }
 

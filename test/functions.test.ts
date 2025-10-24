@@ -9,6 +9,8 @@ import {
   runWasmMainWithGc,
   instantiateWasmModuleWithGc,
   DEFAULT_OUTPUT_STRIDE,
+  COMPILER_INPUT_PTR,
+  readFunctionEntry,
   AST_COMPILER_ENTRY_PATH,
 } from "./helpers";
 
@@ -221,6 +223,37 @@ test("functions can return from multiple paths", async () => {
   `);
   const result = await runWasmMainWithGc(wasm);
   expect(result).toBe(36);
+});
+
+test("functions record doc attributes", async () => {
+  const compiler = await instantiateAstCompiler();
+  const source = [
+    '#[doc = "adds numbers"]',
+    '#[doc = "second line"]',
+    "fn helper() -> i32 {",
+    "    40",
+    "}",
+    "",
+    '#[doc = "const helper"]',
+    "const fn const_helper() -> i32 {",
+    "    2",
+    "}",
+    "",
+    "fn main() -> i32 {",
+    "    helper() + const_helper()",
+    "}",
+  ].join("\n");
+  const inputPtr = COMPILER_INPUT_PTR;
+  const outputPtr = DEFAULT_OUTPUT_STRIDE;
+  compiler.compileWithLayout(inputPtr, outputPtr, source);
+  const encoder = new TextEncoder();
+  const inputLen = encoder.encode(source).length;
+  const helperEntry = readFunctionEntry(compiler.memory, outputPtr, inputLen, 0);
+  expect(helperEntry.doc).toBe("adds numbers\nsecond line");
+  const constEntry = readFunctionEntry(compiler.memory, outputPtr, inputLen, 1);
+  expect(constEntry.doc).toBe("const helper");
+  const mainEntry = readFunctionEntry(compiler.memory, outputPtr, inputLen, 2);
+  expect(mainEntry.doc).toBeNull();
 });
 
 test("unit return functions allow bare return", async () => {

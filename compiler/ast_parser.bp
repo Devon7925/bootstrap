@@ -1,5 +1,7 @@
 use "./ast_compiler_base_lexing.bp";
 
+const DOC_ATTRIBUTE_BUFFER_CAPACITY: i32 = 4096;
+
 fn compute_line_and_column(base: i32, len: i32, offset: i32) -> (i32, i32) {
     if base < 0 {
         return (0, 0);
@@ -166,6 +168,31 @@ fn record_duplicate_param_failure(
                 input_len,
                 param_start,
                 24,
+                message,
+            );
+        }
+    }
+}
+
+fn record_function_attribute_failure(
+    ast_base: i32,
+    input_len: i32,
+    current_module_index: i32,
+    module_base: i32,
+    attribute_start: i32,
+    const MESSAGE_LEN: i32,
+    message: [u8; MESSAGE_LEN],
+) {
+    let detail_out_ptr: i32 = ast_base - ast_output_reserve(input_len);
+    if detail_out_ptr > 0 {
+        if load_u8(detail_out_ptr) == 0 {
+            write_failure_detail_with_location(
+                detail_out_ptr,
+                current_module_index,
+                module_base,
+                input_len,
+                attribute_start,
+                MESSAGE_LEN,
                 message,
             );
         }
@@ -2959,6 +2986,179 @@ fn parse_function(
     current_module_index: i32,
 ) -> i32 {
     let mut cursor: i32 = skip_whitespace(base, len, offset);
+    let temp_base: i32 = ast_temp_base(ast_base);
+    let doc_buffer_ptr: i32 = temp_base;
+    let doc_len_ptr: i32 = doc_buffer_ptr + DOC_ATTRIBUTE_BUFFER_CAPACITY;
+    let mut doc_length: i32 = 0;
+    loop {
+        if cursor >= len {
+            break;
+        }
+        let first_byte: i32 = load_u8(base + cursor);
+        if first_byte != '#' {
+            break;
+        }
+        let attribute_start: i32 = cursor;
+        cursor = cursor + 1;
+        cursor = skip_whitespace(base, len, cursor);
+        if cursor >= len {
+            let message: [u8; 28] = "malformed function attribute";
+            record_function_attribute_failure(
+                ast_base,
+                len,
+                current_module_index,
+                base,
+                attribute_start,
+                28,
+                message,
+            );
+            return -1;
+        }
+        cursor = expect_char(base, len, cursor, '[');
+        if cursor < 0 {
+            let message: [u8; 28] = "malformed function attribute";
+            record_function_attribute_failure(
+                ast_base,
+                len,
+                current_module_index,
+                base,
+                attribute_start,
+                28,
+                message,
+            );
+            return -1;
+        }
+        cursor = skip_whitespace(base, len, cursor);
+        let attr_ident: IdentifierParse = parse_identifier(base, len, cursor);
+        cursor = attr_ident.cursor;
+        if cursor < 0 {
+            let message: [u8; 28] = "malformed function attribute";
+            record_function_attribute_failure(
+                ast_base,
+                len,
+                current_module_index,
+                base,
+                attribute_start,
+                28,
+                message,
+            );
+            return -1;
+        }
+        let attr_name_start: i32 = attr_ident.start;
+        let attr_name_len: i32 = attr_ident.length;
+        let mut handled: bool = false;
+        if identifier_matches_keyword(base, len, attr_name_start, attr_name_len, 3, "doc") {
+            handled = true;
+            cursor = skip_whitespace(base, len, cursor);
+            cursor = expect_char(base, len, cursor, '=');
+            if cursor < 0 {
+                let message: [u8; 37] = "doc attribute requires string literal";
+                record_function_attribute_failure(
+                    ast_base,
+                    len,
+                    current_module_index,
+                    base,
+                    attribute_start,
+                    37,
+                    message,
+                );
+                return -1;
+            }
+            cursor = skip_whitespace(base, len, cursor);
+            if doc_length > 0 {
+                if doc_length >= DOC_ATTRIBUTE_BUFFER_CAPACITY {
+                    let message: [u8; 22] = "doc attribute too long";
+                    record_function_attribute_failure(
+                        ast_base,
+                        len,
+                        current_module_index,
+                        base,
+                        attribute_start,
+                        22,
+                        message,
+                    );
+                    return -1;
+                }
+                store_u8(doc_buffer_ptr + doc_length, '\n');
+                doc_length = doc_length + 1;
+            }
+            let remaining_capacity: i32 = DOC_ATTRIBUTE_BUFFER_CAPACITY - doc_length;
+            if remaining_capacity <= 0 {
+                let message: [u8; 22] = "doc attribute too long";
+                record_function_attribute_failure(
+                    ast_base,
+                    len,
+                    current_module_index,
+                    base,
+                    attribute_start,
+                    22,
+                    message,
+                );
+                return -1;
+            }
+            let string_cursor: i32 = parse_string_literal_to_buffer(
+                base,
+                len,
+                cursor,
+                doc_buffer_ptr + doc_length,
+                remaining_capacity,
+                doc_len_ptr,
+            );
+            if string_cursor < 0 {
+                let message: [u8; 37] = "doc attribute requires string literal";
+                record_function_attribute_failure(
+                    ast_base,
+                    len,
+                    current_module_index,
+                    base,
+                    attribute_start,
+                    37,
+                    message,
+                );
+                return -1;
+            }
+            let segment_len: i32 = load_i32(doc_len_ptr);
+            doc_length = doc_length + segment_len;
+            cursor = skip_whitespace(base, len, string_cursor);
+        }
+        if !handled {
+            let message: [u8; 30] = "unsupported function attribute";
+            record_function_attribute_failure(
+                ast_base,
+                len,
+                current_module_index,
+                base,
+                attribute_start,
+                30,
+                message,
+            );
+            return -1;
+        }
+        cursor = expect_char(base, len, cursor, ']');
+        if cursor < 0 {
+            let message: [u8; 28] = "malformed function attribute";
+            record_function_attribute_failure(
+                ast_base,
+                len,
+                current_module_index,
+                base,
+                attribute_start,
+                28,
+                message,
+            );
+            return -1;
+        }
+        cursor = skip_whitespace(base, len, cursor);
+    };
+    let mut doc_ptr: i32 = 0;
+    let mut doc_len: i32 = 0;
+    if doc_length > 0 {
+        doc_ptr = ast_store_bytes(ast_base, doc_buffer_ptr, doc_length);
+        if doc_ptr < 0 {
+            return -1;
+        }
+        doc_len = doc_length;
+    }
     let mut is_const_fn: bool = false;
     let mut maybe_const: i32 = expect_keyword_const(base, len, cursor);
     if maybe_const >= 0 {
@@ -2978,7 +3178,6 @@ fn parse_function(
     }
     cursor = skip_whitespace(base, len, cursor);
 
-    let temp_base: i32 = ast_temp_base(ast_base);
     let params_count_ptr: i32 = temp_base;
     let params_table_ptr: i32 = temp_base + 4;
     let params_table_end: i32 = params_table_ptr + MAX_PARAMS * 8;
@@ -3389,6 +3588,8 @@ fn parse_function(
         len,
         current_module_index,
         name_start,
+        doc_ptr,
+        doc_len,
     );
     cursor
 }
