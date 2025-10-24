@@ -258,6 +258,43 @@ export function readExpressionEntry(
   };
 }
 
+export interface StructTypeMetadataEntry {
+  readonly fieldCount: number;
+  readonly nameLength: number;
+  readonly fieldStride: number;
+  readonly fieldsPtr: number;
+  readonly cache: number;
+}
+
+export function readStructTypeEntries(
+  memory: WebAssembly.Memory,
+  outPtr: number,
+  inputLen: number,
+): StructTypeMetadataEntry[] {
+  const astBasePtr = astBase(outPtr, inputLen);
+  const countPtr = astStructTypesCountPtr(astBasePtr);
+  const count = safeReadI32(new DataView(memory.buffer), countPtr);
+  if (count <= 0) {
+    return [];
+  }
+
+  const entries: StructTypeMetadataEntry[] = [];
+  const base = countPtr + WORD_SIZE;
+  for (let index = 0; index < count; index += 1) {
+    const entryPtr = base + index * AST_STRUCT_TYPE_ENTRY_SIZE;
+    const view = new DataView(memory.buffer, entryPtr, AST_STRUCT_TYPE_ENTRY_SIZE);
+    entries.push({
+      fieldCount: view.getInt32(0, true),
+      nameLength: view.getInt32(4, true),
+      fieldStride: view.getInt32(8, true),
+      fieldsPtr: view.getInt32(12, true),
+      cache: view.getInt32(16, true),
+    });
+  }
+
+  return entries;
+}
+
 export interface FunctionEntryInfo {
   readonly namePtr: number;
   readonly nameLength: number;
