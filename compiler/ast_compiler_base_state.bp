@@ -691,67 +691,94 @@ fn ast_function_type_template_payload_ptr(ast_base: i32, index: i32) -> i32 {
     if raw_ptr > 0 { raw_ptr } else { 0 }
 }
 
+fn ast_function_param_template_handle_ptr(
+    ast_base: i32,
+    index: i32,
+    param_index: i32,
+) -> i32 {
+    if param_index < 0 {
+        return 0;
+    }
+    let payload_ptr: i32 = ast_function_type_template_payload_ptr(ast_base, index);
+    if payload_ptr <= 0 {
+        return 0;
+    }
+    let param_count: i32 = ast_function_param_count(ast_base, index);
+    if param_index >= param_count {
+        return 0;
+    }
+    let handle_index: i32 =
+        TYPE_TEMPLATE_PAYLOAD_PARAM_BASE_INDEX
+        + param_index * TYPE_TEMPLATE_PAYLOAD_PARAM_STRIDE;
+    payload_ptr + handle_index * WORD_SIZE
+}
+
 fn ast_function_param_requires_specialization(
     ast_base: i32,
     index: i32,
     param_index: i32,
 ) -> bool {
-    if param_index < 0 { return false; }
-    let payload_ptr: i32 = ast_function_type_template_payload_ptr(ast_base, index);
-    if payload_ptr <= 0 { return false; }
-    if param_index >= ast_function_param_count(ast_base, index) {
+    let handle_ptr: i32 = ast_function_param_template_handle_ptr(ast_base, index, param_index);
+    if handle_ptr <= 0 {
         return false;
     }
-    let handle_index: i32 =
-        TYPE_TEMPLATE_PAYLOAD_PARAM_BASE_INDEX
-        + param_index * TYPE_TEMPLATE_PAYLOAD_PARAM_STRIDE;
-    let handle_ptr: i32 = payload_ptr + handle_index * WORD_SIZE;
     load_i32(handle_ptr) > 0
 }
 
 fn ast_function_param_template_payload(ast_base: i32, index: i32, param_index: i32) -> i32 {
-    if param_index < 0 { return 0; }
-    let payload_ptr: i32 = ast_function_type_template_payload_ptr(ast_base, index);
-    if payload_ptr <= 0 { return 0; }
-    if param_index >= ast_function_param_count(ast_base, index) {
+    let handle_ptr: i32 = ast_function_param_template_handle_ptr(ast_base, index, param_index);
+    if handle_ptr <= 0 {
         return 0;
     }
-    let handle_index: i32 =
-        TYPE_TEMPLATE_PAYLOAD_PARAM_BASE_INDEX
-        + param_index * TYPE_TEMPLATE_PAYLOAD_PARAM_STRIDE;
-    load_i32(payload_ptr + handle_index * WORD_SIZE)
+    load_i32(handle_ptr)
 }
 
 fn ast_function_param_template_base_type(ast_base: i32, index: i32, param_index: i32) -> i32 {
-    if param_index < 0 { return 0; }
-    let payload_ptr: i32 = ast_function_type_template_payload_ptr(ast_base, index);
-    if payload_ptr <= 0 { return 0; }
-    if param_index >= ast_function_param_count(ast_base, index) {
+    let handle_ptr: i32 = ast_function_param_template_handle_ptr(ast_base, index, param_index);
+    if handle_ptr <= 0 {
         return 0;
     }
-    let base_index: i32 =
-        TYPE_TEMPLATE_PAYLOAD_PARAM_BASE_INDEX
-        + param_index * TYPE_TEMPLATE_PAYLOAD_PARAM_STRIDE
-        + 1;
-    load_i32(payload_ptr + base_index * WORD_SIZE)
+    load_i32(handle_ptr + WORD_SIZE)
+}
+
+fn ast_function_return_template_handle_ptr(ast_base: i32, index: i32) -> i32 {
+    let payload_ptr: i32 = ast_function_type_template_payload_ptr(ast_base, index);
+    if payload_ptr <= 0 {
+        return 0;
+    }
+    payload_ptr + TYPE_TEMPLATE_PAYLOAD_RETURN_HANDLE_INDEX * WORD_SIZE
+}
+
+fn ast_function_return_template_base_ptr(ast_base: i32, index: i32) -> i32 {
+    let payload_ptr: i32 = ast_function_type_template_payload_ptr(ast_base, index);
+    if payload_ptr <= 0 {
+        return 0;
+    }
+    payload_ptr + TYPE_TEMPLATE_PAYLOAD_RETURN_BASE_INDEX * WORD_SIZE
 }
 
 fn ast_function_return_requires_specialization(ast_base: i32, index: i32) -> bool {
-    let payload_ptr: i32 = ast_function_type_template_payload_ptr(ast_base, index);
-    if payload_ptr <= 0 { return false; }
-    load_i32(payload_ptr + TYPE_TEMPLATE_PAYLOAD_RETURN_HANDLE_INDEX * WORD_SIZE) > 0
+    let handle_ptr: i32 = ast_function_return_template_handle_ptr(ast_base, index);
+    if handle_ptr <= 0 {
+        return false;
+    }
+    load_i32(handle_ptr) > 0
 }
 
 fn ast_function_return_template_payload(ast_base: i32, index: i32) -> i32 {
-    let payload_ptr: i32 = ast_function_type_template_payload_ptr(ast_base, index);
-    if payload_ptr <= 0 { return 0; }
-    load_i32(payload_ptr + TYPE_TEMPLATE_PAYLOAD_RETURN_HANDLE_INDEX * WORD_SIZE)
+    let handle_ptr: i32 = ast_function_return_template_handle_ptr(ast_base, index);
+    if handle_ptr <= 0 {
+        return 0;
+    }
+    load_i32(handle_ptr)
 }
 
 fn ast_function_return_template_base_type(ast_base: i32, index: i32) -> i32 {
-    let payload_ptr: i32 = ast_function_type_template_payload_ptr(ast_base, index);
-    if payload_ptr <= 0 { return 0; }
-    load_i32(payload_ptr + TYPE_TEMPLATE_PAYLOAD_RETURN_BASE_INDEX * WORD_SIZE)
+    let base_ptr: i32 = ast_function_return_template_base_ptr(ast_base, index);
+    if base_ptr <= 0 {
+        return 0;
+    }
+    load_i32(base_ptr)
 }
 
 fn ast_function_param_template_kind(ast_base: i32, index: i32, param_index: i32) -> i32 {
