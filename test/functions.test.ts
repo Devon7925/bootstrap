@@ -9,6 +9,10 @@ import {
   runWasmMainWithGc,
   instantiateWasmModuleWithGc,
   DEFAULT_OUTPUT_STRIDE,
+  COMPILER_INPUT_PTR,
+  readFunctionCount,
+  readFunctionEntry,
+  readModuleStorageTop,
   AST_COMPILER_ENTRY_PATH,
 } from "./helpers";
 
@@ -340,6 +344,37 @@ test("function section handles multibyte type indices", async () => {
   const wasm = await compileWithAstCompiler(source);
   const result = await runWasmMainWithGc(wasm);
   expect(result).toBe(helperCount - 1);
+});
+
+test("doc attributes are recorded in function entries", async () => {
+  const compiler = await instantiateAstCompiler();
+  const source = [
+    "#[doc = \"Adds one\"]",
+    "#[doc = \"Returns a + 1\"]",
+    "fn add(a: i32) -> i32 {",
+    "    a + 1",
+    "}",
+    "",
+    "fn main() -> i32 {",
+    "    add(41)",
+    "}",
+  ].join("\n");
+  const wasm = compiler.compileAt(COMPILER_INPUT_PTR, DEFAULT_OUTPUT_STRIDE, source);
+  const outputPtr = readModuleStorageTop(compiler.memory);
+  const inputLen = new TextEncoder().encode(source).length;
+  const functionCount = readFunctionCount(compiler.memory, outputPtr, inputLen);
+  expect(functionCount).toBe(2);
+
+  const addEntry = readFunctionEntry(compiler.memory, outputPtr, inputLen, 0);
+  expect(addEntry.name).toBe("add");
+  expect(addEntry.doc).toBe("Adds one\nReturns a + 1");
+
+  const mainEntry = readFunctionEntry(compiler.memory, outputPtr, inputLen, 1);
+  expect(mainEntry.name).toBe("main");
+  expect(mainEntry.doc).toBeNull();
+
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(42);
 });
 
 test("ast compiler source can be compiled once", async () => {
