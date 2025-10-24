@@ -194,10 +194,6 @@ fn interpret_constant_expression(
         }
         let mut expr_type: i32 = ast_expr_type(ast_base, expr_index);
         if expr_type < 0 {
-            if value_type < 0 {
-                store_i32(scratch_top_ptr, saved_top);
-                return -1;
-            }
             ast_expr_set_type(ast_base, expr_index, value_type);
             expr_type = value_type;
         }
