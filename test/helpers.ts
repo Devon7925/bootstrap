@@ -802,21 +802,25 @@ export class CompilerInstance {
       ...extraModules.filter((module) => module.path !== MEMORY_INTRINSICS_MODULE_PATH),
     ];
 
-    const loadModule = this.#loadModuleFromSource;
+    const loadModuleFromSource = this.#loadModuleFromSource;
     const compileFromPath = this.#compileFromPath;
 
-    for (const module of modules) {
+    const loadModuleIntoCache = (path: string, contents: string) => {
+      if (!loadModuleFromSource) {
+        throw new Error("stage1 compiler missing module loading exports");
+      }
+
       let contentLength: number;
       try {
-        writeModuleString(this.#memory, MODULE_PATH_PTR, module.path);
-        contentLength = writeModuleString(this.#memory, MODULE_CONTENT_PTR, module.source);
+        writeModuleString(this.#memory, MODULE_PATH_PTR, path);
+        contentLength = writeModuleString(this.#memory, MODULE_CONTENT_PTR, contents);
       } catch (cause) {
         throw this.#failure(readModuleStorageTop(this.#memory), -1, cause);
       }
 
       let loadResult: number | bigint;
       try {
-        loadResult = loadModule(MODULE_PATH_PTR, MODULE_CONTENT_PTR);
+        loadResult = loadModuleFromSource(MODULE_PATH_PTR, MODULE_CONTENT_PTR);
       } catch (cause) {
         throw this.#failure(readModuleStorageTop(this.#memory), -1, cause);
       }
@@ -834,35 +838,16 @@ export class CompilerInstance {
       } catch (cause) {
         throw this.#failure(readModuleStorageTop(this.#memory), -1, cause);
       }
+    };
+
+    for (const module of modules) {
+      loadModuleIntoCache(module.path, module.source);
     }
 
-    let entryContentLength: number;
-    try {
-      writeModuleString(this.#memory, MODULE_PATH_PTR, entryPath);
-      entryContentLength = writeModuleString(this.#memory, MODULE_CONTENT_PTR, source);
-    } catch (cause) {
-      throw this.#failure(readModuleStorageTop(this.#memory), -1, cause);
-    }
+    loadModuleIntoCache(entryPath, source);
 
-    let loadEntryResult: number | bigint;
-    try {
-      loadEntryResult = loadModule(MODULE_PATH_PTR, MODULE_CONTENT_PTR);
-    } catch (cause) {
-      throw this.#failure(readModuleStorageTop(this.#memory), -1, cause);
-    }
-
-    const entryStatus = coerceToI32(loadEntryResult);
-    if (!Number.isFinite(entryStatus)) {
-      throw this.#failure(readModuleStorageTop(this.#memory), -1);
-    }
-    if (entryStatus < 0) {
-      throw this.#failure(readModuleStorageTop(this.#memory), entryStatus);
-    }
-
-    try {
-      zeroModuleMemory(this.#memory, MODULE_CONTENT_PTR, entryContentLength + 1);
-    } catch (cause) {
-      throw this.#failure(readModuleStorageTop(this.#memory), -1, cause);
+    if (!compileFromPath) {
+      throw new Error("stage1 compiler missing module loading exports");
     }
 
     let producedLength: number;
