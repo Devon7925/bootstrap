@@ -260,7 +260,7 @@ test("bare return is rejected for non-unit functions", async () => {
   );
 });
 
-test.todo("unit functions reject return values", async () => {
+test("unit functions reject return values", async () => {
   const failure = await expectCompileFailure(`
     fn helper() {
         return 1;
@@ -271,7 +271,9 @@ test.todo("unit functions reject return values", async () => {
         0
     }
   `);
-  expect(failure.failure.detail).toBeDefined();
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:3:9: return expression type does not match function return type",
+  );
 });
 
 test.todo("unit function results cannot initialize locals", async () => {

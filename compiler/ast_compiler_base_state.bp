@@ -421,6 +421,7 @@ const AST_FUNCTION_ENTRY_SIZE: i32 = 60;
 
 const FUNCTION_FLAG_CONST: i32 = 1;
 const FUNCTION_FLAG_HAS_CONST_PARAMS: i32 = 2;
+const FUNCTION_FLAG_IMPLICIT_UNIT_RETURN: i32 = 4;
 
 const AST_NAMES_CAPACITY: i32 = 131072;
 
@@ -768,6 +769,10 @@ fn ast_function_is_const(ast_base: i32, index: i32) -> bool {
 
 fn ast_function_has_const_params(ast_base: i32, index: i32) -> bool {
     (ast_function_flags(ast_base, index) & FUNCTION_FLAG_HAS_CONST_PARAMS) != 0
+}
+
+fn ast_function_has_implicit_unit_return(ast_base: i32, index: i32) -> bool {
+    (ast_function_flags(ast_base, index) & FUNCTION_FLAG_IMPLICIT_UNIT_RETURN) != 0
 }
 
 fn ast_function_const_params_count(ast_base: i32, index: i32) -> i32 {
@@ -1650,7 +1655,9 @@ fn clone_const_specialization_expr(
             return -1;
         }
         let location_offset: i32 = load_i32(entry_ptr + 3 * WORD_SIZE);
-        let new_index: i32 = ast_expr_alloc_return(ast_base, cloned_value, location_offset);
+        let is_bare: i32 = if ast_expr_return_is_bare(ast_base, expr_index) { 1 } else { 0 };
+        let new_index: i32 =
+            ast_expr_alloc_return(ast_base, cloned_value, location_offset, is_bare);
         if new_index < 0 {
             return -1;
         }
@@ -5954,13 +5961,18 @@ fn ast_expr_alloc_continue(ast_base: i32, location_offset: i32) -> i32 {
     index
 }
 
-fn ast_expr_alloc_return(ast_base: i32, value_index: i32, location_offset: i32) -> i32 {
-    let index: i32 = ast_expr_alloc(ast_base, 23, value_index, 0, location_offset);
+fn ast_expr_alloc_return(ast_base: i32, value_index: i32, location_offset: i32, is_bare: i32) -> i32 {
+    let index: i32 = ast_expr_alloc(ast_base, 23, value_index, is_bare, location_offset);
     if index < 0 {
         return -1;
     }
     ast_expr_set_type(ast_base, index, ast_expr_type(ast_base, value_index));
     index
+}
+
+fn ast_expr_return_is_bare(ast_base: i32, expr_index: i32) -> bool {
+    let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+    load_i32(entry_ptr + 2 * WORD_SIZE) != 0
 }
 
 fn expression_node_from_parts(ast_base: i32, kind: i32, data0: i32, data1: i32) -> i32 {
