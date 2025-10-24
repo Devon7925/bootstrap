@@ -29,14 +29,13 @@ fn compute_line_and_column(base: i32, len: i32, offset: i32) -> (i32, i32) {
     (line, column)
 }
 
-fn write_module_prefixed_failure_detail(
+fn prepare_module_prefixed_failure_detail(
     detail_out_ptr: i32,
     module_index: i32,
     module_base: i32,
     module_len: i32,
     location_offset: i32,
     const MESSAGE_LEN: i32,
-    message: [u8; MESSAGE_LEN],
 ) -> bool {
     let mut effective_base: i32 = module_base;
     let mut effective_len: i32 = module_len;
@@ -69,6 +68,12 @@ fn write_module_prefixed_failure_detail(
         use_fallback_path = true;
         path_len = 9;
     }
+    if path_len <= 0 {
+        return false;
+    }
+    if path_len > FAILURE_DETAIL_CAPACITY {
+        return false;
+    }
     let location: (i32, i32) =
         compute_line_and_column(effective_base, effective_len, location_offset);
     let line: i32 = location.0;
@@ -81,6 +86,11 @@ fn write_module_prefixed_failure_detail(
     } else {
         location_offset
     };
+    let suffix_len: i32 = decimal_length(line) + decimal_length(column) + 4;
+    let required_len: i32 = path_len + suffix_len + MESSAGE_LEN;
+    if required_len > FAILURE_DETAIL_CAPACITY {
+        return false;
+    }
     if detail_out_ptr > 0 {
         let stored_path_ptr: i32 = if use_fallback_path {
             detail_out_ptr
@@ -102,42 +112,15 @@ fn write_module_prefixed_failure_detail(
         if effective_index >= 0 {
             store_i32(scratch_module_index_ptr(detail_out_ptr), effective_index);
         }
-    }
-    let mut write_offset: i32 = 0;
-    let mut truncated: bool = false;
-    let mut prefix_idx: i32 = 0;
-    while prefix_idx < path_len {
-        if write_offset >= FAILURE_DETAIL_CAPACITY {
-            truncated = true;
-            break;
+        if use_fallback_path {
+            let mut prefix_idx: i32 = 0;
+            while prefix_idx < path_len {
+                store_u8(detail_out_ptr + prefix_idx, fallback_path[prefix_idx] as i32);
+                prefix_idx = prefix_idx + 1;
+            };
         }
-        let byte: i32 = if use_fallback_path {
-            fallback_path[prefix_idx] as i32
-        } else {
-            load_u8(path_ptr + prefix_idx)
-        };
-        store_u8(detail_out_ptr + write_offset, byte);
-        write_offset = write_offset + 1;
-        prefix_idx = prefix_idx + 1;
-    };
-    let suffix_result: (i32, bool) = write_failure_detail_suffix(
-        detail_out_ptr,
-        write_offset,
-        true,
-        line,
-        column,
-        MESSAGE_LEN,
-        message,
-    );
-    write_offset = suffix_result.0;
-    if suffix_result.1 {
-        truncated = true;
     }
-    while write_offset < FAILURE_DETAIL_CAPACITY {
-        store_u8(detail_out_ptr + write_offset, 0);
-        write_offset = write_offset + 1;
-    };
-    !truncated
+    true
 }
 
 fn write_failure_detail_with_location(
@@ -150,16 +133,17 @@ fn write_failure_detail_with_location(
     message: [u8; MESSAGE_LEN],
 ) {
     if detail_out_ptr > 0 {
-        let wrote_detail: bool = write_module_prefixed_failure_detail(
+        let prepared: bool = prepare_module_prefixed_failure_detail(
             detail_out_ptr,
             module_index,
             module_base,
             module_len,
             location_offset,
             MESSAGE_LEN,
-            message,
         );
-        if !wrote_detail {
+        if prepared {
+            write_failure_detail(detail_out_ptr, MESSAGE_LEN, message);
+        } else {
             clear_failure_location(detail_out_ptr);
             write_failure_detail(detail_out_ptr, MESSAGE_LEN, message);
         }
