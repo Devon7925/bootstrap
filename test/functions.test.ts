@@ -247,6 +247,33 @@ test("bare return is rejected for non-unit functions", async () => {
   );
 });
 
+test.todo("unit functions reject return values", async () => {
+  const failure = await expectCompileFailure(`
+    fn helper() {
+        return 1;
+    }
+
+    fn main() -> i32 {
+        helper();
+        0
+    }
+  `);
+  expect(failure.failure.detail).toBeDefined();
+});
+
+test.todo("unit function results cannot initialize locals", async () => {
+  const failure = await expectCompileFailure(`
+    fn helper() {
+    }
+
+    fn main() -> i32 {
+        let value: i32 = helper();
+        value
+    }
+  `);
+  expect(failure.failure.detail).toBeDefined();
+});
+
 test("functions can use local variables", async () => {
   const wasm = await compileWithAstCompiler(`
     fn compute() -> i32 {
