@@ -64,3 +64,23 @@ test("array elements can be summed", async () => {
   const result = await runWasmMainWithGc(wasm);
   expect(result).toBe(10);
 });
+
+test.todo("array index rejects negative constant indices", async () => {
+  const failure = await expectCompileFailure(`
+    fn main() -> i32 {
+        let values: [i32; 3] = [1, 2, 3];
+        values[-1]
+    }
+  `);
+  expect(failure.failure.detail).toBeDefined();
+});
+
+test.todo("array index rejects out of bounds constant indices", async () => {
+  const failure = await expectCompileFailure(`
+    fn main() -> i32 {
+        let values: [i32; 3] = [1, 2, 3];
+        values[3]
+    }
+  `);
+  expect(failure.failure.detail).toBeDefined();
+});
