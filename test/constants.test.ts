@@ -231,6 +231,37 @@ test("const functions specialize simple const parameters during interpretation",
   expect(result).toBe(42);
 });
 
+test.todo("const functions returning arrays evaluate for runtime initializers", async () => {
+  const wasm = await compileWithAstCompiler(`
+    const fn make_values() -> [i32; 3] {
+        [1, 2, 3]
+    }
+
+    fn main() -> i32 {
+        let values: [i32; 3] = make_values();
+        values[0] + values[1] + values[2]
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(6);
+});
+
+test.todo("const functions with const parameters build array constants", async () => {
+  const wasm = await compileWithAstCompiler(`
+    const fn make_array(const COUNT: i32) -> [i32; COUNT] {
+        [COUNT; COUNT]
+    }
+
+    const VALUES = make_array(3);
+
+    fn main() -> i32 {
+        VALUES[0] + VALUES[1] + VALUES[2]
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(9);
+});
+
 test("len intrinsic can be evaluated in const expressions", async () => {
   const wasm = await compileWithAstCompiler(`
     const LENGTH: i32 = len([1, 2, 3, 4]);
