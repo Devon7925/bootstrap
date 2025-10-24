@@ -56,6 +56,12 @@ export class Compilation {
     this.#wasm = wasm;
   }
 
+  #ensureWasmTarget(): void {
+    if (this.#target !== Target.Wasm) {
+      throw new CompileError(`target '${this.#target}' cannot be emitted as Wasm`);
+    }
+  }
+
   get target(): Target {
     return this.#target;
   }
@@ -65,16 +71,12 @@ export class Compilation {
   }
 
   toWasm(): Uint8Array {
-    if (this.#target !== Target.Wasm) {
-      throw new CompileError(`target '${this.#target}' cannot be emitted as Wasm`);
-    }
+    this.#ensureWasmTarget();
     return new Uint8Array(this.#wasm);
   }
 
   intoWasm(): Uint8Array {
-    if (this.#target !== Target.Wasm) {
-      throw new CompileError(`target '${this.#target}' cannot be emitted as Wasm`);
-    }
+    this.#ensureWasmTarget();
 
     if (this.#consumed) {
       return new Uint8Array(this.#wasm);
@@ -170,14 +172,10 @@ function readStageFailure(
   let instrOffset = -1;
   try {
     functions = view.getInt32(outputPtr + FUNCTIONS_COUNT_PTR_OFFSET, true);
-  } catch {
-    functions = -1;
-  }
+  } catch {}
   try {
     instrOffset = view.getInt32(outputPtr + INSTR_OFFSET_PTR_OFFSET, true);
-  } catch {
-    instrOffset = -1;
-  }
+  } catch {}
 
   let compiledFunctions = 0;
   if (functions > 0) {
