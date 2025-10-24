@@ -238,15 +238,12 @@ export async function compile(
   if (!memory) {
     throw new CompileError("stage2 compiler must export memory");
   }
-  if (
-    typeof loadModuleFromSourceExport !== "function" ||
-    typeof compileFromPathExport !== "function"
-  ) {
+  if (typeof loadModuleFromSourceExport !== "function") {
     throw new CompileError("stage2 compiler missing module loading exports");
   }
-
-  const loadModuleFromSource = loadModuleFromSourceExport;
-  const compileFromPath = compileFromPathExport;
+  if (typeof compileFromPathExport !== "function") {
+    throw new CompileError("stage2 compiler missing module loading exports");
+  }
   const memoryIntrinsicsSource = await loadMemoryIntrinsicsSource();
 
   const loadModule = (path: string, contents: string) => {
@@ -254,7 +251,7 @@ export async function compile(
     const contentLength = writeModuleString(memory, MODULE_CONTENT_PTR, contents);
     let status: number;
     try {
-      const result = loadModuleFromSource(MODULE_PATH_PTR, MODULE_CONTENT_PTR);
+      const result = loadModuleFromSourceExport(MODULE_PATH_PTR, MODULE_CONTENT_PTR);
       status = coerceToI32(result);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
@@ -269,20 +266,14 @@ export async function compile(
     zeroModuleMemory(memory, MODULE_CONTENT_PTR, contentLength + 1);
   };
 
-  const moduleSources: CompilerModuleSource[] = [
-    { path: MEMORY_INTRINSICS_MODULE_PATH, source: memoryIntrinsicsSource },
-    ...extraModules.filter((module) => {
-      if (module.path === MEMORY_INTRINSICS_MODULE_PATH) {
-        return false;
-      }
-      if (module.path === entryPath) {
-        return false;
-      }
-      return true;
-    }),
-  ];
-
-  for (const module of moduleSources) {
+  loadModule(MEMORY_INTRINSICS_MODULE_PATH, memoryIntrinsicsSource);
+  for (const module of extraModules) {
+    if (module.path === MEMORY_INTRINSICS_MODULE_PATH) {
+      continue;
+    }
+    if (module.path === entryPath) {
+      continue;
+    }
     loadModule(module.path, module.source);
   }
 
@@ -290,7 +281,7 @@ export async function compile(
 
   let producedLen: number;
   try {
-    const result = compileFromPath(MODULE_PATH_PTR);
+    const result = compileFromPathExport(MODULE_PATH_PTR);
     producedLen = coerceToI32(result);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
