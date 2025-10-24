@@ -259,7 +259,7 @@ export async function compile(
         `stage2 compiler failed to load module '${path}': ${detail}`,
       );
     }
-    if (!Number.isFinite(status) || status < 0) {
+    if (status < 0) {
       const top = readModuleStorageTop(memory);
       throw new CompileError(readStageFailure("stage2", memory, top, status));
     }
@@ -289,7 +289,7 @@ export async function compile(
   }
 
   const outputPtr = readModuleStorageTop(memory);
-  if (!Number.isFinite(producedLen) || producedLen <= 0) {
+  if (producedLen <= 0) {
     throw new CompileError(readStageFailure("stage2", memory, outputPtr, producedLen));
   }
 
