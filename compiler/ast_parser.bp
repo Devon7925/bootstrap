@@ -4020,11 +4020,7 @@ fn parse_use_declaration(
             module_entry_set_flags(import_index, existing_flags);
             return (-1, func_count);
         }
-        let mut updated_flags: i32 = existing_flags | MODULE_FLAG_IMPORTED;
-        if (updated_flags & MODULE_FLAG_IMPORTING) != 0 {
-            updated_flags = updated_flags - MODULE_FLAG_IMPORTING;
-        }
-        module_entry_set_flags(import_index, updated_flags);
+        module_entry_set_flags(import_index, existing_flags | MODULE_FLAG_IMPORTED);
     }
     (idx, new_count)
 }
