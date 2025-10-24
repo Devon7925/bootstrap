@@ -202,10 +202,7 @@ fn module_allocate_bytes(len: i32) -> i32 {
     }
     top = align_to(top, WORD_SIZE);
     let start: i32 = top;
-    let mut end: i32 = start + len;
-    if len == 0 {
-        end = start;
-    }
+    let end: i32 = start + len;
     if ensure_memory_capacity(end + 1) < 0 {
         let detail_out_ptr: i32 = module_storage_top();
         if detail_out_ptr > 0 {
