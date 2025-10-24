@@ -147,7 +147,7 @@ test("else if chains execute", async () => {
   expect(result).toBe(2099);
 });
 
-test.todo("if branches with mismatched types report precise diagnostics", async () => {
+test("if branches with mismatched types report precise diagnostics", async () => {
   const failure = await expectCompileFailure(`
     fn mismatched(flag: bool) -> i32 {
         if flag {
@@ -161,7 +161,7 @@ test.todo("if branches with mismatched types report precise diagnostics", async 
         mismatched(true)
     }
   `);
-  expect(failure.failure.detail).toMatch(/if (branch|branches) type mismatch/);
+  expect(failure.failure.detail).toBe("if branches type mismatch");
 });
 
 test("loop allows final if without semicolon", async () => {

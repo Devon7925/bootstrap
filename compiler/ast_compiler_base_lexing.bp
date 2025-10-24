@@ -1172,6 +1172,21 @@ fn parse_block_expression_body(
                 name_len,
             );
             if existing >= 0 {
+                let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+                if detail_out_ptr > 0 {
+                    if load_u8(detail_out_ptr) == 0 {
+                        let message: [u8; 27] = "duplicate local declaration";
+                        write_failure_detail_with_location(
+                            detail_out_ptr,
+                            scratch_module_index(detail_out_ptr),
+                            base,
+                            len,
+                            name_start,
+                            27,
+                            message,
+                        );
+                    }
+                }
                 store_i32(locals_stack_count_ptr, saved_stack_count);
                 store_i32(locals_next_index_ptr, saved_next_index);
                 return -1;
