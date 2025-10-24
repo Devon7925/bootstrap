@@ -117,7 +117,7 @@ test("logical operators short circuit", async () => {
   expect(result).toBe(2);
 });
 
-test.todo("boolean locals reject integer initializers", async () => {
+test("boolean locals reject integer initializers", async () => {
   const failure = await expectCompileFailure(`
     fn main() -> i32 {
         let flag: bool = 1;

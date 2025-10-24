@@ -1265,6 +1265,36 @@ fn parse_block_expression_body(
                 let inferred_type: i32 = ast_expr_type(ast_base, init_index);
                 store_i32(stmt_local_type_ptr, inferred_type);
             }
+            let local_type_id: i32 = load_i32(stmt_local_type_ptr);
+            if local_type_id == BUILTIN_TYPE_ID_BOOL {
+                let init_type: i32 = ast_expr_type(ast_base, init_index);
+                if init_type >= 0 && init_type != BUILTIN_TYPE_ID_BOOL {
+                    let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+                    if detail_out_ptr > 0 {
+                        if load_u8(detail_out_ptr) == 0 {
+                            let mut location_offset: i32 =
+                                ast_expr_location(ast_base, init_index);
+                            if location_offset < 0 {
+                                location_offset = name_start;
+                            }
+                            let message: [u8; 41] =
+                                "boolean local initializer must be boolean";
+                            write_failure_detail_with_location(
+                                detail_out_ptr,
+                                scratch_module_index(detail_out_ptr),
+                                base,
+                                len,
+                                location_offset,
+                                41,
+                                message,
+                            );
+                        }
+                    }
+                    store_i32(locals_stack_count_ptr, saved_stack_count);
+                    store_i32(locals_next_index_ptr, saved_next_index);
+                    return -1;
+                }
+            }
             idx = skip_whitespace(base, len, idx);
             idx = expect_char(base, len, idx, ';');
             if idx < 0 {
@@ -1290,7 +1320,6 @@ fn parse_block_expression_body(
             store_i32(entry_ptr, name_start);
             store_i32(entry_ptr + 4, name_len);
             store_i32(entry_ptr + 8, local_index);
-            let local_type_id: i32 = load_i32(stmt_local_type_ptr);
             store_i32(entry_ptr + 12, local_type_id);
             store_i32(entry_ptr + 16, if is_mut { 1 } else { 0 });
             store_i32(locals_stack_count_ptr, stack_count + 1);
