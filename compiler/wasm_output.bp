@@ -1966,8 +1966,7 @@ fn emit_expression(
     offset: i32,
     ast_base: i32,
     expr_index: i32,
-    runtime_map_ptr: i32,
-    runtime_func_count: i32,
+    runtime_map: RuntimeFunctionMap,
 ) -> i32 {
     if expr_index < 0 {
         return -1;
@@ -1997,10 +1996,10 @@ fn emit_expression(
         if callee_index < 0 {
             return -1;
         }
-        if runtime_map_ptr > 0 {
-            if callee_index >= runtime_func_count {
+        if runtime_map.ptr > 0 {
+            if callee_index >= runtime_map.count {
                 let runtime_index: i32 =
-                    load_i32(runtime_map_ptr + callee_index * WORD_SIZE);
+                    load_i32(runtime_map.ptr + callee_index * WORD_SIZE);
                 if runtime_index < 0 {
                     return -1;
                 }
@@ -2024,7 +2023,7 @@ fn emit_expression(
                             search_name_len,
                         ) {
                             let runtime_index: i32 =
-                                load_i32(runtime_map_ptr + search_idx * WORD_SIZE);
+                                load_i32(runtime_map.ptr + search_idx * WORD_SIZE);
                             if runtime_index >= 0 {
                                 store_i32(callee_slot, runtime_index);
                                 callee_index = runtime_index;
@@ -2047,8 +2046,7 @@ fn emit_expression(
                 out,
                 ast_base,
                 arg_expr_index,
-                runtime_map_ptr,
-                runtime_func_count,
+                runtime_map,
             );
             if out < 0 {
                 return -1;
@@ -2085,7 +2083,7 @@ fn emit_expression(
         if length < 0 {
             return -1;
         }
-        let mut out: i32 = emit_expression(base, offset, ast_base, element_index, runtime_map_ptr, runtime_func_count);
+        let mut out: i32 = emit_expression(base, offset, ast_base, element_index, runtime_map);
         if out < 0 {
             return -1;
         }
@@ -2117,7 +2115,7 @@ fn emit_expression(
         let mut idx: i32 = 0;
         while idx < element_count {
             let element_index: i32 = load_i32(values_ptr + idx * WORD_SIZE);
-            out = emit_expression(base, out, ast_base, element_index, runtime_map_ptr, runtime_func_count);
+            out = emit_expression(base, out, ast_base, element_index, runtime_map);
             if out < 0 {
                 return -1;
             }
@@ -2140,11 +2138,11 @@ fn emit_expression(
     if kind == 36 {
         let array_index: i32 = load_i32(entry_ptr + 4);
         let index_index: i32 = load_i32(entry_ptr + 8);
-        let mut out: i32 = emit_expression(base, offset, ast_base, array_index, runtime_map_ptr, runtime_func_count);
+        let mut out: i32 = emit_expression(base, offset, ast_base, array_index, runtime_map);
         if out < 0 {
             return -1;
         }
-        out = emit_expression(base, out, ast_base, index_index, runtime_map_ptr, runtime_func_count);
+        out = emit_expression(base, out, ast_base, index_index, runtime_map);
         if out < 0 {
             return -1;
         }
@@ -2165,15 +2163,15 @@ fn emit_expression(
         let array_index: i32 = load_i32(entry_ptr + 4);
         let index_index: i32 = load_i32(entry_ptr + 8);
         let value_index: i32 = load_i32(entry_ptr + 12);
-        let mut out: i32 = emit_expression(base, offset, ast_base, array_index, runtime_map_ptr, runtime_func_count);
+        let mut out: i32 = emit_expression(base, offset, ast_base, array_index, runtime_map);
         if out < 0 {
             return -1;
         }
-        out = emit_expression(base, out, ast_base, index_index, runtime_map_ptr, runtime_func_count);
+        out = emit_expression(base, out, ast_base, index_index, runtime_map);
         if out < 0 {
             return -1;
         }
-        out = emit_expression(base, out, ast_base, value_index, runtime_map_ptr, runtime_func_count);
+        out = emit_expression(base, out, ast_base, value_index, runtime_map);
         if out < 0 {
             return -1;
         }
@@ -2188,11 +2186,11 @@ fn emit_expression(
         out = write_byte(base, out, 251);
         out = write_byte(base, out, 14);
         out = write_u32_leb(base, out, type_index);
-        out = emit_expression(base, out, ast_base, array_index, runtime_map_ptr, runtime_func_count);
+        out = emit_expression(base, out, ast_base, array_index, runtime_map);
         if out < 0 {
             return -1;
         }
-        out = emit_expression(base, out, ast_base, index_index, runtime_map_ptr, runtime_func_count);
+        out = emit_expression(base, out, ast_base, index_index, runtime_map);
         if out < 0 {
             return -1;
         }
@@ -2208,11 +2206,11 @@ fn emit_expression(
             return -1;
         }
         let value_index: i32 = load_i32(entry_ptr + 12);
-        let mut out: i32 = emit_expression(base, offset, ast_base, tuple_index, runtime_map_ptr, runtime_func_count);
+        let mut out: i32 = emit_expression(base, offset, ast_base, tuple_index, runtime_map);
         if out < 0 {
             return -1;
         }
-        out = emit_expression(base, out, ast_base, value_index, runtime_map_ptr, runtime_func_count);
+        out = emit_expression(base, out, ast_base, value_index, runtime_map);
         if out < 0 {
             return -1;
         }
@@ -2228,7 +2226,7 @@ fn emit_expression(
         out = write_byte(base, out, 5);
         out = write_u32_leb(base, out, type_index);
         out = write_u32_leb(base, out, field_index);
-        out = emit_expression(base, out, ast_base, tuple_index, runtime_map_ptr, runtime_func_count);
+        out = emit_expression(base, out, ast_base, tuple_index, runtime_map);
         if out < 0 {
             return -1;
         }
@@ -2259,7 +2257,7 @@ fn emit_expression(
         if field_index < 0 {
             return -1;
         }
-        let mut out: i32 = emit_expression(base, offset, ast_base, tuple_index, runtime_map_ptr, runtime_func_count);
+        let mut out: i32 = emit_expression(base, offset, ast_base, tuple_index, runtime_map);
         if out < 0 {
             return -1;
         }
@@ -2289,8 +2287,7 @@ fn emit_expression(
             offset,
             ast_base,
             struct_index,
-            runtime_map_ptr,
-            runtime_func_count,
+            runtime_map,
         );
         if out < 0 {
             return -1;
@@ -2334,7 +2331,7 @@ fn emit_expression(
             let mut idx: i32 = 0;
             while idx < element_count {
                 let value_index: i32 = load_i32(values_ptr + idx * WORD_SIZE);
-                out = emit_expression(base, out, ast_base, value_index, runtime_map_ptr, runtime_func_count);
+                out = emit_expression(base, out, ast_base, value_index, runtime_map);
                 if out < 0 {
                     return -1;
                 }
@@ -2378,8 +2375,7 @@ fn emit_expression(
                     out,
                     ast_base,
                     value_index,
-                    runtime_map_ptr,
-                    runtime_func_count,
+                    runtime_map,
                 );
                 if out < 0 {
                     return -1;
@@ -2433,7 +2429,7 @@ fn emit_expression(
     }
     if kind == 29 || kind == 30 || kind == 31 {
         let ptr_index: i32 = load_i32(entry_ptr + 4);
-        let mut out: i32 = emit_expression(base, offset, ast_base, ptr_index, runtime_map_ptr, runtime_func_count);
+        let mut out: i32 = emit_expression(base, offset, ast_base, ptr_index, runtime_map);
         if out < 0 {
             return -1;
         }
@@ -2459,11 +2455,11 @@ fn emit_expression(
     if kind == 32 || kind == 33 || kind == 34 {
         let ptr_index: i32 = load_i32(entry_ptr + 4);
         let value_index: i32 = load_i32(entry_ptr + 8);
-        let mut out: i32 = emit_expression(base, offset, ast_base, ptr_index, runtime_map_ptr, runtime_func_count);
+        let mut out: i32 = emit_expression(base, offset, ast_base, ptr_index, runtime_map);
         if out < 0 {
             return -1;
         }
-        out = emit_expression(base, out, ast_base, value_index, runtime_map_ptr, runtime_func_count);
+        out = emit_expression(base, out, ast_base, value_index, runtime_map);
         if out < 0 {
             return -1;
         }
@@ -2491,7 +2487,7 @@ fn emit_expression(
     if kind == 39 {
         let value_index: i32 = load_i32(entry_ptr + 4);
         let target_type: i32 = load_i32(entry_ptr + 8);
-        let mut out: i32 = emit_expression(base, offset, ast_base, value_index, runtime_map_ptr, runtime_func_count);
+        let mut out: i32 = emit_expression(base, offset, ast_base, value_index, runtime_map);
         if out < 0 {
             return -1;
         }
@@ -2517,11 +2513,11 @@ fn emit_expression(
     {
         let left_index: i32 = load_i32(entry_ptr + 4);
         let right_index: i32 = load_i32(entry_ptr + 8);
-        let mut out: i32 = emit_expression(base, offset, ast_base, left_index, runtime_map_ptr, runtime_func_count);
+        let mut out: i32 = emit_expression(base, offset, ast_base, left_index, runtime_map);
         if out < 0 {
             return -1;
         }
-        out = emit_expression(base, out, ast_base, right_index, runtime_map_ptr, runtime_func_count);
+        out = emit_expression(base, out, ast_base, right_index, runtime_map);
         if out < 0 {
             return -1;
         }
@@ -2612,7 +2608,7 @@ fn emit_expression(
     if kind == 20 {
         let left_index: i32 = load_i32(entry_ptr + 4);
         let right_index: i32 = load_i32(entry_ptr + 8);
-        let mut out: i32 = emit_expression(base, offset, ast_base, left_index, runtime_map_ptr, runtime_func_count);
+        let mut out: i32 = emit_expression(base, offset, ast_base, left_index, runtime_map);
         if out < 0 {
             return -1;
         }
@@ -2621,7 +2617,7 @@ fn emit_expression(
         out = write_byte(base, out, 65);
         out = write_i32_leb(base, out, 1);
         out = write_byte(base, out, 5);
-        out = emit_expression(base, out, ast_base, right_index, runtime_map_ptr, runtime_func_count);
+        out = emit_expression(base, out, ast_base, right_index, runtime_map);
         if out < 0 {
             return -1;
         }
@@ -2631,13 +2627,13 @@ fn emit_expression(
     if kind == 21 {
         let left_index: i32 = load_i32(entry_ptr + 4);
         let right_index: i32 = load_i32(entry_ptr + 8);
-        let mut out: i32 = emit_expression(base, offset, ast_base, left_index, runtime_map_ptr, runtime_func_count);
+        let mut out: i32 = emit_expression(base, offset, ast_base, left_index, runtime_map);
         if out < 0 {
             return -1;
         }
         out = write_byte(base, out, 4);
         out = write_byte(base, out, 127);
-        out = emit_expression(base, out, ast_base, right_index, runtime_map_ptr, runtime_func_count);
+        out = emit_expression(base, out, ast_base, right_index, runtime_map);
         if out < 0 {
             return -1;
         }
@@ -2649,7 +2645,7 @@ fn emit_expression(
     }
     if kind == 22 {
         let value_index: i32 = load_i32(entry_ptr + 4);
-        let mut out: i32 = emit_expression(base, offset, ast_base, value_index, runtime_map_ptr, runtime_func_count);
+        let mut out: i32 = emit_expression(base, offset, ast_base, value_index, runtime_map);
         if out < 0 {
             return -1;
         }
@@ -2658,7 +2654,7 @@ fn emit_expression(
     }
     if kind == 23 {
         let value_index: i32 = load_i32(entry_ptr + 4);
-        let mut out: i32 = emit_expression(base, offset, ast_base, value_index, runtime_map_ptr, runtime_func_count);
+        let mut out: i32 = emit_expression(base, offset, ast_base, value_index, runtime_map);
         if out < 0 {
             return -1;
         }
@@ -2669,18 +2665,18 @@ fn emit_expression(
         let condition_index: i32 = load_i32(entry_ptr + 4);
         let then_index: i32 = load_i32(entry_ptr + 8);
         let else_index: i32 = load_i32(entry_ptr + 12);
-        let mut out: i32 = emit_expression(base, offset, ast_base, condition_index, runtime_map_ptr, runtime_func_count);
+        let mut out: i32 = emit_expression(base, offset, ast_base, condition_index, runtime_map);
         if out < 0 {
             return -1;
         }
         out = write_byte(base, out, 4);
         out = write_byte(base, out, 127);
-        out = emit_expression(base, out, ast_base, then_index, runtime_map_ptr, runtime_func_count);
+        out = emit_expression(base, out, ast_base, then_index, runtime_map);
         if out < 0 {
             return -1;
         }
         out = write_byte(base, out, 5);
-        out = emit_expression(base, out, ast_base, else_index, runtime_map_ptr, runtime_func_count);
+        out = emit_expression(base, out, ast_base, else_index, runtime_map);
         if out < 0 {
             return -1;
         }
@@ -2691,13 +2687,13 @@ fn emit_expression(
         let local_index: i32 = load_i32(entry_ptr + 4);
         let init_index: i32 = load_i32(entry_ptr + 8);
         let body_index: i32 = load_i32(entry_ptr + 12);
-        let mut out: i32 = emit_expression(base, offset, ast_base, init_index, runtime_map_ptr, runtime_func_count);
+        let mut out: i32 = emit_expression(base, offset, ast_base, init_index, runtime_map);
         if out < 0 {
             return -1;
         }
         out = write_byte(base, out, 33);
         out = write_u32_leb(base, out, local_index);
-        out = emit_expression(base, out, ast_base, body_index, runtime_map_ptr, runtime_func_count);
+        out = emit_expression(base, out, ast_base, body_index, runtime_map);
         if out < 0 {
             return -1;
         }
@@ -2706,7 +2702,7 @@ fn emit_expression(
     if kind == 10 {
         let local_index: i32 = load_i32(entry_ptr + 4);
         let value_index: i32 = load_i32(entry_ptr + 8);
-        let mut out: i32 = emit_expression(base, offset, ast_base, value_index, runtime_map_ptr, runtime_func_count);
+        let mut out: i32 = emit_expression(base, offset, ast_base, value_index, runtime_map);
         if out < 0 {
             return -1;
         }
@@ -2717,12 +2713,12 @@ fn emit_expression(
     if kind == 11 {
         let first_index: i32 = load_i32(entry_ptr + 4);
         let then_index: i32 = load_i32(entry_ptr + 8);
-        let mut out: i32 = emit_expression(base, offset, ast_base, first_index, runtime_map_ptr, runtime_func_count);
+        let mut out: i32 = emit_expression(base, offset, ast_base, first_index, runtime_map);
         if out < 0 {
             return -1;
         }
         out = write_byte(base, out, 26);
-        out = emit_expression(base, out, ast_base, then_index, runtime_map_ptr, runtime_func_count);
+        out = emit_expression(base, out, ast_base, then_index, runtime_map);
         if out < 0 {
             return -1;
         }
@@ -2734,7 +2730,7 @@ fn emit_expression(
         out = write_byte(base, out, 127);
         out = write_byte(base, out, 3);
         out = write_byte(base, out, 64);
-        out = emit_expression(base, out, ast_base, body_index, runtime_map_ptr, runtime_func_count);
+        out = emit_expression(base, out, ast_base, body_index, runtime_map);
         if out < 0 {
             return -1;
         }
@@ -2754,7 +2750,7 @@ fn emit_expression(
         let value_index: i32 = load_i32(entry_ptr + 8);
         let mut out: i32 = offset;
         if value_index >= 0 {
-            out = emit_expression(base, out, ast_base, value_index, runtime_map_ptr, runtime_func_count);
+            out = emit_expression(base, out, ast_base, value_index, runtime_map);
             if out < 0 {
                 return -1;
             }
@@ -3588,7 +3584,7 @@ fn emit_code_section(
             let mut emit_idx: i32 = 0;
             while emit_idx < arg_count {
                     let arg_expr_index: i32 = load_i32(args_base + emit_idx * 4);
-                    out = emit_expression(base, out, ast_base, arg_expr_index, runtime_map.ptr, runtime_map.count);
+                    out = emit_expression(base, out, ast_base, arg_expr_index, runtime_map);
                     if out < 0 {
                         return -1;
                     }
@@ -3623,7 +3619,7 @@ fn emit_code_section(
             } else {
                 out = write_u32_leb(base, out, 0);
             }
-            out = emit_expression(base, out, ast_base, expr_index, runtime_map.ptr, runtime_map.count);
+            out = emit_expression(base, out, ast_base, expr_index, runtime_map);
             if out < 0 {
                 return -1;
             }
