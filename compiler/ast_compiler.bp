@@ -32,6 +32,7 @@ fn compile_impl(
             record_type_metadata_failure(out_ptr);
         } else if out_ptr > 0 {
             if load_u8(out_ptr) == 0 {
+                let message: [u8; 21] = "parsing source failed";
                 write_failure_detail_with_location(
                     out_ptr,
                     current_module_index,
@@ -39,7 +40,7 @@ fn compile_impl(
                     input_len,
                     0,
                     21,
-                    "parsing source failed",
+                    message,
                 );
             }
         }
@@ -78,7 +79,8 @@ fn compile_impl(
 fn report_missing_module_path(detail_out_ptr: i32) {
     if detail_out_ptr > 0 {
         clear_failure_location(detail_out_ptr);
-        write_failure_detail(detail_out_ptr, 19, "module path missing");
+        let message: [u8; 19] = "module path missing";
+        write_failure_detail(detail_out_ptr, 19, message);
     }
 }
 
@@ -135,23 +137,15 @@ fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
     if path_len > MODULE_PATH_MAX_LENGTH {
         if detail_out_ptr > 0 {
             clear_failure_location(detail_out_ptr);
-            write_failure_detail(
-                detail_out_ptr,
-                34,
-                "module path exceeds maximum length",
-            );
+            let message: [u8; 34] = "module path exceeds maximum length";
+            write_failure_detail(detail_out_ptr, 34, message);
         }
         return -1;
     }
     let content_len: i32 = string_length(content_ptr);
     if content_len < 0 {
-        write_module_failure_with_location(
-            detail_out_ptr,
-            path_ptr,
-            path_len,
-            22,
-            "module content missing",
-        );
+        let message: [u8; 22] = "module content missing";
+        write_module_failure_with_location(detail_out_ptr, path_ptr, path_len, 22, message);
         return -1;
     }
     let existing_index: i32 = module_find_index(path_ptr, path_len);
@@ -159,13 +153,8 @@ fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
         module_entry_path(existing_index)
     } else {
         if module_count() >= MODULE_MAX_COUNT {
-            write_module_failure_with_location(
-                detail_out_ptr,
-                path_ptr,
-                path_len,
-                29,
-                "module table capacity reached",
-            );
+            let message: [u8; 29] = "module table capacity reached";
+            write_module_failure_with_location(detail_out_ptr, path_ptr, path_len, 29, message);
             return -1;
         }
         let allocated_path_ptr: i32 = module_allocate_bytes(path_len + 1);
@@ -221,13 +210,8 @@ fn compileFromPath(path_ptr: i32) -> i32 {
     }
     let index: i32 = module_find_index(path_ptr, path_len);
     if index < 0 {
-        write_module_failure_with_location(
-            detail_out_ptr,
-            path_ptr,
-            path_len,
-            26,
-            "module has not been loaded",
-        );
+        let message: [u8; 26] = "module has not been loaded";
+        write_module_failure_with_location(detail_out_ptr, path_ptr, path_len, 26, message);
         return -1;
     }
     module_clear_flags();
@@ -237,12 +221,13 @@ fn compileFromPath(path_ptr: i32) -> i32 {
     let input_ptr: i32 = module_entry_content(index);
     let input_len: i32 = module_entry_content_len(index);
     if input_ptr <= 0 || input_len <= 0 {
+        let message: [u8; 35] = "cached module entry missing content";
         write_module_failure_with_location(
             detail_out_ptr,
             module_path_ptr,
             module_path_len,
             35,
-            "cached module entry missing content",
+            message,
         );
         return -1;
     }
@@ -251,12 +236,13 @@ fn compileFromPath(path_ptr: i32) -> i32 {
     module_set_storage_top(out_ptr);
     let required: i32 = out_ptr + ast_output_reserve(input_len);
     if ensure_memory_capacity(required) < 0 {
+        let message: [u8; 54] = "failed to reserve linear memory for module compilation";
         write_module_failure_with_location(
             out_ptr,
             module_path_ptr,
             module_path_len,
             54,
-            "failed to reserve linear memory for module compilation",
+            message,
         );
         return -1;
     }
