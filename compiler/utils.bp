@@ -9,7 +9,7 @@ fn memory_equal(a_ptr: i32, b_ptr: i32, len: i32) -> bool {
         let b_byte: i32 = load_u8(b_ptr + idx);
         if a_byte != b_byte {
             return false;
-        };
+        }
         idx = idx + 1;
     };
     true
@@ -18,7 +18,7 @@ fn memory_equal(a_ptr: i32, b_ptr: i32, len: i32) -> bool {
 fn string_length(ptr: i32) -> i32 {
     if ptr <= 0 {
         return -1;
-    };
+    }
     let mut len: i32 = 0;
     while load_u8(ptr + len) != 0 {
         len = len + 1;
@@ -38,7 +38,7 @@ fn copy_bytes(dest: i32, src: i32, len: i32) {
 fn align_to(value: i32, alignment: i32) -> i32 {
     if alignment <= 0 {
         return value;
-    };
+    }
     let mut adjusted: i32 = value + alignment - 1;
     adjusted = adjusted / alignment * alignment;
     adjusted

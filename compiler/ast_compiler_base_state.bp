@@ -180,13 +180,13 @@ fn module_ensure_state_initialized() {
     if top == 0 {
         module_set_storage_top(module_content_base());
         module_set_count(0);
-    };
+    }
 }
 
 fn resolve_module_failure_detail_ptr(detail_ptr: i32) -> i32 {
     if detail_ptr > 0 {
         return detail_ptr;
-    };
+    }
     module_set_storage_top(module_content_base());
     module_storage_top()
 }
@@ -195,24 +195,24 @@ fn module_allocate_bytes(len: i32) -> i32 {
     module_ensure_state_initialized();
     if len < 0 {
         return -1;
-    };
+    }
     let mut top: i32 = module_storage_top();
     if top <= 0 {
         return -1;
-    };
+    }
     top = align_to(top, WORD_SIZE);
     let start: i32 = top;
     let mut end: i32 = start + len;
     if len == 0 {
         end = start;
-    };
+    }
     if ensure_memory_capacity(end + 1) < 0 {
         let detail_out_ptr: i32 = module_storage_top();
         if detail_out_ptr > 0 {
             write_failure_detail(detail_out_ptr, 50, "failed to reserve linear memory for module storage");
-        };
+        }
         return -1;
-    };
+    }
     module_set_storage_top(end);
     start
 }
@@ -221,7 +221,7 @@ fn module_find_index(path_ptr: i32, path_len: i32) -> i32 {
     let count: i32 = module_count();
     if count <= 0 {
         return -1;
-    };
+    }
     let mut index: i32 = 0;
     while index < count {
         let entry_ptr: i32 = module_entry_ptr(index);
@@ -230,8 +230,8 @@ fn module_find_index(path_ptr: i32, path_len: i32) -> i32 {
             let stored_ptr: i32 = load_i32(module_entry_path_ptr(entry_ptr));
             if stored_ptr > 0 && memory_equal(stored_ptr, path_ptr, path_len) {
                 return index;
-            };
-        };
+            }
+        }
         index = index + 1;
     };
     -1
@@ -240,16 +240,16 @@ fn module_find_index(path_ptr: i32, path_len: i32) -> i32 {
 fn module_find_index_by_content_ptr(content_ptr: i32) -> i32 {
     if content_ptr <= 0 {
         return -1;
-    };
+    }
     let count: i32 = module_count();
     if count <= 0 {
         return -1;
-    };
+    }
     let mut index: i32 = 0;
     while index < count {
         if module_entry_content(index) == content_ptr {
             return index;
-        };
+        }
         index = index + 1;
     };
     -1
@@ -326,8 +326,8 @@ fn clear_failure_location(out_ptr: i32) {
             store_i32(scratch_failure_column_ptr(out_ptr), 0);
             store_i32(scratch_failure_character_ptr(out_ptr), 0);
             store_i32(scratch_failure_offset_ptr(out_ptr), 0);
-        };
-    };
+        }
+    }
 }
 
 fn store_failure_detail_location(
@@ -348,11 +348,11 @@ fn store_failure_detail_location(
                         store_i32(scratch_failure_column_ptr(detail_out_ptr), column);
                         store_i32(scratch_failure_character_ptr(detail_out_ptr), 1);
                         store_i32(scratch_failure_offset_ptr(detail_out_ptr), 0);
-                    };
-                };
-            };
-        };
-    };
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn scratch_failure_path_ptr(out_ptr: i32) -> i32 {
@@ -478,7 +478,7 @@ fn write_failure_detail(
                 if write_offset >= FAILURE_DETAIL_CAPACITY {
                     truncated = true;
                     break;
-                };
+                }
                 let byte: i32 = load_u8(path_ptr + path_idx);
                 store_u8(detail_out_ptr + write_offset, byte);
                 write_offset = write_offset + 1;
@@ -489,7 +489,7 @@ fn write_failure_detail(
                 write_offset = write_offset + 1;
             } else {
                 truncated = true;
-            };
+            }
             let mut line_digits_len: i32 = 0;
             let mut line_temp: i32 = line;
             if line_temp <= 0 {
@@ -499,7 +499,7 @@ fn write_failure_detail(
                     line_digits_len = line_digits_len + 1;
                     line_temp = line_temp / 10;
                 };
-            };
+            }
             let mut line_divisor: i32 = 1;
             let mut line_divisor_idx: i32 = 1;
             while line_divisor_idx < line_digits_len {
@@ -512,7 +512,7 @@ fn write_failure_detail(
                 if write_offset >= FAILURE_DETAIL_CAPACITY {
                     truncated = true;
                     break;
-                };
+                }
                 let digit: i32 = line_remaining / line_divisor;
                 store_u8(detail_out_ptr + write_offset, digit + '0');
                 write_offset = write_offset + 1;
@@ -522,14 +522,14 @@ fn write_failure_detail(
                     line_divisor = 1;
                 } else {
                     line_divisor = line_divisor / 10;
-                };
+                }
             };
             if write_offset < FAILURE_DETAIL_CAPACITY {
                 store_u8(detail_out_ptr + write_offset, ':');
                 write_offset = write_offset + 1;
             } else {
                 truncated = true;
-            };
+            }
             let mut column_digits_len: i32 = 0;
             let mut column_temp: i32 = column;
             if column_temp <= 0 {
@@ -539,7 +539,7 @@ fn write_failure_detail(
                     column_digits_len = column_digits_len + 1;
                     column_temp = column_temp / 10;
                 };
-            };
+            }
             let mut column_divisor: i32 = 1;
             let mut column_divisor_idx: i32 = 1;
             while column_divisor_idx < column_digits_len {
@@ -552,7 +552,7 @@ fn write_failure_detail(
                 if write_offset >= FAILURE_DETAIL_CAPACITY {
                     truncated = true;
                     break;
-                };
+                }
                 let digit: i32 = column_remaining / column_divisor;
                 store_u8(detail_out_ptr + write_offset, digit + '0');
                 write_offset = write_offset + 1;
@@ -562,27 +562,27 @@ fn write_failure_detail(
                     column_divisor = 1;
                 } else {
                     column_divisor = column_divisor / 10;
-                };
+                }
             };
             if write_offset < FAILURE_DETAIL_CAPACITY {
                 store_u8(detail_out_ptr + write_offset, ':');
                 write_offset = write_offset + 1;
             } else {
                 truncated = true;
-            };
+            }
             if write_offset < FAILURE_DETAIL_CAPACITY {
                 store_u8(detail_out_ptr + write_offset, ' ');
                 write_offset = write_offset + 1;
             } else {
                 truncated = true;
-            };
-        };
+            }
+        }
         let mut message_idx: i32 = 0;
         while message_idx < MESSAGE_LEN {
             if write_offset >= FAILURE_DETAIL_CAPACITY {
                 truncated = true;
                 break;
-            };
+            }
             let byte: i32 = message[message_idx] as i32;
             store_u8(detail_out_ptr + write_offset, byte);
             write_offset = write_offset + 1;
@@ -592,7 +592,7 @@ fn write_failure_detail(
             store_u8(detail_out_ptr + write_offset, 0);
             write_offset = write_offset + 1;
         };
-    };
+    }
 }
 
 fn ast_output_reserve(input_len: i32) -> i32 {
@@ -695,12 +695,12 @@ fn ast_function_param_requires_specialization(
     index: i32,
     param_index: i32,
 ) -> bool {
-    if param_index < 0 { return false; };
+    if param_index < 0 { return false; }
     let payload_ptr: i32 = ast_function_type_template_payload_ptr(ast_base, index);
-    if payload_ptr <= 0 { return false; };
+    if payload_ptr <= 0 { return false; }
     if param_index >= ast_function_param_count(ast_base, index) {
         return false;
-    };
+    }
     let handle_index: i32 =
         TYPE_TEMPLATE_PAYLOAD_PARAM_BASE_INDEX
         + param_index * TYPE_TEMPLATE_PAYLOAD_PARAM_STRIDE;
@@ -709,12 +709,12 @@ fn ast_function_param_requires_specialization(
 }
 
 fn ast_function_param_template_payload(ast_base: i32, index: i32, param_index: i32) -> i32 {
-    if param_index < 0 { return 0; };
+    if param_index < 0 { return 0; }
     let payload_ptr: i32 = ast_function_type_template_payload_ptr(ast_base, index);
-    if payload_ptr <= 0 { return 0; };
+    if payload_ptr <= 0 { return 0; }
     if param_index >= ast_function_param_count(ast_base, index) {
         return 0;
-    };
+    }
     let handle_index: i32 =
         TYPE_TEMPLATE_PAYLOAD_PARAM_BASE_INDEX
         + param_index * TYPE_TEMPLATE_PAYLOAD_PARAM_STRIDE;
@@ -722,12 +722,12 @@ fn ast_function_param_template_payload(ast_base: i32, index: i32, param_index: i
 }
 
 fn ast_function_param_template_base_type(ast_base: i32, index: i32, param_index: i32) -> i32 {
-    if param_index < 0 { return 0; };
+    if param_index < 0 { return 0; }
     let payload_ptr: i32 = ast_function_type_template_payload_ptr(ast_base, index);
-    if payload_ptr <= 0 { return 0; };
+    if payload_ptr <= 0 { return 0; }
     if param_index >= ast_function_param_count(ast_base, index) {
         return 0;
-    };
+    }
     let base_index: i32 =
         TYPE_TEMPLATE_PAYLOAD_PARAM_BASE_INDEX
         + param_index * TYPE_TEMPLATE_PAYLOAD_PARAM_STRIDE
@@ -737,19 +737,19 @@ fn ast_function_param_template_base_type(ast_base: i32, index: i32, param_index:
 
 fn ast_function_return_requires_specialization(ast_base: i32, index: i32) -> bool {
     let payload_ptr: i32 = ast_function_type_template_payload_ptr(ast_base, index);
-    if payload_ptr <= 0 { return false; };
+    if payload_ptr <= 0 { return false; }
     load_i32(payload_ptr + TYPE_TEMPLATE_PAYLOAD_RETURN_HANDLE_INDEX * WORD_SIZE) > 0
 }
 
 fn ast_function_return_template_payload(ast_base: i32, index: i32) -> i32 {
     let payload_ptr: i32 = ast_function_type_template_payload_ptr(ast_base, index);
-    if payload_ptr <= 0 { return 0; };
+    if payload_ptr <= 0 { return 0; }
     load_i32(payload_ptr + TYPE_TEMPLATE_PAYLOAD_RETURN_HANDLE_INDEX * WORD_SIZE)
 }
 
 fn ast_function_return_template_base_type(ast_base: i32, index: i32) -> i32 {
     let payload_ptr: i32 = ast_function_type_template_payload_ptr(ast_base, index);
-    if payload_ptr <= 0 { return 0; };
+    if payload_ptr <= 0 { return 0; }
     load_i32(payload_ptr + TYPE_TEMPLATE_PAYLOAD_RETURN_BASE_INDEX * WORD_SIZE)
 }
 
@@ -775,7 +775,7 @@ fn ast_function_const_params_count(ast_base: i32, index: i32) -> i32 {
     let ptr: i32 = ast_function_const_params_ptr(ast_base, index);
     if ptr <= 0 {
         return 0;
-    };
+    }
     load_i32(ptr)
 }
 
@@ -783,37 +783,37 @@ fn ast_function_const_params_mask_ptr(ast_base: i32, index: i32) -> i32 {
     let ptr: i32 = ast_function_const_params_ptr(ast_base, index);
     if ptr <= 0 {
         return 0;
-    };
+    }
     ptr + WORD_SIZE
 }
 
 fn ast_function_param_is_const(ast_base: i32, index: i32, param_index: i32) -> bool {
     if param_index < 0 {
         return false;
-    };
+    }
     if !ast_function_has_const_params(ast_base, index) {
         return false;
-    };
+    }
     let param_count: i32 = ast_function_param_count(ast_base, index);
     if param_index >= param_count {
         return false;
-    };
+    }
     let mask_ptr: i32 = ast_function_const_params_mask_ptr(ast_base, index);
     if mask_ptr <= 0 {
         return false;
-    };
+    }
     let mut mask_word_count: i32 = (param_count + 31) >> 5;
     if mask_word_count <= 0 {
         mask_word_count = 1;
-    };
+    }
     let mask_word_index: i32 = param_index >> 5;
     if mask_word_index >= mask_word_count {
         return false;
-    };
+    }
     let mask_word_value: i32 = load_i32(mask_ptr + mask_word_index * WORD_SIZE);
     if mask_word_value == 0 {
         return false;
-    };
+    }
     let mask_bit: i32 = 1 << (param_index & 31);
     (mask_word_value & mask_bit) != 0
 }
@@ -821,21 +821,21 @@ fn ast_function_param_is_const(ast_base: i32, index: i32, param_index: i32) -> b
 fn ast_function_runtime_param_count(ast_base: i32, index: i32) -> i32 {
     if index < 0 {
         return -1;
-    };
+    }
     let total_params: i32 = ast_function_param_count(ast_base, index);
     if total_params < 0 {
         return -1;
-    };
+    }
     if !ast_function_has_const_params(ast_base, index) {
         return total_params;
-    };
+    }
     let const_count: i32 = ast_function_const_params_count(ast_base, index);
     if const_count < 0 {
         return -1;
-    };
+    }
     if const_count > total_params {
         return -1;
-    };
+    }
     total_params - const_count
 }
 
@@ -846,20 +846,20 @@ fn ast_function_param_runtime_index(
 ) -> i32 {
     if param_index < 0 {
         return -1;
-    };
+    }
     let total_params: i32 = ast_function_param_count(ast_base, index);
     if param_index >= total_params {
         return -1;
-    };
+    }
     if ast_function_param_is_const(ast_base, index, param_index) {
         return -1;
-    };
+    }
     let mut runtime_index: i32 = 0;
     let mut scan_index: i32 = 0;
     while scan_index < param_index {
         if !ast_function_param_is_const(ast_base, index, scan_index) {
             runtime_index = runtime_index + 1;
-        };
+        }
         scan_index = scan_index + 1;
     };
     runtime_index
@@ -868,21 +868,21 @@ fn ast_function_param_runtime_index(
 fn const_specialization_keys_equal(existing_key_ptr: i32, query_key_ptr: i32) -> bool {
     if existing_key_ptr <= 0 {
         return false;
-    };
+    }
     if query_key_ptr <= 0 {
         return false;
-    };
+    }
     if existing_key_ptr == query_key_ptr {
         return true;
-    };
+    }
     let existing_count: i32 = load_i32(existing_key_ptr);
     let query_count: i32 = load_i32(query_key_ptr);
     if existing_count < 0 {
         return false;
-    };
+    }
     if existing_count != query_count {
         return false;
-    };
+    }
     let mut idx: i32 = 0;
     while idx < existing_count {
         let existing_entry_ptr: i32 =
@@ -892,17 +892,17 @@ fn const_specialization_keys_equal(existing_key_ptr: i32, query_key_ptr: i32) ->
         let query_param: i32 = load_i32(query_entry_ptr);
         if existing_param != query_param {
             return false;
-        };
+        }
         let existing_value: i32 = load_i32(existing_entry_ptr + WORD_SIZE);
         let query_value: i32 = load_i32(query_entry_ptr + WORD_SIZE);
         if existing_value != query_value {
             return false;
-        };
+        }
         let existing_type: i32 = load_i32(existing_entry_ptr + 2 * WORD_SIZE);
         let query_type: i32 = load_i32(query_entry_ptr + 2 * WORD_SIZE);
         if existing_type != query_type {
             return false;
-        };
+        }
         idx = idx + 1;
     };
     true
@@ -915,13 +915,13 @@ fn ast_function_find_const_specialization(
 ) -> i32 {
     if index < 0 {
         return -1;
-    };
+    }
     if key_ptr <= 0 {
         return -1;
-    };
+    }
     if !ast_function_has_const_params(ast_base, index) {
         return -1;
-    };
+    }
     let mut entry_ptr: i32 = ast_const_specialization_registry_head(ast_base);
     while entry_ptr > 0 {
         let entry_template_index: i32 = load_i32(entry_ptr);
@@ -929,8 +929,8 @@ fn ast_function_find_const_specialization(
             let existing_key_ptr: i32 = load_i32(entry_ptr + WORD_SIZE);
             if const_specialization_keys_equal(existing_key_ptr, key_ptr) {
                 return load_i32(entry_ptr + 2 * WORD_SIZE);
-            };
-        };
+            }
+        }
         entry_ptr = load_i32(entry_ptr + 3 * WORD_SIZE);
     };
     -1
@@ -944,20 +944,20 @@ fn ast_function_register_const_specialization(
 ) -> i32 {
     if index < 0 {
         return -1;
-    };
+    }
     if key_ptr <= 0 {
         return -1;
-    };
+    }
     if specialized_index < 0 {
         return -1;
-    };
+    }
     if !ast_function_has_const_params(ast_base, index) {
         return -1;
-    };
+    }
     let new_entry_ptr: i32 = ast_call_data_alloc(ast_base, 4);
     if new_entry_ptr < 0 {
         return -1;
-    };
+    }
     let previous_head: i32 = ast_const_specialization_registry_head(ast_base);
     store_i32(new_entry_ptr, index);
     store_i32(new_entry_ptr + WORD_SIZE, key_ptr);
@@ -973,14 +973,14 @@ fn const_specialization_lookup_entry(
 ) -> (i32, i32) {
     if key_ptr <= 0 {
         return (-1, -1);
-    };
+    }
     if param_index < 0 {
         return (-1, -1);
-    };
+    }
     let entry_count: i32 = load_i32(key_ptr);
     if entry_count <= 0 {
         return (-1, -1);
-    };
+    }
     let mut scan_index: i32 = 0;
     while scan_index < entry_count {
         let entry_ptr: i32 =
@@ -990,7 +990,7 @@ fn const_specialization_lookup_entry(
             let value: i32 = load_i32(entry_ptr + WORD_SIZE);
             let value_type: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
             return (value, value_type);
-        };
+        }
         scan_index = scan_index + 1;
     };
     (-1, -1)
@@ -1017,14 +1017,14 @@ fn clone_const_specialization_expr_list(
 ) -> i32 {
     if count <= 0 {
         return 0;
-    };
+    }
     if values_ptr < 0 {
         return -1;
-    };
+    }
     let new_ptr: i32 = ast_call_data_alloc(ast_base, count);
     if new_ptr < 0 {
         return -1;
-    };
+    }
     let mut idx: i32 = 0;
     while idx < count {
         let original_expr: i32 = load_i32(values_ptr + idx * WORD_SIZE);
@@ -1046,7 +1046,7 @@ fn clone_const_specialization_expr_list(
         );
         if cloned_expr < 0 {
             return -1;
-        };
+        }
         store_i32(new_ptr + idx * WORD_SIZE, cloned_expr);
         idx = idx + 1;
     };
@@ -1071,13 +1071,13 @@ fn clone_const_specialization_call_metadata(
 ) -> i32 {
     if metadata_ptr <= 0 {
         return -1;
-    };
+    }
     let name_ptr: i32 = call_metadata_name_ptr(metadata_ptr);
     let name_len: i32 = call_metadata_name_len(metadata_ptr);
     let arg_count: i32 = call_metadata_arg_count(metadata_ptr);
     if arg_count < 0 {
         return -1;
-    };
+    }
     let callee_index: i32 = load_i32(call_metadata_callee_index_ptr(metadata_ptr));
     let trim_const_args: bool = callee_index >= 0
         && !ast_function_has_const_params(ast_base, callee_index);
@@ -1088,18 +1088,18 @@ fn clone_const_specialization_call_metadata(
         while count_idx < arg_count {
             if !ast_function_param_is_const(ast_base, callee_index, count_idx) {
                 runtime_arg_count = runtime_arg_count + 1;
-            };
+            }
             count_idx = count_idx + 1;
         };
-    };
+    }
     let total_words: i32 = 4 + runtime_arg_count + 5;
     if total_words <= 0 {
         return -1;
-    };
+    }
     let new_metadata: i32 = ast_call_data_alloc(ast_base, total_words);
     if new_metadata < 0 {
         return -1;
-    };
+    }
     store_i32(new_metadata, name_ptr);
     store_i32(new_metadata + WORD_SIZE, name_len);
     store_i32(new_metadata + 2 * WORD_SIZE, runtime_arg_count);
@@ -1108,8 +1108,8 @@ fn clone_const_specialization_call_metadata(
     if arg_count > 0 {
         if original_args_base < 0 {
             return -1;
-        };
-    };
+        }
+    }
     let new_args_base: i32 = call_metadata_args_base(new_metadata);
     let mut arg_idx: i32 = 0;
     let mut runtime_idx: i32 = 0;
@@ -1136,23 +1136,23 @@ fn clone_const_specialization_call_metadata(
         );
             if cloned_arg < 0 {
                 return -1;
-            };
+            }
             if runtime_arg_count > 0 {
                 store_i32(new_args_base + runtime_idx * WORD_SIZE, cloned_arg);
                 runtime_idx = runtime_idx + 1;
-            };
-        };
+            }
+        }
         arg_idx = arg_idx + 1;
     };
     if trim_const_args {
         if runtime_idx != runtime_arg_count {
             return -1;
-        };
+        }
     } else {
         if runtime_idx != arg_count {
             return -1;
-        };
-    };
+        }
+    }
     let original_extra: i32 = call_metadata_extra_slot_base(metadata_ptr);
     let new_extra: i32 = call_metadata_extra_slot_base(new_metadata);
     if original_extra > 0 && new_extra > 0 {
@@ -1162,13 +1162,13 @@ fn clone_const_specialization_call_metadata(
             store_i32(new_extra + extra_idx * WORD_SIZE, value);
             extra_idx = extra_idx + 1;
         };
-    };
+    }
     if new_extra > 0 {
         store_i32(new_extra, 0);
         store_i32(new_extra + WORD_SIZE, 0);
         store_i32(new_extra + 3 * WORD_SIZE, 0);
         store_i32(new_extra + 4 * WORD_SIZE, 0);
-    };
+    }
     new_metadata
 }
 
@@ -1190,17 +1190,17 @@ fn clone_const_specialization_expr(
 ) -> i32 {
     if expr_index < 0 {
         return expr_index;
-    };
+    }
     if expr_index >= ast_expr_count(ast_base) {
         return -1;
-    };
+    }
     let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
     let kind: i32 = load_i32(entry_ptr);
     if kind == 0 {
         let value: i32 = load_i32(entry_ptr + WORD_SIZE);
         let expr_type: i32 = ast_expr_type(ast_base, expr_index);
         return ast_expr_alloc_literal(ast_base, value, expr_type);
-    };
+    }
     if kind == 1 {
         let metadata_ptr: i32 = load_i32(entry_ptr + WORD_SIZE);
         let cloned_metadata: i32 = clone_const_specialization_call_metadata(
@@ -1221,18 +1221,18 @@ fn clone_const_specialization_expr(
         );
         if cloned_metadata < 0 {
             return -1;
-        };
+        }
         let location_offset: i32 = load_i32(entry_ptr + 3 * WORD_SIZE);
         let new_index: i32 = ast_expr_alloc_call(ast_base, cloned_metadata, location_offset);
         if new_index < 0 {
             return -1;
-        };
+        }
         let expr_type: i32 = ast_expr_type(ast_base, expr_index);
         if expr_type >= 0 {
             ast_expr_set_type(ast_base, new_index, expr_type);
-        };
+        }
         return new_index;
-    };
+    }
     if kind == 6 {
         let param_index: i32 = load_i32(entry_ptr + WORD_SIZE);
         let mut expr_type: i32 = ast_expr_type(ast_base, expr_index);
@@ -1242,7 +1242,7 @@ fn clone_const_specialization_expr(
                     const_specialization_lookup_entry(key_ptr, param_index);
                 if entry.1 < 0 {
                     return -1;
-                };
+                }
                 let literal_index: i32 = ast_expr_alloc_literal(
                     ast_base,
                     entry.0,
@@ -1250,25 +1250,25 @@ fn clone_const_specialization_expr(
                 );
                 if literal_index < 0 {
                     return -1;
-                };
+                }
                 return literal_index;
-            };
+            }
             if env_values_ptr > 0 {
                 let type_slot_ptr: i32 = env_values_ptr + param_index * 8 + WORD_SIZE;
                 let specialized_type: i32 = load_i32(type_slot_ptr);
                 if specialized_type >= 0 {
                     expr_type = specialized_type;
-                };
-            };
+                }
+            }
             let runtime_index: i32 =
                 ast_function_param_runtime_index(ast_base, template_index, param_index);
             if runtime_index < 0 {
                 return -1;
-            };
+            }
             return ast_expr_alloc_param(ast_base, runtime_index, expr_type);
-        };
+        }
         return ast_expr_alloc_param(ast_base, param_index, expr_type);
-    };
+    }
     if kind == 7 {
         let cond_index: i32 = load_i32(entry_ptr + WORD_SIZE);
         let then_index: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
@@ -1291,7 +1291,7 @@ fn clone_const_specialization_expr(
         );
         if cloned_cond < 0 {
             return -1;
-        };
+        }
         let cloned_then: i32 = clone_const_specialization_expr(
             ast_base,
             template_index,
@@ -1310,7 +1310,7 @@ fn clone_const_specialization_expr(
         );
         if cloned_then < 0 {
             return -1;
-        };
+        }
         let cloned_else: i32 = clone_const_specialization_expr(
             ast_base,
             template_index,
@@ -1329,25 +1329,25 @@ fn clone_const_specialization_expr(
         );
         if cloned_else < 0 {
             return -1;
-        };
+        }
         let new_index: i32 = ast_expr_alloc(ast_base, 7, cloned_cond, cloned_then, cloned_else);
         if new_index < 0 {
             return -1;
-        };
+        }
         let expr_type: i32 = ast_expr_type(ast_base, expr_index);
         if expr_type >= 0 {
             ast_expr_set_type(ast_base, new_index, expr_type);
-        };
+        }
         return new_index;
-    };
+    }
     if kind == 8 {
         let mut local_index: i32 = load_i32(entry_ptr + WORD_SIZE);
         if removed_const_count > 0 {
             local_index = local_index - removed_const_count;
             if local_index < 0 {
                 return -1;
-            };
-        };
+            }
+        }
         let mut expr_type: i32 = ast_expr_type(ast_base, expr_index);
         if expr_type < 0 {
             if local_type_stack_ptr > 0 && local_type_stack_top_ptr > 0 {
@@ -1362,23 +1362,23 @@ fn clone_const_specialization_expr(
                         if recorded_type >= 0 {
                             expr_type = recorded_type;
                             ast_expr_set_type(ast_base, expr_index, expr_type);
-                        };
+                        }
                         break;
-                    };
+                    }
                     stack_idx = stack_idx - 1;
                 };
-            };
-        };
+            }
+        }
         return ast_expr_alloc_local(ast_base, local_index, expr_type);
-    };
+    }
     if kind == 9 {
         let mut local_index: i32 = load_i32(entry_ptr + WORD_SIZE);
         if removed_const_count > 0 {
             local_index = local_index - removed_const_count;
             if local_index < 0 {
                 return -1;
-            };
-        };
+            }
+        }
         let init_index: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
         let body_index: i32 = load_i32(entry_ptr + 3 * WORD_SIZE);
         let cloned_init: i32 = clone_const_specialization_expr(
@@ -1399,16 +1399,16 @@ fn clone_const_specialization_expr(
         );
         if cloned_init < 0 {
             return -1;
-        };
+        }
         let mut pushed: bool = false;
         if local_type_stack_ptr > 0 && local_type_stack_top_ptr > 0 {
             if local_type_stack_capacity <= 0 {
                 return -1;
-            };
+            }
             let stack_top: i32 = load_i32(local_type_stack_top_ptr);
             if stack_top >= local_type_stack_capacity {
                 return -1;
-            };
+            }
             let init_type: i32 = ast_expr_type(ast_base, cloned_init);
             store_i32(CLONE_DEBUG_LOCAL_INDEX_OFFSET, local_index);
             store_i32(CLONE_DEBUG_INIT_TYPE_OFFSET, init_type);
@@ -1420,8 +1420,8 @@ fn clone_const_specialization_expr(
                 store_i32(entry_offset + 4, init_type);
                 store_i32(local_type_stack_top_ptr, stack_top + 1);
                 pushed = true;
-            };
-        };
+            }
+        }
         store_i32(
             CLONE_DEBUG_PUSHED_OFFSET,
             if pushed { 1 } else { 0 },
@@ -1446,30 +1446,30 @@ fn clone_const_specialization_expr(
             let stack_top: i32 = load_i32(local_type_stack_top_ptr);
             if stack_top <= 0 {
                 return -1;
-            };
+            }
             store_i32(local_type_stack_top_ptr, stack_top - 1);
-        };
+        }
         if cloned_body < 0 {
             return -1;
-        };
+        }
         let new_index: i32 = ast_expr_alloc(ast_base, 9, local_index, cloned_init, cloned_body);
         if new_index < 0 {
             return -1;
-        };
+        }
         let expr_type: i32 = ast_expr_type(ast_base, expr_index);
         if expr_type >= 0 {
             ast_expr_set_type(ast_base, new_index, expr_type);
-        };
+        }
         return new_index;
-    };
+    }
     if kind == 10 {
         let mut local_index: i32 = load_i32(entry_ptr + WORD_SIZE);
         if removed_const_count > 0 {
             local_index = local_index - removed_const_count;
             if local_index < 0 {
                 return -1;
-            };
-        };
+            }
+        }
         let value_index: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
         let cloned_value: i32 = clone_const_specialization_expr(
             ast_base,
@@ -1489,17 +1489,17 @@ fn clone_const_specialization_expr(
         );
         if cloned_value < 0 {
             return -1;
-        };
+        }
         let new_index: i32 = ast_expr_alloc(ast_base, 10, local_index, cloned_value, 0);
         if new_index < 0 {
             return -1;
-        };
+        }
         let expr_type: i32 = ast_expr_type(ast_base, expr_index);
         if expr_type >= 0 {
             ast_expr_set_type(ast_base, new_index, expr_type);
-        };
+        }
         return new_index;
-    };
+    }
     if kind == 11 {
         let first_index: i32 = load_i32(entry_ptr + WORD_SIZE);
         let then_index: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
@@ -1521,7 +1521,7 @@ fn clone_const_specialization_expr(
         );
         if cloned_first < 0 {
             return -1;
-        };
+        }
         let cloned_then: i32 = clone_const_specialization_expr(
             ast_base,
             template_index,
@@ -1540,17 +1540,17 @@ fn clone_const_specialization_expr(
         );
         if cloned_then < 0 {
             return -1;
-        };
+        }
         let new_index: i32 = ast_expr_alloc(ast_base, 11, cloned_first, cloned_then, 0);
         if new_index < 0 {
             return -1;
-        };
+        }
         let expr_type: i32 = ast_expr_type(ast_base, expr_index);
         if expr_type >= 0 {
             ast_expr_set_type(ast_base, new_index, expr_type);
-        };
+        }
         return new_index;
-    };
+    }
     if kind == 12 {
         let body_index: i32 = load_i32(entry_ptr + WORD_SIZE);
         let loop_flags: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
@@ -1572,17 +1572,17 @@ fn clone_const_specialization_expr(
         );
         if cloned_body < 0 {
             return -1;
-        };
+        }
         let new_index: i32 = ast_expr_alloc_loop(ast_base, cloned_body, loop_flags);
         if new_index < 0 {
             return -1;
-        };
+        }
         let expr_type: i32 = ast_expr_type(ast_base, expr_index);
         if expr_type >= 0 {
             ast_expr_set_type(ast_base, new_index, expr_type);
-        };
+        }
         return new_index;
-    };
+    }
     if kind == 13 {
         let value_index: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
         let mut cloned_value: i32 = -1;
@@ -1605,18 +1605,18 @@ fn clone_const_specialization_expr(
             );
             if cloned_value < 0 {
                 return -1;
-            };
-        };
+            }
+        }
         let new_index: i32 = ast_expr_alloc(ast_base, 13, -1, cloned_value, 0);
         if new_index < 0 {
             return -1;
-        };
+        }
         let expr_type: i32 = ast_expr_type(ast_base, expr_index);
         if expr_type >= 0 {
             ast_expr_set_type(ast_base, new_index, expr_type);
-        };
+        }
         return new_index;
-    };
+    }
     if kind == 23 {
         let value_index: i32 = load_i32(entry_ptr + WORD_SIZE);
         let cloned_value: i32 = clone_const_specialization_expr(
@@ -1637,25 +1637,25 @@ fn clone_const_specialization_expr(
         );
         if cloned_value < 0 {
             return -1;
-        };
+        }
         let location_offset: i32 = load_i32(entry_ptr + 3 * WORD_SIZE);
         let new_index: i32 = ast_expr_alloc_return(ast_base, cloned_value, location_offset);
         if new_index < 0 {
             return -1;
-        };
+        }
         let expr_type: i32 = ast_expr_type(ast_base, expr_index);
         if expr_type >= 0 {
             ast_expr_set_type(ast_base, new_index, expr_type);
-        };
+        }
         return new_index;
-    };
+    }
     if kind == 24 {
         let new_index: i32 = ast_expr_alloc_continue(ast_base, -1);
         if new_index < 0 {
             return -1;
-        };
+        }
         return new_index;
-    };
+    }
     if kind == 22 {
         let value_index: i32 = load_i32(entry_ptr + WORD_SIZE);
         let cloned_value: i32 = clone_const_specialization_expr(
@@ -1676,17 +1676,17 @@ fn clone_const_specialization_expr(
         );
         if cloned_value < 0 {
             return -1;
-        };
+        }
         let new_index: i32 = ast_expr_alloc(ast_base, 22, cloned_value, 0, 0);
         if new_index < 0 {
             return -1;
-        };
+        }
         let expr_type: i32 = ast_expr_type(ast_base, expr_index);
         if expr_type >= 0 {
             ast_expr_set_type(ast_base, new_index, expr_type);
-        };
+        }
         return new_index;
-    };
+    }
     if kind == 35 {
         let element_index: i32 = load_i32(entry_ptr + WORD_SIZE);
         let mut length: i32 = ast_expr_array_repeat_length(ast_base, expr_index);
@@ -1709,7 +1709,7 @@ fn clone_const_specialization_expr(
         );
         if cloned_element < 0 {
             return -1;
-        };
+        }
         let mut resolved_length: bool = false;
         let mut metadata_ptr: i32 = -1;
         if length_expr_index >= 0 {
@@ -1720,7 +1720,7 @@ fn clone_const_specialization_expr(
             if original_metadata_ptr > 0 {
                 usage_list_ptr = load_i32(original_metadata_ptr + WORD_SIZE);
                 usage_count = load_i32(original_metadata_ptr + 2 * WORD_SIZE);
-            };
+            }
             let cloned_length_expr: i32 = clone_const_specialization_expr(
                 ast_base,
                 template_index,
@@ -1739,7 +1739,7 @@ fn clone_const_specialization_expr(
             );
             if cloned_length_expr < 0 {
                 return -1;
-            };
+            }
             let saved_top: i32 = load_i32(eval_stack_top_ptr);
             store_i32(eval_stack_top_ptr, 0);
             let status: i32 = interpret_constant_expression(
@@ -1762,9 +1762,9 @@ fn clone_const_specialization_expr(
                     if normalized >= 0 {
                         length = normalized;
                         resolved_length = true;
-                    };
-                };
-            };
+                    }
+                }
+            }
             if !resolved_length {
                 if usage_count == 1 && usage_list_ptr > 0 && key_ptr > 0 {
                     let recorded_param: i32 = load_i32(usage_list_ptr);
@@ -1778,46 +1778,46 @@ fn clone_const_specialization_expr(
                                 if normalized >= 0 {
                                     length = normalized;
                                     resolved_length = true;
-                                };
-                            };
-                        };
-                    };
-                };
-            };
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             if !resolved_length {
                 let mut copied_usage_ptr: i32 = 0;
                 if usage_count > 0 && usage_list_ptr > 0 {
                     copied_usage_ptr = ast_call_data_alloc(ast_base, usage_count);
                     if copied_usage_ptr < 0 {
                         return -1;
-                    };
+                    }
                     let mut copy_idx: i32 = 0;
                     while copy_idx < usage_count {
                         let value: i32 = load_i32(usage_list_ptr + copy_idx * WORD_SIZE);
                         store_i32(copied_usage_ptr + copy_idx * WORD_SIZE, value);
                         copy_idx = copy_idx + 1;
                     };
-                };
+                }
                 metadata_ptr = ast_call_data_alloc(ast_base, 3);
                 if metadata_ptr < 0 {
                     return -1;
-                };
+                }
                 store_i32(metadata_ptr, cloned_length_expr);
                 store_i32(metadata_ptr + WORD_SIZE, copied_usage_ptr);
                 store_i32(metadata_ptr + 2 * WORD_SIZE, usage_count);
-            };
-        };
+            }
+        }
         if resolved_length {
             metadata_ptr = -1;
         } else if metadata_ptr < 0 {
             metadata_ptr = ast_expr_array_repeat_length_metadata(ast_base, expr_index);
-        };
+        }
         let location: i32 = ast_expr_array_repeat_location(ast_base, expr_index);
         let new_index: i32 =
             ast_expr_alloc_array_repeat(ast_base, cloned_element, length, metadata_ptr, location);
         if new_index < 0 {
             return -1;
-        };
+        }
         let mut expr_type: i32 = ast_expr_type(ast_base, expr_index);
         if resolved_length {
             let element_type: i32 = ast_expr_type(ast_base, cloned_element);
@@ -1826,14 +1826,14 @@ fn clone_const_specialization_expr(
                     ast_register_array_type(ast_base, element_type, length);
                 if specialized_array >= 0 {
                     expr_type = specialized_array;
-                };
-            };
-        };
+                }
+            }
+        }
         if expr_type >= 0 {
             ast_expr_set_type(ast_base, new_index, expr_type);
-        };
+        }
         return new_index;
-    };
+    }
     if kind == 36 {
         let array_index: i32 = load_i32(entry_ptr + WORD_SIZE);
         let index_index: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
@@ -1855,7 +1855,7 @@ fn clone_const_specialization_expr(
         );
         if cloned_array < 0 {
             return -1;
-        };
+        }
         let cloned_index: i32 = clone_const_specialization_expr(
             ast_base,
             template_index,
@@ -1874,7 +1874,7 @@ fn clone_const_specialization_expr(
         );
         if cloned_index < 0 {
             return -1;
-        };
+        }
         let location_offset: i32 = load_i32(entry_ptr + 3 * WORD_SIZE);
         let new_index: i32 = ast_expr_alloc_array_get(
             ast_base,
@@ -1884,13 +1884,13 @@ fn clone_const_specialization_expr(
         );
         if new_index < 0 {
             return -1;
-        };
+        }
         let expr_type: i32 = ast_expr_type(ast_base, expr_index);
         if expr_type >= 0 {
             ast_expr_set_type(ast_base, new_index, expr_type);
-        };
+        }
         return new_index;
-    };
+    }
     if kind == 44 {
         let array_index: i32 = load_i32(entry_ptr + WORD_SIZE);
         let index_index: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
@@ -1913,7 +1913,7 @@ fn clone_const_specialization_expr(
         );
         if cloned_array < 0 {
             return -1;
-        };
+        }
         let cloned_index: i32 = clone_const_specialization_expr(
             ast_base,
             template_index,
@@ -1932,7 +1932,7 @@ fn clone_const_specialization_expr(
         );
         if cloned_index < 0 {
             return -1;
-        };
+        }
         let cloned_value: i32 = clone_const_specialization_expr(
             ast_base,
             template_index,
@@ -1951,7 +1951,7 @@ fn clone_const_specialization_expr(
         );
         if cloned_value < 0 {
             return -1;
-        };
+        }
         let location: i32 = ast_expr_array_set_location(ast_base, expr_index);
         let new_index: i32 = ast_expr_alloc_array_set(
             ast_base,
@@ -1962,13 +1962,13 @@ fn clone_const_specialization_expr(
         );
         if new_index < 0 {
             return -1;
-        };
+        }
         let expr_type: i32 = ast_expr_type(ast_base, expr_index);
         if expr_type >= 0 {
             ast_expr_set_type(ast_base, new_index, expr_type);
-        };
+        }
         return new_index;
-    };
+    }
     if kind == 45 {
         let tuple_index: i32 = load_i32(entry_ptr + WORD_SIZE);
         let field_index: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
@@ -1991,7 +1991,7 @@ fn clone_const_specialization_expr(
         );
         if cloned_tuple < 0 {
             return -1;
-        };
+        }
         let cloned_value: i32 = clone_const_specialization_expr(
             ast_base,
             template_index,
@@ -2010,7 +2010,7 @@ fn clone_const_specialization_expr(
         );
         if cloned_value < 0 {
             return -1;
-        };
+        }
         let location: i32 = ast_expr_tuple_set_location(ast_base, expr_index);
         let new_index: i32 = ast_expr_alloc_tuple_set(
             ast_base,
@@ -2021,19 +2021,19 @@ fn clone_const_specialization_expr(
         );
         if new_index < 0 {
             return -1;
-        };
+        }
         let expr_type: i32 = ast_expr_type(ast_base, expr_index);
         if expr_type >= 0 {
             ast_expr_set_type(ast_base, new_index, expr_type);
-        };
+        }
         return new_index;
-    };
+    }
     if kind == 37 {
         let values_ptr: i32 = load_i32(entry_ptr + WORD_SIZE);
         let count: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
         if count < 0 {
             return -1;
-        };
+        }
         let cloned_ptr: i32 = clone_const_specialization_expr_list(
             ast_base,
             template_index,
@@ -2053,19 +2053,19 @@ fn clone_const_specialization_expr(
         );
         if cloned_ptr < 0 {
             return -1;
-        };
+        }
         let location: i32 = ast_expr_array_list_location(ast_base, expr_index);
         let new_index: i32 =
             ast_expr_alloc_array_list(ast_base, cloned_ptr, count, location);
         if new_index < 0 {
             return -1;
-        };
+        }
         let expr_type: i32 = ast_expr_type(ast_base, expr_index);
         if expr_type >= 0 {
             ast_expr_set_type(ast_base, new_index, expr_type);
-        };
+        }
         return new_index;
-    };
+    }
     if kind == 38 {
         let array_index: i32 = load_i32(entry_ptr + WORD_SIZE);
         let cloned_array: i32 = clone_const_specialization_expr(
@@ -2086,13 +2086,13 @@ fn clone_const_specialization_expr(
         );
         if cloned_array < 0 {
             return -1;
-        };
+        }
         let new_index: i32 = ast_expr_alloc_array_len(ast_base, cloned_array);
         if new_index < 0 {
             return -1;
-        };
+        }
         return new_index;
-    };
+    }
     if kind == 39 {
         let value_index: i32 = load_i32(entry_ptr + WORD_SIZE);
         let target_type: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
@@ -2114,19 +2114,19 @@ fn clone_const_specialization_expr(
         );
         if cloned_value < 0 {
             return -1;
-        };
+        }
         let new_index: i32 = ast_expr_alloc_cast(ast_base, cloned_value, target_type);
         if new_index < 0 {
             return -1;
-        };
+        }
         return new_index;
-    };
+    }
     if kind == 40 {
         let values_ptr: i32 = load_i32(entry_ptr + WORD_SIZE);
         let count: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
         if count < 0 {
             return -1;
-        };
+        }
         let cloned_ptr: i32 = clone_const_specialization_expr_list(
             ast_base,
             template_index,
@@ -2146,11 +2146,11 @@ fn clone_const_specialization_expr(
         );
         if cloned_ptr < 0 {
             return -1;
-        };
+        }
         let new_index: i32 = ast_expr_alloc_tuple(ast_base, cloned_ptr, count);
         if new_index < 0 {
             return -1;
-        };
+        }
         let expr_type: i32 = ast_expr_type(ast_base, expr_index);
         if expr_type >= 0 {
             ast_expr_set_type(ast_base, new_index, expr_type);
@@ -2161,8 +2161,8 @@ fn clone_const_specialization_expr(
                     let resolved_tuple: i32 = resolve_type_id(0, ast_base, tuple_type_id);
                     if resolved_tuple >= 0 {
                         ast_expr_set_type(ast_base, new_index, resolved_tuple);
-                    };
-                };
+                    }
+                }
             } else {
                 let call_data_used_ptr: i32 = ast_call_data_len_ptr(ast_base);
                 let saved_used: i32 = load_i32(call_data_used_ptr);
@@ -2173,7 +2173,7 @@ fn clone_const_specialization_expr(
                     loop {
                         if idx >= count {
                             break;
-                        };
+                        }
                         let cloned_value_index: i32 =
                             load_i32(cloned_ptr + idx * WORD_SIZE);
                         let cloned_value_type: i32 =
@@ -2181,13 +2181,13 @@ fn clone_const_specialization_expr(
                         if cloned_value_type < 0 {
                             all_resolved = false;
                             break;
-                        };
+                        }
                         let resolved_element: i32 =
                             resolve_type_id(0, ast_base, cloned_value_type);
                         if resolved_element < 0 {
                             all_resolved = false;
                             break;
-                        };
+                        }
                         store_i32(
                             element_types_ptr + idx * WORD_SIZE,
                             resolved_element,
@@ -2205,30 +2205,30 @@ fn clone_const_specialization_expr(
                             let after_count: i32 = ast_tuple_types_count(ast_base);
                             if after_count == before_count {
                                 store_i32(call_data_used_ptr, saved_used);
-                            };
+                            }
                             let resolved_tuple: i32 =
                                 resolve_type_id(0, ast_base, tuple_type_id);
                             if resolved_tuple >= 0 {
                                 ast_expr_set_type(ast_base, new_index, resolved_tuple);
-                            };
+                            }
                         } else {
                             store_i32(call_data_used_ptr, saved_used);
-                        };
+                        }
                     } else {
                         store_i32(call_data_used_ptr, saved_used);
-                    };
-                };
-            };
-        };
+                    }
+                }
+            }
+        }
         return new_index;
-    };
+    }
     if kind == 47 {
         let type_expr_index: i32 = ast_expr_struct_literal_type_expr(ast_base, expr_index);
         let metadata_ptr: i32 = ast_expr_struct_literal_metadata(ast_base, expr_index);
         let field_count: i32 = ast_expr_struct_literal_field_count(ast_base, expr_index);
         if field_count < 0 {
             return -1;
-        };
+        }
         let cloned_type: i32 = clone_const_specialization_expr(
             ast_base,
             template_index,
@@ -2247,7 +2247,7 @@ fn clone_const_specialization_expr(
         );
         if cloned_type < 0 {
             return -1;
-        };
+        }
         let metadata_words: i32 =
             STRUCT_LITERAL_METADATA_HEADER_WORDS
                 + field_count * STRUCT_LITERAL_FIELD_ENTRY_WORDS;
@@ -2259,9 +2259,9 @@ fn clone_const_specialization_expr(
         if metadata_words > 0 {
             if cloned_metadata < 0 {
                 return -1;
-            };
+            }
             store_i32(cloned_metadata, ast_expr_struct_literal_location(ast_base, expr_index));
-        };
+        }
         let mut field_idx: i32 = 0;
         while field_idx < field_count {
             let source_entry: i32 = struct_literal_field_entry_ptr(metadata_ptr, field_idx);
@@ -2292,7 +2292,7 @@ fn clone_const_specialization_expr(
             };
             if cloned_label < 0 {
                 return -1;
-            };
+            }
             let cloned_value: i32 = clone_const_specialization_expr(
                 ast_base,
                 template_index,
@@ -2311,7 +2311,7 @@ fn clone_const_specialization_expr(
             );
             if cloned_value < 0 {
                 return -1;
-            };
+            }
             if cloned_metadata > 0 {
                 let target_entry: i32 = struct_literal_field_entry_ptr(cloned_metadata, field_idx);
                 struct_literal_field_set_label_kind(target_entry, label_kind);
@@ -2319,7 +2319,7 @@ fn clone_const_specialization_expr(
                 struct_literal_field_set_label_extra(target_entry, label_extra);
                 struct_literal_field_set_location(target_entry, field_location);
                 struct_literal_field_set_value(target_entry, cloned_value);
-            };
+            }
             field_idx = field_idx + 1;
         };
         let location: i32 = ast_expr_struct_literal_location(ast_base, expr_index);
@@ -2332,13 +2332,13 @@ fn clone_const_specialization_expr(
         );
         if new_index < 0 {
             return -1;
-        };
+        }
         let expr_type: i32 = ast_expr_type(ast_base, expr_index);
         if expr_type >= 0 {
             ast_expr_set_type(ast_base, new_index, expr_type);
-        };
+        }
         return new_index;
-    };
+    }
     if kind == 41 {
         let tuple_index: i32 = load_i32(entry_ptr + WORD_SIZE);
         let field_index: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
@@ -2360,107 +2360,107 @@ fn clone_const_specialization_expr(
         );
         if cloned_tuple < 0 {
             return -1;
-        };
+        }
         let tuple_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, cloned_tuple);
         if load_i32(tuple_entry_ptr) == 0 {
             let literal_value: i32 = load_i32(tuple_entry_ptr + WORD_SIZE);
             let mut literal_type: i32 = ast_expr_type(ast_base, cloned_tuple);
             if literal_type < 0 {
                 return -1;
-            };
+            }
             if literal_type == BUILTIN_TYPE_ID_TYPE {
                 if literal_value < 0 {
                     return -1;
-                };
+                }
                 if !type_id_is_tuple(literal_value) {
                     return -1;
-                };
+                }
                 let resolved_tuple: i32 = resolve_type_id(0, ast_base, literal_value);
                 if resolved_tuple < 0 {
                     return -1;
-                };
+                }
                 if !type_id_is_tuple(resolved_tuple) {
                     return -1;
-                };
+                }
                 let tuple_idx: i32 = tuple_type_index(resolved_tuple);
                 if tuple_idx < 0 {
                     return -1;
-                };
+                }
                 if tuple_idx >= ast_tuple_types_count(ast_base) {
                     return -1;
-                };
+                }
                 if ensure_tuple_type_metadata(0, ast_base, tuple_idx, resolved_tuple) < 0 {
                     return -1;
-                };
+                }
                 let element_count: i32 = ast_tuple_type_element_count(ast_base, tuple_idx);
                 if field_index < 0 || field_index >= element_count {
                     return -1;
-                };
+                }
                 let elements_ptr: i32 = ast_tuple_type_elements_ptr(ast_base, tuple_idx);
                 if elements_ptr < 0 {
                     return -1;
-                };
+                }
                 let element_type: i32 = load_i32(elements_ptr + field_index * WORD_SIZE);
                 if element_type < 0 {
                     return -1;
-                };
+                }
                 let literal_index: i32 =
                     ast_expr_alloc_literal(ast_base, element_type, BUILTIN_TYPE_ID_TYPE);
                 if literal_index < 0 {
                     return -1;
-                };
+                }
                 return literal_index;
-            };
+            }
             if type_id_is_tuple(literal_type) {
                 let resolved_tuple: i32 = resolve_type_id(0, ast_base, literal_type);
                 if resolved_tuple < 0 {
                     return -1;
-                };
+                }
                 if resolved_tuple != literal_type {
                     ast_expr_set_type(ast_base, cloned_tuple, resolved_tuple);
                     literal_type = resolved_tuple;
-                };
+                }
                 let tuple_idx: i32 = tuple_type_index(literal_type);
                 if tuple_idx < 0 {
                     return -1;
-                };
+                }
                 if tuple_idx >= ast_tuple_types_count(ast_base) {
                     return -1;
-                };
+                }
                 if ensure_tuple_type_metadata(0, ast_base, tuple_idx, literal_type) < 0 {
                     return -1;
-                };
+                }
                 let element_count: i32 = ast_tuple_type_element_count(ast_base, tuple_idx);
                 if field_index < 0 || field_index >= element_count {
                     return -1;
-                };
+                }
                 let elements_ptr: i32 = ast_tuple_type_elements_ptr(ast_base, tuple_idx);
                 if elements_ptr < 0 {
                     return -1;
-                };
+                }
                 let element_type: i32 = load_i32(elements_ptr + field_index * WORD_SIZE);
                 if element_type < 0 {
                     return -1;
-                };
+                }
                 if element_count > 0 {
                     if literal_value <= 0 {
                         return -1;
-                    };
+                    }
                     let slot_ptr: i32 = literal_value + field_index * 2 * WORD_SIZE;
                     let element_value: i32 = load_i32(slot_ptr);
                     let element_value_type: i32 = load_i32(slot_ptr + WORD_SIZE);
                     if element_value_type < 0 {
                         return -1;
-                    };
+                    }
                     let literal_index: i32 =
                         ast_expr_alloc_literal(ast_base, element_value, element_value_type);
                     if literal_index < 0 {
                         return -1;
-                    };
+                    }
                     return literal_index;
-                };
-            };
-        };
+                }
+            }
+        }
         let location_offset: i32 = load_i32(entry_ptr + 3 * WORD_SIZE);
         let new_index: i32 = ast_expr_alloc_tuple_get(
             ast_base,
@@ -2470,13 +2470,13 @@ fn clone_const_specialization_expr(
         );
         if new_index < 0 {
             return -1;
-        };
+        }
         let expr_type: i32 = ast_expr_type(ast_base, expr_index);
         if expr_type >= 0 {
             ast_expr_set_type(ast_base, new_index, expr_type);
-        };
+        }
         return new_index;
-    };
+    }
     if kind == 48 {
         let struct_index: i32 = ast_expr_struct_get_base(ast_base, expr_index);
         let metadata_ptr: i32 = ast_expr_struct_get_metadata(ast_base, expr_index);
@@ -2498,11 +2498,11 @@ fn clone_const_specialization_expr(
         );
         if cloned_struct < 0 {
             return -1;
-        };
+        }
         let cloned_metadata: i32 = ast_call_data_alloc(ast_base, STRUCT_GET_LABEL_ENTRY_WORDS);
         if cloned_metadata < 0 {
             return -1;
-        };
+        }
         let label_kind: i32 = struct_get_label_kind(metadata_ptr);
         let label_data: i32 = struct_get_label_data(metadata_ptr);
         let label_extra: i32 = struct_get_label_extra(metadata_ptr);
@@ -2528,7 +2528,7 @@ fn clone_const_specialization_expr(
         };
         if cloned_label < 0 {
             return -1;
-        };
+        }
         struct_get_label_set_kind(cloned_metadata, label_kind);
         struct_get_label_set_data(cloned_metadata, cloned_label);
         struct_get_label_set_extra(cloned_metadata, label_extra);
@@ -2541,26 +2541,26 @@ fn clone_const_specialization_expr(
         );
         if new_index < 0 {
             return -1;
-        };
+        }
         let expr_type: i32 = ast_expr_type(ast_base, expr_index);
         if expr_type >= 0 {
             ast_expr_set_type(ast_base, new_index, expr_type);
-        };
+        }
         return new_index;
-    };
+    }
     if kind == 42 {
         let bytes_ptr: i32 = load_i32(entry_ptr + WORD_SIZE);
         let byte_count: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
         let new_index: i32 = ast_expr_alloc_inline_wasm(ast_base, bytes_ptr, byte_count);
         if new_index < 0 {
             return -1;
-        };
+        }
         let expr_type: i32 = ast_expr_type(ast_base, expr_index);
         if expr_type >= 0 {
             ast_expr_set_type(ast_base, new_index, expr_type);
-        };
+        }
         return new_index;
-    };
+    }
     if kind == 43 {
         let name_start: i32 = load_i32(entry_ptr + WORD_SIZE);
         let name_len: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
@@ -2568,13 +2568,13 @@ fn clone_const_specialization_expr(
         let new_index: i32 = ast_expr_alloc_const_ref(ast_base, source_base, name_start, name_len);
         if new_index < 0 {
             return -1;
-        };
+        }
         let expr_type: i32 = ast_expr_type(ast_base, expr_index);
         if expr_type >= 0 {
             ast_expr_set_type(ast_base, new_index, expr_type);
-        };
+        }
         return new_index;
-    };
+    }
     if kind == 25 || kind == 26 || kind == 27 || kind == 28 || kind == 29 || kind == 30
         || kind == 31 || kind == 32 || kind == 33 || kind == 34 || kind == 2 || kind == 3
         || kind == 4 || kind == 5 || kind == 46 || kind == 14 || kind == 15 || kind == 16 || kind == 17
@@ -2600,7 +2600,7 @@ fn clone_const_specialization_expr(
         );
         if cloned_left < 0 {
             return -1;
-        };
+        }
         let cloned_right: i32 = clone_const_specialization_expr(
             ast_base,
             template_index,
@@ -2619,18 +2619,18 @@ fn clone_const_specialization_expr(
         );
         if cloned_right < 0 {
             return -1;
-        };
+        }
         let data2: i32 = load_i32(entry_ptr + 3 * WORD_SIZE);
         let new_index: i32 = ast_expr_alloc(ast_base, kind, cloned_left, cloned_right, data2);
         if new_index < 0 {
             return -1;
-        };
+        }
         let expr_type: i32 = ast_expr_type(ast_base, expr_index);
         if expr_type >= 0 {
             ast_expr_set_type(ast_base, new_index, expr_type);
-        };
+        }
         return new_index;
-    };
+    }
     -1
 }
 
@@ -2644,35 +2644,35 @@ fn ast_function_clone_const_template(
 ) -> i32 {
     if index < 0 {
         return -1;
-    };
+    }
     if key_ptr <= 0 {
         return -1;
-    };
+    }
     let const_entry_count: i32 = load_i32(key_ptr);
     if const_entry_count < 0 {
         return -1;
-    };
+    }
     let declared_const: i32 = ast_function_const_params_count(ast_base, index);
     if declared_const < 0 {
         return -1;
-    };
+    }
     if const_entry_count != declared_const {
         return -1;
-    };
+    }
     let param_count: i32 = ast_function_param_count(ast_base, index);
     if param_count < 0 {
         return -1;
-    };
+    }
     if param_count > MAX_PARAMS {
         return -1;
-    };
+    }
     let runtime_param_count: i32 = ast_function_runtime_param_count(ast_base, index);
     if runtime_param_count < 0 {
         return -1;
-    };
+    }
     if runtime_param_count + const_entry_count != param_count {
         return -1;
-    };
+    }
     let env_base: i32 = ast_temp_base(ast_base) + CONSTANT_EVAL_SCRATCH_OFFSET;
     let env_values_ptr: i32 = env_base;
     let eval_value_ptr: i32 = env_values_ptr + MAX_PARAMS * 8;
@@ -2693,10 +2693,10 @@ fn ast_function_clone_const_template(
         let recorded_param: i32 = load_i32(entry_ptr);
         if recorded_param < 0 {
             return -1;
-        };
+        }
         if recorded_param >= param_count {
             return -1;
-        };
+        }
         let slot_ptr: i32 = env_values_ptr + recorded_param * 8;
         store_i32(slot_ptr, load_i32(entry_ptr + WORD_SIZE));
         store_i32(slot_ptr + WORD_SIZE, load_i32(entry_ptr + 2 * WORD_SIZE));
@@ -2705,10 +2705,10 @@ fn ast_function_clone_const_template(
     let current_count: i32 = ast_functions_count(ast_base);
     if current_count < 0 {
         return -1;
-    };
+    }
     if index >= current_count {
         return -1;
-    };
+    }
     if current_count >= AST_MAX_FUNCTIONS {
         if detail_out_ptr > 0 {
             let mut module_base: i32 = scratch_module_base(detail_out_ptr);
@@ -2718,10 +2718,10 @@ fn ast_function_clone_const_template(
                 let func_base: i32 = ast_function_entry_module_base(ast_base, caller_func_index);
                 let func_len: i32 = ast_function_entry_module_len(ast_base, caller_func_index);
                 let func_index: i32 = ast_function_entry_module_index(ast_base, caller_func_index);
-                if func_base > 0 { module_base = func_base; };
-                if func_len > 0 { module_len = func_len; };
-                if func_index >= 0 { module_index = func_index; };
-            };
+                if func_base > 0 { module_base = func_base; }
+                if func_len > 0 { module_len = func_len; }
+                if func_index >= 0 { module_index = func_index; }
+            }
             if location_offset >= 0 && module_base > 0 && module_len > 0 {
                 write_failure_detail_with_location(
                     detail_out_ptr,
@@ -2738,10 +2738,10 @@ fn ast_function_clone_const_template(
                     44,
                     "const specialization function limit exceeded",
                 );
-            };
-        };
+            }
+        }
         return -1;
-    };
+    }
     let source_ptr: i32 = ast_function_entry_ptr(ast_base, index);
     let body_kind: i32 = load_i32(source_ptr + 12);
     let body_data0: i32 = load_i32(source_ptr + 16);
@@ -2749,8 +2749,8 @@ fn ast_function_clone_const_template(
     if param_count > 0 {
         if source_param_types_ptr < 0 {
             return -1;
-        };
-    };
+        }
+    }
     let locals_count: i32 = load_i32(source_ptr + 20);
     let mut local_type_stack_ptr: i32 = 0;
     let mut local_type_stack_top_ptr: i32 = 0;
@@ -2761,21 +2761,21 @@ fn ast_function_clone_const_template(
             local_type_stack_ptr
             + locals_count * CONST_SPECIALIZATION_LOCAL_STACK_ENTRY_SIZE;
         store_i32(local_type_stack_top_ptr, 0);
-    };
+    }
     let mut specialized_param_types_ptr: i32 = -1;
     if runtime_param_count > 0 {
         specialized_param_types_ptr = ast_call_data_alloc(ast_base, runtime_param_count);
         if specialized_param_types_ptr < 0 {
             return -1;
-        };
-    };
+        }
+    }
     let mut param_idx: i32 = 0;
     let mut runtime_write_index: i32 = 0;
     while param_idx < param_count {
         let mut resolved_type: i32 = -1;
         if source_param_types_ptr >= 0 {
             resolved_type = load_i32(source_param_types_ptr + param_idx * WORD_SIZE);
-        };
+        }
         if ast_function_param_requires_specialization(ast_base, index, param_idx) {
             let template_handle: i32 = ast_function_param_template_payload(
                 ast_base,
@@ -2784,7 +2784,7 @@ fn ast_function_clone_const_template(
             );
             if template_handle <= 0 {
                 return -1;
-            };
+            }
             let mut specialized_type: i32 = type_template_resolve_type(
                 ast_base,
                 template_handle,
@@ -2797,7 +2797,7 @@ fn ast_function_clone_const_template(
             );
             if specialized_type < 0 {
                 return -1;
-            };
+            }
             if specialized_type == BUILTIN_TYPE_ID_TYPE {
                 let usage_count: i32 = type_template_entry_param_count(template_handle);
                 if usage_count > 0 {
@@ -2809,39 +2809,39 @@ fn ast_function_clone_const_template(
                             let captured_value: i32 = load_i32(env_slot);
                             if captured_value < 0 {
                                 return -1;
-                            };
+                            }
                             specialized_type = captured_value;
-                        };
-                    };
-                };
-            };
+                        }
+                    }
+                }
+            }
             resolved_type = specialized_type;
-        };
+        }
         if resolved_type < 0 {
             return -1;
-        };
+        }
         let type_slot_ptr: i32 = env_values_ptr + param_idx * 8 + WORD_SIZE;
         store_i32(type_slot_ptr, resolved_type);
         if !ast_function_param_is_const(ast_base, index, param_idx) {
             if runtime_param_count > 0 {
                 if specialized_param_types_ptr < 0 {
                     return -1;
-                };
+                }
                 if runtime_write_index >= runtime_param_count {
                     return -1;
-                };
+                }
                 store_i32(
                     specialized_param_types_ptr + runtime_write_index * WORD_SIZE,
                     resolved_type,
                 );
-            };
+            }
             runtime_write_index = runtime_write_index + 1;
-        };
+        }
         param_idx = param_idx + 1;
     };
     if runtime_write_index != runtime_param_count {
         return -1;
-    };
+    }
     let original_return_type: i32 = load_i32(source_ptr + 28);
     let mut specialized_return_type: i32 = original_return_type;
     if ast_function_return_requires_specialization(ast_base, index) {
@@ -2849,7 +2849,7 @@ fn ast_function_clone_const_template(
             ast_function_return_template_payload(ast_base, index);
         if return_template_handle <= 0 {
             return -1;
-        };
+        }
         let resolved_return: i32 = type_template_resolve_type(
             ast_base,
             return_template_handle,
@@ -2862,7 +2862,7 @@ fn ast_function_clone_const_template(
         );
         if resolved_return < 0 {
             return -1;
-        };
+        }
         specialized_return_type = resolved_return;
         if specialized_return_type == BUILTIN_TYPE_ID_TYPE {
             let usage_count: i32 = type_template_entry_param_count(return_template_handle);
@@ -2875,13 +2875,13 @@ fn ast_function_clone_const_template(
                         let captured_value: i32 = load_i32(env_slot);
                         if captured_value < 0 {
                             return -1;
-                        };
+                        }
                         specialized_return_type = captured_value;
-                    };
-                };
-            };
-        };
-    };
+                    }
+                }
+            }
+        }
+    }
     let mut cloned_body_data0: i32 = body_data0;
     if body_kind == 2 {
         cloned_body_data0 = clone_const_specialization_expr(
@@ -2902,8 +2902,8 @@ fn ast_function_clone_const_template(
         );
         if cloned_body_data0 < 0 {
             return -1;
-        };
-    };
+        }
+    }
     let new_index: i32 = current_count;
     let dest_ptr: i32 = ast_function_entry_ptr(ast_base, new_index);
     let mut word_idx: i32 = 0;
@@ -2917,13 +2917,13 @@ fn ast_function_clone_const_template(
     store_i32(dest_ptr + 4, 0);
     if body_kind == 2 {
         store_i32(dest_ptr + 16, cloned_body_data0);
-    };
+    }
     store_i32(dest_ptr + 8, runtime_param_count);
     if runtime_param_count > 0 {
         store_i32(dest_ptr + 24, specialized_param_types_ptr);
     } else {
         store_i32(dest_ptr + 24, -1);
-    };
+    }
     store_i32(dest_ptr + 28, specialized_return_type);
     let original_flags: i32 = load_i32(dest_ptr + 32);
     let const_mask: i32 = original_flags & FUNCTION_FLAG_HAS_CONST_PARAMS;
@@ -2945,63 +2945,63 @@ fn canonicalize_const_value(
 ) -> i32 {
     if raw_type < 0 {
         return -1;
-    };
+    }
     if type_id_is_bool(raw_type) {
         let normalized: i32 = if raw_value == 0 { 0 } else { 1 };
         store_i32(out_value_ptr, normalized);
         store_i32(out_type_ptr, BUILTIN_TYPE_ID_BOOL);
         return 0;
-    };
+    }
     if constant_eval_integer_type_supported(raw_type) {
         let normalized: i32 = normalize_integer_value(raw_value, raw_type);
         if normalized < 0 {
             return -1;
-        };
+        }
         store_i32(out_value_ptr, normalized);
         store_i32(out_type_ptr, raw_type);
         return 0;
-    };
+    }
     if type_id_is_type(raw_type) {
         if raw_value < 0 {
             return -1;
-        };
+        }
         store_i32(out_value_ptr, raw_value);
         store_i32(out_type_ptr, BUILTIN_TYPE_ID_TYPE);
         return 0;
-    };
+    }
     if type_id_is_tuple(raw_type) {
         let tuple_idx: i32 = tuple_type_index(raw_type);
         if tuple_idx < 0 {
             return -1;
-        };
+        }
         if tuple_idx >= ast_tuple_types_count(ast_base) {
             return -1;
-        };
+        }
         let element_count: i32 = ast_tuple_type_element_count(ast_base, tuple_idx);
         if element_count < 0 {
             return -1;
-        };
+        }
         if element_count == 0 {
             store_i32(out_value_ptr, 0);
             store_i32(out_type_ptr, raw_type);
             return 0;
-        };
+        }
         if raw_value <= 0 {
             return -1;
-        };
+        }
         let pair_words: i32 = element_count * 2;
         if pair_words <= 0 {
             return -1;
-        };
+        }
         let canonical_ptr: i32 = ast_call_data_alloc(ast_base, pair_words);
         if canonical_ptr < 0 {
             return -1;
-        };
+        }
         let mut idx: i32 = 0;
         loop {
             if idx >= element_count {
                 break;
-            };
+            }
             let element_slot: i32 = raw_value + idx * 2 * WORD_SIZE;
             let element_value: i32 = load_i32(element_slot);
             let element_type: i32 = load_i32(element_slot + WORD_SIZE);
@@ -3013,36 +3013,36 @@ fn canonicalize_const_value(
         store_i32(out_value_ptr, canonical_ptr);
         store_i32(out_type_ptr, raw_type);
         return 0;
-    };
+    }
     if type_id_is_array(raw_type) {
         if array_type_element_type(ast_base, raw_type) < 0 {
             return -1;
-        };
+        }
         let length: i32 = array_type_length(ast_base, raw_type);
         if length < 0 {
             return -1;
-        };
+        }
         if length == 0 {
             store_i32(out_value_ptr, 0);
             store_i32(out_type_ptr, raw_type);
             return 0;
-        };
+        }
         if raw_value <= 0 {
             return -1;
-        };
+        }
         let pair_words: i32 = length * 2;
         if pair_words <= 0 {
             return -1;
-        };
+        }
         let canonical_ptr: i32 = ast_call_data_alloc(ast_base, pair_words);
         if canonical_ptr < 0 {
             return -1;
-        };
+        }
         let mut idx: i32 = 0;
         loop {
             if idx >= length {
                 break;
-            };
+            }
             let element_slot: i32 = raw_value + idx * 2 * WORD_SIZE;
             let element_value: i32 = load_i32(element_slot);
             let element_value_type: i32 = load_i32(element_slot + WORD_SIZE);
@@ -3054,7 +3054,7 @@ fn canonicalize_const_value(
         store_i32(out_value_ptr, canonical_ptr);
         store_i32(out_type_ptr, raw_type);
         return 0;
-    };
+    }
     -1
 }
 
@@ -3065,36 +3065,36 @@ fn ast_function_canonicalize_const_env(
 ) -> i32 {
     if index < 0 {
         return -1;
-    };
+    }
     if !ast_function_has_const_params(ast_base, index) {
         return 0;
-    };
+    }
     if env_ptr <= 0 {
         return -1;
-    };
+    }
     let param_count: i32 = ast_function_param_count(ast_base, index);
     if param_count < 0 {
         return -1;
-    };
+    }
     let env_param_count: i32 = load_i32(env_ptr);
     if env_param_count != param_count {
         return -1;
-    };
+    }
     let const_count: i32 = ast_function_const_params_count(ast_base, index);
     if const_count <= 0 {
         return 0;
-    };
+    }
     let values_ptr: i32 = env_ptr + WORD_SIZE;
     let call_data_used_ptr: i32 = ast_call_data_len_ptr(ast_base);
     let saved_call_data_used: i32 = load_i32(call_data_used_ptr);
     let payload_words: i32 = 1 + const_count * 3;
     if payload_words <= 0 {
         return -1;
-    };
+    }
     let payload_ptr: i32 = ast_call_data_alloc(ast_base, payload_words);
     if payload_ptr < 0 {
         return -1;
-    };
+    }
     store_i32(payload_ptr, const_count);
     let mut collected: i32 = 0;
     let mut param_index: i32 = 0;
@@ -3106,7 +3106,7 @@ fn ast_function_canonicalize_const_env(
             if raw_type < 0 {
                 store_i32(call_data_used_ptr, saved_call_data_used);
                 return -1;
-            };
+            }
             let entry_ptr: i32 = payload_ptr + WORD_SIZE + collected * 3 * WORD_SIZE;
             store_i32(entry_ptr, param_index);
             if canonicalize_const_value(
@@ -3119,15 +3119,15 @@ fn ast_function_canonicalize_const_env(
             ) < 0 {
                 store_i32(call_data_used_ptr, saved_call_data_used);
                 return -1;
-            };
+            }
             collected = collected + 1;
-        };
+        }
         param_index = param_index + 1;
     };
     if collected != const_count {
         store_i32(call_data_used_ptr, saved_call_data_used);
         return -1;
-    };
+    }
     payload_ptr
 }
 
@@ -3176,7 +3176,7 @@ fn ast_store_name(ast_base: i32, source_base: i32, start: i32, len: i32) -> i32 
     let mut used: i32 = load_i32(name_len_ptr);
     if used + len > AST_NAMES_CAPACITY {
         return -1;
-    };
+    }
     let name_ptr: i32 = ast_names_base(ast_base) + used;
     let mut idx: i32 = 0;
     while idx < len {
@@ -3192,12 +3192,12 @@ fn ast_store_name(ast_base: i32, source_base: i32, start: i32, len: i32) -> i32 
 fn ast_call_data_alloc(ast_base: i32, word_count: i32) -> i32 {
     if word_count <= 0 {
         return -1;
-    };
+    }
     let used_ptr: i32 = ast_call_data_len_ptr(ast_base);
     let used: i32 = load_i32(used_ptr);
     if used + word_count > AST_CALL_DATA_CAPACITY {
         return -1;
-    };
+    }
     let entry_ptr: i32 = ast_call_data_base(ast_base) + used * WORD_SIZE;
     store_i32(used_ptr, used + word_count);
     entry_ptr
@@ -3206,30 +3206,30 @@ fn ast_call_data_alloc(ast_base: i32, word_count: i32) -> i32 {
 fn inline_wasm_literal_byte(ast_base: i32, expr_index: i32) -> i32 {
     if expr_index < 0 {
         return -1;
-    };
+    }
     if expr_index >= ast_expr_count(ast_base) {
         return -1;
-    };
+    }
     let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
     let kind: i32 = load_i32(entry_ptr);
     if kind != 0 {
         return -1;
-    };
+    }
     let literal_type: i32 = ast_expr_type(ast_base, expr_index);
     if literal_type < 0 {
         return -1;
-    };
+    }
     if !type_id_is_integer(literal_type) {
         return -1;
-    };
+    }
     let value: i32 = load_i32(entry_ptr + 4);
     let normalized: i32 = normalize_integer_value(value, literal_type);
     if normalized < 0 {
         return -1;
-    };
+    }
     if normalized > 255 {
         return -1;
-    };
+    }
     normalized
 }
 
@@ -3241,18 +3241,18 @@ fn inline_wasm_collect_bytes(
 ) -> i32 {
     if out_ptr_ptr < 0 {
         return -1;
-    };
+    }
     if out_len_ptr < 0 {
         return -1;
-    };
+    }
     store_i32(out_ptr_ptr, 0);
     store_i32(out_len_ptr, 0);
     if expr_index < 0 {
         return -1;
-    };
+    }
     if expr_index >= ast_expr_count(ast_base) {
         return -1;
-    };
+    }
     let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
     let kind: i32 = load_i32(entry_ptr);
     if kind == 35 {
@@ -3260,21 +3260,21 @@ fn inline_wasm_collect_bytes(
         let length: i32 = load_i32(entry_ptr + 8);
         if length < 0 {
             return -1;
-        };
+        }
         if length == 0 {
             return 0;
-        };
+        }
         let byte_value: i32 = inline_wasm_literal_byte(ast_base, element_index);
         if byte_value < 0 {
             return -1;
-        };
+        }
         let call_data_used_ptr: i32 = ast_call_data_len_ptr(ast_base);
         let saved_used: i32 = load_i32(call_data_used_ptr);
         let bytes_ptr: i32 = ast_call_data_alloc(ast_base, length);
         if bytes_ptr < 0 {
             store_i32(call_data_used_ptr, saved_used);
             return -1;
-        };
+        }
         let mut idx: i32 = 0;
         while idx < length {
             store_i32(bytes_ptr + idx * WORD_SIZE, byte_value);
@@ -3283,26 +3283,26 @@ fn inline_wasm_collect_bytes(
         store_i32(out_ptr_ptr, bytes_ptr);
         store_i32(out_len_ptr, length);
         return 0;
-    };
+    }
     if kind == 37 {
         let values_ptr: i32 = load_i32(entry_ptr + 4);
         let element_count: i32 = load_i32(entry_ptr + 8);
         if element_count < 0 {
             return -1;
-        };
+        }
         if element_count == 0 {
             return 0;
-        };
+        }
         if values_ptr < 0 {
             return -1;
-        };
+        }
         let call_data_used_ptr: i32 = ast_call_data_len_ptr(ast_base);
         let saved_used: i32 = load_i32(call_data_used_ptr);
         let bytes_ptr: i32 = ast_call_data_alloc(ast_base, element_count);
         if bytes_ptr < 0 {
             store_i32(call_data_used_ptr, saved_used);
             return -1;
-        };
+        }
         let mut idx: i32 = 0;
         while idx < element_count {
             let element_index: i32 = load_i32(values_ptr + idx * WORD_SIZE);
@@ -3310,14 +3310,14 @@ fn inline_wasm_collect_bytes(
             if byte_value < 0 {
                 store_i32(call_data_used_ptr, saved_used);
                 return -1;
-            };
+            }
             store_i32(bytes_ptr + idx * WORD_SIZE, byte_value);
             idx = idx + 1;
         };
         store_i32(out_ptr_ptr, bytes_ptr);
         store_i32(out_len_ptr, element_count);
         return 0;
-    };
+    }
     -1
 }
 
@@ -3342,7 +3342,7 @@ fn call_metadata_args_base(metadata_ptr: i32) -> i32 {
 }
 
 fn call_metadata_extra_slot_base(metadata_ptr: i32) -> i32 {
-    if metadata_ptr <= 0 { return 0; };
+    if metadata_ptr <= 0 { return 0; }
     let arg_count: i32 = call_metadata_arg_count(metadata_ptr);
     metadata_ptr + 16 + arg_count * WORD_SIZE
 }
@@ -3355,44 +3355,44 @@ fn call_metadata_compact_runtime_args(
 ) -> i32 {
     if metadata_ptr <= 0 {
         return -1;
-    };
+    }
     if runtime_param_count < 0 {
         return -1;
-    };
+    }
     let arg_count: i32 = call_metadata_arg_count(metadata_ptr);
     if arg_count < 0 {
         return -1;
-    };
+    }
     if runtime_param_count == arg_count {
         return metadata_ptr;
-    };
+    }
     if runtime_param_count > arg_count {
         return -1;
-    };
+    }
     let key_ptr: i32 = call_metadata_const_key_ptr(metadata_ptr);
     if key_ptr <= 0 {
         return -1;
-    };
+    }
     let const_entry_count: i32 = load_i32(key_ptr);
     if const_entry_count <= 0 {
         return -1;
-    };
+    }
     let name_ptr: i32 = call_metadata_name_ptr(metadata_ptr);
     let name_len: i32 = call_metadata_name_len(metadata_ptr);
     let original_args_base: i32 = call_metadata_args_base(metadata_ptr);
     if arg_count > 0 {
         if original_args_base < 0 {
             return -1;
-        };
-    };
+        }
+    }
     let total_words: i32 = 4 + runtime_param_count + 5;
     if total_words <= 0 {
         return -1;
-    };
+    }
     let new_metadata: i32 = ast_call_data_alloc(ast_base, total_words);
     if new_metadata < 0 {
         return -1;
-    };
+    }
     store_i32(new_metadata, name_ptr);
     store_i32(new_metadata + WORD_SIZE, name_len);
     store_i32(new_metadata + 2 * WORD_SIZE, runtime_param_count);
@@ -3408,30 +3408,30 @@ fn call_metadata_compact_runtime_args(
             let recorded_param: i32 = load_i32(entry_ptr);
             if recorded_param < 0 {
                 return -1;
-            };
+            }
             if recorded_param < arg_idx {
                 key_idx = key_idx + 1;
                 continue;
-            };
+            }
             if recorded_param == arg_idx {
                 skip_arg = true;
                 key_idx = key_idx + 1;
-            };
+            }
             break;
         };
         if !skip_arg {
             if runtime_idx >= runtime_param_count {
                 return -1;
-            };
+            }
             let arg_expr_index: i32 = load_i32(original_args_base + arg_idx * WORD_SIZE);
             store_i32(new_args_base + runtime_idx * WORD_SIZE, arg_expr_index);
             runtime_idx = runtime_idx + 1;
-        };
+        }
         arg_idx = arg_idx + 1;
     };
     if runtime_idx != runtime_param_count {
         return -1;
-    };
+    }
     let original_extra: i32 = call_metadata_extra_slot_base(metadata_ptr);
     let new_extra: i32 = call_metadata_extra_slot_base(new_metadata);
     if original_extra > 0 && new_extra > 0 {
@@ -3441,7 +3441,7 @@ fn call_metadata_compact_runtime_args(
             store_i32(new_extra + extra_idx * WORD_SIZE, value);
             extra_idx = extra_idx + 1;
         };
-    };
+    }
     new_metadata
 }
 
@@ -3451,44 +3451,44 @@ fn call_metadata_const_usage_list_slot(metadata_ptr: i32) -> i32 {
 
 fn call_metadata_const_usage_count_ptr(metadata_ptr: i32) -> i32 {
     let base_ptr: i32 = call_metadata_extra_slot_base(metadata_ptr);
-    if base_ptr <= 0 { return 0; };
+    if base_ptr <= 0 { return 0; }
     base_ptr + WORD_SIZE
 }
 
 fn call_metadata_const_usage_count(metadata_ptr: i32) -> i32 {
     let count_ptr: i32 = call_metadata_const_usage_count_ptr(metadata_ptr);
-    if count_ptr <= 0 { return 0; };
+    if count_ptr <= 0 { return 0; }
     load_i32(count_ptr)
 }
 
 fn call_metadata_template_payload_ptr(metadata_ptr: i32) -> i32 {
-    if metadata_ptr <= 0 { return 0; };
+    if metadata_ptr <= 0 { return 0; }
     let base_ptr: i32 = call_metadata_extra_slot_base(metadata_ptr);
-    if base_ptr <= 0 { return 0; };
+    if base_ptr <= 0 { return 0; }
     base_ptr + 2 * WORD_SIZE
 }
 
 fn call_metadata_const_env_ptr_ptr(metadata_ptr: i32) -> i32 {
     let base_ptr: i32 = call_metadata_extra_slot_base(metadata_ptr);
-    if base_ptr <= 0 { return 0; };
+    if base_ptr <= 0 { return 0; }
     base_ptr + 3 * WORD_SIZE
 }
 
 fn call_metadata_const_env_ptr(metadata_ptr: i32) -> i32 {
     let ptr: i32 = call_metadata_const_env_ptr_ptr(metadata_ptr);
-    if ptr <= 0 { return 0; };
+    if ptr <= 0 { return 0; }
     load_i32(ptr)
 }
 
 fn call_metadata_const_key_ptr_ptr(metadata_ptr: i32) -> i32 {
     let base_ptr: i32 = call_metadata_extra_slot_base(metadata_ptr);
-    if base_ptr <= 0 { return 0; };
+    if base_ptr <= 0 { return 0; }
     base_ptr + 4 * WORD_SIZE
 }
 
 fn call_metadata_const_key_ptr(metadata_ptr: i32) -> i32 {
     let ptr: i32 = call_metadata_const_key_ptr_ptr(metadata_ptr);
-    if ptr <= 0 { return 0; };
+    if ptr <= 0 { return 0; }
     load_i32(ptr)
 }
 
@@ -3847,27 +3847,27 @@ fn ast_struct_type_field_record_ptr(
 ) -> i32 {
     if struct_index < 0 {
         return -1;
-    };
+    }
     if field_index < 0 {
         return -1;
-    };
+    }
     if struct_index >= ast_struct_types_count(ast_base) {
         return -1;
-    };
+    }
     let field_count: i32 = ast_struct_type_field_count(ast_base, struct_index);
     if field_index >= field_count {
         return -1;
-    };
+    }
     let fields_ptr: i32 = ast_struct_type_fields_ptr(ast_base, struct_index);
     if field_count > 0 {
         if fields_ptr <= 0 {
             return -1;
-        };
-    };
+        }
+    }
     let stride: i32 = ast_struct_type_field_stride(ast_base, struct_index);
     if stride < STRUCT_FIELD_METADATA_HEADER_WORDS {
         return -1;
-    };
+    }
     fields_ptr + field_index * stride * WORD_SIZE
 }
 
@@ -3879,7 +3879,7 @@ fn ast_struct_type_field_type(
     let record_ptr: i32 = ast_struct_type_field_record_ptr(ast_base, struct_index, field_index);
     if record_ptr < 0 {
         return -1;
-    };
+    }
     load_i32(record_ptr + STRUCT_FIELD_TYPE_WORD_OFFSET * WORD_SIZE)
 }
 
@@ -3891,12 +3891,12 @@ fn struct_field_trimmed_length(
     let name_length: i32 = ast_struct_type_name_length(ast_base, struct_index);
     if name_length <= 0 {
         return 0;
-    };
+    }
     let mut trimmed: i32 = name_length;
     loop {
         if trimmed <= 0 {
             break;
-        };
+        }
         let byte: i32 = ast_struct_type_field_canonical_byte(
             ast_base,
             struct_index,
@@ -3905,7 +3905,7 @@ fn struct_field_trimmed_length(
         );
         if byte != 0 {
             break;
-        };
+        }
         trimmed = trimmed - 1;
     };
     trimmed
@@ -3920,19 +3920,19 @@ fn struct_field_identifier_matches(
 ) -> bool {
     if ident_ptr <= 0 {
         return false;
-    };
+    }
     if ident_len < 0 {
         return false;
-    };
+    }
     let trimmed: i32 = struct_field_trimmed_length(ast_base, struct_index, field_index);
     if ident_len != trimmed {
         return false;
-    };
+    }
     let mut idx: i32 = 0;
     loop {
         if idx >= trimmed {
             break;
-        };
+        }
         let expected: i32 = ast_struct_type_field_canonical_byte(
             ast_base,
             struct_index,
@@ -3942,7 +3942,7 @@ fn struct_field_identifier_matches(
         let actual: i32 = load_u8(ident_ptr + idx);
         if expected != actual {
             return false;
-        };
+        }
         idx = idx + 1;
     };
     true
@@ -3951,10 +3951,10 @@ fn struct_field_identifier_matches(
 fn struct_literal_field_entry_ptr(metadata_ptr: i32, index: i32) -> i32 {
     if metadata_ptr <= 0 {
         return -1;
-    };
+    }
     if index < 0 {
         return -1;
-    };
+    }
     metadata_ptr
         + STRUCT_LITERAL_METADATA_HEADER_WORDS * WORD_SIZE
         + index * STRUCT_LITERAL_FIELD_ENTRY_WORDS * WORD_SIZE
@@ -4003,40 +4003,40 @@ fn struct_literal_field_set_value(entry_ptr: i32, value: i32) {
 fn struct_get_label_kind(metadata_ptr: i32) -> i32 {
     if metadata_ptr <= 0 {
         return -1;
-    };
+    }
     return load_i32(metadata_ptr + STRUCT_GET_LABEL_KIND_OFFSET * WORD_SIZE);
 }
 
 fn struct_get_label_data(metadata_ptr: i32) -> i32 {
     if metadata_ptr <= 0 {
         return -1;
-    };
+    }
     load_i32(metadata_ptr + STRUCT_GET_LABEL_DATA_OFFSET * WORD_SIZE)
 }
 
 fn struct_get_label_extra(metadata_ptr: i32) -> i32 {
     if metadata_ptr <= 0 {
         return -1;
-    };
+    }
     load_i32(metadata_ptr + STRUCT_GET_LABEL_EXTRA_OFFSET * WORD_SIZE)
 }
 
 fn struct_get_label_set_kind(metadata_ptr: i32, value: i32) {
     if metadata_ptr > 0 {
         store_i32(metadata_ptr + STRUCT_GET_LABEL_KIND_OFFSET * WORD_SIZE, value);
-    };
+    }
 }
 
 fn struct_get_label_set_data(metadata_ptr: i32, value: i32) {
     if metadata_ptr > 0 {
         store_i32(metadata_ptr + STRUCT_GET_LABEL_DATA_OFFSET * WORD_SIZE, value);
-    };
+    }
 }
 
 fn struct_get_label_set_extra(metadata_ptr: i32, value: i32) {
     if metadata_ptr > 0 {
         store_i32(metadata_ptr + STRUCT_GET_LABEL_EXTRA_OFFSET * WORD_SIZE, value);
-    };
+    }
 }
 
 
@@ -4048,15 +4048,15 @@ fn ast_struct_type_field_canonical_byte(
 ) -> i32 {
     if byte_index < 0 {
         return -1;
-    };
+    }
     let record_ptr: i32 = ast_struct_type_field_record_ptr(ast_base, struct_index, field_index);
     if record_ptr < 0 {
         return -1;
-    };
+    }
     let name_length: i32 = ast_struct_type_name_length(ast_base, struct_index);
     if byte_index >= name_length {
         return -1;
-    };
+    }
     load_i32(
         record_ptr
             + (STRUCT_FIELD_METADATA_HEADER_WORDS + byte_index) * WORD_SIZE,
@@ -4115,8 +4115,8 @@ fn record_type_metadata_failure(out_ptr: i32) {
         if load_u8(out_ptr) == 0 {
             let message: [u8; 31] = "type metadata resolution failed";
             write_failure_detail(out_ptr, 31, message);
-        };
-    };
+        }
+    }
 }
 
 fn array_type_cached_id(ast_base: i32, index: i32) -> i32 {
@@ -4138,28 +4138,28 @@ fn array_type_index(type_id: i32) -> i32 {
 fn array_type_element_type(ast_base: i32, type_id: i32) -> i32 {
     if !type_id_is_array(type_id) {
         return -1;
-    };
+    }
     let index: i32 = array_type_index(type_id);
     if index < 0 {
         return -1;
-    };
+    }
     if index >= ast_array_types_count(ast_base) {
         return -1;
-    };
+    }
     ast_array_type_element_type(ast_base, index)
 }
 
 fn array_type_length(ast_base: i32, type_id: i32) -> i32 {
     if !type_id_is_array(type_id) {
         return -1;
-    };
+    }
     let index: i32 = array_type_index(type_id);
     if index < 0 {
         return -1;
-    };
+    }
     if index >= ast_array_types_count(ast_base) {
         return -1;
-    };
+    }
     ast_array_type_length(ast_base, index)
 }
 
@@ -4182,67 +4182,67 @@ fn struct_type_index(type_id: i32) -> i32 {
 fn array_type_heap_index(ast_base: i32, type_id: i32) -> i32 {
     if !type_id_is_array(type_id) {
         return -1;
-    };
+    }
     let index: i32 = array_type_index(type_id);
     if index < 0 {
         return -1;
-    };
+    }
     if index >= ast_array_types_count(ast_base) {
         return -1;
-    };
+    }
     let heap_index: i32 = ast_array_heap_index(ast_base, index);
     if heap_index < 0 {
         return -1;
-    };
+    }
     heap_index
 }
 
 fn tuple_type_heap_index(ast_base: i32, type_id: i32) -> i32 {
     if !type_id_is_tuple(type_id) {
         return -1;
-    };
+    }
     let index: i32 = tuple_type_index(type_id);
     if index < 0 {
         return -1;
-    };
+    }
     if index >= ast_tuple_types_count(ast_base) {
         return -1;
-    };
+    }
     let heap_index: i32 = ast_tuple_heap_index(ast_base, index);
     if heap_index < 0 {
         return -1;
-    };
+    }
     heap_index
 }
 
 fn struct_type_heap_index(ast_base: i32, type_id: i32) -> i32 {
     if !type_id_is_struct(type_id) {
         return -1;
-    };
+    }
     let index: i32 = struct_type_index(type_id);
     if index < 0 {
         return -1;
-    };
+    }
     if index >= ast_struct_types_count(ast_base) {
         return -1;
-    };
+    }
     let heap_index: i32 = ast_struct_heap_index(ast_base, index);
     if heap_index < 0 {
         return -1;
-    };
+    }
     heap_index
 }
 
 fn type_id_heap_type_index(ast_base: i32, type_id: i32) -> i32 {
     if type_id_is_array(type_id) {
         return array_type_heap_index(ast_base, type_id);
-    };
+    }
     if type_id_is_tuple(type_id) {
         return tuple_type_heap_index(ast_base, type_id);
-    };
+    }
     if type_id_is_struct(type_id) {
         return struct_type_heap_index(ast_base, type_id);
-    };
+    }
     -1
 }
 
@@ -4258,37 +4258,37 @@ fn composite_type_dependency_resolved(
         let dep_index: i32 = array_type_index(type_id);
         if dep_index < 0 {
             return false;
-        };
+        }
         if dep_index >= array_count {
             return false;
-        };
+        }
         let resolved: i32 = load_i32(resolved_ptr + dep_index * WORD_SIZE);
         return resolved != 0;
-    };
+    }
     if type_id_is_tuple(type_id) {
         let dep_index: i32 = tuple_type_index(type_id);
         if dep_index < 0 {
             return false;
-        };
+        }
         if dep_index >= tuple_count {
             return false;
-        };
+        }
         let resolved: i32 =
             load_i32(resolved_ptr + (array_count + dep_index) * WORD_SIZE);
         return resolved != 0;
-    };
+    }
     if type_id_is_struct(type_id) {
         let dep_index: i32 = struct_type_index(type_id);
         if dep_index < 0 {
             return false;
-        };
+        }
         if dep_index >= struct_count {
             return false;
-        };
+        }
         let offset: i32 = array_count + tuple_count + dep_index;
         let resolved: i32 = load_i32(resolved_ptr + offset * WORD_SIZE);
         return resolved != 0;
-    };
+    }
     true
 }
 
@@ -4304,7 +4304,7 @@ fn composite_type_dependencies_resolved(
         let element_type_id: i32 = ast_array_type_element_type(ast_base, node_index);
         if element_type_id < 0 {
             return false;
-        };
+        }
         return composite_type_dependency_resolved(
             ast_base,
             array_count,
@@ -4313,29 +4313,29 @@ fn composite_type_dependencies_resolved(
             resolved_ptr,
             element_type_id,
         );
-    };
+    }
     let tuple_idx: i32 = node_index - array_count;
     if tuple_idx < tuple_count {
         if tuple_idx < 0 {
             return false;
-        };
+        }
         let element_count: i32 = ast_tuple_type_element_count(ast_base, tuple_idx);
         if element_count < 0 {
             return false;
-        };
+        }
         if element_count == 0 {
             return true;
-        };
+        }
         let elements_ptr: i32 = ast_tuple_type_elements_ptr(ast_base, tuple_idx);
         if elements_ptr < 0 {
             return false;
-        };
+        }
         let mut field_idx: i32 = 0;
         while field_idx < element_count {
             let field_type_id: i32 = load_i32(elements_ptr + field_idx * WORD_SIZE);
             if field_type_id < 0 {
                 return false;
-            };
+            }
             if !composite_type_dependency_resolved(
                 ast_base,
                 array_count,
@@ -4345,40 +4345,40 @@ fn composite_type_dependencies_resolved(
                 field_type_id,
             ) {
                 return false;
-            };
+            }
             field_idx = field_idx + 1;
         };
         return true;
-    };
+    }
     let struct_idx: i32 = tuple_idx - tuple_count;
     if struct_idx < 0 {
         return false;
-    };
+    }
     if struct_idx >= struct_count {
         return false;
-    };
+    }
     let field_count: i32 = ast_struct_type_field_count(ast_base, struct_idx);
     if field_count < 0 {
         return false;
-    };
+    }
     if field_count == 0 {
         return true;
-    };
+    }
     let fields_ptr: i32 = ast_struct_type_fields_ptr(ast_base, struct_idx);
     if fields_ptr < 0 {
         return false;
-    };
+    }
     let stride: i32 = ast_struct_type_field_stride(ast_base, struct_idx);
     if stride <= 0 {
         return false;
-    };
+    }
     let mut struct_field_idx: i32 = 0;
     while struct_field_idx < field_count {
         let record_ptr: i32 = fields_ptr + struct_field_idx * stride * WORD_SIZE;
         let field_type_id: i32 = load_i32(record_ptr);
         if field_type_id < 0 {
             return false;
-        };
+        }
         if !composite_type_dependency_resolved(
             ast_base,
             array_count,
@@ -4388,7 +4388,7 @@ fn composite_type_dependencies_resolved(
             field_type_id,
         ) {
             return false;
-        };
+        }
         struct_field_idx = struct_field_idx + 1;
     };
     true
@@ -4398,15 +4398,15 @@ fn assign_heap_type_indices(out_ptr: i32, ast_base: i32) -> i32 {
     let array_count: i32 = ast_array_types_count(ast_base);
     if array_count < 0 {
         return -1;
-    };
+    }
     let tuple_count: i32 = ast_tuple_types_count(ast_base);
     if tuple_count < 0 {
         return -1;
-    };
+    }
     let struct_count: i32 = ast_struct_types_count(ast_base);
     if struct_count < 0 {
         return -1;
-    };
+    }
     let total: i32 = array_count + tuple_count + struct_count;
     let mut idx: i32 = 0;
     while idx < array_count {
@@ -4425,7 +4425,7 @@ fn assign_heap_type_indices(out_ptr: i32, ast_base: i32) -> i32 {
     };
     if total <= 0 {
         return 0;
-    };
+    }
     let resolved_ptr: i32 = ast_temp_base(ast_base);
     let indices_ptr: i32 = resolved_ptr + total * WORD_SIZE;
     idx = 0;
@@ -4444,7 +4444,7 @@ fn assign_heap_type_indices(out_ptr: i32, ast_base: i32) -> i32 {
             if resolved != 0 {
                 node = node + 1;
                 continue;
-            };
+            }
             if composite_type_dependencies_resolved(
                 ast_base,
                 array_count,
@@ -4458,19 +4458,19 @@ fn assign_heap_type_indices(out_ptr: i32, ast_base: i32) -> i32 {
                 next_index = next_index + 1;
                 assigned = assigned + 1;
                 progress = true;
-            };
+            }
             node = node + 1;
         };
         if !progress {
             return -1;
-        };
+        }
     };
     idx = 0;
     while idx < array_count {
         let heap_index: i32 = load_i32(indices_ptr + idx * WORD_SIZE);
         if heap_index < 0 {
             return -1;
-        };
+        }
         ast_array_heap_index_set(ast_base, idx, heap_index);
         idx = idx + 1;
     };
@@ -4480,7 +4480,7 @@ fn assign_heap_type_indices(out_ptr: i32, ast_base: i32) -> i32 {
         let heap_index: i32 = load_i32(indices_ptr + node * WORD_SIZE);
         if heap_index < 0 {
             return -1;
-        };
+        }
         ast_tuple_heap_index_set(ast_base, idx, heap_index);
         idx = idx + 1;
     };
@@ -4490,7 +4490,7 @@ fn assign_heap_type_indices(out_ptr: i32, ast_base: i32) -> i32 {
         let heap_index: i32 = load_i32(indices_ptr + node * WORD_SIZE);
         if heap_index < 0 {
             return -1;
-        };
+        }
         ast_struct_heap_index_set(ast_base, idx, heap_index);
         idx = idx + 1;
     };
@@ -4500,7 +4500,7 @@ fn assign_heap_type_indices(out_ptr: i32, ast_base: i32) -> i32 {
 fn ast_register_array_type(ast_base: i32, element_type_id: i32, length: i32) -> i32 {
     if length < 0 {
         return -1;
-    };
+    }
     let count_ptr: i32 = ast_array_types_count_ptr(ast_base);
     let count: i32 = load_i32(count_ptr);
     let mut idx: i32 = 0;
@@ -4510,12 +4510,12 @@ fn ast_register_array_type(ast_base: i32, element_type_id: i32, length: i32) -> 
         let existing_length: i32 = load_i32(entry_ptr + 4);
         if existing_element == element_type_id && existing_length == length {
             return array_type_id(idx);
-        };
+        }
         idx = idx + 1;
     };
     if count >= AST_ARRAY_TYPES_CAPACITY {
         return -1;
-    };
+    }
     let entry_ptr: i32 = ast_array_type_entry_ptr(ast_base, count);
     store_i32(entry_ptr + AST_ARRAY_TYPE_ELEMENT_OFFSET, element_type_id);
     store_i32(entry_ptr + AST_ARRAY_TYPE_LENGTH_OFFSET, length);
@@ -4527,10 +4527,10 @@ fn ast_register_array_type(ast_base: i32, element_type_id: i32, length: i32) -> 
 fn ast_register_tuple_type(ast_base: i32, elements_ptr: i32, element_count: i32) -> i32 {
     if element_count < 0 {
         return -1;
-    };
+    }
     if element_count > 0 && elements_ptr < 0 {
         return -1;
-    };
+    }
     let count_ptr: i32 = ast_tuple_types_count_ptr(ast_base);
     let count: i32 = load_i32(count_ptr);
     let mut idx: i32 = 0;
@@ -4541,15 +4541,15 @@ fn ast_register_tuple_type(ast_base: i32, elements_ptr: i32, element_count: i32)
         if existing_count != element_count {
             idx = idx + 1;
             continue;
-        };
+        }
         if element_count == 0 {
             return tuple_type_id(idx);
-        };
+        }
         let existing_ptr: i32 =
             load_i32(entry_ptr + AST_TUPLE_TYPE_ELEMENTS_PTR_OFFSET);
         if existing_ptr < 0 {
             return -1;
-        };
+        }
         let mut match_idx: i32 = 0;
         let mut matches: bool = true;
         while match_idx < element_count {
@@ -4560,17 +4560,17 @@ fn ast_register_tuple_type(ast_base: i32, elements_ptr: i32, element_count: i32)
             if existing_type != new_type {
                 matches = false;
                 break;
-            };
+            }
             match_idx = match_idx + 1;
         };
         if matches {
             return tuple_type_id(idx);
-        };
+        }
         idx = idx + 1;
     };
     if count >= AST_TUPLE_TYPES_CAPACITY {
         return -1;
-    };
+    }
     let entry_ptr: i32 = ast_tuple_type_entry_ptr(ast_base, count);
     let stored_ptr: i32 = if element_count == 0 { 0 } else { elements_ptr };
     store_i32(entry_ptr + AST_TUPLE_TYPE_COUNT_OFFSET, element_count);
@@ -4589,21 +4589,21 @@ fn ast_register_struct_type(
 ) -> i32 {
     if name_length < 0 {
         return -1;
-    };
+    }
     if field_count < 0 {
         return -1;
-    };
+    }
     if field_stride < STRUCT_FIELD_METADATA_HEADER_WORDS {
         return -1;
-    };
+    }
     if field_stride - STRUCT_FIELD_METADATA_HEADER_WORDS < name_length {
         return -1;
-    };
+    }
     if field_count > 0 {
         if fields_ptr <= 0 {
             return -1;
-        };
-    };
+        }
+    }
     let count_ptr: i32 = ast_struct_types_count_ptr(ast_base);
     let count: i32 = load_i32(count_ptr);
     let mut idx: i32 = 0;
@@ -4614,27 +4614,27 @@ fn ast_register_struct_type(
         if existing_count != field_count {
             idx = idx + 1;
             continue;
-        };
+        }
         let existing_name_len: i32 =
             load_i32(entry_ptr + AST_STRUCT_TYPE_NAME_LEN_OFFSET);
         if existing_name_len != name_length {
             idx = idx + 1;
             continue;
-        };
+        }
         let existing_stride: i32 =
             load_i32(entry_ptr + AST_STRUCT_TYPE_FIELD_STRIDE_OFFSET);
         if existing_stride != field_stride {
             idx = idx + 1;
             continue;
-        };
+        }
         if field_count == 0 {
             return struct_type_id(idx);
-        };
+        }
         let existing_fields_ptr: i32 =
             load_i32(entry_ptr + AST_STRUCT_TYPE_FIELDS_PTR_OFFSET);
         if existing_fields_ptr < 0 {
             return -1;
-        };
+        }
         let mut field_idx: i32 = 0;
         let mut matches: bool = true;
         while field_idx < field_count {
@@ -4651,7 +4651,7 @@ fn ast_register_struct_type(
             if existing_type != new_type {
                 matches = false;
                 break;
-            };
+            }
             let mut byte_idx: i32 = 0;
             while byte_idx < name_length {
                 let existing_byte: i32 = load_i32(
@@ -4667,22 +4667,22 @@ fn ast_register_struct_type(
                 if existing_byte != new_byte {
                     matches = false;
                     break;
-                };
+                }
                 byte_idx = byte_idx + 1;
             };
             if !matches {
                 break;
-            };
+            }
             field_idx = field_idx + 1;
         };
         if matches {
             return struct_type_id(idx);
-        };
+        }
         idx = idx + 1;
     };
     if count >= AST_STRUCT_TYPES_CAPACITY {
         return -1;
-    };
+    }
     let entry_ptr: i32 = ast_struct_type_entry_ptr(ast_base, count);
     let stored_ptr: i32 = if field_count == 0 { 0 } else { fields_ptr };
     store_i32(entry_ptr + AST_STRUCT_TYPE_FIELD_COUNT_OFFSET, field_count);
@@ -4697,14 +4697,14 @@ fn ast_register_struct_type(
 fn ensure_array_type_metadata(out_ptr: i32, ast_base: i32, index: i32, type_id: i32) -> i32 {
     if index < 0 {
         return -1;
-    };
+    }
     if index >= SCRATCH_TYPES_CAPACITY {
         return -1;
-    };
+    }
     let cached: i32 = array_type_cached_id(ast_base, index);
     if cached == type_id {
         return 0;
-    };
+    }
     let scratch_entry_ptr: i32 = scratch_type_entry_ptr(out_ptr, index);
     store_i32(scratch_entry_ptr + TYPE_ENTRY_TYPE_ID_OFFSET, type_id);
     store_i32(scratch_entry_ptr + TYPE_ENTRY_NAME_PTR_OFFSET, 0);
@@ -4717,25 +4717,25 @@ fn ensure_array_type_metadata(out_ptr: i32, ast_base: i32, index: i32, type_id: 
     let current_count: i32 = scratch_types_count(out_ptr);
     if index + 1 > current_count {
         scratch_types_set_count(out_ptr, index + 1);
-    };
+    }
     0
 }
 
 fn ensure_tuple_type_metadata(out_ptr: i32, ast_base: i32, index: i32, type_id: i32) -> i32 {
     if index < 0 {
         return -1;
-    };
+    }
     let metadata_index: i32 = tuple_type_metadata_index(index);
     if metadata_index < 0 {
         return -1;
-    };
+    }
     if metadata_index >= SCRATCH_TYPES_CAPACITY {
         return -1;
-    };
+    }
     let cached: i32 = tuple_type_cached_id(ast_base, index);
     if cached == type_id {
         return 0;
-    };
+    }
     let scratch_entry_ptr: i32 = scratch_type_entry_ptr(out_ptr, metadata_index);
     store_i32(scratch_entry_ptr + TYPE_ENTRY_TYPE_ID_OFFSET, type_id);
     store_i32(scratch_entry_ptr + TYPE_ENTRY_NAME_PTR_OFFSET, 0);
@@ -4748,25 +4748,25 @@ fn ensure_tuple_type_metadata(out_ptr: i32, ast_base: i32, index: i32, type_id: 
     let current_count: i32 = scratch_types_count(out_ptr);
     if metadata_index + 1 > current_count {
         scratch_types_set_count(out_ptr, metadata_index + 1);
-    };
+    }
     0
 }
 
 fn ensure_struct_type_metadata(out_ptr: i32, ast_base: i32, index: i32, type_id: i32) -> i32 {
     if index < 0 {
         return -1;
-    };
+    }
     let metadata_index: i32 = struct_type_metadata_index(index);
     if metadata_index < 0 {
         return -1;
-    };
+    }
     if metadata_index >= SCRATCH_TYPES_CAPACITY {
         return -1;
-    };
+    }
     let cached: i32 = struct_type_cached_id(ast_base, index);
     if cached == type_id {
         return 0;
-    };
+    }
     let scratch_entry_ptr: i32 = scratch_type_entry_ptr(out_ptr, metadata_index);
     store_i32(scratch_entry_ptr + TYPE_ENTRY_TYPE_ID_OFFSET, type_id);
     store_i32(scratch_entry_ptr + TYPE_ENTRY_NAME_PTR_OFFSET, 0);
@@ -4779,53 +4779,53 @@ fn ensure_struct_type_metadata(out_ptr: i32, ast_base: i32, index: i32, type_id:
     let current_count: i32 = scratch_types_count(out_ptr);
     if metadata_index + 1 > current_count {
         scratch_types_set_count(out_ptr, metadata_index + 1);
-    };
+    }
     0
 }
 
 fn type_id_contains_only_type_values(ast_base: i32, type_id: i32) -> bool {
     if type_id < 0 {
         return false;
-    };
+    }
     if type_id == BUILTIN_TYPE_ID_TYPE {
         return true;
-    };
+    }
     if type_id_is_array(type_id) {
         let element_type: i32 = array_type_element_type(ast_base, type_id);
         if element_type < 0 {
             return false;
-        };
+        }
         return type_id_contains_only_type_values(ast_base, element_type);
-    };
+    }
     if type_id_is_tuple(type_id) {
         let tuple_idx: i32 = tuple_type_index(type_id);
         if tuple_idx < 0 {
             return false;
-        };
+        }
         if ensure_tuple_type_metadata(0, ast_base, tuple_idx, type_id) < 0 {
             return false;
-        };
+        }
         let element_count: i32 = ast_tuple_type_element_count(ast_base, tuple_idx);
         if element_count < 0 {
             return false;
-        };
+        }
         if element_count == 0 {
             return true;
-        };
+        }
         let elements_ptr: i32 = ast_tuple_type_elements_ptr(ast_base, tuple_idx);
         if elements_ptr < 0 {
             return false;
-        };
+        }
         let mut idx: i32 = 0;
         while idx < element_count {
             let field_type: i32 = load_i32(elements_ptr + idx * WORD_SIZE);
             if !type_id_contains_only_type_values(ast_base, field_type) {
                 return false;
-            };
+            }
             idx = idx + 1;
         };
         return true;
-    };
+    }
     false
 }
 
@@ -4839,39 +4839,39 @@ fn materialize_type_like_value_into(
     if target_type == BUILTIN_TYPE_ID_TYPE {
         if recorded_type_id < 0 {
             return -1;
-        };
+        }
         store_i32(value_ptr, recorded_type_id);
         if type_ptr > 0 {
             store_i32(type_ptr, BUILTIN_TYPE_ID_TYPE);
-        };
+        }
         return BUILTIN_TYPE_ID_TYPE;
-    };
+    }
     if type_id_is_tuple(target_type) {
         if !type_id_is_tuple(recorded_type_id) {
             return -1;
-        };
+        }
         let target_idx: i32 = tuple_type_index(target_type);
         if target_idx < 0 {
             return -1;
-        };
+        }
         if ensure_tuple_type_metadata(0, ast_base, target_idx, target_type) < 0 {
             return -1;
-        };
+        }
         let recorded_idx: i32 = tuple_type_index(recorded_type_id);
         if recorded_idx < 0 {
             return -1;
-        };
+        }
         if ensure_tuple_type_metadata(0, ast_base, recorded_idx, recorded_type_id) < 0 {
             return -1;
-        };
+        }
         let target_count: i32 = ast_tuple_type_element_count(ast_base, target_idx);
         if target_count < 0 {
             return -1;
-        };
+        }
         let recorded_count: i32 = ast_tuple_type_element_count(ast_base, recorded_idx);
         if recorded_count != target_count {
             return -1;
-        };
+        }
         let pair_words: i32 = if target_count > 0 { target_count * 2 } else { 0 };
         let pair_storage_ptr: i32 = if pair_words > 0 {
             ast_call_data_alloc(ast_base, pair_words)
@@ -4881,13 +4881,13 @@ fn materialize_type_like_value_into(
         if pair_words > 0 {
             if pair_storage_ptr < 0 {
                 return -1;
-            };
-        };
+            }
+        }
         let target_elements_ptr: i32 = ast_tuple_type_elements_ptr(ast_base, target_idx);
         let recorded_elements_ptr: i32 = ast_tuple_type_elements_ptr(ast_base, recorded_idx);
         if target_elements_ptr < 0 || recorded_elements_ptr < 0 {
             return -1;
-        };
+        }
         let mut idx: i32 = 0;
         while idx < target_count {
             let target_field_type: i32 = load_i32(target_elements_ptr + idx * WORD_SIZE);
@@ -4901,33 +4901,33 @@ fn materialize_type_like_value_into(
                 slot_ptr + WORD_SIZE,
             ) < 0 {
                 return -1;
-            };
+            }
             idx = idx + 1;
         };
         if pair_words == 0 {
             store_i32(value_ptr, 0);
         } else {
             store_i32(value_ptr, pair_storage_ptr);
-        };
+        }
         if type_ptr > 0 {
             store_i32(type_ptr, target_type);
-        };
+        }
         return target_type;
-    };
+    }
     if type_id_is_array(target_type) {
         if !type_id_is_array(recorded_type_id) {
             return -1;
-        };
+        }
         let target_length: i32 = array_type_length(ast_base, target_type);
         let recorded_length: i32 = array_type_length(ast_base, recorded_type_id);
         if target_length != recorded_length {
             return -1;
-        };
+        }
         let target_element_type: i32 = array_type_element_type(ast_base, target_type);
         let recorded_element_type: i32 = array_type_element_type(ast_base, recorded_type_id);
         if target_element_type < 0 || recorded_element_type < 0 {
             return -1;
-        };
+        }
         let pair_words: i32 = if target_length > 0 { target_length * 2 } else { 0 };
         let pair_storage_ptr: i32 = if pair_words > 0 {
             ast_call_data_alloc(ast_base, pair_words)
@@ -4937,8 +4937,8 @@ fn materialize_type_like_value_into(
         if pair_words > 0 {
             if pair_storage_ptr < 0 {
                 return -1;
-            };
-        };
+            }
+        }
         let mut idx: i32 = 0;
         while idx < target_length {
             let slot_ptr: i32 = pair_storage_ptr + idx * 2 * WORD_SIZE;
@@ -4950,19 +4950,19 @@ fn materialize_type_like_value_into(
                 slot_ptr + WORD_SIZE,
             ) < 0 {
                 return -1;
-            };
+            }
             idx = idx + 1;
         };
         if pair_words == 0 {
             store_i32(value_ptr, 0);
         } else {
             store_i32(value_ptr, pair_storage_ptr);
-        };
+        }
         if type_ptr > 0 {
             store_i32(type_ptr, target_type);
-        };
+        }
         return target_type;
-    };
+    }
     -1
 }
 
@@ -4974,7 +4974,7 @@ fn resolve_array_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
         record_type_metadata_debug(out_ptr, 1, type_id, 0);
         record_type_metadata_failure(out_ptr);
         return -1;
-    };
+    }
     let index: i32 = array_type_index(type_id);
     store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 1001);
     store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, index);
@@ -4982,24 +4982,24 @@ fn resolve_array_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
         record_type_metadata_debug(out_ptr, 2, type_id, index);
         record_type_metadata_failure(out_ptr);
         return -1;
-    };
+    }
     let type_count: i32 = ast_array_types_count(ast_base);
     if index >= type_count {
         record_type_metadata_debug(out_ptr, 3, type_id, type_count);
         record_type_metadata_failure(out_ptr);
         return -1;
-    };
+    }
     let cached: i32 = array_type_cached_id(ast_base, index);
     store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 1002);
     store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, cached);
     if cached == type_id {
         return type_id;
-    };
+    }
     if cached == TYPE_METADATA_CACHE_IN_PROGRESS {
         record_type_metadata_debug(out_ptr, 4, type_id, index);
         record_type_metadata_failure(out_ptr);
         return -1;
-    };
+    }
     array_type_set_cached_id(ast_base, index, TYPE_METADATA_CACHE_IN_PROGRESS);
     let mut element_type_id: i32 = ast_array_type_element_type(ast_base, index);
     store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 1003);
@@ -5010,12 +5010,12 @@ fn resolve_array_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
         record_type_metadata_debug(out_ptr, 5, type_id, element_type_id);
         record_type_metadata_failure(out_ptr);
         return -1;
-    };
+    }
     if resolved_element != element_type_id {
         let entry_ptr: i32 = ast_array_type_entry_ptr(ast_base, index);
         store_i32(entry_ptr + AST_ARRAY_TYPE_ELEMENT_OFFSET, resolved_element);
         element_type_id = resolved_element;
-    };
+    }
     let length: i32 = ast_array_type_length(ast_base, index);
     store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 1004);
     store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, length);
@@ -5024,13 +5024,13 @@ fn resolve_array_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
         record_type_metadata_debug(out_ptr, 6, type_id, length);
         record_type_metadata_failure(out_ptr);
         return -1;
-    };
+    }
     if ensure_array_type_metadata(out_ptr, ast_base, index, type_id) < 0 {
         array_type_set_cached_id(ast_base, index, 0);
         record_type_metadata_debug(out_ptr, 7, type_id, index);
         record_type_metadata_failure(out_ptr);
         return -1;
-    };
+    }
     store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 1005);
     store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, type_id);
     type_id
@@ -5044,7 +5044,7 @@ fn resolve_tuple_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
         record_type_metadata_debug(out_ptr, 10, type_id, 0);
         record_type_metadata_failure(out_ptr);
         return -1;
-    };
+    }
     let index: i32 = tuple_type_index(type_id);
     store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 2001);
     store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, index);
@@ -5052,7 +5052,7 @@ fn resolve_tuple_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
         record_type_metadata_debug(out_ptr, 11, type_id, index);
         record_type_metadata_failure(out_ptr);
         return -1;
-    };
+    }
     let tuple_count: i32 = ast_tuple_types_count(ast_base);
     store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 2002);
     store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, tuple_count);
@@ -5060,18 +5060,18 @@ fn resolve_tuple_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
         record_type_metadata_debug(out_ptr, 12, type_id, tuple_count);
         record_type_metadata_failure(out_ptr);
         return -1;
-    };
+    }
     let cached: i32 = tuple_type_cached_id(ast_base, index);
     store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 2003);
     store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, cached);
     if cached == type_id {
         return type_id;
-    };
+    }
     if cached == TYPE_METADATA_CACHE_IN_PROGRESS {
         record_type_metadata_debug(out_ptr, 13, type_id, index);
         record_type_metadata_failure(out_ptr);
         return -1;
-    };
+    }
     tuple_type_set_cached_id(ast_base, index, TYPE_METADATA_CACHE_IN_PROGRESS);
     let element_count: i32 = ast_tuple_type_element_count(ast_base, index);
     store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 2004);
@@ -5081,7 +5081,7 @@ fn resolve_tuple_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
         record_type_metadata_debug(out_ptr, 14, type_id, element_count);
         record_type_metadata_failure(out_ptr);
         return -1;
-    };
+    }
     if element_count > 0 {
         let elements_ptr: i32 = ast_tuple_type_elements_ptr(ast_base, index);
         store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 2005);
@@ -5091,7 +5091,7 @@ fn resolve_tuple_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
             record_type_metadata_debug(out_ptr, 15, type_id, index);
             record_type_metadata_failure(out_ptr);
             return -1;
-        };
+        }
         let mut elem_idx: i32 = 0;
         while elem_idx < element_count {
             let type_ptr: i32 = elements_ptr + elem_idx * WORD_SIZE;
@@ -5105,19 +5105,19 @@ fn resolve_tuple_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
                 record_type_metadata_debug(out_ptr, 16, type_id, element_type_id);
                 record_type_metadata_failure(out_ptr);
                 return -1;
-            };
+            }
             if resolved_element != element_type_id {
                 store_i32(type_ptr, resolved_element);
-            };
+            }
             elem_idx = elem_idx + 1;
         };
-    };
+    }
     if ensure_tuple_type_metadata(out_ptr, ast_base, index, type_id) < 0 {
         tuple_type_set_cached_id(ast_base, index, 0);
         record_type_metadata_debug(out_ptr, 17, type_id, index);
         record_type_metadata_failure(out_ptr);
         return -1;
-    };
+    }
     store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 2007);
     store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, type_id);
     type_id
@@ -5127,44 +5127,44 @@ fn resolve_struct_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
     if !type_id_is_struct(type_id) {
         record_type_metadata_failure(out_ptr);
         return -1;
-    };
+    }
     let index: i32 = struct_type_index(type_id);
     if index < 0 {
         record_type_metadata_failure(out_ptr);
         return -1;
-    };
+    }
     if index >= ast_struct_types_count(ast_base) {
         record_type_metadata_failure(out_ptr);
         return -1;
-    };
+    }
     let cached: i32 = struct_type_cached_id(ast_base, index);
     if cached == type_id {
         return type_id;
-    };
+    }
     if cached == TYPE_METADATA_CACHE_IN_PROGRESS {
         record_type_metadata_failure(out_ptr);
         return -1;
-    };
+    }
     struct_type_set_cached_id(ast_base, index, TYPE_METADATA_CACHE_IN_PROGRESS);
     let field_count: i32 = ast_struct_type_field_count(ast_base, index);
     if field_count < 0 {
         struct_type_set_cached_id(ast_base, index, 0);
         record_type_metadata_failure(out_ptr);
         return -1;
-    };
+    }
     if field_count > 0 {
         let fields_ptr: i32 = ast_struct_type_fields_ptr(ast_base, index);
         if fields_ptr < 0 {
             struct_type_set_cached_id(ast_base, index, 0);
             record_type_metadata_failure(out_ptr);
             return -1;
-        };
+        }
         let stride: i32 = ast_struct_type_field_stride(ast_base, index);
         if stride <= 0 {
             struct_type_set_cached_id(ast_base, index, 0);
             record_type_metadata_failure(out_ptr);
             return -1;
-        };
+        }
         let mut field_idx: i32 = 0;
         while field_idx < field_count {
             let record_ptr: i32 = fields_ptr + field_idx * stride * WORD_SIZE;
@@ -5173,24 +5173,24 @@ fn resolve_struct_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
                 struct_type_set_cached_id(ast_base, index, 0);
                 record_type_metadata_failure(out_ptr);
                 return -1;
-            };
+            }
             let resolved_field: i32 = resolve_type_id(out_ptr, ast_base, field_type_id);
             if resolved_field < 0 {
                 struct_type_set_cached_id(ast_base, index, 0);
                 record_type_metadata_failure(out_ptr);
                 return -1;
-            };
+            }
             if resolved_field != field_type_id {
                 store_i32(record_ptr, resolved_field);
-            };
+            }
             field_idx = field_idx + 1;
         };
-    };
+    }
     if ensure_struct_type_metadata(out_ptr, ast_base, index, type_id) < 0 {
         struct_type_set_cached_id(ast_base, index, 0);
         record_type_metadata_failure(out_ptr);
         return -1;
-    };
+    }
     struct_type_set_cached_id(ast_base, index, type_id);
     type_id
 }
@@ -5198,19 +5198,19 @@ fn resolve_struct_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
 fn resolve_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
     if type_id < 0 {
         return -1;
-    };
+    }
     if type_id_is_array(type_id) {
         return resolve_array_type_id(out_ptr, ast_base, type_id);
-    };
+    }
     if type_id_is_tuple(type_id) {
         return resolve_tuple_type_id(out_ptr, ast_base, type_id);
-    };
+    }
     if type_id_is_struct(type_id) {
         return resolve_struct_type_id(out_ptr, ast_base, type_id);
-    };
+    }
     if type_id_is_builtin(type_id) {
         return type_id;
-    };
+    }
     record_type_metadata_debug(out_ptr, 100, type_id, 0);
     record_type_metadata_failure(out_ptr);
     -1
@@ -5263,10 +5263,10 @@ fn ast_expr_set_type(ast_base: i32, index: i32, type_id: i32) {
 fn ast_expr_type(ast_base: i32, index: i32) -> i32 {
     if index < 0 {
         return -1;
-    };
+    }
     if index >= ast_expr_count(ast_base) {
         return -1;
-    };
+    }
     load_i32(ast_expr_type_entry_ptr(ast_base, index))
 }
 
@@ -5289,7 +5289,7 @@ fn ast_expr_alloc(ast_base: i32, kind: i32, data0: i32, data1: i32, data2: i32) 
     let count: i32 = load_i32(count_ptr);
     if count >= AST_EXPR_CAPACITY {
         return -1;
-    };
+    }
     let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, count);
     store_i32(entry_ptr, kind);
     store_i32(entry_ptr + 4, data0);
@@ -5305,7 +5305,7 @@ fn ast_expr_alloc_literal(ast_base: i32, value: i32, type_id: i32) -> i32 {
     let index: i32 = ast_expr_alloc(ast_base, 0, value, 0, 0);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, type_id);
     index
 }
@@ -5314,7 +5314,7 @@ fn ast_expr_alloc_call(ast_base: i32, metadata_ptr: i32, location_offset: i32) -
     let index: i32 = ast_expr_alloc(ast_base, 1, metadata_ptr, 0, location_offset);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, -1);
     index
 }
@@ -5333,7 +5333,7 @@ fn ast_expr_alloc_add(
     let index: i32 = ast_expr_alloc(ast_base, 2, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, ast_expr_type(ast_base, left_index));
     index
 }
@@ -5347,7 +5347,7 @@ fn ast_expr_alloc_sub(
     let index: i32 = ast_expr_alloc(ast_base, 3, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, ast_expr_type(ast_base, left_index));
     index
 }
@@ -5361,7 +5361,7 @@ fn ast_expr_alloc_mul(
     let index: i32 = ast_expr_alloc(ast_base, 4, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, ast_expr_type(ast_base, left_index));
     index
 }
@@ -5375,7 +5375,7 @@ fn ast_expr_alloc_div(
     let index: i32 = ast_expr_alloc(ast_base, 5, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, ast_expr_type(ast_base, left_index));
     index
 }
@@ -5389,7 +5389,7 @@ fn ast_expr_alloc_rem(
     let index: i32 = ast_expr_alloc(ast_base, 46, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, ast_expr_type(ast_base, left_index));
     index
 }
@@ -5403,7 +5403,7 @@ fn ast_expr_alloc_bitwise_or(
     let index: i32 = ast_expr_alloc(ast_base, 25, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, ast_expr_type(ast_base, left_index));
     index
 }
@@ -5417,7 +5417,7 @@ fn ast_expr_alloc_bitwise_and(
     let index: i32 = ast_expr_alloc(ast_base, 26, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, ast_expr_type(ast_base, left_index));
     index
 }
@@ -5425,14 +5425,14 @@ fn ast_expr_alloc_bitwise_and(
 fn ast_expr_alloc_inline_wasm(ast_base: i32, bytes_ptr: i32, byte_count: i32) -> i32 {
     if byte_count < 0 {
         return -1;
-    };
+    }
     if byte_count > 0 && bytes_ptr < 0 {
         return -1;
-    };
+    }
     let index: i32 = ast_expr_alloc(ast_base, 42, bytes_ptr, byte_count, 0);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_I32);
     index
 }
@@ -5447,13 +5447,13 @@ fn ast_expr_alloc_array_repeat(
     if length < 0 {
         if length_expr_metadata_ptr < 0 {
             return -1;
-        };
-    };
+        }
+    }
     let index: i32 =
         ast_expr_alloc(ast_base, 35, element_index, length, length_expr_metadata_ptr);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, -1);
     ast_expr_entry_set_extra(ast_base, index, location_offset);
     index
@@ -5473,7 +5473,7 @@ fn ast_expr_array_repeat_length_expr(ast_base: i32, expr_index: i32) -> i32 {
     let metadata_ptr: i32 = ast_expr_array_repeat_length_metadata(ast_base, expr_index);
     if metadata_ptr <= 0 {
         return -1;
-    };
+    }
     load_i32(metadata_ptr)
 }
 
@@ -5485,14 +5485,14 @@ fn ast_expr_alloc_array_list(
 ) -> i32 {
     if count <= 0 {
         return -1;
-    };
+    }
     if values_ptr < 0 {
         return -1;
-    };
+    }
     let index: i32 = ast_expr_alloc(ast_base, 37, values_ptr, count, 0);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, -1);
     ast_expr_entry_set_extra(ast_base, index, location_offset);
     index
@@ -5526,7 +5526,7 @@ fn ast_expr_alloc_array_get(
         ast_expr_alloc(ast_base, 36, array_index, index_index, location_offset);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, -1);
     index
 }
@@ -5544,11 +5544,11 @@ fn ast_expr_alloc_tuple_get(
 ) -> i32 {
     if field_index < 0 {
         return -1;
-    };
+    }
     let index: i32 = ast_expr_alloc(ast_base, 41, tuple_index, field_index, location_offset);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, -1);
     index
 }
@@ -5561,14 +5561,14 @@ fn ast_expr_alloc_struct_get(
 ) -> i32 {
     if struct_index < 0 {
         return -1;
-    };
+    }
     if label_metadata_ptr <= 0 {
         return -1;
-    };
+    }
     let index: i32 = ast_expr_alloc(ast_base, 48, struct_index, label_metadata_ptr, location_offset);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, -1);
     index
 }
@@ -5586,7 +5586,7 @@ fn ast_expr_alloc_array_len(ast_base: i32, array_index: i32) -> i32 {
     let index: i32 = ast_expr_alloc(ast_base, 38, array_index, 0, 0);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_I32);
     index
 }
@@ -5594,14 +5594,14 @@ fn ast_expr_alloc_array_len(ast_base: i32, array_index: i32) -> i32 {
 fn ast_expr_alloc_tuple(ast_base: i32, values_ptr: i32, count: i32) -> i32 {
     if count < 0 {
         return -1;
-    };
+    }
     if count > 0 && values_ptr < 0 {
         return -1;
-    };
+    }
     let index: i32 = ast_expr_alloc(ast_base, 40, values_ptr, count, 0);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, -1);
     index
 }
@@ -5615,19 +5615,19 @@ fn ast_expr_alloc_struct_literal(
 ) -> i32 {
     if type_expr_index < 0 {
         return -1;
-    };
+    }
     if field_count < 0 {
         return -1;
-    };
+    }
     if field_count > 0 {
         if metadata_ptr <= 0 {
             return -1;
-        };
-    };
+        }
+    }
     let index: i32 = ast_expr_alloc(ast_base, 47, type_expr_index, metadata_ptr, field_count);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, -1);
     ast_expr_entry_set_extra(ast_base, index, location_offset);
     index
@@ -5671,7 +5671,7 @@ fn ast_expr_alloc_cast(ast_base: i32, value_index: i32, target_type_id: i32) -> 
     let index: i32 = ast_expr_alloc(ast_base, 39, value_index, target_type_id, 0);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, target_type_id);
     index
 }
@@ -5685,7 +5685,7 @@ fn ast_expr_alloc_shl(
     let index: i32 = ast_expr_alloc(ast_base, 27, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, ast_expr_type(ast_base, left_index));
     index
 }
@@ -5699,7 +5699,7 @@ fn ast_expr_alloc_shr_s(
     let index: i32 = ast_expr_alloc(ast_base, 28, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, ast_expr_type(ast_base, left_index));
     index
 }
@@ -5713,7 +5713,7 @@ fn ast_expr_alloc_eq(
     let index: i32 = ast_expr_alloc(ast_base, 14, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_BOOL);
     index
 }
@@ -5727,7 +5727,7 @@ fn ast_expr_alloc_ne(
     let index: i32 = ast_expr_alloc(ast_base, 15, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_BOOL);
     index
 }
@@ -5741,7 +5741,7 @@ fn ast_expr_alloc_lt(
     let index: i32 = ast_expr_alloc(ast_base, 16, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_BOOL);
     index
 }
@@ -5755,7 +5755,7 @@ fn ast_expr_alloc_gt(
     let index: i32 = ast_expr_alloc(ast_base, 17, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_BOOL);
     index
 }
@@ -5769,7 +5769,7 @@ fn ast_expr_alloc_le(
     let index: i32 = ast_expr_alloc(ast_base, 18, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_BOOL);
     index
 }
@@ -5783,7 +5783,7 @@ fn ast_expr_alloc_ge(
     let index: i32 = ast_expr_alloc(ast_base, 19, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_BOOL);
     index
 }
@@ -5797,7 +5797,7 @@ fn ast_expr_alloc_logical_or(
     let index: i32 = ast_expr_alloc(ast_base, 20, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_BOOL);
     index
 }
@@ -5811,7 +5811,7 @@ fn ast_expr_alloc_logical_and(
     let index: i32 = ast_expr_alloc(ast_base, 21, left_index, right_index, location_offset);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_BOOL);
     index
 }
@@ -5824,7 +5824,7 @@ fn ast_expr_alloc_logical_not(
     let index: i32 = ast_expr_alloc(ast_base, 22, value_index, 0, location_offset);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, BUILTIN_TYPE_ID_BOOL);
     index
 }
@@ -5833,7 +5833,7 @@ fn ast_expr_alloc_param(ast_base: i32, param_index: i32, type_id: i32) -> i32 {
     let index: i32 = ast_expr_alloc(ast_base, 6, param_index, 0, 0);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, type_id);
     index
 }
@@ -5847,7 +5847,7 @@ fn ast_expr_alloc_if(
     let index: i32 = ast_expr_alloc(ast_base, 7, condition_index, then_index, else_index);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, ast_expr_type(ast_base, then_index));
     index
 }
@@ -5856,7 +5856,7 @@ fn ast_expr_alloc_local(ast_base: i32, local_index: i32, type_id: i32) -> i32 {
     let index: i32 = ast_expr_alloc(ast_base, 8, local_index, 0, 0);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, type_id);
     index
 }
@@ -5870,7 +5870,7 @@ fn ast_expr_alloc_let(
     let index: i32 = ast_expr_alloc(ast_base, 9, local_index, init_index, body_index);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, ast_expr_type(ast_base, body_index));
     index
 }
@@ -5879,7 +5879,7 @@ fn ast_expr_alloc_set_local(ast_base: i32, local_index: i32, value_index: i32) -
     let index: i32 = ast_expr_alloc(ast_base, 10, local_index, value_index, 0);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, ast_expr_type(ast_base, value_index));
     index
 }
@@ -5894,7 +5894,7 @@ fn ast_expr_alloc_array_set(
     let index: i32 = ast_expr_alloc(ast_base, 44, array_index, element_index, value_index);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, ast_expr_type(ast_base, value_index));
     ast_expr_entry_set_extra(ast_base, index, location_offset);
     index
@@ -5914,7 +5914,7 @@ fn ast_expr_alloc_tuple_set(
     let index: i32 = ast_expr_alloc(ast_base, 45, tuple_index, field_index, value_index);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, ast_expr_type(ast_base, value_index));
     ast_expr_entry_set_extra(ast_base, index, location_offset);
     index
@@ -5928,7 +5928,7 @@ fn ast_expr_alloc_sequence(ast_base: i32, first_index: i32, then_index: i32) -> 
     let index: i32 = ast_expr_alloc(ast_base, 11, first_index, then_index, 0);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, ast_expr_type(ast_base, then_index));
     index
 }
@@ -5937,7 +5937,7 @@ fn ast_expr_alloc_loop(ast_base: i32, body_index: i32, flags: i32) -> i32 {
     let index: i32 = ast_expr_alloc(ast_base, 12, body_index, flags, 0);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, ast_expr_type(ast_base, body_index));
     index
 }
@@ -5946,7 +5946,7 @@ fn ast_expr_alloc_break(ast_base: i32, location_offset: i32, value_index: i32) -
     let index: i32 = ast_expr_alloc(ast_base, 13, -1, value_index, location_offset);
     if index < 0 {
         return -1;
-    };
+    }
     let value_type: i32 = if value_index >= 0 {
         ast_expr_type(ast_base, value_index)
     } else {
@@ -5965,7 +5965,7 @@ fn ast_expr_alloc_continue(ast_base: i32, location_offset: i32) -> i32 {
     let index: i32 = ast_expr_alloc(ast_base, 24, -1, 0, location_offset);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, -1);
     index
 }
@@ -5974,7 +5974,7 @@ fn ast_expr_alloc_return(ast_base: i32, value_index: i32, location_offset: i32) 
     let index: i32 = ast_expr_alloc(ast_base, 23, value_index, 0, location_offset);
     if index < 0 {
         return -1;
-    };
+    }
     ast_expr_set_type(ast_base, index, ast_expr_type(ast_base, value_index));
     index
 }
@@ -5982,16 +5982,16 @@ fn ast_expr_alloc_return(ast_base: i32, value_index: i32, location_offset: i32) 
 fn expression_node_from_parts(ast_base: i32, kind: i32, data0: i32, data1: i32) -> i32 {
     if kind == 0 {
         return ast_expr_alloc_literal(ast_base, data0, data1);
-    };
+    }
     if kind == 1 {
         return ast_expr_alloc_call(ast_base, data0, data1);
-    };
+    }
     if kind == 6 {
         return ast_expr_alloc_param(ast_base, data0, data1);
-    };
+    }
     if kind == 8 {
         return ast_expr_alloc_local(ast_base, data0, data1);
-    };
+    }
     data0
 }
 
@@ -6035,8 +6035,8 @@ fn record_struct_intrinsic_invalid_props_failure(
             store_i32(failure_ptr, STRUCT_INTRINSIC_FAILURE_INVALID_PROPS);
             store_i32(failure_ptr + WORD_SIZE, location);
             store_i32(payload_slot_ptr, failure_ptr);
-        };
-    };
+        }
+    }
 }
 
 fn record_struct_intrinsic_type_mismatch_failure(
@@ -6059,8 +6059,8 @@ fn record_struct_intrinsic_type_mismatch_failure(
             );
             store_i32(failure_ptr + WORD_SIZE, location);
             store_i32(payload_slot_ptr, failure_ptr);
-        };
-    };
+        }
+    }
 }
 
 fn evaluate_struct_intrinsic(
@@ -6078,23 +6078,23 @@ fn evaluate_struct_intrinsic(
     if metadata_ptr <= 0 {
         store_i32(scratch_top_ptr, saved_top);
         return -1;
-    };
+    }
     let payload_slot_ptr: i32 = call_metadata_template_payload_ptr(metadata_ptr);
     if payload_slot_ptr > 0 {
         store_i32(payload_slot_ptr, 0);
-    };
+    }
     let arg_count: i32 = call_metadata_arg_count(metadata_ptr);
     if arg_count != 3 {
         store_i32(scratch_top_ptr, saved_top);
         return -1;
-    };
+    }
     let args_base: i32 = call_metadata_args_base(metadata_ptr);
     if arg_count > 0 {
         if args_base < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
-        };
-    };
+        }
+    }
 
     let length_expr_index: i32 = load_i32(args_base);
     let length_offset: i32 = load_i32(scratch_top_ptr);
@@ -6115,26 +6115,26 @@ fn evaluate_struct_intrinsic(
     if length_status < 0 {
         store_i32(scratch_top_ptr, saved_top);
         return -1;
-    };
+    }
     if length_status != CONST_EVAL_STATUS_OK {
         store_i32(scratch_top_ptr, saved_top);
         return length_status;
-    };
+    }
     let length_type: i32 = load_i32(length_type_ptr);
     if !constant_eval_integer_type_supported(length_type) {
         store_i32(scratch_top_ptr, saved_top);
         return -1;
-    };
+    }
     let raw_length: i32 = load_i32(length_value_ptr);
     let str_length: i32 = normalize_integer_value(raw_length, length_type);
     if str_length < 0 {
         store_i32(scratch_top_ptr, saved_top);
         return -1;
-    };
+    }
     if str_length == 0 {
         store_i32(scratch_top_ptr, saved_top);
         return -1;
-    };
+    }
     store_i32(scratch_top_ptr, length_offset);
 
     let count_expr_index: i32 = load_i32(args_base + WORD_SIZE);
@@ -6156,22 +6156,22 @@ fn evaluate_struct_intrinsic(
     if count_status < 0 {
         store_i32(scratch_top_ptr, saved_top);
         return -1;
-    };
+    }
     if count_status != CONST_EVAL_STATUS_OK {
         store_i32(scratch_top_ptr, saved_top);
         return count_status;
-    };
+    }
     let count_type: i32 = load_i32(count_type_ptr);
     if !constant_eval_integer_type_supported(count_type) {
         store_i32(scratch_top_ptr, saved_top);
         return -1;
-    };
+    }
     let raw_count: i32 = load_i32(count_value_ptr);
     let prop_count: i32 = normalize_integer_value(raw_count, count_type);
     if prop_count < 0 {
         store_i32(scratch_top_ptr, saved_top);
         return -1;
-    };
+    }
     store_i32(scratch_top_ptr, count_offset);
 
     let props_expr_index: i32 = load_i32(args_base + 2 * WORD_SIZE);
@@ -6193,28 +6193,28 @@ fn evaluate_struct_intrinsic(
     if props_status < 0 {
         store_i32(scratch_top_ptr, saved_top);
         return -1;
-    };
+    }
     if props_status != CONST_EVAL_STATUS_OK {
         store_i32(scratch_top_ptr, saved_top);
         return props_status;
-    };
+    }
     let props_type: i32 = load_i32(props_type_ptr);
     if !type_id_is_array(props_type) {
         record_struct_intrinsic_invalid_props_failure(ast_base, metadata_ptr, props_expr_index);
         store_i32(scratch_top_ptr, saved_top);
         return -1;
-    };
+    }
     let props_length: i32 = array_type_length(ast_base, props_type);
     if props_length < 0 {
         record_struct_intrinsic_invalid_props_failure(ast_base, metadata_ptr, props_expr_index);
         store_i32(scratch_top_ptr, saved_top);
         return -1;
-    };
+    }
     if props_length != prop_count {
         record_struct_intrinsic_invalid_props_failure(ast_base, metadata_ptr, props_expr_index);
         store_i32(scratch_top_ptr, saved_top);
         return -1;
-    };
+    }
     let props_data_ptr: i32 = if prop_count > 0 {
         load_i32(props_value_ptr)
     } else {
@@ -6225,55 +6225,55 @@ fn evaluate_struct_intrinsic(
             record_struct_intrinsic_invalid_props_failure(ast_base, metadata_ptr, props_expr_index);
             store_i32(scratch_top_ptr, saved_top);
             return -1;
-        };
-    };
+        }
+    }
     let props_element_type: i32 = array_type_element_type(ast_base, props_type);
     if props_element_type < 0 {
         record_struct_intrinsic_invalid_props_failure(ast_base, metadata_ptr, props_expr_index);
         store_i32(scratch_top_ptr, saved_top);
         return -1;
-    };
+    }
     if !type_id_is_tuple(props_element_type) {
         record_struct_intrinsic_invalid_props_failure(ast_base, metadata_ptr, props_expr_index);
         store_i32(scratch_top_ptr, saved_top);
         return -1;
-    };
+    }
     let tuple_index: i32 = tuple_type_index(props_element_type);
     if tuple_index < 0 {
         record_struct_intrinsic_invalid_props_failure(ast_base, metadata_ptr, props_expr_index);
         store_i32(scratch_top_ptr, saved_top);
         return -1;
-    };
+    }
     if tuple_index >= ast_tuple_types_count(ast_base) {
         record_struct_intrinsic_invalid_props_failure(ast_base, metadata_ptr, props_expr_index);
         store_i32(scratch_top_ptr, saved_top);
         return -1;
-    };
+    }
     let tuple_element_count: i32 =
         ast_tuple_type_element_count(ast_base, tuple_index);
     if tuple_element_count != 2 {
         record_struct_intrinsic_invalid_props_failure(ast_base, metadata_ptr, props_expr_index);
         store_i32(scratch_top_ptr, saved_top);
         return -1;
-    };
+    }
     let tuple_elements_ptr: i32 = ast_tuple_type_elements_ptr(ast_base, tuple_index);
     if tuple_elements_ptr < 0 {
         record_struct_intrinsic_invalid_props_failure(ast_base, metadata_ptr, props_expr_index);
         store_i32(scratch_top_ptr, saved_top);
         return -1;
-    };
+    }
     let name_field_type: i32 = load_i32(tuple_elements_ptr);
     let type_field_type: i32 = load_i32(tuple_elements_ptr + WORD_SIZE);
     if type_field_type != BUILTIN_TYPE_ID_TYPE {
         record_struct_intrinsic_invalid_props_failure(ast_base, metadata_ptr, props_expr_index);
         store_i32(scratch_top_ptr, saved_top);
         return -1;
-    };
+    }
     if !type_id_is_array(name_field_type) {
         record_struct_intrinsic_invalid_props_failure(ast_base, metadata_ptr, props_expr_index);
         store_i32(scratch_top_ptr, saved_top);
         return -1;
-    };
+    }
     let canonical_name_length: i32 =
         array_type_length(ast_base, name_field_type);
     if canonical_name_length < str_length {
@@ -6284,32 +6284,32 @@ fn evaluate_struct_intrinsic(
         );
         store_i32(scratch_top_ptr, saved_top);
         return -1;
-    };
+    }
     let name_element_type: i32 = array_type_element_type(ast_base, name_field_type);
     if name_element_type != BUILTIN_TYPE_ID_U8 {
         record_struct_intrinsic_invalid_props_failure(ast_base, metadata_ptr, props_expr_index);
         store_i32(scratch_top_ptr, saved_top);
         return -1;
-    };
+    }
     let mut tuple_expr_list_ptr: i32 = 0;
     if props_expr_index >= 0 {
         tuple_expr_list_ptr = ast_expr_array_list_values_ptr(ast_base, props_expr_index);
-    };
+    }
     store_i32(scratch_top_ptr, props_offset);
 
     let field_stride_words: i32 = STRUCT_FIELD_METADATA_HEADER_WORDS + str_length;
     if field_stride_words <= 0 {
         store_i32(scratch_top_ptr, saved_top);
         return -1;
-    };
+    }
     if prop_count > 0 {
         if field_stride_words > 0 {
             if prop_count > AST_CALL_DATA_CAPACITY / field_stride_words {
                 store_i32(scratch_top_ptr, saved_top);
                 return -1;
-            };
-        };
-    };
+            }
+        }
+    }
     let call_data_used_ptr: i32 = ast_call_data_len_ptr(ast_base);
     let saved_call_data_used: i32 = load_i32(call_data_used_ptr);
     let total_field_words: i32 =
@@ -6324,8 +6324,8 @@ fn evaluate_struct_intrinsic(
             store_i32(call_data_used_ptr, saved_call_data_used);
             store_i32(scratch_top_ptr, saved_top);
             return -1;
-        };
-    };
+        }
+    }
     let mut prop_idx: i32 = 0;
     while prop_idx < prop_count {
         let array_slot_ptr: i32 = props_data_ptr + prop_idx * 2 * WORD_SIZE;
@@ -6335,12 +6335,12 @@ fn evaluate_struct_intrinsic(
             store_i32(call_data_used_ptr, saved_call_data_used);
             store_i32(scratch_top_ptr, saved_top);
             return -1;
-        };
+        }
         if tuple_value_ptr <= 0 {
             store_i32(call_data_used_ptr, saved_call_data_used);
             store_i32(scratch_top_ptr, saved_top);
             return -1;
-        };
+        }
         let record_ptr: i32 = fields_ptr + prop_idx * field_stride_words * WORD_SIZE;
         store_i32(
             record_ptr + STRUCT_FIELD_OFFSET_WORD_OFFSET * WORD_SIZE,
@@ -6353,14 +6353,14 @@ fn evaluate_struct_intrinsic(
             store_i32(call_data_used_ptr, saved_call_data_used);
             store_i32(scratch_top_ptr, saved_top);
             return -1;
-        };
+        }
         if str_length > 0 {
             if field_name_ptr <= 0 {
                 store_i32(call_data_used_ptr, saved_call_data_used);
                 store_i32(scratch_top_ptr, saved_top);
                 return -1;
-            };
-        };
+            }
+        }
         if canonical_name_length > str_length {
             let mut extra_idx: i32 = str_length;
             while extra_idx < canonical_name_length {
@@ -6376,7 +6376,7 @@ fn evaluate_struct_intrinsic(
                         props_expr_index,
                     );
                     return -1;
-                };
+                }
                 let normalized_char: i32 = normalize_integer_value(char_value, char_type);
                 if normalized_char != 0 {
                     store_i32(call_data_used_ptr, saved_call_data_used);
@@ -6387,10 +6387,10 @@ fn evaluate_struct_intrinsic(
                         props_expr_index,
                     );
                     return -1;
-                };
+                }
                 extra_idx = extra_idx + 1;
             };
-        };
+        }
         let type_slot_ptr: i32 = tuple_value_ptr + 2 * WORD_SIZE;
         let field_type_id: i32 = load_i32(type_slot_ptr);
         let field_type_type: i32 = load_i32(type_slot_ptr + WORD_SIZE);
@@ -6398,12 +6398,12 @@ fn evaluate_struct_intrinsic(
             store_i32(call_data_used_ptr, saved_call_data_used);
             store_i32(scratch_top_ptr, saved_top);
             return -1;
-        };
+        }
         if field_type_id < 0 {
             store_i32(call_data_used_ptr, saved_call_data_used);
             store_i32(scratch_top_ptr, saved_top);
             return -1;
-        };
+        }
         store_i32(
             record_ptr + STRUCT_FIELD_TYPE_WORD_OFFSET * WORD_SIZE,
             field_type_id,
@@ -6417,18 +6417,18 @@ fn evaluate_struct_intrinsic(
                 store_i32(call_data_used_ptr, saved_call_data_used);
                 store_i32(scratch_top_ptr, saved_top);
                 return -1;
-            };
+            }
             let normalized_char: i32 = normalize_integer_value(char_value, char_type);
             if normalized_char < 0 {
                 store_i32(call_data_used_ptr, saved_call_data_used);
                 store_i32(scratch_top_ptr, saved_top);
                 return -1;
-            };
+            }
             if normalized_char > 255 {
                 store_i32(call_data_used_ptr, saved_call_data_used);
                 store_i32(scratch_top_ptr, saved_top);
                 return -1;
-            };
+            }
             store_i32(
                 record_ptr + (STRUCT_FIELD_METADATA_HEADER_WORDS + byte_idx) * WORD_SIZE,
                 normalized_char,
@@ -6455,7 +6455,7 @@ fn evaluate_struct_intrinsic(
                 if prev_byte != current_byte {
                     matches = false;
                     break;
-                };
+                }
                 scan_idx = scan_idx + 1;
             };
             if matches {
@@ -6476,8 +6476,8 @@ fn evaluate_struct_intrinsic(
                         load_i32(tuple_expr_list_ptr + prop_idx * WORD_SIZE);
                     if tuple_expr_index >= 0 {
                         name_location = ast_expr_location(ast_base, tuple_expr_index);
-                    };
-                };
+                    }
+                }
                 store_i32(call_data_used_ptr, saved_call_data_used);
                 store_i32(scratch_top_ptr, saved_top);
                 if payload_slot_ptr > 0 {
@@ -6501,10 +6501,10 @@ fn evaluate_struct_intrinsic(
                             byte_idx = byte_idx + 1;
                         };
                         store_i32(payload_slot_ptr, failure_ptr);
-                    };
-                };
+                    }
+                }
                 return -1;
-            };
+            }
             prev_idx = prev_idx + 1;
         };
         prop_idx = prop_idx + 1;
@@ -6521,11 +6521,11 @@ fn evaluate_struct_intrinsic(
         store_i32(call_data_used_ptr, saved_call_data_used);
         store_i32(scratch_top_ptr, saved_top);
         return -1;
-    };
+    }
     let after_count: i32 = ast_struct_types_count(ast_base);
     if after_count == before_count {
         store_i32(call_data_used_ptr, saved_call_data_used);
-    };
+    }
     store_i32(out_value_ptr, struct_type_id);
     store_i32(out_type_ptr, BUILTIN_TYPE_ID_TYPE);
     store_i32(scratch_top_ptr, saved_top);
@@ -6535,21 +6535,21 @@ fn evaluate_struct_intrinsic(
 fn resolve_constant_reference(ast_base: i32, expr_index: i32) -> i32 {
     if expr_index < 0 {
         return -1;
-    };
+    }
     if expr_index >= ast_expr_count(ast_base) {
         return -1;
-    };
+    }
     let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
     let kind: i32 = load_i32(entry_ptr);
     if kind != 43 {
         return 0;
-    };
+    }
     let ident_start: i32 = load_i32(entry_ptr + 4);
     let ident_len: i32 = load_i32(entry_ptr + 8);
     let source_base: i32 = load_i32(entry_ptr + 12);
     if ident_len <= 0 {
         return -1;
-    };
+    }
     let const_index: i32 = find_constant_entry_index(
         source_base,
         ast_base,
@@ -6559,11 +6559,11 @@ fn resolve_constant_reference(ast_base: i32, expr_index: i32) -> i32 {
     );
     if const_index < 0 {
         return -1;
-    };
+    }
     let const_entry_ptr: i32 = ast_constant_entry_ptr(ast_base, const_index);
     if interpret_constant_entry(ast_base, const_entry_ptr) < 0 {
         return -1;
-    };
+    }
     let const_value: i32 = ast_constant_entry_value(const_entry_ptr);
     let const_type: i32 = ast_constant_entry_type(const_entry_ptr);
     store_i32(entry_ptr, 0);

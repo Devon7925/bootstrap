@@ -41,37 +41,37 @@ fn compile_impl(
                     21,
                     "parsing source failed",
                 );
-            };
-        };
+            }
+        }
         return -1;
-    };
+    }
     if interpret_program_constants(out_ptr, ast_base, func_count) < 0 {
         record_type_metadata_debug(out_ptr, 100, 0, 0);
         record_type_metadata_failure(out_ptr);
         return -1;
-    };
+    }
     if validate_program(out_ptr, ast_base, func_count) < 0 {
         record_type_metadata_debug(out_ptr, 101, 0, 0);
         record_type_metadata_failure(out_ptr);
         return -1;
-    };
+    }
     let final_func_count: i32 = ast_functions_count(ast_base);
     if final_func_count < 0 {
         record_type_metadata_failure(out_ptr);
         return -1;
-    };
+    }
     if write_type_metadata(out_ptr, ast_base) < 0 {
         record_type_metadata_debug(out_ptr, 102, 0, 0);
         record_type_metadata_failure(out_ptr);
         return -1;
-    };
+    }
 
     let produced_len: i32 = emit_program(out_ptr, ast_base, final_func_count);
     if produced_len <= 0 {
         record_type_metadata_debug(out_ptr, 103, 0, 0);
         record_type_metadata_failure(out_ptr);
         return -1;
-    };
+    }
     produced_len
 }
 
@@ -90,17 +90,17 @@ fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
         if detail_out_ptr > 0 {
             clear_failure_location(detail_out_ptr);
             write_failure_detail(detail_out_ptr, 19, "module path missing");
-        };
+        }
         return -1;
-    };
+    }
     let content_len: i32 = string_length(content_ptr);
     if content_len < 0 {
         if detail_out_ptr > 0 {
             store_failure_detail_location(detail_out_ptr, path_ptr, path_len, 1, 1);
             write_failure_detail(detail_out_ptr, 22, "module content missing");
-        };
+        }
         return -1;
-    };
+    }
     let existing_index: i32 = module_find_index(path_ptr, path_len);
     let stored_path_ptr: i32 = if existing_index >= 0 {
         module_entry_path(existing_index)
@@ -109,9 +109,9 @@ fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
             if detail_out_ptr > 0 {
                 store_failure_detail_location(detail_out_ptr, path_ptr, path_len, 1, 1);
                 write_failure_detail(detail_out_ptr, 29, "module table capacity reached");
-            };
+            }
             return -1;
-        };
+        }
         let allocated_path_ptr: i32 = module_allocate_bytes(path_len + 1);
         if allocated_path_ptr <= 0 {
             let mut message_ptr: i32 = module_storage_top();
@@ -125,10 +125,10 @@ fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
                         32,
                         "module storage allocation failed",
                     );
-                };
-            };
+                }
+            }
             return -1;
-        };
+        }
         copy_bytes(allocated_path_ptr, path_ptr, path_len);
         store_u8(allocated_path_ptr + path_len, 0);
         allocated_path_ptr
@@ -151,10 +151,10 @@ fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
                     32,
                     "module storage allocation failed",
                 );
-            };
-        };
+            }
+        }
         return -1;
-    };
+    }
     copy_bytes(allocated_content_ptr, content_ptr, content_len);
     store_u8(allocated_content_ptr + content_len, 0);
     let store_index: i32 = if existing_index >= 0 {
@@ -178,25 +178,25 @@ fn compileFromPath(path_ptr: i32) -> i32 {
         if detail_out_ptr > 0 {
             clear_failure_location(detail_out_ptr);
             write_failure_detail(detail_out_ptr, 19, "module path missing");
-        };
+        }
         return -1;
-    };
+    }
     let path_len: i32 = string_length(path_ptr);
     if path_len <= 0 {
         if detail_out_ptr > 0 {
             clear_failure_location(detail_out_ptr);
             write_failure_detail(detail_out_ptr, 19, "module path missing");
-        };
+        }
         return -1;
-    };
+    }
     let index: i32 = module_find_index(path_ptr, path_len);
     if index < 0 {
         if detail_out_ptr > 0 {
             store_failure_detail_location(detail_out_ptr, path_ptr, path_len, 1, 1);
             write_failure_detail(detail_out_ptr, 26, "module has not been loaded");
-        };
+        }
         return -1;
-    };
+    }
     module_clear_flags();
     module_entry_set_flags(index, MODULE_FLAG_IMPORTING);
     let module_path_ptr: i32 = module_entry_path(index);
@@ -207,9 +207,9 @@ fn compileFromPath(path_ptr: i32) -> i32 {
         if detail_out_ptr > 0 {
             store_failure_detail_location(detail_out_ptr, module_path_ptr, module_path_len, 1, 1);
             write_failure_detail(detail_out_ptr, 35, "cached module entry missing content");
-        };
+        }
         return -1;
-    };
+    }
     let initial_top: i32 = module_storage_top();
     let out_ptr: i32 = align_to(
         if initial_top > 0 {
@@ -226,9 +226,9 @@ fn compileFromPath(path_ptr: i32) -> i32 {
         if out_ptr > 0 {
             store_failure_detail_location(out_ptr, module_path_ptr, module_path_len, 1, 1);
             write_failure_detail(out_ptr, 54, "failed to reserve linear memory for module compilation");
-        };
+        }
         return -1;
-    };
+    }
     let status: i32 = compile_impl(input_ptr, input_len, out_ptr, index);
     module_entry_set_flags(index, if status > 0 { MODULE_FLAG_IMPORTED } else { 0 });
     if status <= 0 {
@@ -245,9 +245,9 @@ fn compileFromPath(path_ptr: i32) -> i32 {
                     25,
                     message,
                 );
-            };
-        };
-    };
+            }
+        }
+    }
     status
 }
 
