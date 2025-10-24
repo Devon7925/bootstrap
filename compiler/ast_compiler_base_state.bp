@@ -4127,6 +4127,17 @@ fn record_type_metadata_failure(out_ptr: i32) {
     }
 }
 
+fn record_type_metadata_failure_with_debug(
+    out_ptr: i32,
+    context: i32,
+    subject: i32,
+    extra: i32,
+) -> i32 {
+    record_type_metadata_debug(out_ptr, context, subject, extra);
+    record_type_metadata_failure(out_ptr);
+    -1
+}
+
 fn array_type_cached_id(ast_base: i32, index: i32) -> i32 {
     load_i32(ast_array_type_entry_ptr(ast_base, index) + AST_ARRAY_TYPE_CACHE_OFFSET)
 }
@@ -4975,23 +4986,17 @@ fn resolve_array_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
     store_i32(TYPE_METADATA_DEBUG_LAST_SUBJECT_OFFSET, type_id);
     store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, 0);
     if !type_id_is_array(type_id) {
-        record_type_metadata_debug(out_ptr, 1, type_id, 0);
-        record_type_metadata_failure(out_ptr);
-        return -1;
+        return record_type_metadata_failure_with_debug(out_ptr, 1, type_id, 0);
     }
     let index: i32 = array_type_index(type_id);
     store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 1001);
     store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, index);
     if index < 0 {
-        record_type_metadata_debug(out_ptr, 2, type_id, index);
-        record_type_metadata_failure(out_ptr);
-        return -1;
+        return record_type_metadata_failure_with_debug(out_ptr, 2, type_id, index);
     }
     let type_count: i32 = ast_array_types_count(ast_base);
     if index >= type_count {
-        record_type_metadata_debug(out_ptr, 3, type_id, type_count);
-        record_type_metadata_failure(out_ptr);
-        return -1;
+        return record_type_metadata_failure_with_debug(out_ptr, 3, type_id, type_count);
     }
     let cached: i32 = array_type_cached_id(ast_base, index);
     store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 1002);
@@ -5000,9 +5005,7 @@ fn resolve_array_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
         return type_id;
     }
     if cached == TYPE_METADATA_CACHE_IN_PROGRESS {
-        record_type_metadata_debug(out_ptr, 4, type_id, index);
-        record_type_metadata_failure(out_ptr);
-        return -1;
+        return record_type_metadata_failure_with_debug(out_ptr, 4, type_id, index);
     }
     array_type_set_cached_id(ast_base, index, TYPE_METADATA_CACHE_IN_PROGRESS);
     let mut element_type_id: i32 = ast_array_type_element_type(ast_base, index);
@@ -5011,9 +5014,7 @@ fn resolve_array_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
     let resolved_element: i32 = resolve_type_id(out_ptr, ast_base, element_type_id);
     if resolved_element < 0 {
         array_type_set_cached_id(ast_base, index, 0);
-        record_type_metadata_debug(out_ptr, 5, type_id, element_type_id);
-        record_type_metadata_failure(out_ptr);
-        return -1;
+        return record_type_metadata_failure_with_debug(out_ptr, 5, type_id, element_type_id);
     }
     if resolved_element != element_type_id {
         let entry_ptr: i32 = ast_array_type_entry_ptr(ast_base, index);
@@ -5025,15 +5026,11 @@ fn resolve_array_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
     store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, length);
     if length < 0 {
         array_type_set_cached_id(ast_base, index, 0);
-        record_type_metadata_debug(out_ptr, 6, type_id, length);
-        record_type_metadata_failure(out_ptr);
-        return -1;
+        return record_type_metadata_failure_with_debug(out_ptr, 6, type_id, length);
     }
     if ensure_array_type_metadata(out_ptr, ast_base, index, type_id) < 0 {
         array_type_set_cached_id(ast_base, index, 0);
-        record_type_metadata_debug(out_ptr, 7, type_id, index);
-        record_type_metadata_failure(out_ptr);
-        return -1;
+        return record_type_metadata_failure_with_debug(out_ptr, 7, type_id, index);
     }
     store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 1005);
     store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, type_id);
@@ -5045,25 +5042,19 @@ fn resolve_tuple_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
     store_i32(TYPE_METADATA_DEBUG_LAST_SUBJECT_OFFSET, type_id);
     store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, 0);
     if !type_id_is_tuple(type_id) {
-        record_type_metadata_debug(out_ptr, 10, type_id, 0);
-        record_type_metadata_failure(out_ptr);
-        return -1;
+        return record_type_metadata_failure_with_debug(out_ptr, 10, type_id, 0);
     }
     let index: i32 = tuple_type_index(type_id);
     store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 2001);
     store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, index);
     if index < 0 {
-        record_type_metadata_debug(out_ptr, 11, type_id, index);
-        record_type_metadata_failure(out_ptr);
-        return -1;
+        return record_type_metadata_failure_with_debug(out_ptr, 11, type_id, index);
     }
     let tuple_count: i32 = ast_tuple_types_count(ast_base);
     store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 2002);
     store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, tuple_count);
     if index >= tuple_count {
-        record_type_metadata_debug(out_ptr, 12, type_id, tuple_count);
-        record_type_metadata_failure(out_ptr);
-        return -1;
+        return record_type_metadata_failure_with_debug(out_ptr, 12, type_id, tuple_count);
     }
     let cached: i32 = tuple_type_cached_id(ast_base, index);
     store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 2003);
@@ -5072,9 +5063,7 @@ fn resolve_tuple_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
         return type_id;
     }
     if cached == TYPE_METADATA_CACHE_IN_PROGRESS {
-        record_type_metadata_debug(out_ptr, 13, type_id, index);
-        record_type_metadata_failure(out_ptr);
-        return -1;
+        return record_type_metadata_failure_with_debug(out_ptr, 13, type_id, index);
     }
     tuple_type_set_cached_id(ast_base, index, TYPE_METADATA_CACHE_IN_PROGRESS);
     let element_count: i32 = ast_tuple_type_element_count(ast_base, index);
@@ -5082,9 +5071,7 @@ fn resolve_tuple_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
     store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, element_count);
     if element_count < 0 {
         tuple_type_set_cached_id(ast_base, index, 0);
-        record_type_metadata_debug(out_ptr, 14, type_id, element_count);
-        record_type_metadata_failure(out_ptr);
-        return -1;
+        return record_type_metadata_failure_with_debug(out_ptr, 14, type_id, element_count);
     }
     if element_count > 0 {
         let elements_ptr: i32 = ast_tuple_type_elements_ptr(ast_base, index);
@@ -5092,9 +5079,7 @@ fn resolve_tuple_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
         store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, elements_ptr);
         if elements_ptr < 0 {
             tuple_type_set_cached_id(ast_base, index, 0);
-            record_type_metadata_debug(out_ptr, 15, type_id, index);
-            record_type_metadata_failure(out_ptr);
-            return -1;
+            return record_type_metadata_failure_with_debug(out_ptr, 15, type_id, index);
         }
         let mut elem_idx: i32 = 0;
         while elem_idx < element_count {
@@ -5106,9 +5091,7 @@ fn resolve_tuple_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
                 resolve_type_id(out_ptr, ast_base, element_type_id);
             if resolved_element < 0 {
                 tuple_type_set_cached_id(ast_base, index, 0);
-                record_type_metadata_debug(out_ptr, 16, type_id, element_type_id);
-                record_type_metadata_failure(out_ptr);
-                return -1;
+                return record_type_metadata_failure_with_debug(out_ptr, 16, type_id, element_type_id);
             }
             if resolved_element != element_type_id {
                 store_i32(type_ptr, resolved_element);
@@ -5118,9 +5101,7 @@ fn resolve_tuple_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
     }
     if ensure_tuple_type_metadata(out_ptr, ast_base, index, type_id) < 0 {
         tuple_type_set_cached_id(ast_base, index, 0);
-        record_type_metadata_debug(out_ptr, 17, type_id, index);
-        record_type_metadata_failure(out_ptr);
-        return -1;
+        return record_type_metadata_failure_with_debug(out_ptr, 17, type_id, index);
     }
     store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 2007);
     store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, type_id);
