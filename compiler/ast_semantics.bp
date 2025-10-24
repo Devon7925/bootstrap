@@ -2117,8 +2117,7 @@ fn interpret_constant_entry(ast_base: i32, const_entry_ptr: i32) -> i32 {
         ast_constant_entry_set_eval_state(const_entry_ptr, AST_CONSTANT_EVAL_STATE_EVALUATED);
         return 0;
     }
-    let const_type_ptr: i32 = ast_constant_entry_type_ptr(const_entry_ptr);
-    let mut target_type: i32 = load_i32(const_type_ptr);
+    let mut target_type: i32 = ast_constant_entry_type(const_entry_ptr);
     if target_type >= 0 {
         let expr_type: i32 = ast_expr_type(ast_base, expr_index);
         if expr_type < 0 {
@@ -2148,7 +2147,7 @@ fn interpret_constant_entry(ast_base: i32, const_entry_ptr: i32) -> i32 {
     }
     let mut literal_value: i32 = load_i32(eval_value_ptr);
     let literal_type: i32 = load_i32(eval_type_ptr);
-    target_type = load_i32(const_type_ptr);
+    target_type = ast_constant_entry_type(const_entry_ptr);
     if target_type < 0 {
         target_type = literal_type;
     }
@@ -2160,8 +2159,8 @@ fn interpret_constant_entry(ast_base: i32, const_entry_ptr: i32) -> i32 {
         target_type = literal_type;
     }
     literal_value = load_i32(eval_value_ptr);
-    store_i32(ast_constant_entry_value_ptr(const_entry_ptr), literal_value);
-    store_i32(const_type_ptr, target_type);
+    ast_constant_entry_set_value(const_entry_ptr, literal_value);
+    ast_constant_entry_set_type(const_entry_ptr, target_type);
     ast_constant_entry_set_eval_state(const_entry_ptr, AST_CONSTANT_EVAL_STATE_EVALUATED);
     0
 }
@@ -2438,15 +2437,14 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
             break;
         }
         let const_entry_ptr: i32 = ast_constant_entry_ptr(ast_base, const_idx);
-        let const_type_ptr: i32 = ast_constant_entry_type_ptr(const_entry_ptr);
-        let const_type_id: i32 = load_i32(const_type_ptr);
+        let const_type_id: i32 = ast_constant_entry_type(const_entry_ptr);
         if const_type_id >= 0 {
             let resolved_const_type: i32 = resolve_type_id(out_ptr, ast_base, const_type_id);
             if resolved_const_type < 0 {
                 return record_type_metadata_failure_with_debug(out_ptr, 300, const_idx, const_type_id);
             }
             if resolved_const_type != const_type_id {
-                store_i32(const_type_ptr, resolved_const_type);
+                ast_constant_entry_set_type(const_entry_ptr, resolved_const_type);
             }
         }
         const_idx = const_idx + 1;

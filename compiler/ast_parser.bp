@@ -3680,13 +3680,18 @@ fn parse_constant_declaration(
         return -1;
     }
     let entry_ptr: i32 = ast_constant_entry_ptr(ast_base, count);
-    store_i32(ast_constant_entry_name_start_ptr(entry_ptr), name_start);
-    store_i32(ast_constant_entry_name_len_ptr(entry_ptr), name_len);
-    store_i32(ast_constant_entry_value_ptr(entry_ptr), 0);
-    store_i32(ast_constant_entry_type_ptr(entry_ptr), type_id);
-    ast_constant_entry_set_expr_index(entry_ptr, expr_index);
-    ast_constant_entry_set_eval_state(entry_ptr, AST_CONSTANT_EVAL_STATE_UNEVALUATED);
-    ast_constant_entry_set_module_index(entry_ptr, current_module_index);
+    ast_constant_entry_store(
+        entry_ptr,
+        [
+            name_start,
+            name_len,
+            0,
+            type_id,
+            expr_index,
+            AST_CONSTANT_EVAL_STATE_UNEVALUATED,
+            current_module_index,
+        ],
+    );
     store_i32(count_ptr, count + 1);
 
     idx

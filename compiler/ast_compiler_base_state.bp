@@ -3576,72 +3576,69 @@ fn ast_constant_entry_ptr(ast_base: i32, index: i32) -> i32 {
     ast_constants_count_ptr(ast_base) + WORD_SIZE + index * AST_CONSTANT_ENTRY_SIZE
 }
 
-fn ast_constant_entry_name_start_ptr(entry_ptr: i32) -> i32 {
-    entry_ptr + AST_CONSTANT_ENTRY_NAME_OFFSET
-}
+const AST_CONSTANT_ENTRY_FIELD_COUNT: i32 = 7;
 
-fn ast_constant_entry_name_len_ptr(entry_ptr: i32) -> i32 {
-    entry_ptr + AST_CONSTANT_ENTRY_NAME_LEN_OFFSET
-}
-
-fn ast_constant_entry_value_ptr(entry_ptr: i32) -> i32 {
-    entry_ptr + AST_CONSTANT_ENTRY_VALUE_OFFSET
-}
-
-fn ast_constant_entry_type_ptr(entry_ptr: i32) -> i32 {
-    entry_ptr + AST_CONSTANT_ENTRY_TYPE_OFFSET
-}
-
-fn ast_constant_entry_expr_index_ptr(entry_ptr: i32) -> i32 {
-    entry_ptr + AST_CONSTANT_ENTRY_EXPR_INDEX_OFFSET
-}
-
-fn ast_constant_entry_eval_state_ptr(entry_ptr: i32) -> i32 {
-    entry_ptr + AST_CONSTANT_ENTRY_EVAL_STATE_OFFSET
-}
-
-fn ast_constant_entry_module_index_ptr(entry_ptr: i32) -> i32 {
-    entry_ptr + AST_CONSTANT_ENTRY_MODULE_INDEX_OFFSET
+fn ast_constant_entry_store(entry_ptr: i32, entry: [i32; AST_CONSTANT_ENTRY_FIELD_COUNT]) {
+    store_i32(entry_ptr + AST_CONSTANT_ENTRY_NAME_OFFSET, entry[0]);
+    store_i32(entry_ptr + AST_CONSTANT_ENTRY_NAME_LEN_OFFSET, entry[1]);
+    store_i32(entry_ptr + AST_CONSTANT_ENTRY_VALUE_OFFSET, entry[2]);
+    store_i32(entry_ptr + AST_CONSTANT_ENTRY_TYPE_OFFSET, entry[3]);
+    store_i32(entry_ptr + AST_CONSTANT_ENTRY_EXPR_INDEX_OFFSET, entry[4]);
+    store_i32(entry_ptr + AST_CONSTANT_ENTRY_EVAL_STATE_OFFSET, entry[5]);
+    store_i32(entry_ptr + AST_CONSTANT_ENTRY_MODULE_INDEX_OFFSET, entry[6]);
 }
 
 fn ast_constant_entry_name_start(entry_ptr: i32) -> i32 {
-    load_i32(ast_constant_entry_name_start_ptr(entry_ptr))
+    load_i32(entry_ptr + AST_CONSTANT_ENTRY_NAME_OFFSET)
 }
 
 fn ast_constant_entry_name_len(entry_ptr: i32) -> i32 {
-    load_i32(ast_constant_entry_name_len_ptr(entry_ptr))
+    load_i32(entry_ptr + AST_CONSTANT_ENTRY_NAME_LEN_OFFSET)
 }
 
 fn ast_constant_entry_value(entry_ptr: i32) -> i32 {
-    load_i32(ast_constant_entry_value_ptr(entry_ptr))
+    load_i32(entry_ptr + AST_CONSTANT_ENTRY_VALUE_OFFSET)
 }
 
 fn ast_constant_entry_type(entry_ptr: i32) -> i32 {
-    load_i32(ast_constant_entry_type_ptr(entry_ptr))
+    load_i32(entry_ptr + AST_CONSTANT_ENTRY_TYPE_OFFSET)
 }
 
 fn ast_constant_entry_expr_index(entry_ptr: i32) -> i32 {
-    load_i32(ast_constant_entry_expr_index_ptr(entry_ptr))
+    load_i32(entry_ptr + AST_CONSTANT_ENTRY_EXPR_INDEX_OFFSET)
 }
 
 fn ast_constant_entry_eval_state(entry_ptr: i32) -> i32 {
-    load_i32(ast_constant_entry_eval_state_ptr(entry_ptr))
+    load_i32(entry_ptr + AST_CONSTANT_ENTRY_EVAL_STATE_OFFSET)
 }
 
 fn ast_constant_entry_module_index(entry_ptr: i32) -> i32 {
-    load_i32(ast_constant_entry_module_index_ptr(entry_ptr))
+    load_i32(entry_ptr + AST_CONSTANT_ENTRY_MODULE_INDEX_OFFSET)
+}
+
+fn ast_constant_entry_set_name(entry_ptr: i32, name_start: i32, name_len: i32) {
+    store_i32(entry_ptr + AST_CONSTANT_ENTRY_NAME_OFFSET, name_start);
+    store_i32(entry_ptr + AST_CONSTANT_ENTRY_NAME_LEN_OFFSET, name_len);
+}
+
+fn ast_constant_entry_set_value(entry_ptr: i32, value: i32) {
+    store_i32(entry_ptr + AST_CONSTANT_ENTRY_VALUE_OFFSET, value);
+}
+
+fn ast_constant_entry_set_type(entry_ptr: i32, type_id: i32) {
+    store_i32(entry_ptr + AST_CONSTANT_ENTRY_TYPE_OFFSET, type_id);
 }
 
 fn ast_constant_entry_set_expr_index(entry_ptr: i32, expr_index: i32) {
-    store_i32(ast_constant_entry_expr_index_ptr(entry_ptr), expr_index);
+    store_i32(entry_ptr + AST_CONSTANT_ENTRY_EXPR_INDEX_OFFSET, expr_index);
 }
 
 fn ast_constant_entry_set_eval_state(entry_ptr: i32, eval_state: i32) {
-    store_i32(ast_constant_entry_eval_state_ptr(entry_ptr), eval_state);
+    store_i32(entry_ptr + AST_CONSTANT_ENTRY_EVAL_STATE_OFFSET, eval_state);
 }
 
 fn ast_constant_entry_set_module_index(entry_ptr: i32, module_index: i32) {
-    store_i32(ast_constant_entry_module_index_ptr(entry_ptr), module_index);
+    store_i32(entry_ptr + AST_CONSTANT_ENTRY_MODULE_INDEX_OFFSET, module_index);
 }
 
 const AST_CONSTANT_EVAL_STATE_UNEVALUATED: i32 = 0;
