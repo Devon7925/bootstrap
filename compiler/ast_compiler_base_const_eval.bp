@@ -1815,9 +1815,6 @@ fn interpret_constant_expression(
             }
         }
         store_i32(scratch_top_ptr, saved_top);
-        if body_status == CONST_EVAL_STATUS_RETURN {
-            return CONST_EVAL_STATUS_OK;
-        }
         return CONST_EVAL_STATUS_OK;
     }
     if kind == 9 {
