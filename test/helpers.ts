@@ -10,12 +10,14 @@ import {
   FUNCTIONS_COUNT_PTR_OFFSET,
   INSTR_OFFSET_PTR_OFFSET,
   STAGE1_MAX_FUNCTIONS,
+  describeCompilationFailure,
+  FAILURE_DETAIL_CAPACITY,
 } from "../src/index";
-import type { CompilerModuleSource } from "../src/index";
+import type { CompilerModuleSource, CompileFailureDetails } from "../src/index";
 
-export type { CompilerModuleSource } from "../src/index";
+export type { CompilerModuleSource, CompileFailureDetails } from "../src/index";
 
-export { COMPILER_INPUT_PTR } from "../src/index";
+export { COMPILER_INPUT_PTR, describeCompilationFailure, FAILURE_DETAIL_CAPACITY } from "../src/index";
 
 export const AST_COMPILER_ENTRY_PATH = "/compiler/ast_compiler.bp";
 const AST_COMPILER_DIR_URL = new URL("../compiler/", import.meta.url);
@@ -35,16 +37,9 @@ const MODULE_PATH_PTR = 1_024;
 const MODULE_CONTENT_PTR = 4_096;
 const DEFAULT_ENTRY_MODULE_PATH = "/entry.bp";
 const MEMORY_INTRINSICS_MODULE_PATH = "/stdlib/memory.bp";
-export const FAILURE_DETAIL_CAPACITY = 256;
 const SCRATCH_TYPE_METADATA_DEBUG_CONTEXT_OFFSET = 4_032;
 const SCRATCH_TYPE_METADATA_DEBUG_SUBJECT_OFFSET = 4_036;
 const SCRATCH_TYPE_METADATA_DEBUG_EXTRA_OFFSET = 4_040;
-const SCRATCH_FAILURE_PATH_PTR_OFFSET = 4_048;
-const SCRATCH_FAILURE_PATH_LEN_OFFSET = 4_052;
-const SCRATCH_FAILURE_LINE_OFFSET = 4_056;
-const SCRATCH_FAILURE_COLUMN_OFFSET = 4_060;
-const SCRATCH_FAILURE_CHARACTER_OFFSET = 4_064;
-const SCRATCH_FAILURE_OFFSET_OFFSET = 4_068;
 
 const WORD_SIZE = 4;
 const SCRATCH_INSTR_CAPACITY = 131_072;
@@ -104,14 +99,6 @@ export interface ScratchTypeEntry {
   readonly namePtr: number;
   readonly nameLength: number;
   readonly extra: number;
-}
-
-export interface CompileFailureDetails {
-  readonly producedLength: number;
-  readonly functions: number;
-  readonly instructionOffset: number;
-  readonly compiledFunctions: number;
-  readonly detail?: string;
 }
 
 export interface CompileWithAstCompilerOptions {
@@ -1061,70 +1048,6 @@ export function readTypeMetadataDebugInfo(
     context: safeReadI32(view, outPtr + SCRATCH_TYPE_METADATA_DEBUG_CONTEXT_OFFSET),
     subject: safeReadI32(view, outPtr + SCRATCH_TYPE_METADATA_DEBUG_SUBJECT_OFFSET),
     extra: safeReadI32(view, outPtr + SCRATCH_TYPE_METADATA_DEBUG_EXTRA_OFFSET),
-  };
-}
-
-export function describeCompilationFailure(
-  memory: WebAssembly.Memory,
-  outputPtr: number,
-  producedLength: number,
-): CompileFailureDetails {
-  const view = new DataView(memory.buffer);
-  const functions = safeReadI32(view, outputPtr + FUNCTIONS_COUNT_PTR_OFFSET);
-  const instrOffset = safeReadI32(view, outputPtr + INSTR_OFFSET_PTR_OFFSET);
-
-  let compiledFunctions = 0;
-  if (functions > 0) {
-    for (let index = 0; index < functions; index += 1) {
-      const entry = outputPtr + FUNCTIONS_BASE_OFFSET + index * FUNCTION_ENTRY_SIZE;
-      const codeLen = safeReadI32(view, entry + 16);
-      if (codeLen > 0) {
-        compiledFunctions += 1;
-      } else {
-        break;
-      }
-    }
-  }
-
-  let detail: string | undefined;
-  const start = outputPtr;
-  const end = Math.min(outputPtr + FAILURE_DETAIL_CAPACITY, memory.buffer.byteLength);
-  if (end > start) {
-    const detailBytes = new Uint8Array(memory.buffer.slice(start, end));
-    const zeroIndex = detailBytes.indexOf(0);
-    const slice = zeroIndex >= 0 ? detailBytes.subarray(0, zeroIndex) : detailBytes;
-    const text = decoder.decode(slice).trim();
-    if (text.length > 0) {
-      detail = text;
-    }
-  }
-
-  const line = safeReadI32(view, outputPtr + SCRATCH_FAILURE_LINE_OFFSET);
-  const column = safeReadI32(view, outputPtr + SCRATCH_FAILURE_COLUMN_OFFSET);
-  if (line > 0 && column > 0) {
-    let path = "/entry.bp";
-    const pathPtr = safeReadI32(view, outputPtr + SCRATCH_FAILURE_PATH_PTR_OFFSET);
-    const pathLen = safeReadI32(view, outputPtr + SCRATCH_FAILURE_PATH_LEN_OFFSET);
-    if (pathPtr > 0 && pathLen > 0) {
-      try {
-        const bytes = new Uint8Array(memory.buffer, pathPtr, pathLen);
-        path = decoder.decode(bytes);
-      } catch {
-        path = "/entry.bp";
-      }
-    }
-    if (!detail || !detail.startsWith("/")) {
-      const message = detail && detail.length > 0 ? detail : "";
-      detail = `${path}:${line}:${column}: ${message}`.trimEnd();
-    }
-  }
-
-  return {
-    producedLength,
-    functions,
-    instructionOffset: instrOffset,
-    compiledFunctions,
-    detail,
   };
 }
 
