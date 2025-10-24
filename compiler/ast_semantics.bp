@@ -2115,6 +2115,7 @@ fn interpret_program_constants(out_ptr: i32, ast_base: i32, func_count: i32) -> 
                     );
                 };
             };
+            record_type_metadata_debug(out_ptr, 200, const_idx, const_entry_ptr);
             return -1;
         };
         const_idx = const_idx + 1;
@@ -2167,6 +2168,7 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
         if const_type_id >= 0 {
             let resolved_const_type: i32 = resolve_type_id(out_ptr, ast_base, const_type_id);
             if resolved_const_type < 0 {
+                record_type_metadata_debug(out_ptr, 300, const_idx, const_type_id);
                 record_type_metadata_failure(out_ptr);
                 return -1;
             };
