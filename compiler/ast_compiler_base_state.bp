@@ -449,19 +449,23 @@ const AST_CONSTANTS_SECTION_WORDS: i32 = AST_CONSTANTS_SECTION_SIZE >> 2;
 
 const AST_CALL_DATA_CAPACITY: i32 = 131072 - AST_CONSTANTS_SECTION_WORDS;
 
+fn decimal_length(value: i32) -> i32 {
+    if value <= 0 {
+        return 1;
+    }
+    let mut digits: i32 = 0;
+    let mut remaining: i32 = value;
+    while remaining > 0 {
+        digits = digits + 1;
+        remaining = remaining / 10;
+    };
+    digits
+}
+
 fn append_decimal_component(detail_out_ptr: i32, write_offset: i32, value: i32) -> (i32, bool) {
     let mut offset: i32 = write_offset;
     let mut truncated: bool = false;
-    let mut digits_len: i32 = 0;
-    let mut temp: i32 = value;
-    if temp <= 0 {
-        digits_len = 1;
-    } else {
-        while temp > 0 {
-            digits_len = digits_len + 1;
-            temp = temp / 10;
-        };
-    }
+    let digits_len: i32 = decimal_length(value);
     let mut divisor: i32 = 1;
     let mut divisor_idx: i32 = 1;
     while divisor_idx < digits_len {
