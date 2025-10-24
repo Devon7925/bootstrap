@@ -1525,6 +1525,7 @@ fn parse_block_expression_body(
                 return -1;
             }
             let mut value_index: i32 = -1;
+            let mut is_bare_return: i32 = 0;
             let next_after_return: i32 = load_u8(base + after_return);
             if next_after_return == ';' {
                 value_index = ast_expr_alloc_tuple(ast_base, 0, 0);
@@ -1533,6 +1534,7 @@ fn parse_block_expression_body(
                     store_i32(locals_next_index_ptr, saved_next_index);
                     return -1;
                 }
+                is_bare_return = 1;
                 after_return = skip_whitespace(base, len, after_return + 1);
             } else {
                 after_return = parse_expression(
@@ -1581,7 +1583,8 @@ fn parse_block_expression_body(
                 }
                 after_return = skip_whitespace(base, len, after_return);
             }
-            let return_expr_index: i32 = ast_expr_alloc_return(ast_base, value_index, idx);
+            let return_expr_index: i32 =
+                ast_expr_alloc_return(ast_base, value_index, idx, is_bare_return);
             if return_expr_index < 0 {
                 store_i32(locals_stack_count_ptr, saved_stack_count);
                 store_i32(locals_next_index_ptr, saved_next_index);

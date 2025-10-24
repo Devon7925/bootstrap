@@ -5205,6 +5205,24 @@ fn resolve_expression_internal(
                     return -1;
                 }
             }
+            if ast_function_has_implicit_unit_return(ast_base, caller_func_index) {
+                if !ast_expr_return_is_bare(ast_base, expr_index) {
+                    if out_ptr > 0 {
+                        if load_u8(out_ptr) == 0 {
+                            let location_offset: i32 = load_i32(entry_ptr + 12);
+                            record_failure_with_location(
+                                out_ptr,
+                                ast_base,
+                                caller_func_index,
+                                location_offset,
+                                58,
+                                "return expression type does not match function return type",
+                            );
+                        }
+                    }
+                    return -1;
+                }
+            }
         }
         ast_expr_set_type(ast_base, expr_index, value_type);
         return 0;

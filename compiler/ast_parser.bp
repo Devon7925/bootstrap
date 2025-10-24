@@ -3207,6 +3207,7 @@ fn parse_function(
     cursor = skip_whitespace(base, len, cursor);
 
     let mut block_allow_empty: i32 = 0;
+    let mut implicit_unit_return: bool = false;
     let mut has_return_type: bool = false;
     let mut return_type_id: i32 = -1;
     let mut return_template_handle: i32 = 0;
@@ -3253,6 +3254,7 @@ fn parse_function(
     if !has_return_type {
         block_allow_empty = 1;
         return_type_id = BUILTIN_TYPE_ID_I32;
+        implicit_unit_return = true;
     }
 
     cursor = skip_whitespace(base, len, cursor);
@@ -3369,6 +3371,9 @@ fn parse_function(
     }
     if const_params_ptr > 0 {
         flags = flags | FUNCTION_FLAG_HAS_CONST_PARAMS;
+    }
+    if implicit_unit_return {
+        flags = flags | FUNCTION_FLAG_IMPLICIT_UNIT_RETURN;
     }
     ast_write_function_entry(
         ast_base,
