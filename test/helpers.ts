@@ -25,6 +25,10 @@ export const DEFAULT_OUTPUT_STRIDE = 4_096;
 const TYPES_COUNT_PTR_OFFSET = 819_196;
 const TYPES_BASE_OFFSET = 819_200;
 const TYPE_ENTRY_SIZE = 16;
+const TYPE_ENTRY_TYPE_ID_OFFSET = 0;
+const TYPE_ENTRY_NAME_PTR_OFFSET = 4;
+const TYPE_ENTRY_NAME_LEN_OFFSET = 8;
+const TYPE_ENTRY_EXTRA_OFFSET = 12;
 const MODULE_STATE_BASE = 1_048_576;
 const MODULE_STORAGE_TOP_OFFSET = 4;
 const MODULE_PATH_PTR = 1_024;
@@ -32,6 +36,9 @@ const MODULE_CONTENT_PTR = 4_096;
 const DEFAULT_ENTRY_MODULE_PATH = "/entry.bp";
 const MEMORY_INTRINSICS_MODULE_PATH = "/stdlib/memory.bp";
 export const FAILURE_DETAIL_CAPACITY = 256;
+const SCRATCH_TYPE_METADATA_DEBUG_CONTEXT_OFFSET = 4_032;
+const SCRATCH_TYPE_METADATA_DEBUG_SUBJECT_OFFSET = 4_036;
+const SCRATCH_TYPE_METADATA_DEBUG_EXTRA_OFFSET = 4_040;
 const SCRATCH_FAILURE_PATH_PTR_OFFSET = 4_048;
 const SCRATCH_FAILURE_PATH_LEN_OFFSET = 4_052;
 const SCRATCH_FAILURE_LINE_OFFSET = 4_056;
@@ -42,12 +49,22 @@ const SCRATCH_FAILURE_OFFSET_OFFSET = 4_068;
 const WORD_SIZE = 4;
 const SCRATCH_INSTR_CAPACITY = 131_072;
 const SCRATCH_FN_BASE_OFFSET = 917_504;
+const SCRATCH_TYPES_CAPACITY = 2_048;
+const SCRATCH_TYPES_BASE_OFFSET = SCRATCH_FN_BASE_OFFSET - SCRATCH_TYPES_CAPACITY * TYPE_ENTRY_SIZE;
+const SCRATCH_TYPES_COUNT_OFFSET = SCRATCH_TYPES_BASE_OFFSET - WORD_SIZE;
 
 const AST_MAX_FUNCTIONS = 1_024;
 const AST_FUNCTION_ENTRY_SIZE = 60;
 const AST_NAMES_CAPACITY = 131_072;
 const AST_CONSTANTS_CAPACITY = 1_024;
 const AST_CONSTANT_ENTRY_SIZE = 28;
+const AST_CONSTANT_ENTRY_NAME_OFFSET = 0;
+const AST_CONSTANT_ENTRY_NAME_LEN_OFFSET = 4;
+const AST_CONSTANT_ENTRY_VALUE_OFFSET = 8;
+const AST_CONSTANT_ENTRY_TYPE_OFFSET = 12;
+const AST_CONSTANT_ENTRY_EXPR_INDEX_OFFSET = 16;
+const AST_CONSTANT_ENTRY_EVAL_STATE_OFFSET = 20;
+const AST_CONSTANT_ENTRY_MODULE_INDEX_OFFSET = 24;
 const AST_ARRAY_TYPES_CAPACITY = 256;
 const AST_ARRAY_TYPE_ENTRY_SIZE = 12;
 const AST_TUPLE_TYPES_CAPACITY = 256;
@@ -80,6 +97,13 @@ export interface TypeEntry {
   readonly nameLength: number;
   readonly valueStart: number;
   readonly valueLength: number;
+}
+
+export interface ScratchTypeEntry {
+  readonly typeId: number;
+  readonly namePtr: number;
+  readonly nameLength: number;
+  readonly extra: number;
 }
 
 export interface CompileFailureDetails {
@@ -191,6 +215,10 @@ function astExprCountPtr(astBasePtr: number): number {
   return astExtraBase(astBasePtr);
 }
 
+function astExprTypesBase(astBasePtr: number): number {
+  return astExtraBase(astBasePtr) + WORD_SIZE + AST_EXPR_CAPACITY * AST_EXPR_ENTRY_SIZE;
+}
+
 function astNamesLenPtr(astBasePtr: number): number {
   return astBasePtr + WORD_SIZE + AST_MAX_FUNCTIONS * AST_FUNCTION_ENTRY_SIZE;
 }
@@ -256,6 +284,134 @@ export function readExpressionEntry(
     data1: view.getInt32(8, true),
     data2: view.getInt32(12, true),
   };
+}
+
+export function readExpressionType(
+  memory: WebAssembly.Memory,
+  outPtr: number,
+  inputLen: number,
+  index: number,
+): number {
+  const exprCount = readExpressionCount(memory, outPtr, inputLen);
+  if (index < 0 || index >= exprCount) {
+    return -1;
+  }
+  const astBasePtr = astBase(outPtr, inputLen);
+  const view = new DataView(memory.buffer);
+  return safeReadI32(view, astExprTypesBase(astBasePtr) + index * WORD_SIZE);
+}
+
+export interface AstConstantEntryInfo {
+  readonly nameStart: number;
+  readonly nameLength: number;
+  readonly value: number;
+  readonly type: number;
+  readonly exprIndex: number;
+  readonly evalState: number;
+  readonly moduleIndex: number;
+}
+
+export function readAstConstantCount(
+  memory: WebAssembly.Memory,
+  outPtr: number,
+  inputLen: number,
+): number {
+  const astBasePtr = astBase(outPtr, inputLen);
+  const view = new DataView(memory.buffer);
+  return safeReadI32(view, astConstantsCountPtr(astBasePtr));
+}
+
+export function readAstConstantEntry(
+  memory: WebAssembly.Memory,
+  outPtr: number,
+  inputLen: number,
+  index: number,
+): AstConstantEntryInfo {
+  const astBasePtr = astBase(outPtr, inputLen);
+  const entryPtr =
+    astConstantsCountPtr(astBasePtr) + WORD_SIZE + index * AST_CONSTANT_ENTRY_SIZE;
+  const view = new DataView(memory.buffer);
+  const nameStart = safeReadI32(view, entryPtr + AST_CONSTANT_ENTRY_NAME_OFFSET);
+  const nameLength = safeReadI32(view, entryPtr + AST_CONSTANT_ENTRY_NAME_LEN_OFFSET);
+  const value = safeReadI32(view, entryPtr + AST_CONSTANT_ENTRY_VALUE_OFFSET);
+  const type = safeReadI32(view, entryPtr + AST_CONSTANT_ENTRY_TYPE_OFFSET);
+  const exprIndex = safeReadI32(view, entryPtr + AST_CONSTANT_ENTRY_EXPR_INDEX_OFFSET);
+  const evalState = safeReadI32(view, entryPtr + AST_CONSTANT_ENTRY_EVAL_STATE_OFFSET);
+  const moduleIndex = safeReadI32(view, entryPtr + AST_CONSTANT_ENTRY_MODULE_INDEX_OFFSET);
+  return { nameStart, nameLength, value, type, exprIndex, evalState, moduleIndex };
+}
+
+export interface AstArrayTypeEntryInfo {
+  readonly elementType: number;
+  readonly length: number;
+  readonly cachedTypeId: number;
+}
+
+export function readAstArrayTypeCount(
+  memory: WebAssembly.Memory,
+  outPtr: number,
+  inputLen: number,
+): number {
+  const astBasePtr = astBase(outPtr, inputLen);
+  const view = new DataView(memory.buffer);
+  return safeReadI32(view, astArrayTypesCountPtr(astBasePtr));
+}
+
+export function readAstArrayTypeEntry(
+  memory: WebAssembly.Memory,
+  outPtr: number,
+  inputLen: number,
+  index: number,
+): AstArrayTypeEntryInfo {
+  const astBasePtr = astBase(outPtr, inputLen);
+  const entryPtr =
+    astArrayTypesCountPtr(astBasePtr) + WORD_SIZE + index * AST_ARRAY_TYPE_ENTRY_SIZE;
+  const view = new DataView(memory.buffer, entryPtr, AST_ARRAY_TYPE_ENTRY_SIZE);
+  return {
+    elementType: view.getInt32(0, true),
+    length: view.getInt32(4, true),
+    cachedTypeId: view.getInt32(8, true),
+  };
+}
+
+export interface AstTupleTypeEntryInfo {
+  readonly elementCount: number;
+  readonly elementsPtr: number;
+  readonly cachedTypeId: number;
+  readonly elements: readonly number[];
+}
+
+export function readAstTupleTypeCount(
+  memory: WebAssembly.Memory,
+  outPtr: number,
+  inputLen: number,
+): number {
+  const astBasePtr = astBase(outPtr, inputLen);
+  const view = new DataView(memory.buffer);
+  return safeReadI32(view, astTupleTypesCountPtr(astBasePtr));
+}
+
+export function readAstTupleTypeEntry(
+  memory: WebAssembly.Memory,
+  outPtr: number,
+  inputLen: number,
+  index: number,
+): AstTupleTypeEntryInfo {
+  const astBasePtr = astBase(outPtr, inputLen);
+  const entryPtr =
+    astTupleTypesCountPtr(astBasePtr) + WORD_SIZE + index * AST_TUPLE_TYPE_ENTRY_SIZE;
+  const view = new DataView(memory.buffer, entryPtr, AST_TUPLE_TYPE_ENTRY_SIZE);
+  const elementCount = view.getInt32(0, true);
+  const elementsPtr = view.getInt32(4, true);
+  const cachedTypeId = view.getInt32(8, true);
+  const elements: number[] = [];
+  if (elementCount > 0 && elementsPtr > 0) {
+    const elementsView = new DataView(memory.buffer);
+    for (let idx = 0; idx < elementCount; idx += 1) {
+      elements.push(safeReadI32(elementsView, elementsPtr + idx * WORD_SIZE));
+    }
+  }
+  return { elementCount, elementsPtr, cachedTypeId, elements };
 }
 
 export interface FunctionEntryInfo {
@@ -603,6 +759,26 @@ export class CompilerInstance {
     };
   }
 
+  readScratchTypesCount(outputPtr: number): number {
+    const view = new DataView(this.#memory.buffer);
+    return safeReadI32(view, outputPtr + SCRATCH_TYPES_COUNT_OFFSET);
+  }
+
+  readScratchTypeEntry(outputPtr: number, index: number): ScratchTypeEntry {
+    if (index < 0 || index >= SCRATCH_TYPES_CAPACITY) {
+      return { typeId: -1, namePtr: -1, nameLength: -1, extra: -1 };
+    }
+    const entryPtr =
+      outputPtr + SCRATCH_TYPES_BASE_OFFSET + index * TYPE_ENTRY_SIZE;
+    const view = new DataView(this.#memory.buffer);
+    return {
+      typeId: safeReadI32(view, entryPtr + TYPE_ENTRY_TYPE_ID_OFFSET),
+      namePtr: safeReadI32(view, entryPtr + TYPE_ENTRY_NAME_PTR_OFFSET),
+      nameLength: safeReadI32(view, entryPtr + TYPE_ENTRY_NAME_LEN_OFFSET),
+      extra: safeReadI32(view, entryPtr + TYPE_ENTRY_EXTRA_OFFSET),
+    };
+  }
+
   #failure(outputPtr: number, producedLength: number, cause?: unknown): Stage1CompileFailure {
     const failure = this.#readFailure(outputPtr, producedLength);
     const detail = failure.detail ? `, detail=\"${failure.detail}\"` : "";
@@ -892,6 +1068,24 @@ export async function runWasmMainWithGc(wasm: Uint8Array): Promise<number> {
   const instance = await instantiateWasmModuleWithGc(wasm);
   const main = expectExportedFunction(instance, "main");
   return main();
+}
+
+export interface TypeMetadataDebugInfo {
+  readonly context: number;
+  readonly subject: number;
+  readonly extra: number;
+}
+
+export function readTypeMetadataDebugInfo(
+  memory: WebAssembly.Memory,
+  outPtr: number,
+): TypeMetadataDebugInfo {
+  const view = new DataView(memory.buffer);
+  return {
+    context: safeReadI32(view, outPtr + SCRATCH_TYPE_METADATA_DEBUG_CONTEXT_OFFSET),
+    subject: safeReadI32(view, outPtr + SCRATCH_TYPE_METADATA_DEBUG_SUBJECT_OFFSET),
+    extra: safeReadI32(view, outPtr + SCRATCH_TYPE_METADATA_DEBUG_EXTRA_OFFSET),
+  };
 }
 
 export function describeCompilationFailure(

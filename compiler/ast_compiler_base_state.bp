@@ -2,6 +2,14 @@ use "./ast_compiler_base_lexing.bp";
 
 const WORD_SIZE: i32 = 4;
 
+const SCRATCH_TYPE_METADATA_DEBUG_CONTEXT_OFFSET: i32 = 4032;
+
+const SCRATCH_TYPE_METADATA_DEBUG_SUBJECT_OFFSET: i32 = 4036;
+
+const SCRATCH_TYPE_METADATA_DEBUG_EXTRA_OFFSET: i32 = 4040;
+
+const SCRATCH_TYPE_METADATA_DEBUG_FAILURE_COUNT_OFFSET: i32 = 4044;
+
 const SCRATCH_FAILURE_PATH_PTR_OFFSET: i32 = 4048;
 
 const SCRATCH_FAILURE_PATH_LEN_OFFSET: i32 = 4052;
@@ -13,6 +21,22 @@ const SCRATCH_FAILURE_COLUMN_OFFSET: i32 = 4060;
 const SCRATCH_FAILURE_CHARACTER_OFFSET: i32 = 4064;
 
 const SCRATCH_FAILURE_OFFSET_OFFSET: i32 = 4068;
+const CONST_ARRAY_DEBUG_EXPR_TYPE_OFFSET: i32 = 5000;
+const CONST_ARRAY_DEBUG_ELEMENT_TYPE_OFFSET: i32 = 5004;
+const CONST_ARRAY_DEBUG_ENV_COUNT_OFFSET: i32 = 5008;
+const CONST_ARRAY_DEBUG_PARAM_COUNT_OFFSET: i32 = 5012;
+const CONST_ARRAY_DEBUG_TREAT_AS_TYPE_OFFSET: i32 = 5016;
+const TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET: i32 = 5020;
+const TYPE_METADATA_DEBUG_LAST_SUBJECT_OFFSET: i32 = 5024;
+const TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET: i32 = 5028;
+const CONST_EVAL_DEBUG_EXPR_OFFSET: i32 = 5032;
+const CONST_EVAL_DEBUG_KIND_OFFSET: i32 = 5036;
+const CONST_EVAL_DEBUG_STEP_OFFSET: i32 = 5040;
+const CONST_EVAL_DEBUG_LOCAL_OFFSET: i32 = 5044;
+const CLONE_DEBUG_LOCAL_INDEX_OFFSET: i32 = 5048;
+const CLONE_DEBUG_INIT_TYPE_OFFSET: i32 = 5052;
+const CLONE_DEBUG_PUSHED_OFFSET: i32 = 5056;
+
 
 const SCRATCH_MODULE_BASE_OFFSET: i32 = 4080;
 
@@ -1386,6 +1410,8 @@ fn clone_const_specialization_expr(
                 return -1;
             };
             let init_type: i32 = ast_expr_type(ast_base, cloned_init);
+            store_i32(CLONE_DEBUG_LOCAL_INDEX_OFFSET, local_index);
+            store_i32(CLONE_DEBUG_INIT_TYPE_OFFSET, init_type);
             if init_type >= 0 {
                 let entry_offset: i32 =
                     local_type_stack_ptr
@@ -1396,6 +1422,10 @@ fn clone_const_specialization_expr(
                 pushed = true;
             };
         };
+        store_i32(
+            CLONE_DEBUG_PUSHED_OFFSET,
+            if pushed { 1 } else { 0 },
+        );
         let cloned_body: i32 = clone_const_specialization_expr(
             ast_base,
             template_index,
@@ -4059,7 +4089,28 @@ fn tuple_type_set_cached_id(ast_base: i32, index: i32, type_id: i32) {
 
 const TYPE_METADATA_CACHE_IN_PROGRESS: i32 = -2;
 
+fn record_type_metadata_debug(out_ptr: i32, context: i32, subject: i32, extra: i32) {
+    if out_ptr > 0 {
+        store_i32(out_ptr + SCRATCH_TYPE_METADATA_DEBUG_CONTEXT_OFFSET, context);
+        store_i32(out_ptr + SCRATCH_TYPE_METADATA_DEBUG_SUBJECT_OFFSET, subject);
+        store_i32(out_ptr + SCRATCH_TYPE_METADATA_DEBUG_EXTRA_OFFSET, extra);
+    } else {
+        store_i32(SCRATCH_TYPE_METADATA_DEBUG_CONTEXT_OFFSET, context);
+        store_i32(SCRATCH_TYPE_METADATA_DEBUG_SUBJECT_OFFSET, subject);
+        store_i32(SCRATCH_TYPE_METADATA_DEBUG_EXTRA_OFFSET, extra);
+    };
+}
+
 fn record_type_metadata_failure(out_ptr: i32) {
+    record_type_metadata_debug(out_ptr, 255, 0, 0);
+    if out_ptr > 0 {
+        let current: i32 =
+            load_i32(out_ptr + SCRATCH_TYPE_METADATA_DEBUG_FAILURE_COUNT_OFFSET);
+        store_i32(out_ptr + SCRATCH_TYPE_METADATA_DEBUG_FAILURE_COUNT_OFFSET, current + 1);
+    } else {
+        let current: i32 = load_i32(SCRATCH_TYPE_METADATA_DEBUG_FAILURE_COUNT_OFFSET);
+        store_i32(SCRATCH_TYPE_METADATA_DEBUG_FAILURE_COUNT_OFFSET, current + 1);
+    };
     if out_ptr > 0 {
         if load_u8(out_ptr) == 0 {
             let message: [u8; 31] = "type metadata resolution failed";
@@ -4916,32 +4967,47 @@ fn materialize_type_like_value_into(
 }
 
 fn resolve_array_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
+    store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 1000);
+    store_i32(TYPE_METADATA_DEBUG_LAST_SUBJECT_OFFSET, type_id);
+    store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, 0);
     if !type_id_is_array(type_id) {
+        record_type_metadata_debug(out_ptr, 1, type_id, 0);
         record_type_metadata_failure(out_ptr);
         return -1;
     };
     let index: i32 = array_type_index(type_id);
+    store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 1001);
+    store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, index);
     if index < 0 {
+        record_type_metadata_debug(out_ptr, 2, type_id, index);
         record_type_metadata_failure(out_ptr);
         return -1;
     };
-    if index >= ast_array_types_count(ast_base) {
+    let type_count: i32 = ast_array_types_count(ast_base);
+    if index >= type_count {
+        record_type_metadata_debug(out_ptr, 3, type_id, type_count);
         record_type_metadata_failure(out_ptr);
         return -1;
     };
     let cached: i32 = array_type_cached_id(ast_base, index);
+    store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 1002);
+    store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, cached);
     if cached == type_id {
         return type_id;
     };
     if cached == TYPE_METADATA_CACHE_IN_PROGRESS {
+        record_type_metadata_debug(out_ptr, 4, type_id, index);
         record_type_metadata_failure(out_ptr);
         return -1;
     };
     array_type_set_cached_id(ast_base, index, TYPE_METADATA_CACHE_IN_PROGRESS);
     let mut element_type_id: i32 = ast_array_type_element_type(ast_base, index);
+    store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 1003);
+    store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, element_type_id);
     let resolved_element: i32 = resolve_type_id(out_ptr, ast_base, element_type_id);
     if resolved_element < 0 {
         array_type_set_cached_id(ast_base, index, 0);
+        record_type_metadata_debug(out_ptr, 5, type_id, element_type_id);
         record_type_metadata_failure(out_ptr);
         return -1;
     };
@@ -4951,52 +5017,78 @@ fn resolve_array_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
         element_type_id = resolved_element;
     };
     let length: i32 = ast_array_type_length(ast_base, index);
+    store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 1004);
+    store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, length);
     if length < 0 {
         array_type_set_cached_id(ast_base, index, 0);
+        record_type_metadata_debug(out_ptr, 6, type_id, length);
         record_type_metadata_failure(out_ptr);
         return -1;
     };
     if ensure_array_type_metadata(out_ptr, ast_base, index, type_id) < 0 {
         array_type_set_cached_id(ast_base, index, 0);
+        record_type_metadata_debug(out_ptr, 7, type_id, index);
         record_type_metadata_failure(out_ptr);
         return -1;
     };
+    store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 1005);
+    store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, type_id);
     type_id
 }
 
 fn resolve_tuple_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
+    store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 2000);
+    store_i32(TYPE_METADATA_DEBUG_LAST_SUBJECT_OFFSET, type_id);
+    store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, 0);
     if !type_id_is_tuple(type_id) {
+        record_type_metadata_debug(out_ptr, 10, type_id, 0);
         record_type_metadata_failure(out_ptr);
         return -1;
     };
     let index: i32 = tuple_type_index(type_id);
+    store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 2001);
+    store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, index);
     if index < 0 {
+        record_type_metadata_debug(out_ptr, 11, type_id, index);
         record_type_metadata_failure(out_ptr);
         return -1;
     };
-    if index >= ast_tuple_types_count(ast_base) {
+    let tuple_count: i32 = ast_tuple_types_count(ast_base);
+    store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 2002);
+    store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, tuple_count);
+    if index >= tuple_count {
+        record_type_metadata_debug(out_ptr, 12, type_id, tuple_count);
         record_type_metadata_failure(out_ptr);
         return -1;
     };
     let cached: i32 = tuple_type_cached_id(ast_base, index);
+    store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 2003);
+    store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, cached);
     if cached == type_id {
         return type_id;
     };
     if cached == TYPE_METADATA_CACHE_IN_PROGRESS {
+        record_type_metadata_debug(out_ptr, 13, type_id, index);
         record_type_metadata_failure(out_ptr);
         return -1;
     };
     tuple_type_set_cached_id(ast_base, index, TYPE_METADATA_CACHE_IN_PROGRESS);
     let element_count: i32 = ast_tuple_type_element_count(ast_base, index);
+    store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 2004);
+    store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, element_count);
     if element_count < 0 {
         tuple_type_set_cached_id(ast_base, index, 0);
+        record_type_metadata_debug(out_ptr, 14, type_id, element_count);
         record_type_metadata_failure(out_ptr);
         return -1;
     };
     if element_count > 0 {
         let elements_ptr: i32 = ast_tuple_type_elements_ptr(ast_base, index);
+        store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 2005);
+        store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, elements_ptr);
         if elements_ptr < 0 {
             tuple_type_set_cached_id(ast_base, index, 0);
+            record_type_metadata_debug(out_ptr, 15, type_id, index);
             record_type_metadata_failure(out_ptr);
             return -1;
         };
@@ -5004,10 +5096,13 @@ fn resolve_tuple_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
         while elem_idx < element_count {
             let type_ptr: i32 = elements_ptr + elem_idx * WORD_SIZE;
             let element_type_id: i32 = load_i32(type_ptr);
+            store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 2006);
+            store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, element_type_id);
             let resolved_element: i32 =
                 resolve_type_id(out_ptr, ast_base, element_type_id);
             if resolved_element < 0 {
                 tuple_type_set_cached_id(ast_base, index, 0);
+                record_type_metadata_debug(out_ptr, 16, type_id, element_type_id);
                 record_type_metadata_failure(out_ptr);
                 return -1;
             };
@@ -5019,9 +5114,12 @@ fn resolve_tuple_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
     };
     if ensure_tuple_type_metadata(out_ptr, ast_base, index, type_id) < 0 {
         tuple_type_set_cached_id(ast_base, index, 0);
+        record_type_metadata_debug(out_ptr, 17, type_id, index);
         record_type_metadata_failure(out_ptr);
         return -1;
     };
+    store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 2007);
+    store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, type_id);
     type_id
 }
 
@@ -5113,6 +5211,8 @@ fn resolve_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
     if type_id_is_builtin(type_id) {
         return type_id;
     };
+    record_type_metadata_debug(out_ptr, 100, type_id, 0);
+    record_type_metadata_failure(out_ptr);
     -1
 }
 
