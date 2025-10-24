@@ -395,4 +395,37 @@ describe("struct intrinsic with const type values", () => {
         const result = await runWasmMainWithGc(wasm);
         expect(result).toBe(42);
     });
+
+    test("store a struct in memory and load it back", async () => {
+        const wasm = await compileWithAstCompiler(`
+        use "/stdlib/memory.bp";
+
+        const Pair = struct(6, 2, [
+            ("first\\0", i32),
+            ("second", i32),
+        ]);
+
+        fn write_pair(ptr: i32, p: Pair) -> i32 {
+            store_i32(ptr, p.first);
+            store_i32(ptr + 4, p.second);
+            0
+        }
+
+        fn read_pair(ptr: i32) -> Pair {
+            let a: i32 = load_i32(ptr);
+            let b: i32 = load_i32(ptr + 4);
+            Pair { first: a, second: b }
+        }
+
+        fn main() -> i32 {
+            let off: i32 = 512;
+            let p: Pair = Pair { first: 20, second: 22 };
+            write_pair(off, p);
+            let q: Pair = read_pair(off);
+            q.first + q.second
+        }
+      `, { entryPath: "/tests/memory/store_struct.bp", modules: [{ path: "/tests/empty.bp", source: "fn unused() -> i32 { 0 }" }] });
+        const result = await runWasmMainWithGc(wasm);
+        expect(result).toBe(42);
+    });
 });
