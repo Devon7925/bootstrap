@@ -220,15 +220,7 @@ fn compileFromPath(path_ptr: i32) -> i32 {
         return -1;
     }
     let initial_top: i32 = module_storage_top();
-    let out_ptr: i32 = align_to(
-        if initial_top > 0 {
-            initial_top
-        } else {
-            module_ensure_state_initialized();
-            module_storage_top()
-        },
-        WORD_SIZE,
-    );
+    let out_ptr: i32 = align_to(initial_top, WORD_SIZE);
     module_set_storage_top(out_ptr);
     let required: i32 = out_ptr + ast_output_reserve(input_len);
     if ensure_memory_capacity(required) < 0 {
