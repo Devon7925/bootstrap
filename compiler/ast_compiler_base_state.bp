@@ -52,9 +52,9 @@ const SCRATCH_INSTR_BASE_OFFSET: i32 = 8192;
 
 const SCRATCH_INSTR_CAPACITY: i32 = 131072;
 
-const SCRATCH_FN_COUNT_OFFSET: i32 = 917496;
+const SCRATCH_FN_COUNT_OFFSET: i32 = 921592;
 
-const SCRATCH_FN_BASE_OFFSET: i32 = 917504;
+const SCRATCH_FN_BASE_OFFSET: i32 = 921600;
 
 const TYPE_ENTRY_SIZE: i32 = 16;
 
@@ -400,7 +400,7 @@ fn scratch_types_set_count(out_ptr: i32, count: i32) {
 
 const AST_MAX_FUNCTIONS: i32 = 1024;
 
-const AST_FUNCTION_ENTRY_SIZE: i32 = 60;
+const AST_FUNCTION_ENTRY_SIZE: i32 = 68;
 
 const FUNCTION_FLAG_CONST: i32 = 1;
 const FUNCTION_FLAG_HAS_CONST_PARAMS: i32 = 2;
@@ -636,6 +636,14 @@ fn ast_function_entry_name_start_ptr(ast_base: i32, index: i32) -> i32 {
     ast_function_entry_ptr(ast_base, index) + 56
 }
 
+fn ast_function_doc_ptr_ptr(ast_base: i32, index: i32) -> i32 {
+    ast_function_entry_ptr(ast_base, index) + 60
+}
+
+fn ast_function_doc_len_ptr(ast_base: i32, index: i32) -> i32 {
+    ast_function_entry_ptr(ast_base, index) + 64
+}
+
 fn ast_function_flags(ast_base: i32, index: i32) -> i32 {
     load_i32(ast_function_flags_ptr(ast_base, index))
 }
@@ -662,6 +670,14 @@ fn ast_function_entry_module_index(ast_base: i32, index: i32) -> i32 {
 
 fn ast_function_entry_name_start(ast_base: i32, index: i32) -> i32 {
     load_i32(ast_function_entry_name_start_ptr(ast_base, index))
+}
+
+fn ast_function_doc_ptr(ast_base: i32, index: i32) -> i32 {
+    load_i32(ast_function_doc_ptr_ptr(ast_base, index))
+}
+
+fn ast_function_doc_len(ast_base: i32, index: i32) -> i32 {
+    load_i32(ast_function_doc_len_ptr(ast_base, index))
 }
 
 fn ast_function_set_template_owner_index(ast_base: i32, index: i32, value: i32) {
@@ -3531,6 +3547,8 @@ fn ast_write_function_entry(
     module_len: i32,
     module_index: i32,
     name_start: i32,
+    doc_ptr: i32,
+    doc_len: i32,
 ) {
     let entry_ptr: i32 = ast_function_entry_ptr(ast_base, index);
     store_i32(entry_ptr, name_ptr);
@@ -3548,6 +3566,8 @@ fn ast_write_function_entry(
     store_i32(entry_ptr + 48, module_len);
     store_i32(entry_ptr + 52, module_index);
     store_i32(entry_ptr + 56, name_start);
+    store_i32(entry_ptr + 60, doc_ptr);
+    store_i32(entry_ptr + 64, doc_len);
 }
 
 fn ast_constants_count_ptr(ast_base: i32) -> i32 {

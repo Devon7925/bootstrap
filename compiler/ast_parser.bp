@@ -1,5 +1,7 @@
 use "./ast_compiler_base_lexing.bp";
 
+const DOC_STRING_BUFFER_CAPACITY: i32 = 4096;
+
 fn compute_line_and_column(base: i32, len: i32, offset: i32) -> (i32, i32) {
     if base < 0 {
         return (0, 0);
@@ -2959,24 +2961,6 @@ fn parse_function(
     current_module_index: i32,
 ) -> i32 {
     let mut cursor: i32 = skip_whitespace(base, len, offset);
-    let mut is_const_fn: bool = false;
-    let mut maybe_const: i32 = expect_keyword_const(base, len, cursor);
-    if maybe_const >= 0 {
-        if maybe_const >= len {
-            return -1;
-        }
-        let after_const: i32 = load_u8(base + maybe_const);
-        if !is_whitespace(after_const) {
-            return -1;
-        }
-        is_const_fn = true;
-        cursor = skip_whitespace(base, len, maybe_const);
-    }
-    cursor = expect_keyword_fn(base, len, cursor);
-    if cursor < 0 {
-        return -1;
-    }
-    cursor = skip_whitespace(base, len, cursor);
 
     let temp_base: i32 = ast_temp_base(ast_base);
     let params_count_ptr: i32 = temp_base;
@@ -2998,6 +2982,123 @@ fn parse_function(
     let locals_table_ptr: i32 = locals_stack_count_ptr + 4;
     let locals_next_index_ptr: i32 = locals_table_ptr + MAX_LOCALS * LOCALS_ENTRY_SIZE;
     let expr_temp_base: i32 = locals_next_index_ptr + 4;
+    let doc_buffer_ptr: i32 = expr_temp_base;
+    let doc_len_ptr: i32 = doc_buffer_ptr + DOC_STRING_BUFFER_CAPACITY;
+    let mut doc_string_ptr: i32 = 0;
+    let mut doc_string_len: i32 = 0;
+
+    loop {
+        cursor = skip_whitespace(base, len, cursor);
+        if cursor >= len {
+            return -1;
+        }
+        let first: i32 = load_u8(base + cursor);
+        if first != '#' {
+            break;
+        }
+        cursor = cursor + 1;
+        if cursor >= len {
+            return -1;
+        }
+        let bracket: i32 = load_u8(base + cursor);
+        if bracket != '[' {
+            return -1;
+        }
+        cursor = skip_whitespace(base, len, cursor + 1);
+        let attr_ident: IdentifierParse = parse_identifier(base, len, cursor);
+        cursor = attr_ident.cursor;
+        if cursor < 0 {
+            return -1;
+        }
+        let is_doc_attr: bool = identifier_matches_keyword(
+            base,
+            len,
+            attr_ident.start,
+            attr_ident.length,
+            3,
+            "doc",
+        );
+        cursor = skip_whitespace(base, len, cursor);
+        if is_doc_attr {
+            cursor = expect_char(base, len, cursor, '=');
+            if cursor < 0 {
+                return -1;
+            }
+            cursor = skip_whitespace(base, len, cursor);
+            let mut combined_len: i32 = 0;
+            if doc_string_len > 0 {
+                if doc_string_len >= DOC_STRING_BUFFER_CAPACITY {
+                    return -1;
+                }
+                let mut copy_idx: i32 = 0;
+                while copy_idx < doc_string_len {
+                    let byte: i32 = load_u8(doc_string_ptr + copy_idx);
+                    store_u8(doc_buffer_ptr + copy_idx, byte);
+                    copy_idx = copy_idx + 1;
+                };
+                combined_len = doc_string_len;
+                if combined_len >= DOC_STRING_BUFFER_CAPACITY {
+                    return -1;
+                }
+                store_u8(doc_buffer_ptr + combined_len, '\n');
+                combined_len = combined_len + 1;
+            }
+            let remaining_capacity: i32 = DOC_STRING_BUFFER_CAPACITY - combined_len;
+            if remaining_capacity <= 0 {
+                return -1;
+            }
+            store_i32(doc_len_ptr, 0);
+            let literal_cursor: i32 = parse_string_literal_to_buffer(
+                base,
+                len,
+                cursor,
+                doc_buffer_ptr + combined_len,
+                remaining_capacity,
+                doc_len_ptr,
+            );
+            if literal_cursor < 0 {
+                return -1;
+            }
+            let literal_len: i32 = load_i32(doc_len_ptr);
+            if literal_len < 0 {
+                return -1;
+            }
+            let total_len: i32 = combined_len + literal_len;
+            doc_string_ptr = ast_store_name(ast_base, doc_buffer_ptr, 0, total_len);
+            if doc_string_ptr < 0 {
+                return -1;
+            }
+            doc_string_len = total_len;
+            cursor = skip_whitespace(base, len, literal_cursor);
+        } else {
+            return -1;
+        }
+        cursor = expect_char(base, len, cursor, ']');
+        if cursor < 0 {
+            return -1;
+        }
+        cursor = cursor + 1;
+    };
+    cursor = skip_whitespace(base, len, cursor);
+    let mut is_const_fn: bool = false;
+    let mut maybe_const: i32 = expect_keyword_const(base, len, cursor);
+    if maybe_const >= 0 {
+        if maybe_const >= len {
+            return -1;
+        }
+        let after_const: i32 = load_u8(base + maybe_const);
+        if !is_whitespace(after_const) {
+            return -1;
+        }
+        is_const_fn = true;
+        cursor = skip_whitespace(base, len, maybe_const);
+    }
+    cursor = expect_keyword_fn(base, len, cursor);
+    if cursor < 0 {
+        return -1;
+    }
+    cursor = skip_whitespace(base, len, cursor);
+
     store_i32(type_template_sink_ptr, 0);
     store_i32(type_template_sink_ptr + 4, 0);
     let name_ident: IdentifierParse = parse_identifier(base, len, cursor);
@@ -3389,6 +3490,8 @@ fn parse_function(
         len,
         current_module_index,
         name_start,
+        doc_string_ptr,
+        doc_string_len,
     );
     cursor
 }
