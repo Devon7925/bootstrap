@@ -1775,6 +1775,7 @@ fn parse_block_expression_body(
         let mut assignment_identified: bool = false;
         let mut assignment_local_index: i32 = -1;
         let mut assignment_cursor: i32 = idx;
+        let mut assignment_location: i32 = -1;
         let mut assignment_kind: i32 = 0;
         let mut assignment_array_expr_index: i32 = -1;
         let mut assignment_array_index_expr_index: i32 = -1;
@@ -1789,6 +1790,7 @@ fn parse_block_expression_body(
                 if assignment_cursor >= 0 {
                     let name_start: i32 = assignment_ident.start;
                     let name_len: i32 = assignment_ident.length;
+                    assignment_location = name_start;
                     let mut after_ident: i32 = skip_whitespace(base, len, assignment_cursor);
                     if after_ident < len {
                         let selectors_base: i32 = stmt_nested_temp_base + 128;
@@ -2125,6 +2127,9 @@ fn parse_block_expression_body(
                     store_i32(locals_stack_count_ptr, saved_stack_count);
                     store_i32(locals_next_index_ptr, saved_next_index);
                     return -1;
+                }
+                if assignment_kind == 0 {
+                    ast_expr_entry_set_extra(ast_base, assign_expr_index, assignment_location);
                 }
                 let stmt_count: i32 = load_i32(statement_count_ptr);
                 if stmt_count >= statements_capacity {

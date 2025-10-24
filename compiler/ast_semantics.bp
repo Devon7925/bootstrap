@@ -5337,6 +5337,7 @@ fn resolve_expression_internal(
         return 0;
     }
     if kind == 10 {
+        let local_index: i32 = load_i32(entry_ptr + 4);
         let value_index: i32 = load_i32(entry_ptr + 8);
         if resolve_expression_internal(out_ptr, ast_base,
             value_index,
@@ -5352,7 +5353,90 @@ fn resolve_expression_internal(
         ) < 0 {
             return -1;
         }
-        ast_expr_set_type(ast_base, expr_index, ast_expr_type(ast_base, value_index));
+        let mut recorded_entry_offset: i32 = -1;
+        let mut recorded_type: i32 = -1;
+        if local_stack_base > 0 && local_stack_count_ptr > 0 {
+            if local_index >= 0 {
+                let stack_count: i32 = load_i32(local_stack_count_ptr);
+                let mut stack_idx: i32 = stack_count - 1;
+                loop {
+                    if stack_idx < 0 {
+                        break;
+                    }
+                    let entry_offset: i32 =
+                        local_stack_base + stack_idx * RESOLVE_LOCAL_STACK_ENTRY_SIZE;
+                    let recorded_index: i32 = load_i32(entry_offset);
+                    if recorded_index == local_index {
+                        recorded_entry_offset = entry_offset;
+                        recorded_type = load_i32(entry_offset + 8);
+                        if recorded_type < 0 {
+                            let init_expr_index: i32 = load_i32(entry_offset + 4);
+                            if init_expr_index >= 0 {
+                                recorded_type = ast_expr_type(ast_base, init_expr_index);
+                                if recorded_type >= 0 {
+                                    store_i32(entry_offset + 8, recorded_type);
+                                }
+                            }
+                        }
+                        break;
+                    }
+                    stack_idx = stack_idx - 1;
+                };
+            }
+        }
+        let mut resolved_local: i32 = -1;
+        if recorded_type >= 0 {
+            resolved_local = resolve_type_id(out_ptr, ast_base, recorded_type);
+            if resolved_local < 0 {
+                return -1;
+            }
+            if recorded_entry_offset >= 0 {
+                if resolved_local != recorded_type {
+                    store_i32(recorded_entry_offset + 8, resolved_local);
+                }
+            }
+        }
+        let mut resolved_value: i32 = -1;
+        let mut value_type: i32 = ast_expr_type(ast_base, value_index);
+        if value_type >= 0 {
+            resolved_value = resolve_type_id(out_ptr, ast_base, value_type);
+            if resolved_value < 0 {
+                return -1;
+            }
+            if resolved_value != value_type {
+                ast_expr_set_type(ast_base, value_index, resolved_value);
+            }
+            value_type = resolved_value;
+        }
+        if resolved_local >= 0 {
+            if resolved_value >= 0 {
+                if resolved_value != resolved_local {
+                    let location: i32 = ast_expr_entry_extra(ast_base, expr_index);
+                    record_failure_with_location(
+                        out_ptr,
+                        ast_base,
+                        caller_func_index,
+                        location,
+                        30,
+                        "local assignment type mismatch",
+                    );
+                    return -1;
+                }
+            } else {
+                ast_expr_set_type(ast_base, value_index, resolved_local);
+                value_type = resolved_local;
+            }
+            ast_expr_set_type(ast_base, expr_index, resolved_local);
+            return 0;
+        }
+        if resolved_value >= 0 {
+            if recorded_entry_offset >= 0 {
+                store_i32(recorded_entry_offset + 8, resolved_value);
+            }
+            ast_expr_set_type(ast_base, expr_index, resolved_value);
+            return 0;
+        }
+        ast_expr_set_type(ast_base, expr_index, value_type);
         return 0;
     }
     if kind == 11 {

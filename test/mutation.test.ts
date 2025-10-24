@@ -103,7 +103,7 @@ test("tuple field assignment reports type mismatch location", async () => {
   );
 });
 
-test.todo("boolean mutation rejects integer assignments", async () => {
+test("boolean mutation rejects integer assignments", async () => {
   const failure = await expectCompileFailure(`
     fn main() -> i32 {
         let mut flag: bool = false;
@@ -112,5 +112,5 @@ test.todo("boolean mutation rejects integer assignments", async () => {
     }
   `);
 
-  expect(failure.failure.detail).toBeDefined();
+  expect(failure.failure.detail).toBe("/entry.bp:4:9: local assignment type mismatch");
 });
