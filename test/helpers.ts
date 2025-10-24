@@ -138,14 +138,6 @@ function writeModuleString(memory: WebAssembly.Memory, ptr: number, text: string
   return bytes.length;
 }
 
-function zeroModuleMemory(memory: WebAssembly.Memory, ptr: number, length: number) {
-  if (length <= 0) {
-    return;
-  }
-  ensureModuleMemoryCapacity(memory, ptr + length);
-  new Uint8Array(memory.buffer).fill(0, ptr, ptr + length);
-}
-
 function zeroFailureDetail(memory: WebAssembly.Memory, ptr: number) {
   if (ptr <= 0) {
     return;
@@ -828,12 +820,6 @@ export class CompilerInstance {
       if (status < 0) {
         throw this.#failure(readModuleStorageTop(this.#memory), status);
       }
-
-      try {
-        zeroModuleMemory(this.#memory, MODULE_CONTENT_PTR, contentLength + 1);
-      } catch (cause) {
-        throw this.#failure(readModuleStorageTop(this.#memory), -1, cause);
-      }
     }
 
     let entryContentLength: number;
@@ -857,12 +843,6 @@ export class CompilerInstance {
     }
     if (entryStatus < 0) {
       throw this.#failure(readModuleStorageTop(this.#memory), entryStatus);
-    }
-
-    try {
-      zeroModuleMemory(this.#memory, MODULE_CONTENT_PTR, entryContentLength + 1);
-    } catch (cause) {
-      throw this.#failure(readModuleStorageTop(this.#memory), -1, cause);
     }
 
     let producedLength: number;

@@ -101,7 +101,6 @@ async function loadAndCompile(
 ): Promise<Uint8Array> {
   const contentLength = writeString(compiler.memory, contentPtr, source);
   expect(compiler.loadModuleFromSource(pathPtr, contentPtr)).toBe(0);
-  zeroMemory(compiler.memory, contentPtr, contentLength + 1);
   const producedLength = compiler.compileFromPath(pathPtr);
   expect(producedLength).toBeGreaterThan(0);
   return readOutput(compiler.memory, producedLength);
@@ -117,7 +116,6 @@ async function loadModuleSource(
   writeString(compiler.memory, pathPtr, path);
   const contentLength = writeString(compiler.memory, contentPtr, source);
   expect(compiler.loadModuleFromSource(pathPtr, contentPtr)).toBe(0);
-  zeroMemory(compiler.memory, contentPtr, contentLength + 1);
 }
 
 test("loadModuleFromSource persists content for compileFromPath", async () => {
@@ -188,7 +186,6 @@ fn main() -> i32 {
 }`;
   const contentLength = writeString(compiler.memory, contentPtr, source);
   expect(compiler.loadModuleFromSource(pathPtr, contentPtr)).toBe(0);
-  zeroMemory(compiler.memory, contentPtr, contentLength + 1);
 
   const detailOutPtr = readModuleStorageTop(compiler.memory);
   zeroMemory(compiler.memory, detailOutPtr, FAILURE_DETAIL_CAPACITY);
@@ -246,7 +243,6 @@ test("loadModuleFromSource reports linear memory exhaustion", async () => {
       failurePath = path;
       break;
     }
-    zeroMemory(compiler.memory, contentPtr, largeModule.length + 1);
   }
 
   expect(failure).not.toBeNull();
@@ -456,7 +452,6 @@ test("compileFromPath fails when use import is missing", async () => {
   `,
   );
   expect(compiler.loadModuleFromSource(pathPtr, contentPtr)).toBe(0);
-  zeroMemory(compiler.memory, contentPtr, contentLength + 1);
 
   const producedLength = compiler.compileFromPath(pathPtr);
   const failure = readCompileFailure(compiler, producedLength);
