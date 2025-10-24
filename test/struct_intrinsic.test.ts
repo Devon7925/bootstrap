@@ -429,3 +429,41 @@ describe("struct intrinsic with const type values", () => {
         expect(result).toBe(42);
     });
 });
+
+test.todo("struct literals accept fields in any order", async () => {
+    const wasm = await compileWithAstCompiler(`
+    const Pair = struct(6, 2, [
+        ("first\\0", i32),
+        ("second", i32),
+    ]);
+
+    fn main() -> i32 {
+        let pair: Pair = Pair {
+            second: 20,
+            first: 22,
+        };
+        pair.first - pair.second
+    }
+    `);
+    const result = await runWasmMainWithGc(wasm);
+    expect(result).toBe(2);
+});
+
+test.todo("struct literal bracket labels can appear before canonical order", async () => {
+    const wasm = await compileWithAstCompiler(`
+    const Pair = struct(6, 2, [
+        ("first\\0", i32),
+        ("second", i32),
+    ]);
+
+    fn main() -> i32 {
+        let pair: Pair = Pair {
+            ["second"]: 7,
+            first: 5,
+        };
+        pair.first * pair.second
+    }
+    `);
+    const result = await runWasmMainWithGc(wasm);
+    expect(result).toBe(35);
+});
