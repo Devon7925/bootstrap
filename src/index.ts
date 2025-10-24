@@ -117,14 +117,6 @@ function writeModuleString(memory: WebAssembly.Memory, ptr: number, text: string
   return bytes.length;
 }
 
-function zeroModuleMemory(memory: WebAssembly.Memory, ptr: number, length: number) {
-  if (length <= 0) {
-    return;
-  }
-  growMemoryIfRequired(memory, ptr + length);
-  new Uint8Array(memory.buffer).fill(0, ptr, ptr + length);
-}
-
 function readModuleStorageTop(memory: WebAssembly.Memory): number {
   try {
     const view = new DataView(memory.buffer);
@@ -263,7 +255,6 @@ export async function compile(
       const top = readModuleStorageTop(memory);
       throw new CompileError(readStageFailure("stage2", memory, top, status));
     }
-    zeroModuleMemory(memory, MODULE_CONTENT_PTR, contentLength + 1);
   };
 
   loadModule(MEMORY_INTRINSICS_MODULE_PATH, memoryIntrinsicsSource);
