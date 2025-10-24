@@ -337,21 +337,13 @@ fn store_failure_detail_location(
     line: i32,
     column: i32,
 ) {
-    if detail_out_ptr > 0 {
-        if path_ptr > 0 {
-            if path_len > 0 {
-                if line > 0 {
-                    if column > 0 {
-                        store_i32(scratch_failure_path_ptr_ptr(detail_out_ptr), path_ptr);
-                        store_i32(scratch_failure_path_len_ptr(detail_out_ptr), path_len);
-                        store_i32(scratch_failure_line_ptr(detail_out_ptr), line);
-                        store_i32(scratch_failure_column_ptr(detail_out_ptr), column);
-                        store_i32(scratch_failure_character_ptr(detail_out_ptr), 1);
-                        store_i32(scratch_failure_offset_ptr(detail_out_ptr), 0);
-                    }
-                }
-            }
-        }
+    if detail_out_ptr > 0 && path_ptr > 0 && path_len > 0 && line > 0 && column > 0 {
+        store_i32(scratch_failure_path_ptr_ptr(detail_out_ptr), path_ptr);
+        store_i32(scratch_failure_path_len_ptr(detail_out_ptr), path_len);
+        store_i32(scratch_failure_line_ptr(detail_out_ptr), line);
+        store_i32(scratch_failure_column_ptr(detail_out_ptr), column);
+        store_i32(scratch_failure_character_ptr(detail_out_ptr), 1);
+        store_i32(scratch_failure_offset_ptr(detail_out_ptr), 0);
     }
 }
 
@@ -1105,10 +1097,8 @@ fn clone_const_specialization_call_metadata(
     store_i32(new_metadata + 2 * WORD_SIZE, runtime_arg_count);
     store_i32(new_metadata + 3 * WORD_SIZE, callee_index);
     let original_args_base: i32 = call_metadata_args_base(metadata_ptr);
-    if arg_count > 0 {
-        if original_args_base < 0 {
-            return -1;
-        }
+    if arg_count > 0 && original_args_base < 0 {
+        return -1;
     }
     let new_args_base: i32 = call_metadata_args_base(new_metadata);
     let mut arg_idx: i32 = 0;
@@ -2256,10 +2246,10 @@ fn clone_const_specialization_expr(
         } else {
             0
         };
+        if metadata_words > 0 && cloned_metadata < 0 {
+            return -1;
+        }
         if metadata_words > 0 {
-            if cloned_metadata < 0 {
-                return -1;
-            }
             store_i32(cloned_metadata, ast_expr_struct_literal_location(ast_base, expr_index));
         }
         let mut field_idx: i32 = 0;
@@ -2746,10 +2736,8 @@ fn ast_function_clone_const_template(
     let body_kind: i32 = load_i32(source_ptr + 12);
     let body_data0: i32 = load_i32(source_ptr + 16);
     let source_param_types_ptr: i32 = load_i32(source_ptr + 24);
-    if param_count > 0 {
-        if source_param_types_ptr < 0 {
-            return -1;
-        }
+    if param_count > 0 && source_param_types_ptr < 0 {
+        return -1;
     }
     let locals_count: i32 = load_i32(source_ptr + 20);
     let mut local_type_stack_ptr: i32 = 0;
@@ -2824,10 +2812,7 @@ fn ast_function_clone_const_template(
         store_i32(type_slot_ptr, resolved_type);
         if !ast_function_param_is_const(ast_base, index, param_idx) {
             if runtime_param_count > 0 {
-                if specialized_param_types_ptr < 0 {
-                    return -1;
-                }
-                if runtime_write_index >= runtime_param_count {
+                if specialized_param_types_ptr < 0 || runtime_write_index >= runtime_param_count {
                     return -1;
                 }
                 store_i32(
@@ -3380,10 +3365,8 @@ fn call_metadata_compact_runtime_args(
     let name_ptr: i32 = call_metadata_name_ptr(metadata_ptr);
     let name_len: i32 = call_metadata_name_len(metadata_ptr);
     let original_args_base: i32 = call_metadata_args_base(metadata_ptr);
-    if arg_count > 0 {
-        if original_args_base < 0 {
-            return -1;
-        }
+    if arg_count > 0 && original_args_base < 0 {
+        return -1;
     }
     let total_words: i32 = 4 + runtime_param_count + 5;
     if total_words <= 0 {
@@ -4878,10 +4861,8 @@ fn materialize_type_like_value_into(
         } else {
             0
         };
-        if pair_words > 0 {
-            if pair_storage_ptr < 0 {
-                return -1;
-            }
+        if pair_words > 0 && pair_storage_ptr < 0 {
+            return -1;
         }
         let target_elements_ptr: i32 = ast_tuple_type_elements_ptr(ast_base, target_idx);
         let recorded_elements_ptr: i32 = ast_tuple_type_elements_ptr(ast_base, recorded_idx);
@@ -4934,10 +4915,8 @@ fn materialize_type_like_value_into(
         } else {
             0
         };
-        if pair_words > 0 {
-            if pair_storage_ptr < 0 {
-                return -1;
-            }
+        if pair_words > 0 && pair_storage_ptr < 0 {
+            return -1;
         }
         let mut idx: i32 = 0;
         while idx < target_length {
@@ -6089,11 +6068,9 @@ fn evaluate_struct_intrinsic(
         return -1;
     }
     let args_base: i32 = call_metadata_args_base(metadata_ptr);
-    if arg_count > 0 {
-        if args_base < 0 {
-            store_i32(scratch_top_ptr, saved_top);
-            return -1;
-        }
+    if arg_count > 0 && args_base < 0 {
+        store_i32(scratch_top_ptr, saved_top);
+        return -1;
     }
 
     let length_expr_index: i32 = load_i32(args_base);
@@ -6302,13 +6279,9 @@ fn evaluate_struct_intrinsic(
         store_i32(scratch_top_ptr, saved_top);
         return -1;
     }
-    if prop_count > 0 {
-        if field_stride_words > 0 {
-            if prop_count > AST_CALL_DATA_CAPACITY / field_stride_words {
-                store_i32(scratch_top_ptr, saved_top);
-                return -1;
-            }
-        }
+    if prop_count > 0 && prop_count > AST_CALL_DATA_CAPACITY / field_stride_words {
+        store_i32(scratch_top_ptr, saved_top);
+        return -1;
     }
     let call_data_used_ptr: i32 = ast_call_data_len_ptr(ast_base);
     let saved_call_data_used: i32 = load_i32(call_data_used_ptr);
@@ -6319,12 +6292,10 @@ fn evaluate_struct_intrinsic(
     } else {
         0
     };
-    if total_field_words > 0 {
-        if fields_ptr < 0 {
-            store_i32(call_data_used_ptr, saved_call_data_used);
-            store_i32(scratch_top_ptr, saved_top);
-            return -1;
-        }
+    if total_field_words > 0 && fields_ptr < 0 {
+        store_i32(call_data_used_ptr, saved_call_data_used);
+        store_i32(scratch_top_ptr, saved_top);
+        return -1;
     }
     let mut prop_idx: i32 = 0;
     while prop_idx < prop_count {
