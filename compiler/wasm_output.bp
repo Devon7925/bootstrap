@@ -104,6 +104,29 @@ fn write_i32_leb(base: i32, offset: i32, value: i32) -> i32 {
 }
 
 
+fn struct_literal_metadata_find_entry(
+    metadata_ptr: i32,
+    field_count: i32,
+    canonical_index: i32,
+) -> i32 {
+    if canonical_index < 0 {
+        return -1;
+    }
+    let mut search_idx: i32 = 0;
+    while search_idx < field_count {
+        let entry: i32 = struct_literal_field_entry_ptr(metadata_ptr, search_idx);
+        if entry <= 0 {
+            return -1;
+        }
+        if struct_literal_field_label_extra(entry) == canonical_index {
+            return entry;
+        }
+        search_idx = search_idx + 1;
+    };
+    -1
+}
+
+
 fn build_runtime_function_map(ast_base: i32, func_count: i32) -> RuntimeFunctionMap {
     let mut total_functions: i32 = ast_functions_count(ast_base);
     if total_functions < func_count {
@@ -949,9 +972,13 @@ fn collect_local_counts_from_expression(
             return -1;
         }
         let mut total: i32 = 0;
-        let mut idx: i32 = 0;
-        while idx < field_count {
-            let entry: i32 = struct_literal_field_entry_ptr(metadata_ptr, idx);
+        let mut canonical_idx: i32 = 0;
+        while canonical_idx < field_count {
+            let entry: i32 = struct_literal_metadata_find_entry(
+                metadata_ptr,
+                field_count,
+                canonical_idx,
+            );
             if entry <= 0 {
                 return -1;
             }
@@ -970,7 +997,7 @@ fn collect_local_counts_from_expression(
             if total < 0 {
                 return -1;
             }
-            idx = idx + 1;
+            canonical_idx = canonical_idx + 1;
         };
         total
     } else if kind == 48 {
@@ -1386,9 +1413,13 @@ fn expression_code_size(ast_base: i32, expr_index: i32) -> i32 {
             if metadata_ptr <= 0 {
                 return -1;
             }
-            let mut idx: i32 = 0;
-            while idx < field_count {
-                let entry: i32 = struct_literal_field_entry_ptr(metadata_ptr, idx);
+            let mut canonical_idx: i32 = 0;
+            while canonical_idx < field_count {
+                let entry: i32 = struct_literal_metadata_find_entry(
+                    metadata_ptr,
+                    field_count,
+                    canonical_idx,
+                );
                 if entry <= 0 {
                     return -1;
                 }
@@ -1398,7 +1429,7 @@ fn expression_code_size(ast_base: i32, expr_index: i32) -> i32 {
                     return -1;
                 }
                 total = total + value_size;
-                idx = idx + 1;
+                canonical_idx = canonical_idx + 1;
             };
         }
         let struct_type: i32 = ast_expr_type(ast_base, expr_index);
@@ -1792,9 +1823,13 @@ fn remap_expression_calls(
             if metadata_ptr <= 0 {
                 return -1;
             }
-            let mut idx: i32 = 0;
-            while idx < field_count {
-                let entry: i32 = struct_literal_field_entry_ptr(metadata_ptr, idx);
+            let mut canonical_idx: i32 = 0;
+            while canonical_idx < field_count {
+                let entry: i32 = struct_literal_metadata_find_entry(
+                    metadata_ptr,
+                    field_count,
+                    canonical_idx,
+                );
                 if entry <= 0 {
                     return -1;
                 }
@@ -1802,7 +1837,7 @@ fn remap_expression_calls(
                 if remap_expression_calls(ast_base, value_index, runtime_map_ptr, func_index) < 0 {
                     return -1;
                 }
-                idx = idx + 1;
+                canonical_idx = canonical_idx + 1;
             };
         }
         return 0;
@@ -2363,9 +2398,13 @@ fn emit_expression(
             if metadata_ptr <= 0 {
                 return -1;
             }
-            let mut idx: i32 = 0;
-            while idx < field_count {
-                let entry: i32 = struct_literal_field_entry_ptr(metadata_ptr, idx);
+            let mut canonical_idx: i32 = 0;
+            while canonical_idx < field_count {
+                let entry: i32 = struct_literal_metadata_find_entry(
+                    metadata_ptr,
+                    field_count,
+                    canonical_idx,
+                );
                 if entry <= 0 {
                     return -1;
                 }
@@ -2380,7 +2419,7 @@ fn emit_expression(
                 if out < 0 {
                     return -1;
                 }
-                idx = idx + 1;
+                canonical_idx = canonical_idx + 1;
             };
         }
         let struct_type: i32 = ast_expr_type(ast_base, expr_index);
