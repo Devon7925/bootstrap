@@ -120,109 +120,19 @@ fn write_module_prefixed_failure_detail(
         write_offset = write_offset + 1;
         prefix_idx = prefix_idx + 1;
     };
-    if write_offset < FAILURE_DETAIL_CAPACITY {
-        store_u8(detail_out_ptr + write_offset, ':');
-        write_offset = write_offset + 1;
-    } else {
+    let suffix_result: (i32, bool) = write_failure_detail_suffix(
+        detail_out_ptr,
+        write_offset,
+        true,
+        line,
+        column,
+        MESSAGE_LEN,
+        message,
+    );
+    write_offset = suffix_result.0;
+    if suffix_result.1 {
         truncated = true;
     }
-    let mut line_digits_len: i32 = 0;
-    let mut line_temp: i32 = line;
-    if line_temp <= 0 {
-        line_digits_len = 1;
-    } else {
-        while line_temp > 0 {
-            line_digits_len = line_digits_len + 1;
-            line_temp = line_temp / 10;
-        };
-    }
-    let mut line_divisor: i32 = 1;
-    let mut line_divisor_idx: i32 = 1;
-    while line_divisor_idx < line_digits_len {
-        line_divisor = line_divisor * 10;
-        line_divisor_idx = line_divisor_idx + 1;
-    };
-    let mut line_remaining: i32 = line;
-    let mut line_written: i32 = 0;
-    while line_written < line_digits_len {
-        if write_offset >= FAILURE_DETAIL_CAPACITY {
-            truncated = true;
-            break;
-        }
-        let digit: i32 = line_remaining / line_divisor;
-        store_u8(detail_out_ptr + write_offset, digit + '0');
-        write_offset = write_offset + 1;
-        line_remaining = line_remaining - digit * line_divisor;
-        line_written = line_written + 1;
-        if line_divisor <= 1 {
-            line_divisor = 1;
-        } else {
-            line_divisor = line_divisor / 10;
-        }
-    };
-    if write_offset < FAILURE_DETAIL_CAPACITY {
-        store_u8(detail_out_ptr + write_offset, ':');
-        write_offset = write_offset + 1;
-    } else {
-        truncated = true;
-    }
-    let mut column_digits_len: i32 = 0;
-    let mut column_temp: i32 = column;
-    if column_temp <= 0 {
-        column_digits_len = 1;
-    } else {
-        while column_temp > 0 {
-            column_digits_len = column_digits_len + 1;
-            column_temp = column_temp / 10;
-        };
-    }
-    let mut column_divisor: i32 = 1;
-    let mut column_divisor_idx: i32 = 1;
-    while column_divisor_idx < column_digits_len {
-        column_divisor = column_divisor * 10;
-        column_divisor_idx = column_divisor_idx + 1;
-    };
-    let mut column_remaining: i32 = column;
-    let mut column_written: i32 = 0;
-    while column_written < column_digits_len {
-        if write_offset >= FAILURE_DETAIL_CAPACITY {
-            truncated = true;
-            break;
-        }
-        let digit: i32 = column_remaining / column_divisor;
-        store_u8(detail_out_ptr + write_offset, digit + '0');
-        write_offset = write_offset + 1;
-        column_remaining = column_remaining - digit * column_divisor;
-        column_written = column_written + 1;
-        if column_divisor <= 1 {
-            column_divisor = 1;
-        } else {
-            column_divisor = column_divisor / 10;
-        }
-    };
-    if write_offset < FAILURE_DETAIL_CAPACITY {
-        store_u8(detail_out_ptr + write_offset, ':');
-        write_offset = write_offset + 1;
-    } else {
-        truncated = true;
-    }
-    if write_offset < FAILURE_DETAIL_CAPACITY {
-        store_u8(detail_out_ptr + write_offset, ' ');
-        write_offset = write_offset + 1;
-    } else {
-        truncated = true;
-    }
-    let mut message_idx: i32 = 0;
-    while message_idx < MESSAGE_LEN {
-        if write_offset >= FAILURE_DETAIL_CAPACITY {
-            truncated = true;
-            break;
-        }
-        let byte: i32 = message[message_idx] as i32;
-        store_u8(detail_out_ptr + write_offset, byte);
-        write_offset = write_offset + 1;
-        message_idx = message_idx + 1;
-    };
     while write_offset < FAILURE_DETAIL_CAPACITY {
         store_u8(detail_out_ptr + write_offset, 0);
         write_offset = write_offset + 1;

@@ -449,6 +449,107 @@ const AST_CONSTANTS_SECTION_WORDS: i32 = AST_CONSTANTS_SECTION_SIZE >> 2;
 
 const AST_CALL_DATA_CAPACITY: i32 = 131072 - AST_CONSTANTS_SECTION_WORDS;
 
+fn append_decimal_component(detail_out_ptr: i32, write_offset: i32, value: i32) -> (i32, bool) {
+    let mut offset: i32 = write_offset;
+    let mut truncated: bool = false;
+    let mut digits_len: i32 = 0;
+    let mut temp: i32 = value;
+    if temp <= 0 {
+        digits_len = 1;
+    } else {
+        while temp > 0 {
+            digits_len = digits_len + 1;
+            temp = temp / 10;
+        };
+    }
+    let mut divisor: i32 = 1;
+    let mut divisor_idx: i32 = 1;
+    while divisor_idx < digits_len {
+        divisor = divisor * 10;
+        divisor_idx = divisor_idx + 1;
+    };
+    let mut remaining: i32 = if value <= 0 { 0 } else { value };
+    let mut written: i32 = 0;
+    while written < digits_len {
+        if offset >= FAILURE_DETAIL_CAPACITY {
+            truncated = true;
+            break;
+        }
+        let digit: i32 = remaining / divisor;
+        store_u8(detail_out_ptr + offset, digit + '0');
+        offset = offset + 1;
+        remaining = remaining - digit * divisor;
+        written = written + 1;
+        if divisor <= 1 {
+            divisor = 1;
+        } else {
+            divisor = divisor / 10;
+        }
+    };
+    (offset, truncated)
+}
+
+fn write_failure_detail_suffix(
+    detail_out_ptr: i32,
+    write_offset: i32,
+    include_location: bool,
+    line: i32,
+    column: i32,
+    const MESSAGE_LEN: i32,
+    message: [u8; MESSAGE_LEN],
+) -> (i32, bool) {
+    let mut offset: i32 = write_offset;
+    let mut truncated: bool = false;
+    if include_location {
+        if offset < FAILURE_DETAIL_CAPACITY {
+            store_u8(detail_out_ptr + offset, ':');
+            offset = offset + 1;
+        } else {
+            truncated = true;
+        }
+        let line_result: (i32, bool) = append_decimal_component(detail_out_ptr, offset, line);
+        offset = line_result.0;
+        if line_result.1 {
+            truncated = true;
+        }
+        if offset < FAILURE_DETAIL_CAPACITY {
+            store_u8(detail_out_ptr + offset, ':');
+            offset = offset + 1;
+        } else {
+            truncated = true;
+        }
+        let column_result: (i32, bool) = append_decimal_component(detail_out_ptr, offset, column);
+        offset = column_result.0;
+        if column_result.1 {
+            truncated = true;
+        }
+        if offset < FAILURE_DETAIL_CAPACITY {
+            store_u8(detail_out_ptr + offset, ':');
+            offset = offset + 1;
+        } else {
+            truncated = true;
+        }
+        if offset < FAILURE_DETAIL_CAPACITY {
+            store_u8(detail_out_ptr + offset, ' ');
+            offset = offset + 1;
+        } else {
+            truncated = true;
+        }
+    }
+    let mut message_idx: i32 = 0;
+    while message_idx < MESSAGE_LEN {
+        if offset >= FAILURE_DETAIL_CAPACITY {
+            truncated = true;
+            break;
+        }
+        let byte: i32 = message[message_idx] as i32;
+        store_u8(detail_out_ptr + offset, byte);
+        offset = offset + 1;
+        message_idx = message_idx + 1;
+    };
+    (offset, truncated)
+}
+
 fn write_failure_detail(
     detail_out_ptr: i32,
     const MESSAGE_LEN: i32,
@@ -460,12 +561,11 @@ fn write_failure_detail(
         let line: i32 = scratch_failure_line(detail_out_ptr);
         let column: i32 = scratch_failure_column(detail_out_ptr);
         let mut write_offset: i32 = 0;
-        let mut truncated: bool = false;
-        if path_ptr > 0 && path_len > 0 && line > 0 && column > 0 {
+        let include_location: bool = path_ptr > 0 && path_len > 0 && line > 0 && column > 0;
+        if include_location {
             let mut path_idx: i32 = 0;
             while path_idx < path_len {
                 if write_offset >= FAILURE_DETAIL_CAPACITY {
-                    truncated = true;
                     break;
                 }
                 let byte: i32 = load_u8(path_ptr + path_idx);
@@ -473,110 +573,17 @@ fn write_failure_detail(
                 write_offset = write_offset + 1;
                 path_idx = path_idx + 1;
             };
-            if write_offset < FAILURE_DETAIL_CAPACITY {
-                store_u8(detail_out_ptr + write_offset, ':');
-                write_offset = write_offset + 1;
-            } else {
-                truncated = true;
-            }
-            let mut line_digits_len: i32 = 0;
-            let mut line_temp: i32 = line;
-            if line_temp <= 0 {
-                line_digits_len = 1;
-            } else {
-                while line_temp > 0 {
-                    line_digits_len = line_digits_len + 1;
-                    line_temp = line_temp / 10;
-                };
-            }
-            let mut line_divisor: i32 = 1;
-            let mut line_divisor_idx: i32 = 1;
-            while line_divisor_idx < line_digits_len {
-                line_divisor = line_divisor * 10;
-                line_divisor_idx = line_divisor_idx + 1;
-            };
-            let mut line_remaining: i32 = if line <= 0 { 0 } else { line };
-            let mut line_written: i32 = 0;
-            while line_written < line_digits_len {
-                if write_offset >= FAILURE_DETAIL_CAPACITY {
-                    truncated = true;
-                    break;
-                }
-                let digit: i32 = line_remaining / line_divisor;
-                store_u8(detail_out_ptr + write_offset, digit + '0');
-                write_offset = write_offset + 1;
-                line_remaining = line_remaining - digit * line_divisor;
-                line_written = line_written + 1;
-                if line_divisor <= 1 {
-                    line_divisor = 1;
-                } else {
-                    line_divisor = line_divisor / 10;
-                }
-            };
-            if write_offset < FAILURE_DETAIL_CAPACITY {
-                store_u8(detail_out_ptr + write_offset, ':');
-                write_offset = write_offset + 1;
-            } else {
-                truncated = true;
-            }
-            let mut column_digits_len: i32 = 0;
-            let mut column_temp: i32 = column;
-            if column_temp <= 0 {
-                column_digits_len = 1;
-            } else {
-                while column_temp > 0 {
-                    column_digits_len = column_digits_len + 1;
-                    column_temp = column_temp / 10;
-                };
-            }
-            let mut column_divisor: i32 = 1;
-            let mut column_divisor_idx: i32 = 1;
-            while column_divisor_idx < column_digits_len {
-                column_divisor = column_divisor * 10;
-                column_divisor_idx = column_divisor_idx + 1;
-            };
-            let mut column_remaining: i32 = if column <= 0 { 0 } else { column };
-            let mut column_written: i32 = 0;
-            while column_written < column_digits_len {
-                if write_offset >= FAILURE_DETAIL_CAPACITY {
-                    truncated = true;
-                    break;
-                }
-                let digit: i32 = column_remaining / column_divisor;
-                store_u8(detail_out_ptr + write_offset, digit + '0');
-                write_offset = write_offset + 1;
-                column_remaining = column_remaining - digit * column_divisor;
-                column_written = column_written + 1;
-                if column_divisor <= 1 {
-                    column_divisor = 1;
-                } else {
-                    column_divisor = column_divisor / 10;
-                }
-            };
-            if write_offset < FAILURE_DETAIL_CAPACITY {
-                store_u8(detail_out_ptr + write_offset, ':');
-                write_offset = write_offset + 1;
-            } else {
-                truncated = true;
-            }
-            if write_offset < FAILURE_DETAIL_CAPACITY {
-                store_u8(detail_out_ptr + write_offset, ' ');
-                write_offset = write_offset + 1;
-            } else {
-                truncated = true;
-            }
         }
-        let mut message_idx: i32 = 0;
-        while message_idx < MESSAGE_LEN {
-            if write_offset >= FAILURE_DETAIL_CAPACITY {
-                truncated = true;
-                break;
-            }
-            let byte: i32 = message[message_idx] as i32;
-            store_u8(detail_out_ptr + write_offset, byte);
-            write_offset = write_offset + 1;
-            message_idx = message_idx + 1;
-        };
+        let suffix_result: (i32, bool) = write_failure_detail_suffix(
+            detail_out_ptr,
+            write_offset,
+            include_location,
+            line,
+            column,
+            MESSAGE_LEN,
+            message,
+        );
+        write_offset = suffix_result.0;
         while write_offset < FAILURE_DETAIL_CAPACITY {
             store_u8(detail_out_ptr + write_offset, 0);
             write_offset = write_offset + 1;
