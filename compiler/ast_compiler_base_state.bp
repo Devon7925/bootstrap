@@ -6447,17 +6447,6 @@ fn evaluate_struct_intrinsic(
                 scan_idx = scan_idx + 1;
             };
             if matches {
-                let temp_bytes_ptr: i32 = scratch_base + saved_top;
-                let mut copy_idx: i32 = 0;
-                while copy_idx < str_length {
-                    let byte_value: i32 = load_i32(
-                        record_ptr
-                            + (STRUCT_FIELD_METADATA_HEADER_WORDS + copy_idx)
-                                * WORD_SIZE,
-                    );
-                    store_i32(temp_bytes_ptr + copy_idx * WORD_SIZE, byte_value);
-                    copy_idx = copy_idx + 1;
-                };
                 let mut name_location: i32 = -1;
                 if tuple_expr_list_ptr > 0 {
                     let tuple_expr_index: i32 =
@@ -6469,7 +6458,7 @@ fn evaluate_struct_intrinsic(
                 store_i32(call_data_used_ptr, saved_call_data_used);
                 store_i32(scratch_top_ptr, saved_top);
                 if payload_slot_ptr > 0 {
-                    let failure_words: i32 = 3 + str_length;
+                    let failure_words: i32 = 4;
                     let failure_ptr: i32 = ast_call_data_alloc(ast_base, failure_words);
                     if failure_ptr >= 0 {
                         store_i32(
@@ -6478,16 +6467,7 @@ fn evaluate_struct_intrinsic(
                         );
                         store_i32(failure_ptr + WORD_SIZE, name_location);
                         store_i32(failure_ptr + 2 * WORD_SIZE, str_length);
-                        let mut byte_idx: i32 = 0;
-                        while byte_idx < str_length {
-                            let byte_value: i32 =
-                                load_i32(temp_bytes_ptr + byte_idx * WORD_SIZE);
-                            store_i32(
-                                failure_ptr + (3 + byte_idx) * WORD_SIZE,
-                                byte_value,
-                            );
-                            byte_idx = byte_idx + 1;
-                        };
+                        store_i32(failure_ptr + 3 * WORD_SIZE, field_name_ptr);
                         store_i32(payload_slot_ptr, failure_ptr);
                     }
                 }
