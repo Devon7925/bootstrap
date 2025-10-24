@@ -1228,6 +1228,7 @@ fn parse_block_expression_body(
                 return -1;
             }
             idx = skip_whitespace(base, len, idx);
+            let init_start: i32 = idx;
             idx = parse_expression(
                 base,
                 len,
@@ -1274,8 +1275,12 @@ fn parse_block_expression_body(
                         if load_u8(detail_out_ptr) == 0 {
                             let mut location_offset: i32 =
                                 ast_expr_location(ast_base, init_index);
-                            if location_offset < 0 {
-                                location_offset = name_start;
+                            if location_offset <= 0 {
+                                if init_start >= 0 {
+                                    location_offset = init_start;
+                                } else {
+                                    location_offset = name_start;
+                                }
                             }
                             let message: [u8; 41] =
                                 "boolean local initializer must be boolean";
