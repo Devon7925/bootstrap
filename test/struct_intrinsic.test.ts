@@ -207,7 +207,7 @@ describe("struct intrinsic with const type values", () => {
         expect(result).toBe(42);
     });
 
-    test.todo("dynamic struct factories build property names programmatically", async () => {
+    test("dynamic struct factories build property names programmatically", async () => {
         const wasm = await compileWithAstCompiler(`
         const KEY_COUNT: i32 = 12;
         const KEY_NAME_CAP: i32 = 4;
