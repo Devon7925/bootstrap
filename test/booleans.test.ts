@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 
 import {
   compileWithAstCompiler,
+  expectCompileFailure,
   expectExportedFunction,
   instantiateWasmModuleWithGc,
   runWasmMainWithGc,
@@ -114,4 +115,18 @@ test("logical operators short circuit", async () => {
   `);
   const result = await runWasmMainWithGc(wasm);
   expect(result).toBe(2);
+});
+
+test.todo("boolean locals reject integer initializers", async () => {
+  const failure = await expectCompileFailure(`
+    fn main() -> i32 {
+        let flag: bool = 1;
+        if flag {
+            1
+        } else {
+            0
+        }
+    }
+  `);
+  expect(failure.failure.detail).toBeDefined();
 });
