@@ -1119,13 +1119,13 @@ fn parse_basic_expression(
     if !is_identifier_start(first_byte) {
         return -1;
     }
-    let ident: (i32, i32, i32) = parse_identifier(base, len, cursor);
-    let mut next_cursor: i32 = ident.0;
+    let ident: IdentifierParse = parse_identifier(base, len, cursor);
+    let mut next_cursor: i32 = ident.cursor;
     if next_cursor < 0 {
         return -1;
     }
-    let ident_start: i32 = ident.1;
-    let ident_len: i32 = ident.2;
+    let ident_start: i32 = ident.start;
+    let ident_len: i32 = ident.length;
     next_cursor = skip_whitespace(base, len, next_cursor);
     if next_cursor < len {
         let next_byte: i32 = load_u8(base + next_cursor);
@@ -1616,17 +1616,17 @@ fn parse_unary_expression(
                     if !is_identifier_start(close_byte) {
                         return -1;
                     }
-                    let label_ident: (i32, i32, i32) =
+                    let label_ident: IdentifierParse =
                         parse_identifier(base, len, field_cursor);
-                    let after_label: i32 = label_ident.0;
+                    let after_label: i32 = label_ident.cursor;
                     if after_label < 0 {
                         return -1;
                     }
-                    label_data = ast_store_name(ast_base, base, label_ident.1, label_ident.2);
+                    label_data = ast_store_name(ast_base, base, label_ident.start, label_ident.length);
                     if label_data < 0 {
                         return -1;
                     }
-                    label_extra = label_ident.2;
+                    label_extra = label_ident.length;
                     field_cursor = skip_whitespace(base, len, after_label);
                 }
                 field_cursor = expect_char(base, len, field_cursor, ':');
@@ -1806,12 +1806,13 @@ fn parse_unary_expression(
         if !is_identifier_start(first_field_byte) {
             return -1;
         }
-        let label_ident: (i32, i32, i32) = parse_identifier(base, len, field_cursor);
-        let after_label: i32 = label_ident.0;
+        let label_ident: IdentifierParse = parse_identifier(base, len, field_cursor);
+        let after_label: i32 = label_ident.cursor;
         if after_label < 0 {
             return -1;
         }
-        let label_name_ptr: i32 = ast_store_name(ast_base, base, label_ident.1, label_ident.2);
+        let label_name_ptr: i32 =
+            ast_store_name(ast_base, base, label_ident.start, label_ident.length);
         if label_name_ptr < 0 {
             return -1;
         }
@@ -1821,7 +1822,7 @@ fn parse_unary_expression(
         }
         struct_get_label_set_kind(metadata_ptr, STRUCT_LITERAL_LABEL_KIND_IDENTIFIER);
         struct_get_label_set_data(metadata_ptr, label_name_ptr);
-        struct_get_label_set_extra(metadata_ptr, label_ident.2);
+        struct_get_label_set_extra(metadata_ptr, label_ident.length);
         let struct_parts: (i32, i32, i32) =
             load_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr);
         let struct_expr_index: i32 = expression_index_from_parts(ast_base, struct_parts);
@@ -1832,7 +1833,7 @@ fn parse_unary_expression(
             ast_base,
             struct_expr_index,
             metadata_ptr,
-            label_ident.1,
+            label_ident.start,
         );
         if get_index < 0 {
             return -1;
@@ -2995,13 +2996,13 @@ fn parse_function(
     let expr_temp_base: i32 = locals_next_index_ptr + 4;
     store_i32(type_template_sink_ptr, 0);
     store_i32(type_template_sink_ptr + 4, 0);
-    let name_ident: (i32, i32, i32) = parse_identifier(base, len, cursor);
-    cursor = name_ident.0;
+    let name_ident: IdentifierParse = parse_identifier(base, len, cursor);
+    cursor = name_ident.cursor;
     if cursor < 0 {
         return -1;
     }
-    let name_start: i32 = name_ident.1;
-    let name_len: i32 = name_ident.2;
+    let name_start: i32 = name_ident.start;
+    let name_len: i32 = name_ident.length;
 
     let constants_count: i32 = ast_constants_count(ast_base);
     let mut const_idx: i32 = 0;
@@ -3100,13 +3101,13 @@ fn parse_function(
             qualifier_cursor = after_const_cursor;
         };
         cursor = qualifier_cursor;
-        let param_ident: (i32, i32, i32) = parse_identifier(base, len, cursor);
-        cursor = param_ident.0;
+        let param_ident: IdentifierParse = parse_identifier(base, len, cursor);
+        cursor = param_ident.cursor;
         if cursor < 0 {
             return -1;
         }
-        let param_start: i32 = param_ident.1;
-        let param_len: i32 = param_ident.2;
+        let param_start: i32 = param_ident.start;
+        let param_len: i32 = param_ident.length;
         let mut existing_idx: i32 = 0;
         while existing_idx < param_count {
             let existing_ptr: i32 = params_table_ptr + existing_idx * 8;
@@ -3479,13 +3480,13 @@ fn parse_constant_declaration(
     store_i32(locals_next_index_ptr, 0);
     store_i32(loop_depth_ptr, 0);
 
-    let ident: (i32, i32, i32) = parse_identifier(base, len, idx);
-    idx = ident.0;
+    let ident: IdentifierParse = parse_identifier(base, len, idx);
+    idx = ident.cursor;
     if idx < 0 {
         return -1;
     }
-    let name_start: i32 = ident.1;
-    let name_len: i32 = ident.2;
+    let name_start: i32 = ident.start;
+    let name_len: i32 = ident.length;
 
     if find_constant_entry_index(base, ast_base, name_start, name_len, false) >= 0 {
         let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);

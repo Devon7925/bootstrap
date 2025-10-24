@@ -143,13 +143,27 @@ fn expect_keyword_return(base: i32, len: i32, offset: i32) -> i32 {
     expect_keyword_literal(base, len, offset, 6, "return")
 }
 
-fn parse_identifier(base: i32, len: i32, offset: i32) -> (i32, i32, i32) {
+const IdentifierParse = struct(6, 3, [
+    ("cursor", i32),
+    ("start\0", i32),
+    ("length", i32),
+]);
+
+fn parse_identifier(base: i32, len: i32, offset: i32) -> IdentifierParse {
     if offset >= len {
-        return (-1, 0, 0);
+        return IdentifierParse {
+            cursor: -1,
+            start: 0,
+            length: 0,
+        };
     }
     let first: i32 = load_u8(base + offset);
     if !is_identifier_start(first) {
-        return (-1, 0, 0);
+        return IdentifierParse {
+            cursor: -1,
+            start: 0,
+            length: 0,
+        };
     }
     let mut idx: i32 = offset + 1;
     while idx < len {
@@ -159,7 +173,11 @@ fn parse_identifier(base: i32, len: i32, offset: i32) -> (i32, i32, i32) {
         }
         idx = idx + 1;
     };
-    (idx, offset, idx - offset)
+    IdentifierParse {
+        cursor: idx,
+        start: offset,
+        length: idx - offset,
+    }
 }
 
 const MAX_PARAMS: i32 = 64;
@@ -1133,15 +1151,15 @@ fn parse_block_expression_body(
                 }
             }
 
-            let ident: (i32, i32, i32) = parse_identifier(base, len, idx);
-            let next_idx: i32 = ident.0;
+            let ident: IdentifierParse = parse_identifier(base, len, idx);
+            let next_idx: i32 = ident.cursor;
             if next_idx < 0 {
                 store_i32(locals_stack_count_ptr, saved_stack_count);
                 store_i32(locals_next_index_ptr, saved_next_index);
                 return -1;
             }
-            let name_start: i32 = ident.1;
-            let name_len: i32 = ident.2;
+            let name_start: i32 = ident.start;
+            let name_len: i32 = ident.length;
             idx = next_idx;
 
             let current_stack: i32 = load_i32(locals_stack_count_ptr);
@@ -1717,11 +1735,11 @@ fn parse_block_expression_body(
         let mut assignment_tuple_field_location: i32 = -1;
         if !expression_parsed {
             if is_identifier_start(next_byte) {
-                let assignment_ident: (i32, i32, i32) = parse_identifier(base, len, idx);
-                assignment_cursor = assignment_ident.0;
+                let assignment_ident: IdentifierParse = parse_identifier(base, len, idx);
+                assignment_cursor = assignment_ident.cursor;
                 if assignment_cursor >= 0 {
-                    let name_start: i32 = assignment_ident.1;
-                    let name_len: i32 = assignment_ident.2;
+                    let name_start: i32 = assignment_ident.start;
+                    let name_len: i32 = assignment_ident.length;
                     let mut after_ident: i32 = skip_whitespace(base, len, assignment_cursor);
                     if after_ident < len {
                         let selectors_base: i32 = stmt_nested_temp_base + 128;
