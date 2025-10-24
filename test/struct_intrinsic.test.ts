@@ -352,4 +352,24 @@ describe("struct intrinsic with const type values", () => {
         const result = await runWasmMainWithGc(wasm);
         expect(result).toBe(42);
     });
+
+    test("passes struct value to runtime function", async () => {
+        const wasm = await compileWithAstCompiler(`
+        const Pair = struct(6, 2, [
+            ("first\\0", i32),
+            ("second", i32),
+        ]);
+
+        fn host_sum_pair(p: Pair) -> i32 {
+            p.first + p.second
+        }
+
+        fn main() -> i32 {
+            let pair: Pair = Pair { first: 20, second: 22 };
+            host_sum_pair(pair)
+        }
+      `);
+        const result = await runWasmMainWithGc(wasm);
+        expect(result).toBe(42);
+    });
 });
