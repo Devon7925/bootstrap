@@ -1809,6 +1809,225 @@ fn try_convert_constant_value(
     -1
 }
 
+fn materialize_constant_value_expression(
+    ast_base: i32,
+    value: i32,
+    type_id: i32,
+    location_offset: i32,
+) -> i32 {
+    if type_id < 0 {
+        return -1;
+    }
+    if type_id_is_array(type_id) {
+        let length: i32 = array_type_length(ast_base, type_id);
+        if length <= 0 {
+            return -1;
+        }
+        if value <= 0 {
+            return -1;
+        }
+        let metadata_ptr: i32 = ast_call_data_alloc(ast_base, length);
+        if metadata_ptr < 0 {
+            return -1;
+        }
+        let mut idx: i32 = 0;
+        while idx < length {
+            let slot_ptr: i32 = value + idx * 2 * WORD_SIZE;
+            let element_value: i32 = load_i32(slot_ptr);
+            let element_type: i32 = load_i32(slot_ptr + WORD_SIZE);
+            if element_type < 0 {
+                return -1;
+            }
+            let element_expr: i32 = materialize_constant_value_expression(
+                ast_base,
+                element_value,
+                element_type,
+                location_offset,
+            );
+            if element_expr < 0 {
+                return -1;
+            }
+            store_i32(metadata_ptr + idx * WORD_SIZE, element_expr);
+            idx = idx + 1;
+        };
+        let expr_index: i32 =
+            ast_expr_alloc_array_list(ast_base, metadata_ptr, length, location_offset);
+        if expr_index < 0 {
+            return -1;
+        }
+        ast_expr_set_type(ast_base, expr_index, type_id);
+        return expr_index;
+    }
+    if type_id_is_tuple(type_id) {
+        let tuple_idx: i32 = tuple_type_index(type_id);
+        if tuple_idx < 0 {
+            return -1;
+        }
+        let element_count: i32 = ast_tuple_type_element_count(ast_base, tuple_idx);
+        if element_count < 0 {
+            return -1;
+        }
+        let metadata_ptr: i32 = if element_count > 0 {
+            ast_call_data_alloc(ast_base, element_count)
+        } else {
+            0
+        };
+        if element_count > 0 {
+            if metadata_ptr < 0 {
+                return -1;
+            }
+            if value <= 0 {
+                return -1;
+            }
+            let mut idx: i32 = 0;
+            while idx < element_count {
+                let slot_ptr: i32 = value + idx * 2 * WORD_SIZE;
+                let element_value: i32 = load_i32(slot_ptr);
+                let element_type: i32 = load_i32(slot_ptr + WORD_SIZE);
+                if element_type < 0 {
+                    return -1;
+                }
+                let element_expr: i32 = materialize_constant_value_expression(
+                    ast_base,
+                    element_value,
+                    element_type,
+                    location_offset,
+                );
+                if element_expr < 0 {
+                    return -1;
+                }
+                store_i32(metadata_ptr + idx * WORD_SIZE, element_expr);
+                idx = idx + 1;
+            };
+        }
+        let expr_index: i32 = ast_expr_alloc_tuple(ast_base, metadata_ptr, element_count);
+        if expr_index < 0 {
+            return -1;
+        }
+        ast_expr_entry_set_extra(ast_base, expr_index, location_offset);
+        ast_expr_set_type(ast_base, expr_index, type_id);
+        return expr_index;
+    }
+    let expr_index: i32 = ast_expr_alloc_literal(ast_base, value, type_id);
+    if expr_index < 0 {
+        return -1;
+    }
+    ast_expr_entry_set_extra(ast_base, expr_index, location_offset);
+    expr_index
+}
+
+fn replace_expression_with_constant_value(
+    ast_base: i32,
+    expr_index: i32,
+    value: i32,
+    type_id: i32,
+    location_offset: i32,
+) -> i32 {
+    if type_id < 0 {
+        return -1;
+    }
+    if type_id_is_array(type_id) {
+        let length: i32 = array_type_length(ast_base, type_id);
+        if length <= 0 {
+            return -1;
+        }
+        if value <= 0 {
+            return -1;
+        }
+        let metadata_ptr: i32 = ast_call_data_alloc(ast_base, length);
+        if metadata_ptr < 0 {
+            return -1;
+        }
+        let mut idx: i32 = 0;
+        while idx < length {
+            let slot_ptr: i32 = value + idx * 2 * WORD_SIZE;
+            let element_value: i32 = load_i32(slot_ptr);
+            let element_type: i32 = load_i32(slot_ptr + WORD_SIZE);
+            if element_type < 0 {
+                return -1;
+            }
+            let element_expr: i32 = materialize_constant_value_expression(
+                ast_base,
+                element_value,
+                element_type,
+                location_offset,
+            );
+            if element_expr < 0 {
+                return -1;
+            }
+            store_i32(metadata_ptr + idx * WORD_SIZE, element_expr);
+            idx = idx + 1;
+        };
+        let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+        store_i32(entry_ptr, 37);
+        store_i32(entry_ptr + WORD_SIZE, metadata_ptr);
+        store_i32(entry_ptr + 2 * WORD_SIZE, length);
+        store_i32(entry_ptr + 3 * WORD_SIZE, 0);
+        ast_expr_entry_set_extra(ast_base, expr_index, location_offset);
+        ast_expr_set_type(ast_base, expr_index, type_id);
+        return 0;
+    }
+    if type_id_is_tuple(type_id) {
+        let tuple_idx: i32 = tuple_type_index(type_id);
+        if tuple_idx < 0 {
+            return -1;
+        }
+        let element_count: i32 = ast_tuple_type_element_count(ast_base, tuple_idx);
+        if element_count < 0 {
+            return -1;
+        }
+        let metadata_ptr: i32 = if element_count > 0 {
+            ast_call_data_alloc(ast_base, element_count)
+        } else {
+            0
+        };
+        if element_count > 0 {
+            if metadata_ptr < 0 {
+                return -1;
+            }
+            if value <= 0 {
+                return -1;
+            }
+            let mut idx: i32 = 0;
+            while idx < element_count {
+                let slot_ptr: i32 = value + idx * 2 * WORD_SIZE;
+                let element_value: i32 = load_i32(slot_ptr);
+                let element_type: i32 = load_i32(slot_ptr + WORD_SIZE);
+                if element_type < 0 {
+                    return -1;
+                }
+                let element_expr: i32 = materialize_constant_value_expression(
+                    ast_base,
+                    element_value,
+                    element_type,
+                    location_offset,
+                );
+                if element_expr < 0 {
+                    return -1;
+                }
+                store_i32(metadata_ptr + idx * WORD_SIZE, element_expr);
+                idx = idx + 1;
+            };
+        }
+        let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+        store_i32(entry_ptr, 40);
+        store_i32(entry_ptr + WORD_SIZE, metadata_ptr);
+        store_i32(entry_ptr + 2 * WORD_SIZE, element_count);
+        store_i32(entry_ptr + 3 * WORD_SIZE, 0);
+        ast_expr_entry_set_extra(ast_base, expr_index, location_offset);
+        ast_expr_set_type(ast_base, expr_index, type_id);
+        return 0;
+    }
+    let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+    store_i32(entry_ptr, 0);
+    store_i32(entry_ptr + WORD_SIZE, value);
+    store_i32(entry_ptr + 2 * WORD_SIZE, 0);
+    store_i32(entry_ptr + 3 * WORD_SIZE, 0);
+    ast_expr_entry_set_extra(ast_base, expr_index, 0);
+    ast_expr_set_type(ast_base, expr_index, type_id);
+    0
+}
+
 fn interpret_constant_entry(ast_base: i32, const_entry_ptr: i32) -> i32 {
     if const_entry_ptr < 0 {
         return -1;
@@ -2825,6 +3044,17 @@ fn resolve_expression_internal(
                     }
                 }
                 store_i32(eval_stack_top_ptr, saved_eval_top);
+                if !evaluation_failed {
+                    if replace_expression_with_constant_value(
+                        ast_base,
+                        expr_index,
+                        literal_value,
+                        literal_type,
+                        call_location_offset,
+                    ) < 0 {
+                        evaluation_failed = true;
+                    }
+                }
                 if evaluation_failed {
                     let mut resolved_location_offset: i32 = call_location_offset;
                     if resolved_location_offset < 0 {
@@ -2880,12 +3110,31 @@ fn resolve_expression_internal(
                 if recorded_env_ptr > 0 {
                     store_i32(recorded_env_ptr, 0);
                 }
-                store_i32(entry_ptr, 0);
-                store_i32(entry_ptr + WORD_SIZE, literal_value);
-                store_i32(entry_ptr + 2 * WORD_SIZE, 0);
-                store_i32(entry_ptr + 3 * WORD_SIZE, 0);
-                store_i32(entry_ptr + AST_EXPR_ENTRY_EXTRA_OFFSET, 0);
-                ast_expr_set_type(ast_base, expr_index, literal_type);
+                if !type_id_is_array(literal_type) && !type_id_is_tuple(literal_type) {
+                    store_i32(entry_ptr, 0);
+                    store_i32(entry_ptr + WORD_SIZE, literal_value);
+                    store_i32(entry_ptr + 2 * WORD_SIZE, 0);
+                    store_i32(entry_ptr + 3 * WORD_SIZE, 0);
+                    store_i32(entry_ptr + AST_EXPR_ENTRY_EXTRA_OFFSET, 0);
+                    ast_expr_set_type(ast_base, expr_index, literal_type);
+                } else {
+                    if resolve_expression_internal(
+                        out_ptr,
+                        ast_base,
+                        expr_index,
+                        func_count,
+                        control_stack_base,
+                        control_stack_count_ptr,
+                        loop_stack_base,
+                        loop_stack_count_ptr,
+                        local_stack_base,
+                        local_stack_count_ptr,
+                        caller_func_index,
+                        caller_is_const,
+                    ) < 0 {
+                        return -1;
+                    }
+                }
             }
         }
         return 0;

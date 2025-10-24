@@ -231,7 +231,7 @@ test("const functions specialize simple const parameters during interpretation",
   expect(result).toBe(42);
 });
 
-test.todo("const functions returning arrays evaluate for runtime initializers", async () => {
+test("const functions returning arrays evaluate for runtime initializers", async () => {
   const wasm = await compileWithAstCompiler(`
     const fn make_values() -> [i32; 3] {
         [1, 2, 3]
