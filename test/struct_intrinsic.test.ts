@@ -373,7 +373,7 @@ describe("struct intrinsic with const type values", () => {
         expect(result).toBe(42);
     });
 
-    test.todo("returns struct value from runtime function and uses it", async () => {
+    test("returns struct value from runtime function and uses it", async () => {
         const wasm = await compileWithAstCompiler(`
         const Pair = struct(6, 2, [
             ("first\\0", i32),
@@ -385,7 +385,7 @@ describe("struct intrinsic with const type values", () => {
                 first: 20,
                 second: 22,
             }
-        };
+        }
 
         fn main() -> i32 {
             let p: Pair = make_pair();
