@@ -781,14 +781,13 @@ export class CompilerInstance {
       ...extraModules.filter((module) => module.path !== MEMORY_INTRINSICS_MODULE_PATH),
     ];
 
-    const loadModule = this.#loadModuleFromSource;
-    const compileFromPath = this.#compileFromPath;
+    const loadModule = this.#loadModuleFromSource!;
+    const compileFromPath = this.#compileFromPath!;
 
-    for (const module of modules) {
-      let contentLength: number;
+    const loadModuleSource = (path: string, contents: string) => {
       try {
-        writeModuleString(this.#memory, MODULE_PATH_PTR, module.path);
-        contentLength = writeModuleString(this.#memory, MODULE_CONTENT_PTR, module.source);
+        writeModuleString(this.#memory, MODULE_PATH_PTR, path);
+        writeModuleString(this.#memory, MODULE_CONTENT_PTR, contents);
       } catch (cause) {
         throw this.#failure(readModuleStorageTop(this.#memory), -1, cause);
       }
@@ -807,30 +806,13 @@ export class CompilerInstance {
       if (status < 0) {
         throw this.#failure(readModuleStorageTop(this.#memory), status);
       }
+    };
+
+    for (const module of modules) {
+      loadModuleSource(module.path, module.source);
     }
 
-    let entryContentLength: number;
-    try {
-      writeModuleString(this.#memory, MODULE_PATH_PTR, entryPath);
-      entryContentLength = writeModuleString(this.#memory, MODULE_CONTENT_PTR, source);
-    } catch (cause) {
-      throw this.#failure(readModuleStorageTop(this.#memory), -1, cause);
-    }
-
-    let loadEntryResult: number | bigint;
-    try {
-      loadEntryResult = loadModule(MODULE_PATH_PTR, MODULE_CONTENT_PTR);
-    } catch (cause) {
-      throw this.#failure(readModuleStorageTop(this.#memory), -1, cause);
-    }
-
-    const entryStatus = coerceToI32(loadEntryResult);
-    if (!Number.isFinite(entryStatus)) {
-      throw this.#failure(readModuleStorageTop(this.#memory), -1);
-    }
-    if (entryStatus < 0) {
-      throw this.#failure(readModuleStorageTop(this.#memory), entryStatus);
-    }
+    loadModuleSource(entryPath, source);
 
     let producedLength: number;
     try {
