@@ -2561,10 +2561,7 @@ fn collect_expression_const_params_visit(
     expr_index: i32,
     params_count: i32,
     const_mask_table_ptr: i32,
-    usage_mask_low_ptr: i32,
-    usage_mask_high_ptr: i32,
-    usage_list_ptr: i32,
-    usage_count_ptr: i32,
+    usage: TypeTemplateParamUsage,
 ) -> i32 {
     if expr_index < 0 {
         return 0;
@@ -2573,6 +2570,10 @@ fn collect_expression_const_params_visit(
         return -1;
     }
     let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+    let mask_low_ptr: i32 = usage.mask_low_ptr;
+    let mask_high_ptr: i32 = usage.mask_high_ptr;
+    let usage_list_ptr: i32 = usage.list_ptr;
+    let usage_count_ptr: i32 = usage.count_ptr;
     let kind: i32 = load_i32(entry_ptr);
     if kind == 0 {
         return 0;
@@ -2600,10 +2601,7 @@ fn collect_expression_const_params_visit(
                 arg_expr_index,
                 params_count,
                 const_mask_table_ptr,
-                usage_mask_low_ptr,
-                usage_mask_high_ptr,
-                usage_list_ptr,
-                usage_count_ptr,
+                usage,
             ) < 0 {
                 return -1;
             }
@@ -2618,10 +2616,7 @@ fn collect_expression_const_params_visit(
             cond_index,
             params_count,
             const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
+            usage,
         ) < 0 {
             return -1;
         }
@@ -2631,10 +2626,7 @@ fn collect_expression_const_params_visit(
             then_index,
             params_count,
             const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
+            usage,
         ) < 0 {
             return -1;
         }
@@ -2644,10 +2636,7 @@ fn collect_expression_const_params_visit(
             else_index,
             params_count,
             const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
+            usage,
         ) < 0 {
             return -1;
         }
@@ -2660,10 +2649,7 @@ fn collect_expression_const_params_visit(
             init_index,
             params_count,
             const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
+            usage,
         ) < 0 {
             return -1;
         }
@@ -2673,10 +2659,7 @@ fn collect_expression_const_params_visit(
             body_index,
             params_count,
             const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
+            usage,
         ) < 0 {
             return -1;
         }
@@ -2686,10 +2669,7 @@ fn collect_expression_const_params_visit(
             else_index,
             params_count,
             const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
+            usage,
         ) < 0 {
             return -1;
         }
@@ -2702,10 +2682,7 @@ fn collect_expression_const_params_visit(
             value_index,
             params_count,
             const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
+            usage,
         );
     }
     if kind == 11 {
@@ -2715,10 +2692,7 @@ fn collect_expression_const_params_visit(
             first_index,
             params_count,
             const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
+            usage,
         ) < 0 {
             return -1;
         }
@@ -2728,10 +2702,7 @@ fn collect_expression_const_params_visit(
             then_index,
             params_count,
             const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
+            usage,
         );
     }
     if kind == 12 {
@@ -2741,10 +2712,7 @@ fn collect_expression_const_params_visit(
             body_index,
             params_count,
             const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
+            usage,
         );
     }
     if kind == 13 {
@@ -2754,10 +2722,7 @@ fn collect_expression_const_params_visit(
             value_index,
             params_count,
             const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
+            usage,
         );
     }
     if kind == 23 {
@@ -2767,10 +2732,7 @@ fn collect_expression_const_params_visit(
             value_index,
             params_count,
             const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
+            usage,
         );
     }
     if kind == 24 {
@@ -2783,10 +2745,7 @@ fn collect_expression_const_params_visit(
             left_index,
             params_count,
             const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
+            usage,
         ) < 0 {
             return -1;
         }
@@ -2796,10 +2755,7 @@ fn collect_expression_const_params_visit(
             right_index,
             params_count,
             const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
+            usage,
         );
     }
     if kind == 29 || kind == 30 || kind == 31 || kind == 38 {
@@ -2809,10 +2765,7 @@ fn collect_expression_const_params_visit(
             child_index,
             params_count,
             const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
+            usage,
         );
     }
     if kind == 44 {
@@ -2822,10 +2775,7 @@ fn collect_expression_const_params_visit(
             array_index,
             params_count,
             const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
+            usage,
         ) < 0 {
             return -1;
         }
@@ -2835,10 +2785,7 @@ fn collect_expression_const_params_visit(
             index_index,
             params_count,
             const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
+            usage,
         ) < 0 {
             return -1;
         }
@@ -2848,10 +2795,7 @@ fn collect_expression_const_params_visit(
             value_index,
             params_count,
             const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
+            usage,
         );
     }
     if kind == 45 {
@@ -2861,10 +2805,7 @@ fn collect_expression_const_params_visit(
             tuple_index,
             params_count,
             const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
+            usage,
         ) < 0 {
             return -1;
         }
@@ -2874,10 +2815,7 @@ fn collect_expression_const_params_visit(
             value_index,
             params_count,
             const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
+            usage,
         );
     }
     if kind == 47 {
@@ -2887,10 +2825,7 @@ fn collect_expression_const_params_visit(
             type_expr_index,
             params_count,
             const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
+            usage,
         ) < 0 {
             return -1;
         }
@@ -2913,10 +2848,7 @@ fn collect_expression_const_params_visit(
                     label_expr,
                     params_count,
                     const_mask_table_ptr,
-                    usage_mask_low_ptr,
-                    usage_mask_high_ptr,
-                    usage_list_ptr,
-                    usage_count_ptr,
+                    usage,
                 ) < 0 {
                     return -1;
                 }
@@ -2927,10 +2859,7 @@ fn collect_expression_const_params_visit(
                 value_index,
                 params_count,
                 const_mask_table_ptr,
-                usage_mask_low_ptr,
-                usage_mask_high_ptr,
-                usage_list_ptr,
-                usage_count_ptr,
+                usage,
             ) < 0 {
                 return -1;
             }
@@ -2945,10 +2874,7 @@ fn collect_expression_const_params_visit(
             struct_index,
             params_count,
             const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
+            usage,
         ) < 0 {
             return -1;
         }
@@ -2963,10 +2889,7 @@ fn collect_expression_const_params_visit(
                 label_expr,
                 params_count,
                 const_mask_table_ptr,
-                usage_mask_low_ptr,
-                usage_mask_high_ptr,
-                usage_list_ptr,
-                usage_count_ptr,
+                usage,
             );
         }
         return 0;
@@ -2979,10 +2902,7 @@ fn collect_expression_const_params_visit(
         expr_index,
         params_count,
         const_mask_table_ptr,
-        usage_mask_low_ptr,
-        usage_mask_high_ptr,
-        usage_list_ptr,
-        usage_count_ptr,
+        usage,
     )
 }
 
@@ -3023,15 +2943,18 @@ fn collect_expression_const_params(
     store_i32(usage_mask_low_ptr, 0);
     store_i32(usage_mask_high_ptr, 0);
     store_i32(usage_count_ptr, 0);
+    let usage: TypeTemplateParamUsage = TypeTemplateParamUsage {
+        mask_low_ptr: usage_mask_low_ptr,
+        mask_high_ptr: usage_mask_high_ptr,
+        list_ptr: usage_list_ptr,
+        count_ptr: usage_count_ptr,
+    };
     if collect_expression_const_params_visit(
         ast_base,
         expr_index,
         params_count,
         const_mask_table_ptr,
-        usage_mask_low_ptr,
-        usage_mask_high_ptr,
-        usage_list_ptr,
-        usage_count_ptr,
+        usage,
     ) < 0 {
         return -1;
     }

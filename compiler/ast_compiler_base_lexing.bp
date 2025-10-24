@@ -161,6 +161,19 @@ const ExpressionParts = struct(
     ],
 );
 
+const TYPE_TEMPLATE_USAGE_FIELD_NAME_CAP: i32 = 14;
+
+const TypeTemplateParamUsage = struct(
+    TYPE_TEMPLATE_USAGE_FIELD_NAME_CAP,
+    4,
+    [
+        ("mask_low_ptr\0", i32),
+        ("mask_high_ptr\0", i32),
+        ("list_ptr\0", i32),
+        ("count_ptr\0", i32),
+    ],
+);
+
 fn parse_identifier(base: i32, len: i32, offset: i32) -> IdentifierParse {
     if offset >= len {
         return IdentifierParse {
@@ -261,28 +274,29 @@ fn identifier_matches_keyword(
 
 fn type_template_record_param_usage(
     param_index: i32,
-    usage_mask_low_ptr: i32,
-    usage_mask_high_ptr: i32,
-    usage_list_ptr: i32,
-    usage_count_ptr: i32,
+    usage: TypeTemplateParamUsage,
 ) -> i32 {
     if param_index < 0 { return -1; }
     if param_index >= MAX_PARAMS { return -1; }
+    let mask_low_ptr: i32 = usage.mask_low_ptr;
+    let mask_high_ptr: i32 = usage.mask_high_ptr;
+    let usage_list_ptr: i32 = usage.list_ptr;
+    let usage_count_ptr: i32 = usage.count_ptr;
     if param_index < 32 {
-        let current_mask: i32 = load_i32(usage_mask_low_ptr);
+        let current_mask: i32 = load_i32(mask_low_ptr);
         let bit: i32 = 1 << param_index;
         if (current_mask & bit) != 0 {
             return 0;
         }
-        store_i32(usage_mask_low_ptr, current_mask | bit);
+        store_i32(mask_low_ptr, current_mask | bit);
     } else {
         let bit_index: i32 = param_index - 32;
-        let current_mask: i32 = load_i32(usage_mask_high_ptr);
+        let current_mask: i32 = load_i32(mask_high_ptr);
         let bit: i32 = 1 << bit_index;
         if (current_mask & bit) != 0 {
             return 0;
         }
-        store_i32(usage_mask_high_ptr, current_mask | bit);
+        store_i32(mask_high_ptr, current_mask | bit);
     }
     let usage_count: i32 = load_i32(usage_count_ptr);
     if usage_count < 0 { return -1; }
@@ -297,14 +311,15 @@ fn type_template_collect_const_params(
     expr_index: i32,
     params_count: i32,
     const_mask_table_ptr: i32,
-    usage_mask_low_ptr: i32,
-    usage_mask_high_ptr: i32,
-    usage_list_ptr: i32,
-    usage_count_ptr: i32,
+    usage: TypeTemplateParamUsage,
 ) -> i32 {
     if expr_index < 0 { return -1; }
     if expr_index >= ast_expr_count(ast_base) { return -1; }
     let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+    let mask_low_ptr: i32 = usage.mask_low_ptr;
+    let mask_high_ptr: i32 = usage.mask_high_ptr;
+    let usage_list_ptr: i32 = usage.list_ptr;
+    let usage_count_ptr: i32 = usage.count_ptr;
     let kind: i32 = load_i32(entry_ptr);
     if kind == 0 { return 0; }
     if kind == 6 {
@@ -319,13 +334,7 @@ fn type_template_collect_const_params(
         let mask_bit_index: i32 = param_index & 31;
         let mask_bit: i32 = 1 << mask_bit_index;
         if (mask_word_value & mask_bit) == 0 { return -1; }
-        return type_template_record_param_usage(
-            param_index,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
-        );
+        return type_template_record_param_usage(param_index, usage);
     }
     if kind == 22 || kind == 39 {
         let child_index: i32 = load_i32(entry_ptr + 4);
@@ -334,10 +343,7 @@ fn type_template_collect_const_params(
             child_index,
             params_count,
             const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
+            usage,
         );
     }
     if kind == 41 {
@@ -347,10 +353,7 @@ fn type_template_collect_const_params(
             tuple_index,
             params_count,
             const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
+            usage,
         );
     }
     if kind == 35 {
@@ -360,10 +363,7 @@ fn type_template_collect_const_params(
             element_index,
             params_count,
             const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
+            usage,
         ) < 0 {
             return -1;
         }
@@ -375,10 +375,7 @@ fn type_template_collect_const_params(
                 length_expr_index,
                 params_count,
                 const_mask_table_ptr,
-                usage_mask_low_ptr,
-                usage_mask_high_ptr,
-                usage_list_ptr,
-                usage_count_ptr,
+                usage,
             );
         }
         return 0;
@@ -403,10 +400,7 @@ fn type_template_collect_const_params(
                 value_index,
                 params_count,
                 const_mask_table_ptr,
-                usage_mask_low_ptr,
-                usage_mask_high_ptr,
-                usage_list_ptr,
-                usage_count_ptr,
+                usage,
             ) < 0 {
                 return -1;
             }
@@ -440,10 +434,7 @@ fn type_template_collect_const_params(
             left_index,
             params_count,
             const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
+            usage,
         ) < 0 {
             return -1;
         }
@@ -452,10 +443,7 @@ fn type_template_collect_const_params(
             right_index,
             params_count,
             const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
+            usage,
         ) < 0 {
             return -1;
         }
@@ -495,15 +483,18 @@ fn type_template_capture_expression_template(
     store_i32(usage_mask_low_ptr, 0);
     store_i32(usage_mask_high_ptr, 0);
     store_i32(usage_count_ptr, 0);
+    let usage: TypeTemplateParamUsage = TypeTemplateParamUsage {
+        mask_low_ptr: usage_mask_low_ptr,
+        mask_high_ptr: usage_mask_high_ptr,
+        list_ptr: usage_list_ptr,
+        count_ptr: usage_count_ptr,
+    };
     if type_template_collect_const_params(
         ast_base,
         expr_index,
         params_count,
         const_mask_table_ptr,
-        usage_mask_low_ptr,
-        usage_mask_high_ptr,
-        usage_list_ptr,
-        usage_count_ptr,
+        usage,
     ) < 0 {
         return -1;
     }
