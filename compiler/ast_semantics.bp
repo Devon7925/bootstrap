@@ -1724,12 +1724,11 @@ fn try_convert_constant_value(
             let mut idx: i32 = 0;
             while idx < length {
                 let slot_ptr: i32 = data_ptr + idx * 2 * WORD_SIZE;
-                let element_value_ptr: i32 = slot_ptr;
                 let element_type_ptr: i32 = slot_ptr + WORD_SIZE;
                 let current_type: i32 = load_i32(element_type_ptr);
                 if try_convert_constant_value(
                     ast_base,
-                    element_value_ptr,
+                    slot_ptr,
                     current_type,
                     element_type,
                 ) < 0 {
@@ -1760,13 +1759,12 @@ fn try_convert_constant_value(
             let mut idx: i32 = 0;
             while idx < element_count {
                 let slot_ptr: i32 = tuple_data_ptr + idx * 2 * WORD_SIZE;
-                let element_value_ptr: i32 = slot_ptr;
                 let element_type_ptr: i32 = slot_ptr + WORD_SIZE;
                 let current_type: i32 = load_i32(element_type_ptr);
                 let field_type: i32 = load_i32(elements_ptr + idx * WORD_SIZE);
                 if try_convert_constant_value(
                     ast_base,
-                    element_value_ptr,
+                    slot_ptr,
                     current_type,
                     field_type,
                 ) < 0 {
@@ -1823,12 +1821,11 @@ fn try_convert_constant_value(
         let mut idx: i32 = 0;
         while idx < value_length {
             let slot_ptr: i32 = data_ptr + idx * 2 * WORD_SIZE;
-            let element_value_ptr: i32 = slot_ptr;
             let element_type_ptr: i32 = slot_ptr + WORD_SIZE;
             let current_type: i32 = load_i32(element_type_ptr);
             if try_convert_constant_value(
                 ast_base,
-                element_value_ptr,
+                slot_ptr,
                 current_type,
                 target_element_type,
             ) < 0 {
@@ -1865,13 +1862,12 @@ fn try_convert_constant_value(
         let mut idx: i32 = 0;
         while idx < value_count {
             let slot_ptr: i32 = tuple_data_ptr + idx * 2 * WORD_SIZE;
-            let element_value_ptr: i32 = slot_ptr;
             let element_type_ptr: i32 = slot_ptr + WORD_SIZE;
             let current_type: i32 = load_i32(element_type_ptr);
             let field_type: i32 = load_i32(target_elements_ptr + idx * WORD_SIZE);
             if try_convert_constant_value(
                 ast_base,
-                element_value_ptr,
+                slot_ptr,
                 current_type,
                 field_type,
             ) < 0 {
@@ -2481,9 +2477,8 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
             let other_name_len: i32 = load_i32(other_entry_ptr + 4);
             if name_len == other_name_len {
                 if identifiers_match(name_ptr, name_len, other_name_ptr, other_name_len) {
-                    let detail_out_ptr: i32 = out_ptr;
-                    if detail_out_ptr > 0 {
-                        if load_u8(detail_out_ptr) == 0 {
+                    if out_ptr > 0 {
+                        if load_u8(out_ptr) == 0 {
                             let module_index: i32 =
                                 ast_function_entry_module_index(ast_base, idx);
                             let mut module_base: i32 =
@@ -2498,7 +2493,7 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
                                 ast_function_entry_name_start(ast_base, idx);
                             let message: [u8; 30] = "duplicate function declaration";
                             write_failure_detail_with_location(
-                                detail_out_ptr,
+                                out_ptr,
                                 module_index,
                                 module_base,
                                 module_len,
@@ -3760,17 +3755,16 @@ fn resolve_expression_internal(
                             if index_value < array_length {
                                 let slot_ptr: i32 =
                                     array_literal_value + index_value * 2 * WORD_SIZE;
-                                let element_value_ptr: i32 = slot_ptr;
                                 let element_type_ptr: i32 = slot_ptr + WORD_SIZE;
                                 let current_element_type: i32 = load_i32(element_type_ptr);
                                 let converted_element: i32 = convert_constant_value(
                                     ast_base,
-                                    element_value_ptr,
+                                    slot_ptr,
                                     current_element_type,
                                     resolved_element,
                                 );
                                 if converted_element >= 0 {
-                                    let literal_value: i32 = load_i32(element_value_ptr);
+                                    let literal_value: i32 = load_i32(slot_ptr);
                                     let expr_entry_ptr: i32 =
                                         ast_expr_entry_ptr(ast_base, expr_index);
                                     store_i32(expr_entry_ptr, 0);
@@ -4211,17 +4205,16 @@ fn resolve_expression_internal(
             if element_count > 0 {
                 if tuple_literal_value > 0 {
                     let slot_ptr: i32 = tuple_literal_value + field_index * 2 * WORD_SIZE;
-                    let element_value_ptr: i32 = slot_ptr;
                     let element_type_slot_ptr: i32 = slot_ptr + WORD_SIZE;
                     let current_element_type: i32 = load_i32(element_type_slot_ptr);
                     let converted_element: i32 = convert_constant_value(
                         ast_base,
-                        element_value_ptr,
+                        slot_ptr,
                         current_element_type,
                         resolved_element,
                     );
                     if converted_element >= 0 {
-                        let literal_value: i32 = load_i32(element_value_ptr);
+                        let literal_value: i32 = load_i32(slot_ptr);
                         let expr_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
                         store_i32(expr_entry_ptr, 0);
                         store_i32(expr_entry_ptr + WORD_SIZE, literal_value);
