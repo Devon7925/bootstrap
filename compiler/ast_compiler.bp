@@ -75,6 +75,13 @@ fn compile_impl(
     produced_len
 }
 
+fn report_missing_module_path(detail_out_ptr: i32) {
+    if detail_out_ptr > 0 {
+        clear_failure_location(detail_out_ptr);
+        write_failure_detail(detail_out_ptr, 19, "module path missing");
+    }
+}
+
 fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
     compile_impl(input_ptr, input_len, out_ptr, -1)
 }
@@ -87,10 +94,7 @@ fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
     let mut detail_out_ptr: i32 = module_storage_top();
     let path_len: i32 = string_length(path_ptr);
     if path_len <= 0 {
-        if detail_out_ptr > 0 {
-            clear_failure_location(detail_out_ptr);
-            write_failure_detail(detail_out_ptr, 19, "module path missing");
-        }
+        report_missing_module_path(detail_out_ptr);
         return -1;
     }
     if path_len > MODULE_PATH_MAX_LENGTH {
@@ -186,18 +190,12 @@ fn compileFromPath(path_ptr: i32) -> i32 {
     module_ensure_state_initialized();
     let detail_out_ptr: i32 = module_storage_top();
     if path_ptr <= 0 {
-        if detail_out_ptr > 0 {
-            clear_failure_location(detail_out_ptr);
-            write_failure_detail(detail_out_ptr, 19, "module path missing");
-        }
+        report_missing_module_path(detail_out_ptr);
         return -1;
     }
     let path_len: i32 = string_length(path_ptr);
     if path_len <= 0 {
-        if detail_out_ptr > 0 {
-            clear_failure_location(detail_out_ptr);
-            write_failure_detail(detail_out_ptr, 19, "module path missing");
-        }
+        report_missing_module_path(detail_out_ptr);
         return -1;
     }
     let index: i32 = module_find_index(path_ptr, path_len);
