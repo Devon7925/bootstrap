@@ -478,7 +478,7 @@ test("const fn with only const parameters can simply process composed array-tupl
     expect(result).toBe(107);
 });
 
-test.todo("const fn with only const parameters can divide to produce composed type", async () => {
+test("const fn with only const parameters can divide to produce composed type", async () => {
     const wasm = await compileWithAstCompiler(`
     const KEY_COUNT: i32 = 12;
 

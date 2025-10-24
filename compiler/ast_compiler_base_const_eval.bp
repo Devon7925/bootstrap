@@ -1,5 +1,25 @@
 use "./ast_compiler_base_state.bp";
 
+fn unsigned_divide(dividend: i32, divisor: i32) -> i32 {
+    let mut quotient: i32 = 0;
+    let mut remainder: i32 = 0;
+    let mut shift: i32 = 31;
+    loop {
+        if shift < 0 {
+            break;
+        }
+        remainder = remainder << 1;
+        let next_bit: i32 = logical_shr(dividend, shift) & 1;
+        remainder = remainder | next_bit;
+        if compare_unsigned(remainder, divisor) >= 0 {
+            remainder = remainder - divisor;
+            quotient = quotient | (1 << shift);
+        }
+        shift = shift - 1;
+    };
+    quotient
+}
+
 fn interpret_constant_expression(
     ast_base: i32,
     expr_index: i32,
@@ -2007,6 +2027,7 @@ fn interpret_constant_expression(
     if kind == 2
         || kind == 3
         || kind == 4
+        || kind == 5
         || kind == 25
         || kind == 26
         || kind == 27
@@ -2099,6 +2120,16 @@ fn interpret_constant_expression(
             computed = left_value - right_value;
         } else if kind == 4 {
             computed = left_value * right_value;
+        } else if kind == 5 {
+            if right_value == 0 {
+                store_i32(scratch_top_ptr, saved_top);
+                return -1;
+            }
+            if type_id_is_signed_integer(target_type) {
+                computed = left_value / right_value;
+            } else {
+                computed = unsigned_divide(left_value, right_value);
+            }
         } else if kind == 25 {
             computed = left_value | right_value;
         } else if kind == 26 {
