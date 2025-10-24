@@ -4052,8 +4052,6 @@ fn parse_use_declaration(
             updated_flags = updated_flags - MODULE_FLAG_IMPORTING;
         }
         module_entry_set_flags(import_index, updated_flags);
-    } else {
-        module_entry_set_flags(import_index, existing_flags);
     }
     (idx, new_count)
 }
