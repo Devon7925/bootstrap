@@ -105,7 +105,7 @@ test("duplicate function parameter names report diagnostics", async () => {
         duplicate(1, 2)
     }
   `);
-  expect(failure.failure.detail).toMatch(/duplicate parameter/);
+  expect(failure.failure.detail).toBe("/entry.bp:2:30: duplicate parameter name");
 });
 
 test("parser reports diagnostic when function limit is exceeded", async () => {
