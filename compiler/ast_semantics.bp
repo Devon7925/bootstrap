@@ -2844,6 +2844,12 @@ fn resolve_expression_internal(
                     return -1;
                 };
                 let original_arg_count: i32 = call_metadata_arg_count(updated_metadata);
+                let env_slot_ptr: i32 = call_metadata_const_env_ptr_ptr(updated_metadata);
+                let recorded_env_ptr: i32 = if env_slot_ptr > 0 {
+                    load_i32(env_slot_ptr)
+                } else {
+                    0
+                };
                 if original_arg_count > 0 {
                     let args_base: i32 = call_metadata_args_base(updated_metadata);
                     if args_base > 0 {
@@ -2854,8 +2860,13 @@ fn resolve_expression_internal(
                         };
                     };
                 };
+                store_i32(updated_metadata, 0);
+                store_i32(updated_metadata + WORD_SIZE, 0);
                 store_i32(updated_metadata + 2 * WORD_SIZE, 0);
                 store_i32(call_metadata_callee_index_ptr(updated_metadata), -1);
+                if env_slot_ptr > 0 {
+                    store_i32(env_slot_ptr, 0);
+                };
                 let extra_base: i32 = call_metadata_extra_slot_base(updated_metadata);
                 if extra_base > 0 {
                     let mut extra_idx: i32 = 0;
@@ -2863,6 +2874,9 @@ fn resolve_expression_internal(
                         store_i32(extra_base + extra_idx * WORD_SIZE, 0);
                         extra_idx = extra_idx + 1;
                     };
+                };
+                if recorded_env_ptr > 0 {
+                    store_i32(recorded_env_ptr, 0);
                 };
                 store_i32(entry_ptr, 0);
                 store_i32(entry_ptr + WORD_SIZE, literal_value);
