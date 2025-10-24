@@ -4381,6 +4381,7 @@ fn resolve_expression_internal(
                 return -1;
             }
             let label_kind: i32 = struct_literal_field_label_kind(entry_ptr);
+            let mut canonical_field_index: i32 = field_idx;
             if label_kind == STRUCT_LITERAL_LABEL_KIND_IDENTIFIER {
                 let ident_ptr: i32 = struct_literal_field_label_data(entry_ptr);
                 let ident_len: i32 = struct_literal_field_label_extra(entry_ptr);
@@ -4408,13 +4409,22 @@ fn resolve_expression_internal(
                     );
                     return -1;
                 }
-                if !struct_field_identifier_matches(
-                    ast_base,
-                    struct_index,
-                    field_idx,
-                    ident_ptr,
-                    ident_len,
-                ) {
+                let mut search_idx: i32 = 0;
+                let mut matched_index: i32 = -1;
+                while search_idx < struct_field_count {
+                    if struct_field_identifier_matches(
+                        ast_base,
+                        struct_index,
+                        search_idx,
+                        ident_ptr,
+                        ident_len,
+                    ) {
+                        matched_index = search_idx;
+                        break;
+                    }
+                    search_idx = search_idx + 1;
+                };
+                if matched_index < 0 {
                     let field_location: i32 = struct_literal_field_location(entry_ptr);
                     record_struct_literal_field_mismatch(
                         out_ptr,
@@ -4426,6 +4436,7 @@ fn resolve_expression_internal(
                     );
                     return -1;
                 }
+                canonical_field_index = matched_index;
             }
             if label_kind == STRUCT_LITERAL_LABEL_KIND_EXPRESSION {
                 let label_expr: i32 = struct_literal_field_label_data(entry_ptr);
@@ -4564,12 +4575,57 @@ fn resolve_expression_internal(
                     );
                     return -1;
                 }
-                let canonical_length: i32 =
-                    struct_field_trimmed_length(ast_base, struct_index, field_idx);
-                if canonical_length < 0 {
-                    return -1;
-                }
-                if trimmed_length != canonical_length {
+                let mut search_idx: i32 = 0;
+                let mut matched_index: i32 = -1;
+                while search_idx < struct_field_count {
+                    let canonical_length: i32 =
+                        struct_field_trimmed_length(ast_base, struct_index, search_idx);
+                    if canonical_length < 0 {
+                        return -1;
+                    }
+                    if canonical_length == trimmed_length {
+                        let mut compare_idx: i32 = 0;
+                        let mut matches: bool = true;
+                        while compare_idx < canonical_length {
+                            let normalized_char: i32 =
+                                struct_label_expression_normalized_byte(
+                                    label_value_ptr,
+                                    compare_idx,
+                                );
+                            if normalized_char < 0 {
+                                record_struct_literal_field_mismatch(
+                                    out_ptr,
+                                    ast_base,
+                                    caller_func_index,
+                                    field_location,
+                                    struct_index,
+                                    field_idx,
+                                );
+                                return -1;
+                            }
+                            let canonical_char: i32 = ast_struct_type_field_canonical_byte(
+                                ast_base,
+                                struct_index,
+                                search_idx,
+                                compare_idx,
+                            );
+                            if canonical_char < 0 {
+                                return -1;
+                            }
+                            if canonical_char != normalized_char {
+                                matches = false;
+                                break;
+                            }
+                            compare_idx = compare_idx + 1;
+                        };
+                        if matches {
+                            matched_index = search_idx;
+                            break;
+                        }
+                    }
+                    search_idx = search_idx + 1;
+                };
+                if matched_index < 0 {
                     record_struct_literal_field_mismatch(
                         out_ptr,
                         ast_base,
@@ -4580,44 +4636,30 @@ fn resolve_expression_internal(
                     );
                     return -1;
                 }
-                let mut compare_idx: i32 = 0;
-                while compare_idx < canonical_length {
-                    let normalized_char: i32 =
-                        struct_label_expression_normalized_byte(label_value_ptr, compare_idx);
-                    if normalized_char < 0 {
-                        record_struct_literal_field_mismatch(
-                            out_ptr,
-                            ast_base,
-                            caller_func_index,
-                            field_location,
-                            struct_index,
-                            field_idx,
-                        );
-                        return -1;
-                    }
-                    let canonical_char: i32 = ast_struct_type_field_canonical_byte(
-                        ast_base,
-                        struct_index,
-                        field_idx,
-                        compare_idx,
-                    );
-                    if canonical_char < 0 {
-                        return -1;
-                    }
-                    if canonical_char != normalized_char {
-                        record_struct_literal_field_mismatch(
-                            out_ptr,
-                            ast_base,
-                            caller_func_index,
-                            field_location,
-                            struct_index,
-                            field_idx,
-                        );
-                        return -1;
-                    }
-                    compare_idx = compare_idx + 1;
-                };
+                canonical_field_index = matched_index;
             }
+            let mut prev_idx: i32 = 0;
+            while prev_idx < field_idx {
+                let prev_entry: i32 = struct_literal_field_entry_ptr(metadata_ptr, prev_idx);
+                if prev_entry <= 0 {
+                    return -1;
+                }
+                let prev_canonical: i32 = struct_literal_field_label_extra(prev_entry);
+                if prev_canonical == canonical_field_index {
+                    let field_location: i32 = struct_literal_field_location(entry_ptr);
+                    record_struct_literal_field_mismatch(
+                        out_ptr,
+                        ast_base,
+                        caller_func_index,
+                        field_location,
+                        struct_index,
+                        canonical_field_index,
+                    );
+                    return -1;
+                }
+                prev_idx = prev_idx + 1;
+            };
+            struct_literal_field_set_label_extra(entry_ptr, canonical_field_index);
             let value_index: i32 = struct_literal_field_value_index(entry_ptr);
             if resolve_expression_internal(
                 out_ptr,
@@ -4635,7 +4677,8 @@ fn resolve_expression_internal(
             ) < 0 {
                 return -1;
             }
-            let field_type: i32 = ast_struct_type_field_type(ast_base, struct_index, field_idx);
+            let field_type: i32 =
+                ast_struct_type_field_type(ast_base, struct_index, canonical_field_index);
             if field_type < 0 {
                 return -1;
             }
@@ -4662,24 +4705,41 @@ fn resolve_expression_internal(
                     caller_func_index,
                     field_location,
                     struct_index,
-                    field_idx,
+                    canonical_field_index,
                 );
                 return -1;
             }
             field_idx = field_idx + 1;
         };
-        if field_count < struct_field_count {
-            let literal_location: i32 = ast_expr_struct_literal_location(ast_base, expr_index);
-            record_struct_literal_missing_field(
-                out_ptr,
-                ast_base,
-                caller_func_index,
-                literal_location,
-                struct_index,
-                field_count,
-            );
-            return -1;
-        }
+        let literal_location: i32 = ast_expr_struct_literal_location(ast_base, expr_index);
+        let mut canonical_idx: i32 = 0;
+        while canonical_idx < struct_field_count {
+            let mut matched: bool = false;
+            let mut scan_idx: i32 = 0;
+            while scan_idx < field_count {
+                let scan_entry: i32 = struct_literal_field_entry_ptr(metadata_ptr, scan_idx);
+                if scan_entry <= 0 {
+                    return -1;
+                }
+                if struct_literal_field_label_extra(scan_entry) == canonical_idx {
+                    matched = true;
+                    break;
+                }
+                scan_idx = scan_idx + 1;
+            };
+            if !matched {
+                record_struct_literal_missing_field(
+                    out_ptr,
+                    ast_base,
+                    caller_func_index,
+                    literal_location,
+                    struct_index,
+                    canonical_idx,
+                );
+                return -1;
+            }
+            canonical_idx = canonical_idx + 1;
+        };
         ast_expr_set_type(ast_base, expr_index, resolved_struct);
         return 0;
     }
