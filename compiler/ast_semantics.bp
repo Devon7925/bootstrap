@@ -2686,54 +2686,143 @@ fn resolve_expression_internal(
         if ast_function_is_const(ast_base, callee_index) {
             let runtime_param_total: i32 =
                 ast_function_runtime_param_count(ast_base, callee_index);
+            if runtime_param_total < 0 {
+                return -1;
+            };
             if runtime_param_total == 0 {
-                let eval_base: i32 =
-                    ast_temp_base(ast_base) + CONSTANT_EVAL_SCRATCH_OFFSET;
-                let eval_value_ptr: i32 = eval_base;
+                let env_base: i32 = ast_temp_base(ast_base) + CONSTANT_EVAL_SCRATCH_OFFSET;
+                let eval_value_ptr: i32 = env_base + MAX_PARAMS * 8;
                 let eval_type_ptr: i32 = eval_value_ptr + WORD_SIZE;
                 let eval_stack_top_ptr: i32 = eval_type_ptr + WORD_SIZE;
                 let eval_stack_base: i32 = eval_stack_top_ptr + WORD_SIZE;
                 let saved_eval_top: i32 = load_i32(eval_stack_top_ptr);
                 store_i32(eval_stack_top_ptr, 0);
-                let eval_status: i32 = interpret_constant_expression(
-                    ast_base,
-                    expr_index,
-                    eval_stack_base,
-                    eval_stack_top_ptr,
-                    eval_value_ptr,
-                    eval_type_ptr,
-                    0,
-                    0,
-                    0,
-                );
-                store_i32(eval_stack_top_ptr, saved_eval_top);
-                let mut evaluation_failed: bool = eval_status != CONST_EVAL_STATUS_OK;
+                let mut evaluation_failed: bool = false;
                 let mut literal_type: i32 = -1;
                 let mut literal_value: i32 = 0;
+                let mut param_values_ptr: i32 = 0;
+                let mut total_param_count: i32 = ast_function_param_count(ast_base, callee_index);
+                if total_param_count < 0 {
+                    total_param_count = 0;
+                    evaluation_failed = true;
+                } else if total_param_count > MAX_PARAMS {
+                    evaluation_failed = true;
+                };
+                let env_ptr: i32 = call_metadata_const_env_ptr(updated_metadata);
                 if !evaluation_failed {
-                    literal_type = load_i32(eval_type_ptr);
-                    if literal_type < 0 {
-                        evaluation_failed = true;
-                    } else {
-                        let mut target_type: i32 = ast_expr_type(ast_base, expr_index);
-                        if target_type < 0 {
-                            target_type = literal_type;
-                        };
-                        if target_type < 0 {
-                            evaluation_failed = true;
-                        } else if try_convert_constant_value(
-                            ast_base,
-                            eval_value_ptr,
-                            literal_type,
-                            target_type,
-                        ) < 0 {
+                    if total_param_count > 0 {
+                        if env_ptr <= 0 {
                             evaluation_failed = true;
                         } else {
-                            literal_type = target_type;
-                            literal_value = load_i32(eval_value_ptr);
+                            let recorded_param_count: i32 = load_i32(env_ptr);
+                            if recorded_param_count != total_param_count {
+                                evaluation_failed = true;
+                            } else {
+                                param_values_ptr = env_base;
+                                let values_ptr: i32 = env_ptr + WORD_SIZE;
+                                let mut param_idx: i32 = 0;
+                                while param_idx < total_param_count {
+                                    let dst_ptr: i32 = param_values_ptr + param_idx * 8;
+                                    let arg_value: i32 = load_i32(values_ptr + param_idx * 8);
+                                    let arg_type: i32 = load_i32(values_ptr + param_idx * 8 + 4);
+                                    if arg_type < 0 {
+                                        evaluation_failed = true;
+                                        break;
+                                    };
+                                    store_i32(dst_ptr, arg_value);
+                                    store_i32(dst_ptr + 4, arg_type);
+                                    param_idx = param_idx + 1;
+                                };
+                            };
                         };
                     };
                 };
+                let mut env_total: i32 = total_param_count;
+                let mut body_expr_index: i32 = -1;
+                if !evaluation_failed {
+                    let callee_entry_ptr: i32 = ast_function_entry_ptr(ast_base, callee_index);
+                    let body_kind: i32 = load_i32(callee_entry_ptr + 12);
+                    if body_kind != 2 {
+                        evaluation_failed = true;
+                    } else {
+                        body_expr_index = load_i32(callee_entry_ptr + 16);
+                        if body_expr_index < 0 {
+                            evaluation_failed = true;
+                        };
+                    };
+                    let locals_count: i32 = load_i32(callee_entry_ptr + 20);
+                    if locals_count < 0 {
+                        evaluation_failed = true;
+                    } else {
+                        env_total = env_total + locals_count;
+                        if env_total < 0 || env_total > MAX_PARAMS {
+                            evaluation_failed = true;
+                        } else if env_total > 0 {
+                            if param_values_ptr == 0 {
+                                param_values_ptr = env_base;
+                                let mut init_idx: i32 = 0;
+                                while init_idx < total_param_count {
+                                    let dst_ptr: i32 = param_values_ptr + init_idx * 8;
+                                    store_i32(dst_ptr, 0);
+                                    store_i32(dst_ptr + 4, -1);
+                                    init_idx = init_idx + 1;
+                                };
+                            };
+                            let mut fill_idx: i32 = total_param_count;
+                            while fill_idx < env_total {
+                                let dst_ptr: i32 = param_values_ptr + fill_idx * 8;
+                                store_i32(dst_ptr, 0);
+                                store_i32(dst_ptr + 4, -1);
+                                fill_idx = fill_idx + 1;
+                            };
+                        };
+                    };
+                };
+                let mut eval_status: i32 = -1;
+                if !evaluation_failed {
+                    eval_status = interpret_constant_expression(
+                        ast_base,
+                        body_expr_index,
+                        eval_stack_base,
+                        eval_stack_top_ptr,
+                        eval_value_ptr,
+                        eval_type_ptr,
+                        param_values_ptr,
+                        total_param_count,
+                        env_total,
+                    );
+                    if eval_status < 0 {
+                        evaluation_failed = true;
+                    } else if eval_status != CONST_EVAL_STATUS_OK
+                        && eval_status != CONST_EVAL_STATUS_RETURN
+                    {
+                        evaluation_failed = true;
+                    } else {
+                        literal_type = load_i32(eval_type_ptr);
+                        if literal_type < 0 {
+                            evaluation_failed = true;
+                        } else {
+                            let mut target_type: i32 = ast_expr_type(ast_base, expr_index);
+                            if target_type < 0 {
+                                target_type = literal_type;
+                            };
+                            if target_type < 0 {
+                                evaluation_failed = true;
+                            } else if try_convert_constant_value(
+                                ast_base,
+                                eval_value_ptr,
+                                literal_type,
+                                target_type,
+                            ) < 0 {
+                                evaluation_failed = true;
+                            } else {
+                                literal_type = target_type;
+                                literal_value = load_i32(eval_value_ptr);
+                            };
+                        };
+                    };
+                };
+                store_i32(eval_stack_top_ptr, saved_eval_top);
                 if evaluation_failed {
                     let mut resolved_location_offset: i32 = call_location_offset;
                     if resolved_location_offset < 0 {
