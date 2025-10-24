@@ -406,7 +406,106 @@ test("const fn with only const parameters can return usable composed array-tuple
     const result = await runWasmMainWithGc(wasm);
     expect(result).toBe(42);
 });
-test.todo("const fn with only const parameters can process composed array-tuple-array partial type", async () => {
+
+test("const fn with only const parameters can return usable composed array-tuple-array u8 partial type from spaced binding", async () => {
+    const wasm = await compileWithAstCompiler(`
+    const KEY_COUNT: i32 = 12;
+    const KEY_NAME_CAP: i32 = 4;
+
+    const fn foo(const COUNT: i32) -> [([u8; KEY_NAME_CAP], type); COUNT] {
+        let mut entries: [([u8; KEY_NAME_CAP], type); COUNT] =
+            [("abcd", i32); COUNT];
+        let mut idx = 0;
+        entries
+    }
+
+    const BAR: [([i32; KEY_NAME_CAP], type); KEY_COUNT] = foo(KEY_COUNT);
+
+    fn main() -> i32 {
+        BAR[0].0[0] as i32
+    }
+    `);
+    const result = await runWasmMainWithGc(wasm);
+    expect(result).toBe(97);
+});
+
+test("const fn with only const parameters can return mutated usable composed array-tuple-array partial type", async () => {
+    const wasm = await compileWithAstCompiler(`
+    const KEY_COUNT: i32 = 12;
+    const KEY_NAME_CAP: i32 = 4;
+
+    const fn foo(const COUNT: i32) -> [([u8; KEY_NAME_CAP], type); COUNT] {
+        let mut entries: [([u8; KEY_NAME_CAP], type); COUNT] =
+            [("abcd", i32); COUNT];
+        let mut idx = 0;
+        entries[0].0[0] = 'e' as u8;
+        entries
+    }
+
+    const BAR: [([u8; KEY_NAME_CAP], type); KEY_COUNT] = foo(KEY_COUNT);
+
+    fn main() -> i32 {
+        BAR[0].0[0] as i32
+    }
+    `);
+    const result = await runWasmMainWithGc(wasm);
+    expect(result).toBe(101);
+});
+
+test("const fn with only const parameters can simply process composed array-tuple-array partial type", async () => {
+    const wasm = await compileWithAstCompiler(`
+    const KEY_COUNT: i32 = 12;
+    const KEY_NAME_CAP: i32 = 4;
+
+    const fn foo(const COUNT: i32) -> [([u8; KEY_NAME_CAP], type); COUNT] {
+        let mut entries: [([u8; KEY_NAME_CAP], type); COUNT] =
+            [([0 as u8; KEY_NAME_CAP], i32); COUNT];
+        let mut idx = 0;
+        while idx < COUNT {
+            entries[idx].0[0] = ('k' as u8);
+            idx = idx + 1;
+        }
+        entries
+    }
+
+    const BAR: [([u8; KEY_NAME_CAP], type); KEY_COUNT] = foo(KEY_COUNT);
+
+    fn main() -> i32 {
+        BAR[0].0[0] as i32
+    }
+    `);
+    const result = await runWasmMainWithGc(wasm);
+    expect(result).toBe(107);
+});
+
+test.todo("const fn with only const parameters can divide to produce composed array-tuple-array partial type", async () => {
+    const wasm = await compileWithAstCompiler(`
+    const KEY_COUNT: i32 = 12;
+    const KEY_NAME_CAP: i32 = 4;
+
+    const fn foo(const COUNT: i32) -> [([u8; KEY_NAME_CAP], type); COUNT] {
+        let mut entries: [([u8; KEY_NAME_CAP], type); COUNT] =
+            [([0 as u8; KEY_NAME_CAP], i32); COUNT];
+        let mut idx: i32 = 0;
+        let tens: i32 = idx / 10;
+        while idx < COUNT {
+            entries[idx].0[0] = ('k' as u8);
+            idx = idx + 1;
+        }
+        entries
+    }
+
+    const BAR: [([u8; KEY_NAME_CAP], type); KEY_COUNT] = foo(KEY_COUNT);
+
+    fn main() -> i32 {
+        BAR[0].0[0] as i32
+    }
+    `);
+    const result = await runWasmMainWithGc(wasm);
+    expect(result).toBe(107);
+});
+
+test.todo("const fn with only const parameters can fully process composed array-tuple-array partial type", async () => {
     const wasm = await compileWithAstCompiler(`
     const KEY_COUNT: i32 = 12;
     const KEY_NAME_CAP: i32 = 4;
