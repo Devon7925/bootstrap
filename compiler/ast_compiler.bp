@@ -93,6 +93,17 @@ fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
         }
         return -1;
     }
+    if path_len > MODULE_PATH_MAX_LENGTH {
+        if detail_out_ptr > 0 {
+            clear_failure_location(detail_out_ptr);
+            write_failure_detail(
+                detail_out_ptr,
+                34,
+                "module path exceeds maximum length",
+            );
+        }
+        return -1;
+    }
     let content_len: i32 = string_length(content_ptr);
     if content_len < 0 {
         if detail_out_ptr > 0 {
