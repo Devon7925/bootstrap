@@ -95,6 +95,28 @@ fn write_module_failure_with_location(
     }
 }
 
+fn prepare_module_storage_allocation_failure(
+    detail_out_ptr: i32,
+    path_ptr: i32,
+    path_len: i32,
+) -> i32 {
+    let resolved_ptr: i32 = resolve_module_failure_detail_ptr(detail_out_ptr);
+    if resolved_ptr > 0 {
+        store_failure_detail_location(resolved_ptr, path_ptr, path_len, 1, 1);
+        if load_u8(resolved_ptr) == 0 {
+            let message: [u8; 32] = "module storage allocation failed";
+            write_module_failure_with_location(
+                resolved_ptr,
+                path_ptr,
+                path_len,
+                32,
+                message,
+            );
+        }
+    }
+    resolved_ptr
+}
+
 fn compile(input_ptr: i32, input_len: i32, out_ptr: i32) -> i32 {
     compile_impl(input_ptr, input_len, out_ptr, -1)
 }
@@ -148,21 +170,11 @@ fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
         }
         let allocated_path_ptr: i32 = module_allocate_bytes(path_len + 1);
         if allocated_path_ptr <= 0 {
-            let mut message_ptr: i32 = module_storage_top();
-            message_ptr = resolve_module_failure_detail_ptr(message_ptr);
-            detail_out_ptr = message_ptr;
-            if message_ptr > 0 {
-                store_failure_detail_location(message_ptr, path_ptr, path_len, 1, 1);
-                if load_u8(message_ptr) == 0 {
-                    write_module_failure_with_location(
-                        message_ptr,
-                        path_ptr,
-                        path_len,
-                        32,
-                        "module storage allocation failed",
-                    );
-                }
-            }
+            detail_out_ptr = prepare_module_storage_allocation_failure(
+                module_storage_top(),
+                path_ptr,
+                path_len,
+            );
             return -1;
         }
         copy_bytes(allocated_path_ptr, path_ptr, path_len);
@@ -171,26 +183,16 @@ fn loadModuleFromSource(path_ptr: i32, content_ptr: i32) -> i32 {
     };
     let allocated_content_ptr: i32 = module_allocate_bytes(content_len + 1);
     if allocated_content_ptr <= 0 {
-        let mut message_ptr: i32 = module_storage_top();
-        message_ptr = resolve_module_failure_detail_ptr(message_ptr);
-        detail_out_ptr = message_ptr;
-        if message_ptr > 0 {
-            let stored_path_len: i32 = if existing_index >= 0 {
-                module_entry_path_len(existing_index)
-            } else {
-                path_len
-            };
-            store_failure_detail_location(message_ptr, stored_path_ptr, stored_path_len, 1, 1);
-            if load_u8(message_ptr) == 0 {
-                write_module_failure_with_location(
-                    message_ptr,
-                    stored_path_ptr,
-                    stored_path_len,
-                    32,
-                    "module storage allocation failed",
-                );
-            }
-        }
+        let stored_path_len: i32 = if existing_index >= 0 {
+            module_entry_path_len(existing_index)
+        } else {
+            path_len
+        };
+        detail_out_ptr = prepare_module_storage_allocation_failure(
+            module_storage_top(),
+            stored_path_ptr,
+            stored_path_len,
+        );
         return -1;
     }
     copy_bytes(allocated_content_ptr, content_ptr, content_len);
