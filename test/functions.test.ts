@@ -95,7 +95,7 @@ test("duplicate function names are rejected", async () => {
   );
 });
 
-test.todo("duplicate function parameter names report diagnostics", async () => {
+test("duplicate function parameter names report diagnostics", async () => {
   const failure = await expectCompileFailure(`
     fn duplicate(value: i32, value: i32) -> i32 {
         value
