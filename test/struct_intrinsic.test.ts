@@ -372,4 +372,27 @@ describe("struct intrinsic with const type values", () => {
         const result = await runWasmMainWithGc(wasm);
         expect(result).toBe(42);
     });
+
+    test.todo("returns struct value from runtime function and uses it", async () => {
+        const wasm = await compileWithAstCompiler(`
+        const Pair = struct(6, 2, [
+            ("first\\0", i32),
+            ("second", i32),
+        ]);
+
+        fn make_pair() -> Pair {
+            Pair {
+                first: 20,
+                second: 22,
+            }
+        };
+
+        fn main() -> i32 {
+            let p: Pair = make_pair();
+            p.first + p.second
+        }
+      `);
+        const result = await runWasmMainWithGc(wasm);
+        expect(result).toBe(42);
+    });
 });
