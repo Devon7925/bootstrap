@@ -1441,7 +1441,6 @@ fn resolve_call_metadata(
                         let specialization: ConstParamSpecialization =
                             specializations[spec_idx];
                         let param_index: i32 = specialization.param;
-                        let expected_arg_type: i32 = specialization.type;
                         let template_handle: i32 = ast_function_param_template_payload(
                             ast_base,
                             target_idx,
@@ -1476,7 +1475,7 @@ fn resolve_call_metadata(
                         if resolved_specialized < 0 {
                             return -1;
                         }
-                        if resolved_specialized != expected_arg_type {
+                        if resolved_specialized != specialization.type {
                             let is_const_param: bool = ast_function_param_is_const(
                                 ast_base,
                                 target_idx,
