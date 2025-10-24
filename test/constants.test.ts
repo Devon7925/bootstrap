@@ -246,7 +246,7 @@ test.todo("const functions returning arrays evaluate for runtime initializers", 
   expect(result).toBe(6);
 });
 
-test.todo("const functions with const parameters build array constants", async () => {
+test("const functions with const parameters build array constants", async () => {
   const wasm = await compileWithAstCompiler(`
     const fn make_array(const COUNT: i32) -> [i32; COUNT] {
         [COUNT; COUNT]

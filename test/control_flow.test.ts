@@ -451,20 +451,6 @@ test("while loops support continue", async () => {
   expect(result).toBe(18);
 });
 
-test.todo("while expressions can initialize locals", async () => {
-  const wasm = await compileWithAstCompiler(`
-    fn main() -> i32 {
-        let mut counter: i32 = 0;
-        let done = while counter < 3 {
-            counter = counter + 1;
-        };
-        counter
-    }
-  `);
-  const result = await runWasmMainWithGc(wasm);
-  expect(result).toBe(3);
-});
-
 test("while loops reject break values", async () => {
   const failure = await expectCompileFailure(`
     fn attempt() {
