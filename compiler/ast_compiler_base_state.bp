@@ -192,7 +192,6 @@ fn resolve_module_failure_detail_ptr(detail_ptr: i32) -> i32 {
 }
 
 fn module_allocate_bytes(len: i32) -> i32 {
-    module_ensure_state_initialized();
     if len < 0 {
         return -1;
     }
