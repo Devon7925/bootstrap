@@ -171,6 +171,19 @@ test("loop allows final if without semicolon", async () => {
   expect(result).toBe(4);
 });
 
+test.todo("loop expressions can initialize locals", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn main() -> i32 {
+        let value: i32 = loop {
+            break 5;
+        };
+        value
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(5);
+});
+
 test("while break cannot carry values", async () => {
   const failure = await expectCompileFailure(`
     fn break_with_value() {
@@ -436,6 +449,20 @@ test("while loops support continue", async () => {
   `);
   const result = await runWasmMainWithGc(wasm);
   expect(result).toBe(18);
+});
+
+test.todo("while expressions can initialize locals", async () => {
+  const wasm = await compileWithAstCompiler(`
+    fn main() -> i32 {
+        let mut counter: i32 = 0;
+        let done = while counter < 3 {
+            counter = counter + 1;
+        };
+        counter
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(3);
 });
 
 test("while loops reject break values", async () => {
