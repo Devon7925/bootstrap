@@ -58,7 +58,7 @@ test("assignment to immutable locals is rejected", async () => {
   expect(error.failure.detail).toBe("/entry.bp:4:9: cannot assign to immutable local");
 });
 
-test.todo("duplicate local declarations report diagnostics", async () => {
+test("duplicate local declarations report diagnostics", async () => {
   const failure = await expectCompileFailure(`
     fn redeclare() -> i32 {
         let value: i32 = 1;
@@ -66,7 +66,7 @@ test.todo("duplicate local declarations report diagnostics", async () => {
         value
     }
   `);
-  expect(failure.failure.detail).toMatch(/duplicate local/);
+  expect(failure.failure.detail).toBe("/entry.bp:4:13: duplicate local declaration");
 });
 
 test("blocks must end with an expression", async () => {
