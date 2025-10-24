@@ -65,22 +65,26 @@ test("array elements can be summed", async () => {
   expect(result).toBe(10);
 });
 
-test.todo("array index rejects negative constant indices", async () => {
+test("array index rejects negative constant indices", async () => {
   const failure = await expectCompileFailure(`
     fn main() -> i32 {
         let values: [i32; 3] = [1, 2, 3];
         values[-1]
     }
   `);
-  expect(failure.failure.detail).toBeDefined();
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:4:16: array index must be non-negative",
+  );
 });
 
-test.todo("array index rejects out of bounds constant indices", async () => {
+test("array index rejects out of bounds constant indices", async () => {
   const failure = await expectCompileFailure(`
     fn main() -> i32 {
         let values: [i32; 3] = [1, 2, 3];
         values[3]
     }
   `);
-  expect(failure.failure.detail).toBeDefined();
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:4:16: array index out of bounds",
+  );
 });

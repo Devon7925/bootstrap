@@ -3643,6 +3643,38 @@ fn resolve_expression_internal(
             );
             return -1;
         }
+        let array_length: i32 = array_type_length(ast_base, resolved_array_type);
+        if array_length < 0 {
+            return -1;
+        }
+        let index_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, index_index);
+        let index_expr_kind: i32 = load_i32(index_entry_ptr);
+        if index_expr_kind == 0 {
+            let mut index_value: i32 = load_i32(index_entry_ptr + WORD_SIZE);
+            index_value = normalize_integer_value(index_value, BUILTIN_TYPE_ID_I32);
+            if index_value < 0 {
+                record_failure_with_location(
+                    out_ptr,
+                    ast_base,
+                    caller_func_index,
+                    index_location,
+                    32,
+                    "array index must be non-negative",
+                );
+                return -1;
+            }
+            if index_value >= array_length {
+                record_failure_with_location(
+                    out_ptr,
+                    ast_base,
+                    caller_func_index,
+                    index_location,
+                    25,
+                    "array index out of bounds",
+                );
+                return -1;
+            }
+        }
         let element_type: i32 = array_type_element_type(ast_base, resolved_array_type);
         if element_type < 0 {
             return -1;
@@ -3656,16 +3688,13 @@ fn resolve_expression_internal(
         let array_expr_kind: i32 = load_i32(array_entry_ptr);
         if array_expr_kind == 0 {
             let array_literal_value: i32 = load_i32(array_entry_ptr + WORD_SIZE);
-            let length: i32 = array_type_length(ast_base, resolved_array_type);
-            if length > 0 {
+            if array_length > 0 {
                 if array_literal_value > 0 {
-                    let index_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, index_index);
-                    let index_expr_kind: i32 = load_i32(index_entry_ptr);
                     if index_expr_kind == 0 {
                         let mut index_value: i32 = load_i32(index_entry_ptr + WORD_SIZE);
                         index_value = normalize_integer_value(index_value, BUILTIN_TYPE_ID_I32);
                         if index_value >= 0 {
-                            if index_value < length {
+                            if index_value < array_length {
                                 let slot_ptr: i32 =
                                     array_literal_value + index_value * 2 * WORD_SIZE;
                                 let element_value_ptr: i32 = slot_ptr;
