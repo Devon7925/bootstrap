@@ -1,3 +1,5 @@
+use "./ast_compiler_base_lexing.bp";
+
 fn identifiers_match(ptr_a: i32, len_a: i32, ptr_b: i32, len_b: i32) -> bool {
     if len_a != len_b {
         return false;
@@ -17,7 +19,6 @@ fn identifiers_match(ptr_a: i32, len_a: i32, ptr_b: i32, len_b: i32) -> bool {
     true
 }
 
-const FAILURE_DETAIL_CAPACITY: i32 = 256;
 const LOOP_STACK_FLAG_STRIDE: i32 = 65536;
 
 const CONST_ENV_ENTRY_NAME_CAP: i32 = 5;
@@ -1015,7 +1016,6 @@ fn collect_call_const_arguments(
     env_copy_ptr
 }
 
-const CALL_METADATA_INTRINSIC_STRUCT: i32 = -2;
 
 fn resolve_call_metadata(
     out_ptr: i32,
