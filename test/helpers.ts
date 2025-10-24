@@ -736,10 +736,6 @@ export class CompilerInstance {
   }
 
   compileModule(entryPath: string, source: string, modules: ReadonlyArray<CompilerModuleSource>): Uint8Array {
-    if (!this.#loadModuleFromSource || !this.#compileFromPath) {
-      throw new Error("stage1 compiler missing module loading exports");
-    }
-
     return this.#compileUsingModules(entryPath, source, modules);
   }
 
