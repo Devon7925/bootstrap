@@ -478,31 +478,23 @@ test("const fn with only const parameters can simply process composed array-tupl
     expect(result).toBe(107);
 });
 
-test.todo("const fn with only const parameters can divide to produce composed array-tuple-array partial type", async () => {
+test.todo("const fn with only const parameters can divide to produce composed type", async () => {
     const wasm = await compileWithAstCompiler(`
     const KEY_COUNT: i32 = 12;
-    const KEY_NAME_CAP: i32 = 4;
 
-    const fn foo(const COUNT: i32) -> [([u8; KEY_NAME_CAP], type); COUNT] {
-        let mut entries: [([u8; KEY_NAME_CAP], type); COUNT] =
-            [([0 as u8; KEY_NAME_CAP], i32); COUNT];
-        let mut idx: i32 = 0;
-        let tens: i32 = idx / 10;
-        while idx < COUNT {
-            entries[idx].0[0] = ('k' as u8);
-            idx = idx + 1;
-        }
-        entries
+    const fn foo(const COUNT: i32) -> [(i32, type); COUNT] {
+        let divided: i32 = COUNT / 10;
+        [(42, i32); COUNT]
     }
 
-    const BAR: [([u8; KEY_NAME_CAP], type); KEY_COUNT] = foo(KEY_COUNT);
+    const BAR: [(i32, type); KEY_COUNT] = foo(KEY_COUNT);
 
     fn main() -> i32 {
-        BAR[0].0[0] as i32
+        BAR[0].0 as i32
     }
     `);
     const result = await runWasmMainWithGc(wasm);
-    expect(result).toBe(107);
+    expect(result).toBe(42);
 });
 
 test.todo("const fn with only const parameters can fully process composed array-tuple-array partial type", async () => {
