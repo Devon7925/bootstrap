@@ -5978,27 +5978,27 @@ fn expression_node_from_parts(ast_base: i32, kind: i32, data0: i32, data1: i32) 
     data0
 }
 
-fn load_expression_parts(kind_ptr: i32, data0_ptr: i32, data1_ptr: i32) -> (i32, i32, i32) {
-    (
-        load_i32(kind_ptr),
-        load_i32(data0_ptr),
-        load_i32(data1_ptr),
-    )
+fn load_expression_parts(kind_ptr: i32, data0_ptr: i32, data1_ptr: i32) -> ExpressionParts {
+    ExpressionParts {
+        kind: load_i32(kind_ptr),
+        data0: load_i32(data0_ptr),
+        data1: load_i32(data1_ptr),
+    }
 }
 
 fn store_expression_parts(
     kind_ptr: i32,
     data0_ptr: i32,
     data1_ptr: i32,
-    parts: (i32, i32, i32),
+    parts: ExpressionParts,
 ) {
-    store_i32(kind_ptr, parts.0);
-    store_i32(data0_ptr, parts.1);
-    store_i32(data1_ptr, parts.2);
+    store_i32(kind_ptr, parts.kind);
+    store_i32(data0_ptr, parts.data0);
+    store_i32(data1_ptr, parts.data1);
 }
 
-fn expression_index_from_parts(ast_base: i32, parts: (i32, i32, i32)) -> i32 {
-    expression_node_from_parts(ast_base, parts.0, parts.1, parts.2)
+fn expression_index_from_parts(ast_base: i32, parts: ExpressionParts) -> i32 {
+    expression_node_from_parts(ast_base, parts.kind, parts.data0, parts.data1)
 }
 
 fn record_struct_intrinsic_invalid_props_failure(

@@ -149,6 +149,18 @@ const IdentifierParse = struct(6, 3, [
     ("length", i32),
 ]);
 
+const EXPRESSION_PART_NAME_CAP: i32 = 5;
+
+const ExpressionParts = struct(
+    EXPRESSION_PART_NAME_CAP,
+    3,
+    [
+        ("kind\0", i32),
+        ("data0", i32),
+        ("data1", i32),
+    ],
+);
+
 fn parse_identifier(base: i32, len: i32, offset: i32) -> IdentifierParse {
     if offset >= len {
         return IdentifierParse {
@@ -474,7 +486,7 @@ fn type_template_capture_expression_template(
     } else {
         expr_index = expression_node_from_parts(ast_base, expr_kind, expr_data0, expr_data1);
         if expr_index < 0 { return -1; }
-        store_expression_parts(expr_kind_ptr, expr_data0_ptr, expr_data1_ptr, (2, expr_index, 0));
+        store_expression_parts(expr_kind_ptr, expr_data0_ptr, expr_data1_ptr, ExpressionParts { kind: 2, data0: expr_index, data1: 0 });
     }
     let usage_mask_low_ptr: i32 = scratch_base;
     let usage_mask_high_ptr: i32 = usage_mask_low_ptr + 4;
@@ -1943,7 +1955,7 @@ fn parse_block_expression_body(
                                             store_i32(locals_next_index_ptr, saved_next_index);
                                             return -1;
                                         }
-                                        let index_parts: (i32, i32, i32) = load_expression_parts(
+                                        let index_parts: ExpressionParts = load_expression_parts(
                                             index_kind_ptr,
                                             index_data0_ptr,
                                             index_data1_ptr,
@@ -2273,7 +2285,7 @@ fn parse_block_expression_body(
         };
     }
 
-    store_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr, (2, final_index, 0));
+    store_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr, ExpressionParts { kind: 2, data0: final_index, data1: 0 });
     idx
 }
 
@@ -2854,7 +2866,11 @@ fn parse_type_expression(
                         expr_kind_ptr,
                         expr_data0_ptr,
                         expr_data1_ptr,
-                        (2, expr_index, 0),
+                        ExpressionParts {
+                            kind: 2,
+                            data0: expr_index,
+                            data1: 0,
+                        },
                     );
                 }
             }
