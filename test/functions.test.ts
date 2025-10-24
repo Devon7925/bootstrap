@@ -95,6 +95,19 @@ test("duplicate function names are rejected", async () => {
   );
 });
 
+test.todo("duplicate function parameter names report diagnostics", async () => {
+  const failure = await expectCompileFailure(`
+    fn duplicate(value: i32, value: i32) -> i32 {
+        value
+    }
+
+    fn main() -> i32 {
+        duplicate(1, 2)
+    }
+  `);
+  expect(failure.failure.detail).toMatch(/duplicate parameter/);
+});
+
 test("parser reports diagnostic when function limit is exceeded", async () => {
   const functionCount = 1_025;
   const source = Array.from({ length: functionCount }, (_, index) => {
