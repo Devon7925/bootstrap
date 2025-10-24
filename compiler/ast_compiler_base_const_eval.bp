@@ -1,3 +1,4 @@
+use "./ast_compiler_base_lexing.bp";
 use "./ast_compiler_base_state.bp";
 
 fn unsigned_divide(dividend: i32, divisor: i32) -> i32 {
@@ -2606,36 +2607,6 @@ fn collect_expression_const_params_visit(
     if kind == 0 {
         return 0;
     }
-    if kind == 6 {
-        if params_count <= 0 {
-            return -1;
-        }
-        if const_mask_table_ptr <= 0 {
-            return -1;
-        }
-        let param_index: i32 = load_i32(entry_ptr + 4);
-        if param_index < 0 {
-            return -1;
-        }
-        if param_index >= params_count {
-            return -1;
-        }
-        let mask_word_index: i32 = param_index >> 5;
-        let mask_word_ptr: i32 = const_mask_table_ptr + mask_word_index * WORD_SIZE;
-        let mask_word_value: i32 = load_i32(mask_word_ptr);
-        let mask_bit_index: i32 = param_index & 31;
-        let mask_bit: i32 = 1 << mask_bit_index;
-        if (mask_word_value & mask_bit) == 0 {
-            return -1;
-        }
-        return type_template_record_param_usage(
-            param_index,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
-        );
-    }
     if kind == 1 {
         let metadata_ptr: i32 = load_i32(entry_ptr + 4);
         if metadata_ptr <= 0 {
@@ -2739,6 +2710,19 @@ fn collect_expression_const_params_visit(
         ) < 0 {
             return -1;
         }
+        let else_index: i32 = load_i32(entry_ptr + 16);
+        if collect_expression_const_params_visit(
+            ast_base,
+            else_index,
+            params_count,
+            const_mask_table_ptr,
+            usage_mask_low_ptr,
+            usage_mask_high_ptr,
+            usage_list_ptr,
+            usage_count_ptr,
+        ) < 0 {
+            return -1;
+        }
         return 0;
     }
     if kind == 10 {
@@ -2806,19 +2790,6 @@ fn collect_expression_const_params_visit(
             usage_count_ptr,
         );
     }
-    if kind == 22 {
-        let value_index: i32 = load_i32(entry_ptr + 4);
-        return collect_expression_const_params_visit(
-            ast_base,
-            value_index,
-            params_count,
-            const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
-        );
-    }
     if kind == 23 {
         let value_index: i32 = load_i32(entry_ptr + 4);
         return collect_expression_const_params_visit(
@@ -2835,15 +2806,7 @@ fn collect_expression_const_params_visit(
     if kind == 24 {
         return 0;
     }
-    if kind == 25
-        || kind == 26
-        || kind == 27
-        || kind == 28
-        || kind == 32
-        || kind == 33
-        || kind == 34
-        || kind == 36
-    {
+    if kind == 25 || kind == 26 || kind == 27 || kind == 28 || kind == 32 || kind == 33 || kind == 34 {
         let left_index: i32 = load_i32(entry_ptr + 4);
         if collect_expression_const_params_visit(
             ast_base,
@@ -2869,46 +2832,7 @@ fn collect_expression_const_params_visit(
             usage_count_ptr,
         );
     }
-    if kind == 2
-        || kind == 3
-        || kind == 4
-        || kind == 5
-        || kind == 46
-        || kind == 14
-        || kind == 15
-        || kind == 16
-        || kind == 17
-        || kind == 18
-        || kind == 19
-        || kind == 20
-        || kind == 21
-    {
-        let left_index: i32 = load_i32(entry_ptr + 4);
-        if collect_expression_const_params_visit(
-            ast_base,
-            left_index,
-            params_count,
-            const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
-        ) < 0 {
-            return -1;
-        }
-        let right_index: i32 = load_i32(entry_ptr + 8);
-        return collect_expression_const_params_visit(
-            ast_base,
-            right_index,
-            params_count,
-            const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
-        );
-    }
-    if kind == 29 || kind == 30 || kind == 31 || kind == 38 || kind == 39 || kind == 41 {
+    if kind == 29 || kind == 30 || kind == 31 || kind == 38 {
         let child_index: i32 = load_i32(entry_ptr + 4);
         return collect_expression_const_params_visit(
             ast_base,
@@ -2920,35 +2844,6 @@ fn collect_expression_const_params_visit(
             usage_list_ptr,
             usage_count_ptr,
         );
-    }
-    if kind == 35 {
-        let element_index: i32 = load_i32(entry_ptr + 4);
-        if collect_expression_const_params_visit(
-            ast_base,
-            element_index,
-            params_count,
-            const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
-        ) < 0 {
-            return -1;
-        }
-        let length_expr_index: i32 = ast_expr_array_repeat_length_expr(ast_base, expr_index);
-        if length_expr_index >= 0 {
-            return collect_expression_const_params_visit(
-                ast_base,
-                length_expr_index,
-                params_count,
-                const_mask_table_ptr,
-                usage_mask_low_ptr,
-                usage_mask_high_ptr,
-                usage_list_ptr,
-                usage_count_ptr,
-            );
-        }
-        return 0;
     }
     if kind == 44 {
         let array_index: i32 = load_i32(entry_ptr + 4);
@@ -3015,37 +2910,6 @@ fn collect_expression_const_params_visit(
             usage_count_ptr,
         );
     }
-    if kind == 37 || kind == 40 {
-        let values_ptr: i32 = load_i32(entry_ptr + 4);
-        let count: i32 = load_i32(entry_ptr + 8);
-        if count < 0 {
-            return -1;
-        }
-        if count == 0 {
-            return 0;
-        }
-        if values_ptr <= 0 {
-            return -1;
-        }
-        let mut elem_idx: i32 = 0;
-        while elem_idx < count {
-            let value_index: i32 = load_i32(values_ptr + elem_idx * WORD_SIZE);
-            if collect_expression_const_params_visit(
-                ast_base,
-                value_index,
-                params_count,
-                const_mask_table_ptr,
-                usage_mask_low_ptr,
-                usage_mask_high_ptr,
-                usage_list_ptr,
-                usage_count_ptr,
-            ) < 0 {
-                return -1;
-            }
-            elem_idx = elem_idx + 1;
-        };
-        return 0;
-    }
     if kind == 47 {
         let type_expr_index: i32 = ast_expr_struct_literal_type_expr(ast_base, expr_index);
         if collect_expression_const_params_visit(
@@ -3067,13 +2931,13 @@ fn collect_expression_const_params_visit(
         }
         let mut field_idx: i32 = 0;
         while field_idx < field_count {
-            let entry_ptr: i32 = struct_literal_field_entry_ptr(metadata_ptr, field_idx);
-            if entry_ptr <= 0 {
+            let field_ptr: i32 = struct_literal_field_entry_ptr(metadata_ptr, field_idx);
+            if field_ptr <= 0 {
                 return -1;
             }
-            let label_kind: i32 = struct_literal_field_label_kind(entry_ptr);
+            let label_kind: i32 = struct_literal_field_label_kind(field_ptr);
             if label_kind == STRUCT_LITERAL_LABEL_KIND_EXPRESSION {
-                let label_expr: i32 = struct_literal_field_label_data(entry_ptr);
+                let label_expr: i32 = struct_literal_field_label_data(field_ptr);
                 if collect_expression_const_params_visit(
                     ast_base,
                     label_expr,
@@ -3087,7 +2951,7 @@ fn collect_expression_const_params_visit(
                     return -1;
                 }
             }
-            let value_index: i32 = struct_literal_field_value_index(entry_ptr);
+            let value_index: i32 = struct_literal_field_value_index(field_ptr);
             if collect_expression_const_params_visit(
                 ast_base,
                 value_index,
@@ -3140,8 +3004,18 @@ fn collect_expression_const_params_visit(
     if kind == 42 || kind == 43 || kind == 8 {
         return 0;
     }
-    -1
+    type_template_collect_const_params(
+        ast_base,
+        expr_index,
+        params_count,
+        const_mask_table_ptr,
+        usage_mask_low_ptr,
+        usage_mask_high_ptr,
+        usage_list_ptr,
+        usage_count_ptr,
+    )
 }
+
 
 fn collect_expression_const_params(
     ast_base: i32,
