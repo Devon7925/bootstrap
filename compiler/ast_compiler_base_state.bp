@@ -392,6 +392,34 @@ fn scratch_module_index(out_ptr: i32) -> i32 {
     load_i32(scratch_module_index_ptr(out_ptr))
 }
 
+fn resolve_failure_module_source(
+    out_ptr: i32,
+    module_index: i32,
+    module_base: i32,
+    module_len: i32,
+) -> (i32, i32, i32) {
+    let mut resolved_index: i32 = module_index;
+    let mut resolved_base: i32 = module_base;
+    let mut resolved_len: i32 = module_len;
+    if resolved_index >= 0 {
+        if resolved_base <= 0 {
+            resolved_base = module_entry_content(resolved_index);
+        }
+        if resolved_len <= 0 {
+            resolved_len = module_entry_content_len(resolved_index);
+        }
+    } else {
+        if resolved_base <= 0 {
+            resolved_base = scratch_module_base(out_ptr);
+        }
+        if resolved_len <= 0 {
+            resolved_len = scratch_module_len(out_ptr);
+        }
+        resolved_index = scratch_module_index(out_ptr);
+    }
+    (resolved_index, resolved_base, resolved_len)
+}
+
 fn scratch_fn_count_ptr(out_ptr: i32) -> i32 {
     out_ptr + SCRATCH_FN_COUNT_OFFSET
 }

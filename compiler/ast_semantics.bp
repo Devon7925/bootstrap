@@ -2252,17 +2252,15 @@ fn try_record_struct_intrinsic_failure(
         if location_offset < 0 {
             location_offset = ast_expr_location(ast_base, expr_index);
         }
-        let mut module_index: i32 = ast_constant_entry_module_index(const_entry_ptr);
-        let mut module_base: i32 = 0;
-        let mut module_len: i32 = 0;
-        if module_index >= 0 {
-            module_base = module_entry_content(module_index);
-            module_len = module_entry_content_len(module_index);
-        } else {
-            module_index = scratch_module_index(out_ptr);
-            module_base = scratch_module_base(out_ptr);
-            module_len = scratch_module_len(out_ptr);
-        }
+        let module_source: (i32, i32, i32) = resolve_failure_module_source(
+            out_ptr,
+            ast_constant_entry_module_index(const_entry_ptr),
+            0,
+            0,
+        );
+        let module_index: i32 = module_source.0;
+        let module_base: i32 = module_source.1;
+        let module_len: i32 = module_source.2;
         let message: [u8; 23] = "duplicate struct field ";
         write_failure_detail_with_location(
             out_ptr,
@@ -2286,17 +2284,15 @@ fn try_record_struct_intrinsic_failure(
         if location_offset < 0 {
             location_offset = ast_expr_location(ast_base, expr_index);
         }
-        let mut module_index: i32 = ast_constant_entry_module_index(const_entry_ptr);
-        let mut module_base: i32 = 0;
-        let mut module_len: i32 = 0;
-        if module_index >= 0 {
-            module_base = module_entry_content(module_index);
-            module_len = module_entry_content_len(module_index);
-        } else {
-            module_index = scratch_module_index(out_ptr);
-            module_base = scratch_module_base(out_ptr);
-            module_len = scratch_module_len(out_ptr);
-        }
+        let module_source: (i32, i32, i32) = resolve_failure_module_source(
+            out_ptr,
+            ast_constant_entry_module_index(const_entry_ptr),
+            0,
+            0,
+        );
+        let module_index: i32 = module_source.0;
+        let module_base: i32 = module_source.1;
+        let module_len: i32 = module_source.2;
         let message: [u8; 47] =
             "const parameter template expected type mismatch";
         write_failure_detail_with_location(
@@ -2318,17 +2314,15 @@ fn try_record_struct_intrinsic_failure(
     if location_offset < 0 {
         location_offset = ast_expr_location(ast_base, expr_index);
     }
-    let mut module_index: i32 = ast_constant_entry_module_index(const_entry_ptr);
-    let mut module_base: i32 = 0;
-    let mut module_len: i32 = 0;
-    if module_index >= 0 {
-        module_base = module_entry_content(module_index);
-        module_len = module_entry_content_len(module_index);
-    } else {
-        module_index = scratch_module_index(out_ptr);
-        module_base = scratch_module_base(out_ptr);
-        module_len = scratch_module_len(out_ptr);
-    }
+    let module_source: (i32, i32, i32) = resolve_failure_module_source(
+        out_ptr,
+        ast_constant_entry_module_index(const_entry_ptr),
+        0,
+        0,
+    );
+    let module_index: i32 = module_source.0;
+    let module_base: i32 = module_source.1;
+    let module_len: i32 = module_source.2;
     let message: [u8; 60] =
         "struct intrinsic properties must be an array of field tuples";
     write_failure_detail_with_location(
@@ -2359,17 +2353,15 @@ fn interpret_program_constants(out_ptr: i32, ast_base: i32, func_count: i32) -> 
                 if load_u8(out_ptr) == 0 {
                     let message: [u8; 48] =
                         "const initializer must be compile-time evaluable";
-                    let mut module_index: i32 =
-                        ast_constant_entry_module_index(const_entry_ptr);
-                    let mut module_base: i32 = 0;
-                    let mut module_len: i32 = 0;
-                    if module_index >= 0 {
-                        module_base = module_entry_content(module_index);
-                        module_len = module_entry_content_len(module_index);
-                    } else {
-                        module_base = scratch_module_base(out_ptr);
-                        module_len = scratch_module_len(out_ptr);
-                    }
+                    let module_source: (i32, i32, i32) = resolve_failure_module_source(
+                        out_ptr,
+                        ast_constant_entry_module_index(const_entry_ptr),
+                        0,
+                        0,
+                    );
+                    let module_index: i32 = module_source.0;
+                    let module_base: i32 = module_source.1;
+                    let module_len: i32 = module_source.2;
                     let location_offset: i32 =
                         ast_constant_entry_name_start(const_entry_ptr);
                     write_failure_detail_with_location(
@@ -2475,16 +2467,15 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
                     let detail_out_ptr: i32 = out_ptr;
                     if detail_out_ptr > 0 {
                         if load_u8(detail_out_ptr) == 0 {
-                            let module_index: i32 =
-                                ast_function_entry_module_index(ast_base, idx);
-                            let mut module_base: i32 =
-                                ast_function_entry_module_base(ast_base, idx);
-                            let mut module_len: i32 =
-                                ast_function_entry_module_len(ast_base, idx);
-                            if (module_base <= 0 || module_len <= 0) && module_index >= 0 {
-                                module_base = module_entry_content(module_index);
-                                module_len = module_entry_content_len(module_index);
-                            }
+                            let module_source: (i32, i32, i32) = resolve_failure_module_source(
+                                out_ptr,
+                                ast_function_entry_module_index(ast_base, idx),
+                                ast_function_entry_module_base(ast_base, idx),
+                                ast_function_entry_module_len(ast_base, idx),
+                            );
+                            let module_index: i32 = module_source.0;
+                            let module_base: i32 = module_source.1;
+                            let module_len: i32 = module_source.2;
                             let name_start: i32 =
                                 ast_function_entry_name_start(ast_base, idx);
                             let message: [u8; 30] = "duplicate function declaration";
@@ -5535,22 +5526,30 @@ fn resolve_expression_internal(
                     if load_u8(out_ptr) == 0 {
                         let location_offset: i32 = ast_expr_break_location(ast_base, expr_index);
                         if location_offset >= 0 {
-                            let mut module_index: i32 = -1;
-                            let mut module_base: i32 = 0;
-                            let mut module_len: i32 = 0;
-                            if caller_func_index >= 0 {
-                                module_index = ast_function_entry_module_index(ast_base, caller_func_index);
-                                module_base = ast_function_entry_module_base(ast_base, caller_func_index);
-                                module_len = ast_function_entry_module_len(ast_base, caller_func_index);
-                                if (module_base <= 0 || module_len <= 0) && module_index >= 0 {
-                                    module_base = module_entry_content(module_index);
-                                    module_len = module_entry_content_len(module_index);
-                                }
-                            }
-                            if module_index < 0 {
-                                module_base = scratch_module_base(out_ptr);
-                                module_len = scratch_module_len(out_ptr);
-                            }
+                            let initial_module_index: i32 = if caller_func_index >= 0 {
+                                ast_function_entry_module_index(ast_base, caller_func_index)
+                            } else {
+                                -1
+                            };
+                            let initial_module_base: i32 = if caller_func_index >= 0 {
+                                ast_function_entry_module_base(ast_base, caller_func_index)
+                            } else {
+                                0
+                            };
+                            let initial_module_len: i32 = if caller_func_index >= 0 {
+                                ast_function_entry_module_len(ast_base, caller_func_index)
+                            } else {
+                                0
+                            };
+                            let module_source: (i32, i32, i32) = resolve_failure_module_source(
+                                out_ptr,
+                                initial_module_index,
+                                initial_module_base,
+                                initial_module_len,
+                            );
+                            let module_index: i32 = module_source.0;
+                            let module_base: i32 = module_source.1;
+                            let module_len: i32 = module_source.2;
                             let message: [u8; 36] = "while loops cannot break with values";
                             write_failure_detail_with_location(
                                 out_ptr,
