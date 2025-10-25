@@ -164,6 +164,36 @@ test("if branches with mismatched types report precise diagnostics", async () =>
   expect(failure.failure.detail).toBe("if branches type mismatch");
 });
 
+test.todo("if expressions without else branches cannot produce values", async () => {
+  const failure = await expectCompileFailure(`
+    fn choose(flag: bool) -> i32 {
+        if flag {
+            1
+        }
+    }
+
+    fn main() -> i32 {
+        choose(false)
+    }
+  `);
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:3:9: if expressions used as values require an else branch",
+  );
+});
+
+test.todo("loop expressions used as values must break with a value", async () => {
+  const failure = await expectCompileFailure(`
+    fn main() -> i32 {
+        loop {
+            break;
+        }
+    }
+  `);
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:3:9: loop expressions used as values must break with a value",
+  );
+});
+
 test("loop allows final if without semicolon", async () => {
   const wasm = await compileWithAstCompiler(`
     fn loop_with_final_if(limit: i32) -> i32 {
