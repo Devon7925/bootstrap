@@ -89,7 +89,7 @@ test("array index rejects out of bounds constant indices", async () => {
   );
 });
 
-test.todo(
+test(
   "array index reports non-array operand diagnostic",
   async () => {
     const failure = await expectCompileFailure(`
@@ -99,7 +99,7 @@ test.todo(
       }
     `);
     expect(failure.failure.detail).toBe(
-      "/entry.bp:4:11: array index requires array operand",
+      "/entry.bp:4:17: array index requires array operand",
     );
   },
 );

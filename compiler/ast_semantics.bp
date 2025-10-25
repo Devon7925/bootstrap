@@ -114,6 +114,42 @@ fn record_failure_with_location(
     0
 }
 
+fn find_token_location_before(
+    out_ptr: i32,
+    start_offset: i32,
+    target_byte: i32,
+) -> i32 {
+    if out_ptr <= 0 {
+        return start_offset;
+    }
+    let module_base: i32 = scratch_module_base(out_ptr);
+    let module_len: i32 = scratch_module_len(out_ptr);
+    if module_base <= 0 {
+        return start_offset;
+    }
+    if module_len <= 0 {
+        return start_offset;
+    }
+    if start_offset <= 0 {
+        return start_offset;
+    }
+    let mut cursor: i32 = start_offset - 1;
+    loop {
+        if cursor < 0 {
+            break;
+        }
+        let byte: i32 = load_u8(module_base + cursor);
+        if byte == target_byte {
+            return cursor;
+        }
+        if !is_whitespace(byte) {
+            break;
+        }
+        cursor = cursor - 1;
+    };
+    start_offset
+}
+
 fn append_struct_field_name_to_failure(
     out_ptr: i32,
     ast_base: i32,
@@ -3685,6 +3721,16 @@ fn resolve_expression_internal(
             return 0;
         }
         if !type_id_is_array(resolved_array_type) {
+            let array_location: i32 =
+                find_token_location_before(out_ptr, index_location, '[' as i32);
+            record_failure_with_location(
+                out_ptr,
+                ast_base,
+                caller_func_index,
+                array_location,
+                34,
+                "array index requires array operand",
+            );
             return -1;
         }
         let index_type: i32 = ast_expr_type(ast_base, index_index);
@@ -4150,7 +4196,18 @@ fn resolve_expression_internal(
         if resolved_tuple != tuple_type {
             ast_expr_set_type(ast_base, tuple_index, resolved_tuple);
         }
+        let access_location: i32 = load_i32(entry_ptr + 12);
         if !type_id_is_tuple(resolved_tuple) {
+            let tuple_location: i32 =
+                find_token_location_before(out_ptr, access_location, '.' as i32);
+            record_failure_with_location(
+                out_ptr,
+                ast_base,
+                caller_func_index,
+                tuple_location,
+                41,
+                "tuple field access requires tuple operand",
+            );
             return -1;
         }
         let tuple_idx: i32 = tuple_type_index(resolved_tuple);
@@ -4164,7 +4221,6 @@ fn resolve_expression_internal(
             return -1;
         }
         let element_count: i32 = ast_tuple_type_element_count(ast_base, tuple_idx);
-        let access_location: i32 = load_i32(entry_ptr + 12);
         if element_count <= field_index {
             record_failure_with_location(
                 out_ptr,
