@@ -209,6 +209,30 @@ test("array list literal length must match declared type", async () => {
   );
 });
 
+test.todo("array local initialization enforces literal length", async () => {
+  const failure = await expectCompileFailure(`
+    fn main() {
+        let values: [i32; 3] = [1, 2];
+    }
+  `);
+
+  expect(failure.failure.detail).toContain(
+    "array expression type does not match expected array type",
+  );
+});
+
+test.todo("array locals reject extra literal elements", async () => {
+  const failure = await expectCompileFailure(`
+    fn main() {
+        let values: [i32; 2] = [1, 2, 3];
+    }
+  `);
+
+  expect(failure.failure.detail).toContain(
+    "array expression type does not match expected array type",
+  );
+});
+
 test("array list literal requires uniform element types", async () => {
   const failure = await expectCompileFailure(`
     fn build() -> [i32; 3] {
