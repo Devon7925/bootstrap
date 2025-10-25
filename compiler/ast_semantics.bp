@@ -1569,7 +1569,7 @@ fn resolve_call_metadata(
                             if new_specialization < 0 {
                                 if out_ptr > 0 {
                                     if load_u8(out_ptr) == 0 {
-                                        let message: [u8; 64] =
+                                        let message: [u8; 58] =
                                             "const specialization cloning failed\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
                                         let detail_capacity: i32 = len(message);
                                         let mut detail_idx: i32 = 0;

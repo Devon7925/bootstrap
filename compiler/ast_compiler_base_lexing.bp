@@ -1308,6 +1308,48 @@ fn parse_block_expression_body(
                     return -1;
                 }
             }
+            if local_type_id >= 0 && type_id_is_array(local_type_id) {
+                let expected_length: i32 = array_type_length(ast_base, local_type_id);
+                if expected_length >= 0 {
+                    let mut literal_length: i32 = -1;
+                    if init_kind == 35 {
+                        literal_length = ast_expr_array_repeat_length(ast_base, init_index);
+                    } else if init_kind == 37 {
+                        let init_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, init_index);
+                        literal_length = load_i32(init_entry_ptr + 2 * WORD_SIZE);
+                    }
+                    if literal_length >= 0 && literal_length != expected_length {
+                        let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+                        if detail_out_ptr > 0 {
+                            if load_u8(detail_out_ptr) == 0 {
+                                let mut location_offset: i32 =
+                                    ast_expr_location(ast_base, init_index);
+                                if location_offset <= 0 {
+                                    if init_start >= 0 {
+                                        location_offset = init_start;
+                                    } else {
+                                        location_offset = name_start;
+                                    }
+                                }
+                                let message: [u8; 56] =
+                                    "array expression type does not match expected array type";
+                                write_failure_detail_with_location(
+                                    detail_out_ptr,
+                                    scratch_module_index(detail_out_ptr),
+                                    base,
+                                    len,
+                                    location_offset,
+                                    56,
+                                    message,
+                                );
+                            }
+                        }
+                        store_i32(locals_stack_count_ptr, saved_stack_count);
+                        store_i32(locals_next_index_ptr, saved_next_index);
+                        return -1;
+                    }
+                }
+            }
             idx = skip_whitespace(base, len, idx);
             idx = expect_char(base, len, idx, ';');
             if idx < 0 {

@@ -3749,8 +3749,8 @@ fn emit_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
         runtime_map,
     );
     if offset < 0 {
-        let message: [u8; 34] = "failed to emit WebAssembly type section";
-        record_emit_failure(out_ptr, 34, message);
+        let message: [u8; 39] = "failed to emit WebAssembly type section";
+        record_emit_failure(out_ptr, 39, message);
         return -1;
     }
     offset = emit_function_section(
@@ -3763,20 +3763,20 @@ fn emit_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
         struct_count,
     );
     if offset < 0 {
-        let message: [u8; 38] = "failed to emit WebAssembly function section";
-        record_emit_failure(out_ptr, 38, message);
+        let message: [u8; 43] = "failed to emit WebAssembly function section";
+        record_emit_failure(out_ptr, 43, message);
         return -1;
     }
     offset = emit_memory_section(out_ptr, offset);
     if offset < 0 {
-        let message: [u8; 36] = "failed to emit WebAssembly memory section";
-        record_emit_failure(out_ptr, 36, message);
+        let message: [u8; 41] = "failed to emit WebAssembly memory section";
+        record_emit_failure(out_ptr, 41, message);
         return -1;
     }
     offset = emit_export_section(out_ptr, offset, ast_base, func_count, runtime_map.ptr);
     if offset < 0 {
-        let message: [u8; 37] = "failed to emit WebAssembly export section";
-        record_emit_failure(out_ptr, 37, message);
+        let message: [u8; 41] = "failed to emit WebAssembly export section";
+        record_emit_failure(out_ptr, 41, message);
         return -1;
     }
     offset = emit_code_section(
@@ -3787,8 +3787,8 @@ fn emit_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
         runtime_map,
     );
     if offset < 0 {
-        let message: [u8; 34] = "failed to emit WebAssembly code section";
-        record_emit_failure(out_ptr, 34, message);
+        let message: [u8; 39] = "failed to emit WebAssembly code section";
+        record_emit_failure(out_ptr, 39, message);
         return -1;
     }
     offset
