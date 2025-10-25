@@ -5483,6 +5483,23 @@ fn resolve_expression_internal(
             return -1;
         }
         store_i32(control_stack_count_ptr, control_count);
+        let else_marker: i32 = ast_expr_entry_extra(ast_base, else_index);
+        if else_marker == -1 {
+            let if_location: i32 = ast_expr_entry_extra(ast_base, expr_index);
+            if if_location >= 0 {
+                let message: [u8; 52] =
+                    "if expressions used as values require an else branch";
+                record_failure_with_location(
+                    out_ptr,
+                    ast_base,
+                    caller_func_index,
+                    if_location,
+                    52,
+                    message,
+                );
+                return -1;
+            }
+        }
         let condition_type: i32 = ast_expr_type(ast_base, condition_index);
         if !type_id_is_bool(condition_type) {
             if !type_id_is_integer(condition_type) {

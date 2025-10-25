@@ -312,9 +312,11 @@ fn parse_basic_expression(
             store_i32(else_data0_ptr, 0);
             store_i32(else_data1_ptr, 0);
             store_i32(else_status_ptr, 1);
+            let mut has_else_branch: bool = false;
             store_i32(literal_ptr, if_cursor);
             if_cursor = expect_keyword_else(base, len, if_cursor);
             if if_cursor >= 0 {
+                has_else_branch = true;
                 if_cursor = skip_whitespace(base, len, if_cursor);
                 if if_cursor >= len {
                     return -1;
@@ -402,6 +404,9 @@ fn parse_basic_expression(
             if else_index < 0 {
                 return -1;
             }
+            if !has_else_branch {
+                ast_expr_entry_set_extra(ast_base, else_index, -1);
+            }
             if load_i32(else_status_ptr) < 0 {
                 let else_diverges: bool = expression_guaranteed_diverges(ast_base, else_index);
                 let else_has_value: i32 = if else_diverges { 0 } else { 1 };
@@ -413,6 +418,7 @@ fn parse_basic_expression(
             if if_index < 0 {
                 return -1;
             }
+            ast_expr_entry_set_extra(ast_base, if_index, cursor);
             store_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr, ExpressionParts { kind: 2, data0: if_index, data1: 0 });
             let both_have_values: i32 = if then_has_value != 0 && else_has_value != 0 {
                 0

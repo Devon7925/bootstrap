@@ -2275,6 +2275,13 @@ fn parse_block_expression_body(
                 store_i32(locals_next_index_ptr, saved_next_index);
                 return -1;
             }
+            let expr_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+            if expr_entry_ptr > 0 {
+                let expr_entry_kind: i32 = load_i32(expr_entry_ptr);
+                if expr_entry_kind == 7 {
+                    ast_expr_entry_set_extra(ast_base, expr_index, -1);
+                }
+            }
             let stmt_count: i32 = load_i32(statement_count_ptr);
             if stmt_count >= statements_capacity {
                 store_i32(locals_stack_count_ptr, saved_stack_count);
@@ -2306,6 +2313,13 @@ fn parse_block_expression_body(
                             store_i32(locals_stack_count_ptr, saved_stack_count);
                             store_i32(locals_next_index_ptr, saved_next_index);
                             return -1;
+                        }
+                        let expr_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+                        if expr_entry_ptr > 0 {
+                            let expr_entry_kind: i32 = load_i32(expr_entry_ptr);
+                            if expr_entry_kind == 7 {
+                                ast_expr_entry_set_extra(ast_base, expr_index, -1);
+                            }
                         }
                         let stmt_count: i32 = load_i32(statement_count_ptr);
                         if stmt_count >= statements_capacity {
