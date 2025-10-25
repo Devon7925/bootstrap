@@ -291,6 +291,35 @@ test("unit function results cannot initialize locals", async () => {
   );
 });
 
+test.todo(
+  "block expression results must respect declared return types",
+  async () => {
+    const failure = await expectCompileFailure(`
+    fn returns_bool_in_i32() -> i32 {
+        let flag: bool = true;
+        flag
+    }
+  `);
+    expect(failure.failure.detail).toBe(
+      "/entry.bp:4:9: return expression type does not match function return type",
+    );
+  },
+);
+
+test.todo(
+  "boolean functions must reject integer-valued block results",
+  async () => {
+    const failure = await expectCompileFailure(`
+    fn returns_int_in_bool() -> bool {
+        1
+    }
+  `);
+    expect(failure.failure.detail).toBe(
+      "/entry.bp:3:9: return expression type does not match function return type",
+    );
+  },
+);
+
 test("functions can use local variables", async () => {
   const wasm = await compileWithAstCompiler(`
     fn compute() -> i32 {
