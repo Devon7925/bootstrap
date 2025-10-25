@@ -92,6 +92,21 @@ test("tuple field indices must exist", async () => {
   );
 });
 
+test.todo(
+  "tuple field access reports non-tuple operand diagnostic",
+  async () => {
+    const failure = await expectCompileFailure(`
+      fn main() -> i32 {
+          let number: i32 = 0;
+          number.0
+      }
+    `);
+    expect(failure.failure.detail).toBe(
+      "/entry.bp:4:11: tuple field access requires tuple operand",
+    );
+  },
+);
+
 test("tuple fields can be chained", async () => {
   const wasm = await compileWithAstCompiler(`
     fn main() -> i32 {
