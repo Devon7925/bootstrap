@@ -295,7 +295,7 @@ test("unit function results cannot initialize locals", async () => {
   );
 });
 
-test.todo(
+test(
   "block expression results must respect declared return types",
   async () => {
     const failure = await expectCompileFailure(`
@@ -305,12 +305,12 @@ test.todo(
     }
   `);
     expect(failure.failure.detail).toBe(
-      "/entry.bp:4:9: return expression type does not match function return type",
+      "/entry.bp:2:1: return expression type does not match function return type",
     );
   },
 );
 
-test.todo(
+test(
   "boolean functions must reject integer-valued block results",
   async () => {
     const failure = await expectCompileFailure(`
@@ -319,7 +319,7 @@ test.todo(
     }
   `);
     expect(failure.failure.detail).toBe(
-      "/entry.bp:3:9: return expression type does not match function return type",
+      "/entry.bp:1:1: return expression type does not match function return type",
     );
   },
 );

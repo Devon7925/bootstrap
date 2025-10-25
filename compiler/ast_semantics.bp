@@ -2698,6 +2698,23 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
                     } else if !expression_guaranteed_diverges(ast_base, expr_index) {
                         return -1;
                     }
+                } else {
+                    if expr_type >= 0 {
+                        if expr_type != fn_return_type {
+                            let location_offset: i32 = ast_expr_location(ast_base, expr_index);
+                            record_failure_with_location(
+                                out_ptr,
+                                ast_base,
+                                idx,
+                                location_offset,
+                                58,
+                                "return expression type does not match function return type",
+                            );
+                            return -1;
+                        }
+                    } else if !expression_guaranteed_diverges(ast_base, expr_index) {
+                        return -1;
+                    }
                 }
             }
         }
