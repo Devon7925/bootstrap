@@ -295,7 +295,7 @@ test("unit function results cannot initialize locals", async () => {
   );
 });
 
-test.todo(
+test(
   "block expression results must respect declared return types",
   async () => {
     const failure = await expectCompileFailure(`
@@ -310,7 +310,7 @@ test.todo(
   },
 );
 
-test.todo(
+test(
   "boolean functions must reject integer-valued block results",
   async () => {
     const failure = await expectCompileFailure(`
