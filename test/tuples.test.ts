@@ -92,7 +92,7 @@ test("tuple field indices must exist", async () => {
   );
 });
 
-test.todo(
+test(
   "tuple field access reports non-tuple operand diagnostic",
   async () => {
     const failure = await expectCompileFailure(`
@@ -102,7 +102,7 @@ test.todo(
       }
     `);
     expect(failure.failure.detail).toBe(
-      "/entry.bp:4:11: tuple field access requires tuple operand",
+      "/entry.bp:4:17: tuple field access requires tuple operand",
     );
   },
 );
