@@ -355,6 +355,32 @@ fn resolve_constant_failure_module_context(
     (module_index, module_base, module_len)
 }
 
+fn record_struct_literal_field_failure(
+    out_ptr: i32,
+    ast_base: i32,
+    caller_func_index: i32,
+    location_offset: i32,
+    struct_index: i32,
+    field_index: i32,
+    const MESSAGE_LEN: i32,
+    message: [u8; MESSAGE_LEN],
+) {
+    if out_ptr > 0 {
+        let initial: i32 = load_u8(out_ptr);
+        record_failure_with_location(
+            out_ptr,
+            ast_base,
+            caller_func_index,
+            location_offset,
+            MESSAGE_LEN,
+            message,
+        );
+        if initial == 0 {
+            append_struct_field_name_to_failure(out_ptr, ast_base, struct_index, field_index);
+        }
+    }
+}
+
 fn record_struct_literal_field_mismatch(
     out_ptr: i32,
     ast_base: i32,
@@ -363,22 +389,16 @@ fn record_struct_literal_field_mismatch(
     struct_index: i32,
     field_index: i32,
 ) {
-    if out_ptr > 0 {
-        let initial: i32 = load_u8(out_ptr);
-        let message: [u8; 57] =
-            "struct literal field name does not match canonical field ";
-        record_failure_with_location(
-            out_ptr,
-            ast_base,
-            caller_func_index,
-            location_offset,
-            57,
-            message,
-        );
-        if initial == 0 {
-            append_struct_field_name_to_failure(out_ptr, ast_base, struct_index, field_index);
-        }
-    }
+    record_struct_literal_field_failure(
+        out_ptr,
+        ast_base,
+        caller_func_index,
+        location_offset,
+        struct_index,
+        field_index,
+        57,
+        "struct literal field name does not match canonical field ",
+    );
 }
 
 fn record_struct_literal_missing_field(
@@ -389,21 +409,16 @@ fn record_struct_literal_missing_field(
     struct_index: i32,
     field_index: i32,
 ) {
-    if out_ptr > 0 {
-        let initial: i32 = load_u8(out_ptr);
-        let message: [u8; 29] = "struct literal missing field ";
-        record_failure_with_location(
-            out_ptr,
-            ast_base,
-            caller_func_index,
-            location_offset,
-            29,
-            message,
-        );
-        if initial == 0 {
-            append_struct_field_name_to_failure(out_ptr, ast_base, struct_index, field_index);
-        }
-    }
+    record_struct_literal_field_failure(
+        out_ptr,
+        ast_base,
+        caller_func_index,
+        location_offset,
+        struct_index,
+        field_index,
+        29,
+        "struct literal missing field ",
+    );
 }
 
 fn struct_label_expression_requires_const_specialization(
@@ -800,22 +815,16 @@ fn record_struct_literal_type_mismatch(
     struct_index: i32,
     field_index: i32,
 ) {
-    if out_ptr > 0 {
-        let initial: i32 = load_u8(out_ptr);
-        let message: [u8; 63] =
-            "struct literal field value type does not match canonical field ";
-        record_failure_with_location(
-            out_ptr,
-            ast_base,
-            caller_func_index,
-            location_offset,
-            63,
-            message,
-        );
-        if initial == 0 {
-            append_struct_field_name_to_failure(out_ptr, ast_base, struct_index, field_index);
-        }
-    }
+    record_struct_literal_field_failure(
+        out_ptr,
+        ast_base,
+        caller_func_index,
+        location_offset,
+        struct_index,
+        field_index,
+        63,
+        "struct literal field value type does not match canonical field ",
+    );
 }
 
 fn store_call_failure_location(
