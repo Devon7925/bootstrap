@@ -164,7 +164,7 @@ test("if branches with mismatched types report precise diagnostics", async () =>
   expect(failure.failure.detail).toBe("if branches type mismatch");
 });
 
-test.todo("if expressions without else branches cannot produce values", async () => {
+test("if expressions without else branches cannot produce values", async () => {
   const failure = await expectCompileFailure(`
     fn choose(flag: bool) -> i32 {
         if flag {

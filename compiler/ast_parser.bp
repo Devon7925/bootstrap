@@ -311,7 +311,7 @@ fn parse_basic_expression(
             store_i32(else_kind_ptr, 0);
             store_i32(else_data0_ptr, 0);
             store_i32(else_data1_ptr, 0);
-            store_i32(else_status_ptr, 1);
+            store_i32(else_status_ptr, 0);
             store_i32(literal_ptr, if_cursor);
             if_cursor = expect_keyword_else(base, len, if_cursor);
             if if_cursor >= 0 {
