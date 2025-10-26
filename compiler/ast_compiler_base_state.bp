@@ -104,10 +104,14 @@ fn module_entry_ptr(index: i32) -> i32 {
     module_table_base() + index * MODULE_ENTRY_SIZE
 }
 
-fn module_entry_store(index: i32, entry: [i32; MODULE_ENTRY_FIELD_COUNT]) {
+fn module_entry_store(
+    index: i32,
+    const FIELD_COUNT: i32,
+    entry: [i32; FIELD_COUNT],
+) {
     let entry_ptr: i32 = module_entry_ptr(index);
     let mut field: i32 = 0;
-    while field < MODULE_ENTRY_FIELD_COUNT {
+    while field < FIELD_COUNT {
         store_i32(entry_ptr + field * WORD_SIZE, entry[field]);
         field = field + 1;
     };
@@ -128,6 +132,7 @@ fn module_entry_flags(index: i32) -> i32 {
 fn module_entry_set_flags(index: i32, flags: i32) {
     module_entry_store(
         index,
+        MODULE_ENTRY_FIELD_COUNT,
         [
             module_entry_field(index, 0),
             module_entry_field(index, 1),
@@ -260,7 +265,7 @@ fn module_entry_content_len(index: i32) -> i32 {
 }
 
 fn module_write_entry(index: i32, path_ptr: i32, path_len: i32, content_ptr: i32, content_len: i32) {
-    module_entry_store(index, [path_ptr, path_len, content_ptr, content_len, 0]);
+    module_entry_store(index, MODULE_ENTRY_FIELD_COUNT, [path_ptr, path_len, content_ptr, content_len, 0]);
 }
 
 fn scratch_instr_offset_ptr(out_ptr: i32) -> i32 {
@@ -3628,14 +3633,16 @@ fn ast_constant_entry_ptr(ast_base: i32, index: i32) -> i32 {
 
 const AST_CONSTANT_ENTRY_FIELD_COUNT: i32 = 7;
 
-fn ast_constant_entry_store(entry_ptr: i32, entry: [i32; AST_CONSTANT_ENTRY_FIELD_COUNT]) {
-    store_i32(entry_ptr + AST_CONSTANT_ENTRY_NAME_OFFSET, entry[0]);
-    store_i32(entry_ptr + AST_CONSTANT_ENTRY_NAME_LEN_OFFSET, entry[1]);
-    store_i32(entry_ptr + AST_CONSTANT_ENTRY_VALUE_OFFSET, entry[2]);
-    store_i32(entry_ptr + AST_CONSTANT_ENTRY_TYPE_OFFSET, entry[3]);
-    store_i32(entry_ptr + AST_CONSTANT_ENTRY_EXPR_INDEX_OFFSET, entry[4]);
-    store_i32(entry_ptr + AST_CONSTANT_ENTRY_EVAL_STATE_OFFSET, entry[5]);
-    store_i32(entry_ptr + AST_CONSTANT_ENTRY_MODULE_INDEX_OFFSET, entry[6]);
+fn ast_constant_entry_store(
+    entry_ptr: i32,
+    const FIELD_COUNT: i32,
+    entry: [i32; FIELD_COUNT],
+) {
+    let mut field: i32 = 0;
+    while field < FIELD_COUNT {
+        store_i32(entry_ptr + field * WORD_SIZE, entry[field]);
+        field = field + 1;
+    };
 }
 
 fn ast_constant_entry_name_start(entry_ptr: i32) -> i32 {

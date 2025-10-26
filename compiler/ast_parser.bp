@@ -3812,6 +3812,7 @@ fn parse_constant_declaration(
     let entry_ptr: i32 = ast_constant_entry_ptr(ast_base, count);
     ast_constant_entry_store(
         entry_ptr,
+        AST_CONSTANT_ENTRY_FIELD_COUNT,
         [
             name_start,
             name_len,
