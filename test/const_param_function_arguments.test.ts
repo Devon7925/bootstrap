@@ -115,3 +115,33 @@ test("const parameter specialization differentiates functions by identity", asyn
     const result = await runWasmMainWithGc(wasm);
     expect(result).toBe(22);
 });
+
+test.todo(
+    "const parameters accept function references from imported modules",
+    async () => {
+        const wasm = await compileWithAstCompiler(
+            `
+    use "/fixtures/math.bp";
+
+    fn apply(const HANDLER: fn(i32) -> i32, value: i32) -> i32 {
+        HANDLER(value)
+    }
+
+    fn main() -> i32 {
+        apply(double, 4)
+    }
+  `,
+            {
+                entryPath: "/tests/const-param-imports.bp",
+                modules: [
+                    {
+                        path: "/fixtures/math.bp",
+                        source: `fn double(value: i32) -> i32 { value * 2 }`,
+                    },
+                ],
+            },
+        );
+        const result = await runWasmMainWithGc(wasm);
+        expect(result).toBe(8);
+    },
+);
