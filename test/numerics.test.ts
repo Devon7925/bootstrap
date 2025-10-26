@@ -44,7 +44,7 @@ test("literal addition executes", async () => {
   expect(result).toBe(6);
 });
 
-test.todo("numeric literals accept underscore separators", async () => {
+test("numeric literals accept underscore separators", async () => {
   const wasm = await compileWithAstCompiler(`
     fn main() -> i32 {
         1_000 + 2_500
