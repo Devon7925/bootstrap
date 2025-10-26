@@ -164,6 +164,19 @@ test("if branches with mismatched types report precise diagnostics", async () =>
   expect(failure.failure.detail).toBe("if branches type mismatch");
 });
 
+test.todo("if conditions require boolean values", async () => {
+  const failure = await expectCompileFailure(`
+    fn main() -> i32 {
+        if 1 {
+            1
+        } else {
+            0
+        }
+    }
+  `);
+  expect(failure.failure.detail).toBe("/entry.bp:3:12: if condition type mismatch");
+});
+
 test("if expressions without else branches cannot produce values", async () => {
   const failure = await expectCompileFailure(`
     fn choose(flag: bool) -> i32 {
@@ -192,6 +205,17 @@ test("loop expressions used as values must break with a value", async () => {
   expect(failure.failure.detail).toBe(
     "/entry.bp:5:9: loop expressions used as values must break with a value",
   );
+});
+
+test.todo("loop break values must match the surrounding expression type", async () => {
+  const failure = await expectCompileFailure(`
+    fn main() -> i32 {
+        loop {
+            break true;
+        }
+    }
+  `);
+  expect(failure.failure.detail).toBe("/entry.bp:4:13: loop break type mismatch");
 });
 
 test("loop allows final if without semicolon", async () => {
