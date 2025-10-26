@@ -3902,8 +3902,17 @@ fn parse_i32_literal(base: i32, len: i32, offset: i32, out_value_ptr: i32) -> i3
             idx = idx + 2;
             let mut digits: i32 = 0;
             let mut value: i32 = 0;
+            let mut last_separator: bool = false;
             while idx < len {
                 let byte: i32 = load_u8(base + idx);
+                if byte == '_' {
+                    if digits == 0 || last_separator {
+                        return -1;
+                    }
+                    last_separator = true;
+                    idx = idx + 1;
+                    continue;
+                }
                 let hex: i32 = if byte >= '0' && byte <= '9' {
                     byte - '0'
                 } else if byte >= 'a' && byte <= 'f' {
@@ -3919,8 +3928,9 @@ fn parse_i32_literal(base: i32, len: i32, offset: i32, out_value_ptr: i32) -> i3
                 value = value * 16 + hex;
                 idx = idx + 1;
                 digits = digits + 1;
+                last_separator = false;
             };
-            if digits == 0 {
+            if digits == 0 || last_separator {
                 return -1;
             }
             store_i32(out_value_ptr, value * sign);
@@ -3929,16 +3939,26 @@ fn parse_i32_literal(base: i32, len: i32, offset: i32, out_value_ptr: i32) -> i3
     }
     let mut digits: i32 = 0;
     let mut value: i32 = 0;
+    let mut last_separator: bool = false;
     while idx < len {
         let byte: i32 = load_u8(base + idx);
+        if byte == '_' {
+            if digits == 0 || last_separator {
+                return -1;
+            }
+            last_separator = true;
+            idx = idx + 1;
+            continue;
+        }
         if !is_digit(byte) {
             break;
         }
         value = value * 10 + (byte - '0');
         idx = idx + 1;
         digits = digits + 1;
+        last_separator = false;
     };
-    if digits == 0 {
+    if digits == 0 || last_separator {
         return -1;
     }
     store_i32(out_value_ptr, value * sign);
