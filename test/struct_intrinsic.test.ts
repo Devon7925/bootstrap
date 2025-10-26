@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { compileWithAstCompiler, runWasmMainWithGc } from "./helpers";
+import {
+    compileWithAstCompiler,
+    expectCompileFailure,
+    runWasmMainWithGc,
+} from "./helpers";
 
 describe("struct intrinsic with const type values", () => {
     test("constructs a static pair with dot and bracket access", async () => {
@@ -140,28 +144,19 @@ describe("struct intrinsic with const type values", () => {
         expect(result).toBe(38);
     });
 
-    test.todo(
-        "struct intrinsic reports canonical name length mismatch",
-        async () => {
-            const failure = await expectCompileFailure(`
+    test("struct intrinsic reports canonical name length mismatch", async () => {
+        const failure = await expectCompileFailure(`
             const Pair = struct(6, 2, [
                 ("first", i32),
                 ("second", i32),
             ]);
 
-            fn main() -> i32 {
-                let pair: Pair = Pair {
-                    first: 1,
-                    second: 2,
-                };
-                pair.first + pair.second
-            }
+            fn main() -> i32 { 0 }
           `);
-            expect(failure.failure.detail).toContain(
-                "const parameter template expected type mismatch",
-            );
-        },
-    );
+        expect(failure.failure.detail).toBe(
+            "/entry.bp:2:26: const parameter template expected type mismatch",
+        );
+    });
 
     test("struct literals accept bracket labels out of canonical order", async () => {
         const wasm = await compileWithAstCompiler(`
