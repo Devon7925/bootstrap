@@ -21,8 +21,13 @@ fn identifiers_match(ptr_a: i32, len_a: i32, ptr_b: i32, len_b: i32) -> bool {
 
 const LOOP_STACK_FLAG_STRIDE: i32 = 65536;
 
+const LOOP_FLAG_DISALLOW_BREAK_VALUES: i32 = 1;
 const LOOP_FLAG_HAS_BREAK_VALUE: i32 = 2;
 const LOOP_FLAG_HAS_BREAK: i32 = 4;
+const LOOP_INFO_LOCATION_SHIFT: i32 = 8;
+const LOOP_INFO_FLAGS_MASK: i32 = (1 << LOOP_INFO_LOCATION_SHIFT) - 1;
+const LOOP_INFO_LOCATION_BITS: i32 = 31 - LOOP_INFO_LOCATION_SHIFT;
+const LOOP_INFO_LOCATION_MAX: i32 = (1 << LOOP_INFO_LOCATION_BITS) - 1;
 
 const CONST_ENV_ENTRY_NAME_CAP: i32 = 5;
 
@@ -141,6 +146,11 @@ fn expression_result_location(ast_base: i32, expr_index: i32) -> i32 {
         }
     }
     if kind == 12 {
+        let loop_info: i32 = ast_expr_entry_extra(ast_base, expr_index);
+        let location_bits: i32 = loop_info >> LOOP_INFO_LOCATION_SHIFT;
+        if location_bits > 0 {
+            return location_bits - 1;
+        }
         let body_index: i32 = load_i32(entry_ptr + 4);
         let body_location: i32 = expression_result_location(ast_base, body_index);
         if body_location >= 0 {
@@ -3117,7 +3127,8 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
                     expr_kind = load_i32(expr_entry_ptr);
                     if expr_kind == 12 {
                         if !skip_loop_value_check {
-                            let loop_flags: i32 = ast_expr_entry_extra(ast_base, expr_index);
+                            let loop_info: i32 = ast_expr_entry_extra(ast_base, expr_index);
+                            let loop_flags: i32 = loop_info & LOOP_INFO_FLAGS_MASK;
                             if (loop_flags & LOOP_FLAG_HAS_BREAK) != 0
                                 && (loop_flags & LOOP_FLAG_HAS_BREAK_VALUE) == 0
                             {
@@ -3181,8 +3192,10 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
                     } else if !expression_guaranteed_diverges(ast_base, expr_index) {
                         if expr_entry_ptr > 0 && !skip_loop_value_check {
                             if expr_kind == 12 {
-                                let loop_flags: i32 =
+                                let loop_info: i32 =
                                     ast_expr_entry_extra(ast_base, expr_index);
+                                let loop_flags: i32 =
+                                    loop_info & LOOP_INFO_FLAGS_MASK;
                                 if (loop_flags & LOOP_FLAG_HAS_BREAK) != 0
                                     && (loop_flags & LOOP_FLAG_HAS_BREAK_VALUE) == 0
                                 {
@@ -3220,6 +3233,28 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
                     }
                 } else if fn_return_type != BUILTIN_TYPE_ID_TYPE && expr_type >= 0 {
                     if expr_type != fn_return_type {
+                        if expr_entry_ptr > 0 {
+                            if expr_kind == 12 {
+                                let loop_info: i32 = ast_expr_entry_extra(ast_base, expr_index);
+                                let loop_flags: i32 = loop_info & LOOP_INFO_FLAGS_MASK;
+                                if (loop_flags & LOOP_FLAG_HAS_BREAK_VALUE) != 0 {
+                                    let mut break_location: i32 =
+                                        expression_result_location(ast_base, expr_index);
+                                    if break_location < 0 {
+                                        break_location = expr_location;
+                                    }
+                                    record_failure_with_location(
+                                        out_ptr,
+                                        ast_base,
+                                        idx,
+                                        break_location,
+                                        24,
+                                        "loop break type mismatch",
+                                    );
+                                    return -1;
+                                }
+                            }
+                        }
                         record_failure_with_location(
                             out_ptr,
                             ast_base,
@@ -6234,6 +6269,22 @@ fn resolve_expression_internal(
         let packed_target: i32 = control_count + loop_flags * LOOP_STACK_FLAG_STRIDE;
         store_i32(loop_stack_base + loop_count * 4, packed_target);
         store_i32(loop_stack_count_ptr, loop_count + 1);
+        let mut loop_type_entry_offset: i32 = -1;
+        let mut loop_type_pushed: bool = false;
+        let mut loop_break_location: i32 = -1;
+        if local_stack_base > 0 && local_stack_count_ptr > 0 {
+            let stack_count: i32 = load_i32(local_stack_count_ptr);
+            if stack_count >= RESOLVE_LOCAL_STACK_CAPACITY {
+                return -1;
+            }
+            loop_type_entry_offset =
+                local_stack_base + stack_count * RESOLVE_LOCAL_STACK_ENTRY_SIZE;
+            store_i32(loop_type_entry_offset, -1);
+            store_i32(loop_type_entry_offset + 4, -1);
+            store_i32(loop_type_entry_offset + 8, -1);
+            store_i32(local_stack_count_ptr, stack_count + 1);
+            loop_type_pushed = true;
+        }
         let body_result: i32 = resolve_expression_internal(out_ptr, ast_base,
             body_index,
             func_count,
@@ -6246,15 +6297,45 @@ fn resolve_expression_internal(
             caller_func_index,
             caller_is_const,
         );
+        if loop_type_entry_offset >= 0 {
+            loop_break_location = load_i32(loop_type_entry_offset + 4);
+        }
+        let recorded_type: i32 = if loop_type_entry_offset >= 0 {
+            load_i32(loop_type_entry_offset + 8)
+        } else {
+            -1
+        };
+        if loop_type_pushed {
+            let stack_count: i32 = load_i32(local_stack_count_ptr);
+            if stack_count <= 0 {
+                return -1;
+            }
+            store_i32(local_stack_count_ptr, stack_count - 1);
+        }
         let updated_target: i32 = load_i32(loop_stack_base + loop_count * 4);
         let updated_flags: i32 = updated_target / LOOP_STACK_FLAG_STRIDE;
-        ast_expr_entry_set_extra(ast_base, expr_index, updated_flags);
+        let mut loop_info: i32 = updated_flags & LOOP_INFO_FLAGS_MASK;
+        if loop_break_location >= 0 {
+            let mut location_bits: i32 = loop_break_location + 1;
+            if location_bits < 0 {
+                location_bits = 0;
+            }
+            if location_bits > LOOP_INFO_LOCATION_MAX {
+                location_bits = LOOP_INFO_LOCATION_MAX;
+            }
+            loop_info = loop_info | (location_bits << LOOP_INFO_LOCATION_SHIFT);
+        }
+        ast_expr_entry_set_extra(ast_base, expr_index, loop_info);
         store_i32(loop_stack_count_ptr, loop_count);
         store_i32(control_stack_count_ptr, control_count);
         if body_result < 0 {
             return -1;
         }
-        ast_expr_set_type(ast_base, expr_index, ast_expr_type(ast_base, body_index));
+        if recorded_type >= 0 {
+            ast_expr_set_type(ast_base, expr_index, recorded_type);
+        } else {
+            ast_expr_set_type(ast_base, expr_index, ast_expr_type(ast_base, body_index));
+        }
         return 0;
     }
     if kind == 13 {
@@ -6274,7 +6355,7 @@ fn resolve_expression_internal(
         store_i32(entry_ptr + 4, branch_depth);
         let value_index: i32 = load_i32(entry_ptr + 8);
         if value_index >= 0 {
-            if loop_flags != 0 {
+            if (loop_flags & LOOP_FLAG_DISALLOW_BREAK_VALUES) != 0 {
                 if out_ptr > 0 {
                     if load_u8(out_ptr) == 0 {
                         let location_offset: i32 = ast_expr_break_location(ast_base, expr_index);
@@ -6320,6 +6401,36 @@ fn resolve_expression_internal(
             let updated_target: i32 =
                 target_index + new_flags * LOOP_STACK_FLAG_STRIDE;
             store_i32(loop_stack_base + (loop_count - 1) * 4, updated_target);
+            let mut loop_type_entry_offset: i32 = -1;
+            if local_stack_base > 0 && local_stack_count_ptr > 0 {
+                let stack_count: i32 = load_i32(local_stack_count_ptr);
+                let mut stack_idx: i32 = stack_count - 1;
+                loop {
+                    if stack_idx < 0 {
+                        break;
+                    }
+                    let entry_offset: i32 =
+                        local_stack_base + stack_idx * RESOLVE_LOCAL_STACK_ENTRY_SIZE;
+                    let recorded_index: i32 = load_i32(entry_offset);
+                    if recorded_index < 0 {
+                        loop_type_entry_offset = entry_offset;
+                        break;
+                    }
+                    stack_idx = stack_idx - 1;
+                };
+            }
+            if loop_type_entry_offset < 0 {
+                return -1;
+            }
+            if loop_type_entry_offset >= 0 {
+                let break_location: i32 = ast_expr_break_location(ast_base, expr_index);
+                if break_location >= 0 {
+                    let recorded_location: i32 = load_i32(loop_type_entry_offset + 4);
+                    if recorded_location < 0 {
+                        store_i32(loop_type_entry_offset + 4, break_location);
+                    }
+                }
+            }
             if resolve_expression_internal(out_ptr, ast_base,
                 value_index,
                 func_count,
@@ -6334,7 +6445,36 @@ fn resolve_expression_internal(
             ) < 0 {
                 return -1;
             }
-            ast_expr_set_type(ast_base, expr_index, ast_expr_type(ast_base, value_index));
+            let mut break_type: i32 = ast_expr_type(ast_base, value_index);
+            if break_type >= 0 {
+                let resolved_break: i32 = resolve_type_id(out_ptr, ast_base, break_type);
+                if resolved_break < 0 {
+                    return -1;
+                }
+                if resolved_break != break_type {
+                    ast_expr_set_type(ast_base, value_index, resolved_break);
+                    break_type = resolved_break;
+                }
+            }
+            let recorded_break: i32 = load_i32(loop_type_entry_offset + 8);
+            if break_type >= 0 {
+                if recorded_break >= 0 && recorded_break != break_type {
+                    let location_offset: i32 = ast_expr_break_location(ast_base, expr_index);
+                    record_failure_with_location(
+                        out_ptr,
+                        ast_base,
+                        caller_func_index,
+                        location_offset,
+                        30,
+                        "loop break value type mismatch",
+                    );
+                    return -1;
+                }
+                store_i32(loop_type_entry_offset + 8, break_type);
+                ast_expr_set_type(ast_base, expr_index, break_type);
+            } else {
+                ast_expr_set_type(ast_base, expr_index, recorded_break);
+            }
             return 0;
         }
         let new_flags: i32 = loop_flags | LOOP_FLAG_HAS_BREAK;

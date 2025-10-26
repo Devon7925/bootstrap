@@ -125,7 +125,7 @@ test("loop break types must match", async () => {
   expect(result).toBe(5);
 });
 
-test.todo(
+test(
   "loop break value types must agree with the loop expression",
   async () => {
     const failure = await expectCompileFailure(`
@@ -229,7 +229,7 @@ test("loop expressions used as values must break with a value", async () => {
   );
 });
 
-test.todo("loop break values must match the surrounding expression type", async () => {
+test("loop break values must match the surrounding expression type", async () => {
   const failure = await expectCompileFailure(`
     fn main() -> i32 {
         loop {
