@@ -2562,6 +2562,50 @@ fn interpret_constant_expression(
     -1
 }
 
+fn load_entry_child(entry_ptr: i32, base_offset: i32, index: i32) -> i32 {
+    load_i32(entry_ptr + base_offset + index * WORD_SIZE)
+}
+
+fn load_array_child(array_ptr: i32, _unused: i32, index: i32) -> i32 {
+    load_i32(array_ptr + index * WORD_SIZE)
+}
+
+fn collect_const_param_children(
+    ast_base: i32,
+    const child_loader: fn(i32, i32, i32) -> i32,
+    context_ptr: i32,
+    loader_arg: i32,
+    child_count: i32,
+    params_count: i32,
+    const_mask_table_ptr: i32,
+    usage_mask_low_ptr: i32,
+    usage_mask_high_ptr: i32,
+    usage_list_ptr: i32,
+    usage_count_ptr: i32,
+) -> i32 {
+    if child_count <= 0 {
+        return 0;
+    }
+    let mut idx: i32 = 0;
+    while idx < child_count {
+        let child_expr_index: i32 = child_loader(context_ptr, loader_arg, idx);
+        if collect_expression_const_params_visit(
+            ast_base,
+            child_expr_index,
+            params_count,
+            const_mask_table_ptr,
+            usage_mask_low_ptr,
+            usage_mask_high_ptr,
+            usage_list_ptr,
+            usage_count_ptr,
+        ) < 0 {
+            return -1;
+        }
+        idx = idx + 1;
+    };
+    0
+}
+
 fn collect_expression_const_params_visit(
     ast_base: i32,
     expr_index: i32,
@@ -2598,114 +2642,57 @@ fn collect_expression_const_params_visit(
                 return -1;
             }
         }
-        let mut arg_idx: i32 = 0;
-        while arg_idx < arg_count {
-            let arg_expr_index: i32 = load_i32(args_base + arg_idx * WORD_SIZE);
-            if collect_expression_const_params_visit(
-                ast_base,
-                arg_expr_index,
-                params_count,
-                const_mask_table_ptr,
-                usage_mask_low_ptr,
-                usage_mask_high_ptr,
-                usage_list_ptr,
-                usage_count_ptr,
-            ) < 0 {
-                return -1;
-            }
-            arg_idx = arg_idx + 1;
-        };
-        return 0;
+        return collect_const_param_children(
+            ast_base,
+            load_array_child,
+            args_base,
+            0,
+            arg_count,
+            params_count,
+            const_mask_table_ptr,
+            usage_mask_low_ptr,
+            usage_mask_high_ptr,
+            usage_list_ptr,
+            usage_count_ptr,
+        );
     }
     if kind == 7 {
-        let cond_index: i32 = load_i32(entry_ptr + 4);
-        if collect_expression_const_params_visit(
+        return collect_const_param_children(
             ast_base,
-            cond_index,
+            load_entry_child,
+            entry_ptr,
+            4,
+            3,
             params_count,
             const_mask_table_ptr,
             usage_mask_low_ptr,
             usage_mask_high_ptr,
             usage_list_ptr,
             usage_count_ptr,
-        ) < 0 {
-            return -1;
-        }
-        let then_index: i32 = load_i32(entry_ptr + 8);
-        if collect_expression_const_params_visit(
-            ast_base,
-            then_index,
-            params_count,
-            const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
-        ) < 0 {
-            return -1;
-        }
-        let else_index: i32 = load_i32(entry_ptr + 12);
-        if collect_expression_const_params_visit(
-            ast_base,
-            else_index,
-            params_count,
-            const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
-        ) < 0 {
-            return -1;
-        }
-        return 0;
+        );
     }
     if kind == 9 {
-        let init_index: i32 = load_i32(entry_ptr + 8);
-        if collect_expression_const_params_visit(
+        return collect_const_param_children(
             ast_base,
-            init_index,
+            load_entry_child,
+            entry_ptr,
+            8,
+            3,
             params_count,
             const_mask_table_ptr,
             usage_mask_low_ptr,
             usage_mask_high_ptr,
             usage_list_ptr,
             usage_count_ptr,
-        ) < 0 {
-            return -1;
-        }
-        let body_index: i32 = load_i32(entry_ptr + 12);
-        if collect_expression_const_params_visit(
-            ast_base,
-            body_index,
-            params_count,
-            const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
-        ) < 0 {
-            return -1;
-        }
-        let else_index: i32 = load_i32(entry_ptr + 16);
-        if collect_expression_const_params_visit(
-            ast_base,
-            else_index,
-            params_count,
-            const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
-        ) < 0 {
-            return -1;
-        }
-        return 0;
+        );
     }
     if kind == 10 {
-        let value_index: i32 = load_i32(entry_ptr + 8);
-        return collect_expression_const_params_visit(
+        return collect_const_param_children(
             ast_base,
-            value_index,
+            load_entry_child,
+            entry_ptr,
+            8,
+            1,
             params_count,
             const_mask_table_ptr,
             usage_mask_low_ptr,
@@ -2715,23 +2702,12 @@ fn collect_expression_const_params_visit(
         );
     }
     if kind == 11 {
-        let first_index: i32 = load_i32(entry_ptr + 4);
-        if collect_expression_const_params_visit(
+        return collect_const_param_children(
             ast_base,
-            first_index,
-            params_count,
-            const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
-        ) < 0 {
-            return -1;
-        }
-        let then_index: i32 = load_i32(entry_ptr + 8);
-        return collect_expression_const_params_visit(
-            ast_base,
-            then_index,
+            load_entry_child,
+            entry_ptr,
+            4,
+            2,
             params_count,
             const_mask_table_ptr,
             usage_mask_low_ptr,
@@ -2741,10 +2717,12 @@ fn collect_expression_const_params_visit(
         );
     }
     if kind == 12 {
-        let body_index: i32 = load_i32(entry_ptr + 4);
-        return collect_expression_const_params_visit(
+        return collect_const_param_children(
             ast_base,
-            body_index,
+            load_entry_child,
+            entry_ptr,
+            4,
+            1,
             params_count,
             const_mask_table_ptr,
             usage_mask_low_ptr,
@@ -2754,10 +2732,12 @@ fn collect_expression_const_params_visit(
         );
     }
     if kind == 13 {
-        let value_index: i32 = load_i32(entry_ptr + 8);
-        return collect_expression_const_params_visit(
+        return collect_const_param_children(
             ast_base,
-            value_index,
+            load_entry_child,
+            entry_ptr,
+            8,
+            1,
             params_count,
             const_mask_table_ptr,
             usage_mask_low_ptr,
@@ -2767,10 +2747,12 @@ fn collect_expression_const_params_visit(
         );
     }
     if kind == 23 {
-        let value_index: i32 = load_i32(entry_ptr + 4);
-        return collect_expression_const_params_visit(
+        return collect_const_param_children(
             ast_base,
-            value_index,
+            load_entry_child,
+            entry_ptr,
+            4,
+            1,
             params_count,
             const_mask_table_ptr,
             usage_mask_low_ptr,
@@ -2783,23 +2765,12 @@ fn collect_expression_const_params_visit(
         return 0;
     }
     if kind == 25 || kind == 26 || kind == 27 || kind == 28 || kind == 32 || kind == 33 || kind == 34 {
-        let left_index: i32 = load_i32(entry_ptr + 4);
-        if collect_expression_const_params_visit(
+        return collect_const_param_children(
             ast_base,
-            left_index,
-            params_count,
-            const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
-        ) < 0 {
-            return -1;
-        }
-        let right_index: i32 = load_i32(entry_ptr + 8);
-        return collect_expression_const_params_visit(
-            ast_base,
-            right_index,
+            load_entry_child,
+            entry_ptr,
+            4,
+            2,
             params_count,
             const_mask_table_ptr,
             usage_mask_low_ptr,
@@ -2809,10 +2780,12 @@ fn collect_expression_const_params_visit(
         );
     }
     if kind == 29 || kind == 30 || kind == 31 || kind == 38 {
-        let child_index: i32 = load_i32(entry_ptr + 4);
-        return collect_expression_const_params_visit(
+        return collect_const_param_children(
             ast_base,
-            child_index,
+            load_entry_child,
+            entry_ptr,
+            4,
+            1,
             params_count,
             const_mask_table_ptr,
             usage_mask_low_ptr,
@@ -2822,36 +2795,12 @@ fn collect_expression_const_params_visit(
         );
     }
     if kind == 44 {
-        let array_index: i32 = load_i32(entry_ptr + 4);
-        if collect_expression_const_params_visit(
+        return collect_const_param_children(
             ast_base,
-            array_index,
-            params_count,
-            const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
-        ) < 0 {
-            return -1;
-        }
-        let index_index: i32 = load_i32(entry_ptr + 8);
-        if collect_expression_const_params_visit(
-            ast_base,
-            index_index,
-            params_count,
-            const_mask_table_ptr,
-            usage_mask_low_ptr,
-            usage_mask_high_ptr,
-            usage_list_ptr,
-            usage_count_ptr,
-        ) < 0 {
-            return -1;
-        }
-        let value_index: i32 = load_i32(entry_ptr + 12);
-        return collect_expression_const_params_visit(
-            ast_base,
-            value_index,
+            load_entry_child,
+            entry_ptr,
+            4,
+            3,
             params_count,
             const_mask_table_ptr,
             usage_mask_low_ptr,
