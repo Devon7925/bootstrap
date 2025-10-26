@@ -6481,6 +6481,11 @@ fn evaluate_struct_intrinsic(
         env_values_count,
     );
     if props_status < 0 {
+        record_struct_intrinsic_type_mismatch_failure(
+            ast_base,
+            metadata_ptr,
+            props_expr_index,
+        );
         store_i32(scratch_top_ptr, saved_top);
         return -1;
     }

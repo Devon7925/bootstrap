@@ -47,9 +47,15 @@ fn compile_impl(
         return -1;
     }
     if interpret_program_constants(out_ptr, ast_base, func_count) < 0 {
+        if out_ptr > 0 && load_u8(out_ptr) != 0 {
+            return -1;
+        }
         return record_type_metadata_failure_with_debug(out_ptr, 100, 0, 0);
     }
     if validate_program(out_ptr, ast_base, func_count) < 0 {
+        if out_ptr > 0 && load_u8(out_ptr) != 0 {
+            return -1;
+        }
         return record_type_metadata_failure_with_debug(out_ptr, 101, 0, 0);
     }
     let final_func_count: i32 = ast_functions_count(ast_base);
