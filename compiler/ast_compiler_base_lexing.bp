@@ -1403,6 +1403,8 @@ fn parse_block_expression_body(
                         store_i32(locals_stack_count_ptr, saved_stack_count);
                         store_i32(locals_next_index_ptr, saved_next_index);
                         return -1;
+                    } else if literal_length == 0 && init_kind == 37 {
+                        ast_expr_set_type(ast_base, init_index, local_type_id);
                     }
                 }
             }

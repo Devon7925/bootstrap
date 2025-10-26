@@ -991,11 +991,11 @@ fn interpret_constant_expression(
     if kind == 37 {
         let values_ptr: i32 = load_i32(entry_ptr + 4);
         let element_count: i32 = load_i32(entry_ptr + 8);
-        if element_count <= 0 {
+        if element_count < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         }
-        if values_ptr <= 0 {
+        if element_count > 0 && values_ptr <= 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         }
@@ -1066,9 +1066,15 @@ fn interpret_constant_expression(
             idx = idx + 1;
         };
         if element_type < 0 {
-            store_i32(call_data_used_ptr, saved_used);
-            store_i32(scratch_top_ptr, saved_top);
-            return -1;
+            let recorded_array: i32 = ast_expr_type(ast_base, expr_index);
+            if recorded_array >= 0 && type_id_is_array(recorded_array) {
+                element_type = array_type_element_type(ast_base, recorded_array);
+            }
+            if element_type < 0 {
+                store_i32(call_data_used_ptr, saved_used);
+                store_i32(scratch_top_ptr, saved_top);
+                return -1;
+            }
         }
         let mut array_type_id: i32 = ast_expr_type(ast_base, expr_index);
         if array_type_id < 0 || !type_id_is_array(array_type_id) {

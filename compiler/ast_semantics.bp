@@ -3822,11 +3822,30 @@ fn resolve_expression_internal(
     if kind == 37 {
         let values_ptr: i32 = load_i32(entry_ptr + 4);
         let element_count: i32 = load_i32(entry_ptr + 8);
-        if values_ptr < 0 {
+        if values_ptr < 0 && element_count > 0 {
             return -1;
         }
-        if element_count <= 0 {
+        if element_count < 0 {
             return -1;
+        }
+        if element_count == 0 {
+            let recorded_type: i32 = ast_expr_type(ast_base, expr_index);
+            if recorded_type < 0 {
+                return -1;
+            }
+            let resolved_array: i32 = resolve_type_id(out_ptr, ast_base, recorded_type);
+            if resolved_array < 0 {
+                return -1;
+            }
+            if !type_id_is_array(resolved_array) {
+                return -1;
+            }
+            let recorded_length: i32 = array_type_length(ast_base, resolved_array);
+            if recorded_length != 0 {
+                return -1;
+            }
+            ast_expr_set_type(ast_base, expr_index, resolved_array);
+            return 0;
         }
         let mut element_type: i32 = -1;
         let mut idx: i32 = 0;

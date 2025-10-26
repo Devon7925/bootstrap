@@ -5763,10 +5763,10 @@ fn ast_expr_alloc_array_list(
     count: i32,
     location_offset: i32,
 ) -> i32 {
-    if count <= 0 {
+    if count < 0 {
         return -1;
     }
-    if values_ptr < 0 {
+    if count > 0 && values_ptr < 0 {
         return -1;
     }
     let index: i32 = ast_expr_alloc(ast_base, 37, values_ptr, count, 0);

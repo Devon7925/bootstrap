@@ -687,10 +687,13 @@ fn collect_local_counts_from_expression(
     if kind == 37 {
         let values_ptr: i32 = load_i32(entry_ptr + 4);
         let element_count: i32 = load_i32(entry_ptr + 8);
-        if values_ptr < 0 {
+        if element_count < 0 {
             return -1;
         }
-        if element_count <= 0 {
+        if element_count == 0 {
+            return 0;
+        }
+        if values_ptr < 0 {
             return -1;
         }
         let mut total: i32 = 0;
@@ -1344,10 +1347,21 @@ fn expression_code_size(
     if kind == 37 {
         let values_ptr: i32 = load_i32(entry_ptr + 4);
         let element_count: i32 = load_i32(entry_ptr + 8);
-        if values_ptr < 0 {
+        if element_count < 0 {
             return -1;
         }
-        if element_count <= 0 {
+        if element_count == 0 {
+            let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+            if expr_type < 0 {
+                return -1;
+            }
+            let type_index: i32 = array_type_heap_index(ast_base, expr_type);
+            if type_index < 0 {
+                return -1;
+            }
+            return 2 + leb_u32_len(type_index) + leb_u32_len(0);
+        }
+        if values_ptr < 0 {
             return -1;
         }
         let mut total: i32 = 0;
@@ -2248,13 +2262,15 @@ fn emit_expression(
     if kind == 37 {
         let values_ptr: i32 = load_i32(entry_ptr + 4);
         let element_count: i32 = load_i32(entry_ptr + 8);
-        if values_ptr < 0 {
-            return -1;
-        }
-        if element_count <= 0 {
+        if element_count < 0 {
             return -1;
         }
         let mut out: i32 = offset;
+        if element_count > 0 {
+            if values_ptr < 0 {
+                return -1;
+            }
+        }
         let mut idx: i32 = 0;
         while idx < element_count {
             let element_index: i32 = load_i32(values_ptr + idx * WORD_SIZE);
