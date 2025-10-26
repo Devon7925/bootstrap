@@ -50,7 +50,7 @@ test("const parameters accept const bindings that store functions", async () => 
     expect(result).toBe(12);
 });
 
-test.todo("let bindings storing functions are rejected for const parameters", async () => {
+test("let bindings storing functions are rejected for const parameters", async () => {
     const failure = await expectCompileFailure(`
     ${sourceHeader}
 
@@ -64,7 +64,7 @@ test.todo("let bindings storing functions are rejected for const parameters", as
     }
   `);
     expect(failure.failure.detail).toBe(
-        "/entry.bp:14:9: const parameter arguments must be compile-time constants",
+        "/entry.bp:18:9: const parameter arguments must be compile-time constants",
     );
 });
 
