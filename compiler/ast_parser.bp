@@ -413,6 +413,7 @@ fn parse_basic_expression(
             if if_index < 0 {
                 return -1;
             }
+            ast_expr_entry_set_extra(ast_base, if_index, condition_start + 1);
             store_expression_parts(out_kind_ptr, out_data0_ptr, out_data1_ptr, ExpressionParts { kind: 2, data0: if_index, data1: 0 });
             let both_have_values: i32 = if then_has_value != 0 && else_has_value != 0 {
                 0

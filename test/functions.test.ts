@@ -197,7 +197,7 @@ test("functions support many parameters", async () => {
 
 test("functions can return from multiple paths", async () => {
   const wasm = await compileWithAstCompiler(`
-    fn choose(flag: i32) -> i32 {
+    fn choose(flag: bool) -> i32 {
         if flag {
             return 10;
         } else {
@@ -220,7 +220,7 @@ test("functions can return from multiple paths", async () => {
     }
 
     fn main() -> i32 {
-        choose(1) + choose(0) + accumulate(3)
+        choose(true) + choose(false) + accumulate(3)
     }
   `);
   const result = await runWasmMainWithGc(wasm);
@@ -233,7 +233,7 @@ test("unit return functions allow bare return", async () => {
         return;
     }
 
-    fn early(flag: i32) -> () {
+    fn early(flag: bool) -> () {
         if flag {
             return;
         };
@@ -244,8 +244,8 @@ test("unit return functions allow bare return", async () => {
 
     fn main() -> i32 {
         do_nothing();
-        early(1);
-        early(0);
+        early(true);
+        early(false);
         7
     }
   `);

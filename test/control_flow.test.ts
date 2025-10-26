@@ -186,7 +186,7 @@ test("if branches with mismatched types report precise diagnostics", async () =>
   expect(failure.failure.detail).toBe("if branches type mismatch");
 });
 
-test.todo("if conditions require boolean values", async () => {
+test("if conditions require boolean values", async () => {
   const failure = await expectCompileFailure(`
     fn main() -> i32 {
         if 1 {
@@ -290,14 +290,14 @@ test("while break cannot carry values", async () => {
   );
 });
 
-test("loop and break support truthy conditions", async () => {
+test("loop and break support boolean conditions", async () => {
   const wasm = await compileWithAstCompiler(`
     fn sum_up_to(limit: i32) -> i32 {
         let mut total: i32 = 0;
         let mut count: i32 = 0;
         let mut remaining: i32 = limit;
         loop {
-            if remaining {
+            if remaining > 0 {
                 total = total + count;
                 count = count + 1;
                 remaining = remaining - 1;
@@ -418,10 +418,10 @@ test("nested loops can break with values", async () => {
         let mut outer: i32 = limit;
         let mut total: i32 = 0;
         loop {
-            if outer {
+            if outer > 0 {
                 let mut inner: i32 = outer;
                 loop {
-                    if inner {
+                    if inner > 0 {
                         total = total + outer;
                         inner = inner - 1;
                         0
@@ -480,7 +480,7 @@ test("break outside loop is rejected", async () => {
 test("if with literal condition executes", async () => {
   const wasm = await compileWithAstCompiler(`
     fn main() -> i32 {
-        if 1 {
+        if true {
             42
         } else {
             0
@@ -493,7 +493,7 @@ test("if with literal condition executes", async () => {
 
 test("if else with parameter condition executes", async () => {
   const wasm = await compileWithAstCompiler(`
-    fn choose(flag: i32) -> i32 {
+    fn choose(flag: bool) -> i32 {
         if flag {
             10
         } else {
@@ -502,7 +502,7 @@ test("if else with parameter condition executes", async () => {
     }
 
     fn main() -> i32 {
-        choose(0)
+        choose(false)
     }
   `);
   const result = await runWasmMainWithGc(wasm);
@@ -559,7 +559,7 @@ test("while loops reject break values", async () => {
 
 test("nested if expressions execute", async () => {
   const wasm = await compileWithAstCompiler(`
-    fn pick(a: i32, b: i32) -> i32 {
+    fn pick(a: bool, b: bool) -> i32 {
         if a {
             if b {
                 1
@@ -576,7 +576,7 @@ test("nested if expressions execute", async () => {
     }
 
     fn main() -> i32 {
-        pick(0, 1) + pick(1, 0) * 10
+        pick(false, true) + pick(true, false) * 10
     }
   `);
   const result = await runWasmMainWithGc(wasm);
