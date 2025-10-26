@@ -228,6 +228,25 @@ const INTRINSIC_KIND_LEN: i32 = 0;
 const INTRINSIC_KIND_INLINE_WASM: i32 = 1;
 
 const CALL_METADATA_INTRINSIC_STRUCT: i32 = -2;
+const CALL_METADATA_CALLEE_PARAM_BASE: i32 = -1024;
+
+fn call_metadata_encode_param_callee(param_index: i32) -> i32 {
+    if param_index < 0 {
+        return -1;
+    }
+    CALL_METADATA_CALLEE_PARAM_BASE - param_index
+}
+
+fn call_metadata_is_param_callee(value: i32) -> bool {
+    value <= CALL_METADATA_CALLEE_PARAM_BASE
+}
+
+fn call_metadata_param_index(value: i32) -> i32 {
+    if !call_metadata_is_param_callee(value) {
+        return -1;
+    }
+    CALL_METADATA_CALLEE_PARAM_BASE - value
+}
 const STRUCT_INTRINSIC_FAILURE_DUPLICATE_FIELD: i32 = 1;
 const STRUCT_INTRINSIC_FAILURE_INVALID_PROPS: i32 = 2;
 const STRUCT_INTRINSIC_FAILURE_TEMPLATE_TYPE_MISMATCH: i32 = 3;
@@ -955,6 +974,43 @@ fn find_constant_entry_index(
     if allow_imports {
         return imported_match;
     }
+    -1
+}
+
+fn find_function_entry_index(
+    base: i32,
+    ast_base: i32,
+    ident_start: i32,
+    ident_len: i32,
+    allow_imports: bool,
+) -> i32 {
+    let func_count: i32 = ast_functions_count(ast_base);
+    if func_count <= 0 {
+        return -1;
+    }
+    let mut idx: i32 = 0;
+    while idx < func_count {
+        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
+        let module_base: i32 = ast_function_entry_module_base(ast_base, idx);
+        if module_base == base {
+            let func_len: i32 = load_i32(entry_ptr + 4);
+            if func_len == ident_len {
+                let name_start: i32 = load_i32(entry_ptr + 56);
+                if name_start >= 0 {
+                    if identifiers_match_source(
+                        base,
+                        name_start,
+                        func_len,
+                        ident_start,
+                        ident_len,
+                    ) {
+                        return idx;
+                    }
+                }
+            }
+        }
+        idx = idx + 1;
+    };
     -1
 }
 
@@ -2401,6 +2457,8 @@ const TUPLE_TYPE_CAPACITY: i32 = 256;
 
 const STRUCT_TYPE_CAPACITY: i32 = 256;
 
+const FUNCTION_TYPE_CAPACITY: i32 = 256;
+
 const TYPE_ID_KIND_SHIFT: i32 = 24;
 
 const TYPE_ID_KIND_USER_COMPOSITE: i32 = 1;
@@ -2421,6 +2479,10 @@ const TYPE_ID_STRUCT_BASE: i32 = TYPE_ID_TUPLE_LIMIT;
 
 const TYPE_ID_STRUCT_LIMIT: i32 = TYPE_ID_STRUCT_BASE + STRUCT_TYPE_CAPACITY;
 
+const TYPE_ID_FUNCTION_BASE: i32 = TYPE_ID_STRUCT_LIMIT;
+
+const TYPE_ID_FUNCTION_LIMIT: i32 = TYPE_ID_FUNCTION_BASE + FUNCTION_TYPE_CAPACITY;
+
 fn type_id_is_builtin(type_id: i32) -> bool {
     type_id >= 0 && type_id <= BUILTIN_TYPE_ID_MAX
 }
@@ -2435,6 +2497,10 @@ fn type_id_is_tuple(type_id: i32) -> bool {
 
 fn type_id_is_struct(type_id: i32) -> bool {
     type_id >= TYPE_ID_STRUCT_BASE && type_id < TYPE_ID_STRUCT_LIMIT
+}
+
+fn type_id_is_function(type_id: i32) -> bool {
+    type_id >= TYPE_ID_FUNCTION_BASE && type_id < TYPE_ID_FUNCTION_LIMIT
 }
 
 fn type_id_is_bool(type_id: i32) -> bool {
@@ -3385,6 +3451,123 @@ fn parse_type(
     let ident_len: i32 = next - offset;
     if ident_len <= 0 {
         return -1;
+    }
+    if identifier_matches_keyword(base, len, offset, ident_len, 2, "fn") {
+        if out_type_ptr < 0 {
+            return -1;
+        }
+        let mut cursor: i32 = next;
+        cursor = skip_whitespace(base, len, cursor);
+        cursor = expect_char(base, len, cursor, '(');
+        if cursor < 0 {
+            return -1;
+        }
+        cursor = skip_whitespace(base, len, cursor);
+        let scratch_base: i32 = parser_temp_scratch_base(ast_base, params_table_ptr);
+        let mut temp_types_ptr: i32 = scratch_base;
+        let mut param_count: i32 = 0;
+        if cursor < len {
+            let maybe_close: i32 = load_u8(base + cursor);
+            if maybe_close != ')' {
+                loop {
+                    if param_count >= MAX_PARAMS {
+                        return -1;
+                    }
+                    store_i32(type_template_sink_ptr, 0);
+                    store_i32(type_template_sink_ptr + 4, 0);
+                    cursor = parse_type(
+                        base,
+                        len,
+                        cursor,
+                        ast_base,
+                        params_table_ptr,
+                        params_count,
+                        const_mask_table_ptr,
+                        type_template_sink_ptr,
+                        out_type_ptr,
+                    );
+                    if cursor < 0 {
+                        return -1;
+                    }
+                    let param_type_id: i32 = load_i32(out_type_ptr);
+                    store_i32(temp_types_ptr + param_count * WORD_SIZE, param_type_id);
+                    param_count = param_count + 1;
+                    cursor = skip_whitespace(base, len, cursor);
+                    if cursor >= len {
+                        return -1;
+                    }
+                    let delimiter: i32 = load_u8(base + cursor);
+                    if delimiter == ',' {
+                        cursor = skip_whitespace(base, len, cursor + 1);
+                        if cursor >= len {
+                            return -1;
+                        }
+                        continue;
+                    }
+                    if delimiter == ')' {
+                        break;
+                    }
+                    return -1;
+                };
+            }
+        }
+        cursor = expect_char(base, len, cursor, ')');
+        if cursor < 0 {
+            return -1;
+        }
+        cursor = skip_whitespace(base, len, cursor);
+        cursor = expect_char(base, len, cursor, '-');
+        if cursor < 0 {
+            return -1;
+        }
+        cursor = expect_char(base, len, cursor, '>');
+        if cursor < 0 {
+            return -1;
+        }
+        cursor = skip_whitespace(base, len, cursor);
+        store_i32(type_template_sink_ptr, 0);
+        store_i32(type_template_sink_ptr + 4, 0);
+        cursor = parse_type(
+            base,
+            len,
+            cursor,
+            ast_base,
+            params_table_ptr,
+            params_count,
+            const_mask_table_ptr,
+            type_template_sink_ptr,
+            out_type_ptr,
+        );
+        if cursor < 0 {
+            return -1;
+        }
+        let return_type_id: i32 = load_i32(out_type_ptr);
+        let mut param_types_ptr: i32 = 0;
+        if param_count > 0 {
+            param_types_ptr = ast_call_data_alloc(ast_base, param_count);
+            if param_types_ptr < 0 {
+                return -1;
+            }
+            let mut copy_idx: i32 = 0;
+            while copy_idx < param_count {
+                let stored_type: i32 =
+                    load_i32(temp_types_ptr + copy_idx * WORD_SIZE);
+                store_i32(param_types_ptr + copy_idx * WORD_SIZE, stored_type);
+                copy_idx = copy_idx + 1;
+            };
+        }
+        let function_type_id_value: i32 = ast_register_function_type(
+            ast_base,
+            param_types_ptr,
+            param_count,
+            0,
+            return_type_id,
+        );
+        if function_type_id_value < 0 {
+            return -1;
+        }
+        store_i32(out_type_ptr, function_type_id_value);
+        return cursor;
     }
     let type_id: i32 = builtin_integer_type_keyword_to_id(base, offset, ident_len);
     if type_id >= 0 {

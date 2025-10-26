@@ -66,6 +66,9 @@ const AST_TUPLE_TYPES_CAPACITY = 256;
 const AST_TUPLE_TYPE_ENTRY_SIZE = 12;
 const AST_STRUCT_TYPES_CAPACITY = 256;
 const AST_STRUCT_TYPE_ENTRY_SIZE = 20;
+
+const AST_FUNCTION_TYPES_CAPACITY = 256;
+const AST_FUNCTION_TYPE_ENTRY_SIZE = 16;
 const AST_ARRAY_HEAP_INDEX_SECTION_SIZE = AST_ARRAY_TYPES_CAPACITY * WORD_SIZE;
 const AST_TUPLE_HEAP_INDEX_SECTION_SIZE = AST_TUPLE_TYPES_CAPACITY * WORD_SIZE;
 const AST_STRUCT_HEAP_INDEX_SECTION_SIZE = AST_STRUCT_TYPES_CAPACITY * WORD_SIZE;
@@ -82,6 +85,9 @@ const AST_TUPLE_TYPES_SECTION_SIZE =
   WORD_SIZE + AST_TUPLE_TYPES_CAPACITY * AST_TUPLE_TYPE_ENTRY_SIZE;
 const AST_STRUCT_TYPES_SECTION_SIZE =
   WORD_SIZE + AST_STRUCT_TYPES_CAPACITY * AST_STRUCT_TYPE_ENTRY_SIZE;
+
+const AST_FUNCTION_TYPES_SECTION_SIZE =
+  WORD_SIZE + AST_FUNCTION_TYPES_CAPACITY * AST_FUNCTION_TYPE_ENTRY_SIZE;
 const memoryIntrinsicsSourceUrl = new URL("../stdlib/memory.bp", import.meta.url);
 
 const encoder = new TextEncoder();
@@ -186,8 +192,12 @@ function astStructHeapIndicesBase(astBasePtr: number): number {
   return astStructTypesCountPtr(astBasePtr) + AST_STRUCT_TYPES_SECTION_SIZE;
 }
 
-function astExtraBase(astBasePtr: number): number {
+function astFunctionTypesCountPtr(astBasePtr: number): number {
   return astStructHeapIndicesBase(astBasePtr) + AST_STRUCT_HEAP_INDEX_SECTION_SIZE;
+}
+
+function astExtraBase(astBasePtr: number): number {
+  return astFunctionTypesCountPtr(astBasePtr) + AST_FUNCTION_TYPES_SECTION_SIZE;
 }
 
 function astExprCountPtr(astBasePtr: number): number {

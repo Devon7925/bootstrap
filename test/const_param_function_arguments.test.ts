@@ -16,7 +16,7 @@ const sourceHeader = `
     }
 `;
 
-test.todo("const parameters accept named function references", async () => {
+test("const parameters accept named function references", async () => {
     const wasm = await compileWithAstCompiler(`
     ${sourceHeader}
 
@@ -32,7 +32,7 @@ test.todo("const parameters accept named function references", async () => {
     expect(result).toBe(6);
 });
 
-test.todo("const parameters accept const bindings that store functions", async () => {
+test("const parameters accept const bindings that store functions", async () => {
     const wasm = await compileWithAstCompiler(`
     ${sourceHeader}
 
@@ -68,7 +68,7 @@ test.todo("let bindings storing functions are rejected for const parameters", as
     );
 });
 
-test.todo("function const parameters handle weird function signatures", async () => {
+test("function const parameters handle weird function signatures", async () => {
     const wasm = await compileWithAstCompiler(`
     fn merge_pair(value: (i32, bool)) -> (i32, bool) {
         value
@@ -98,7 +98,7 @@ test.todo("function const parameters handle weird function signatures", async ()
     expect(result).toBe(7);
 });
 
-test.todo("const parameter specialization differentiates functions by identity", async () => {
+test("const parameter specialization differentiates functions by identity", async () => {
     const wasm = await compileWithAstCompiler(`
     ${sourceHeader}
 
@@ -113,5 +113,5 @@ test.todo("const parameter specialization differentiates functions by identity",
     }
   `);
     const result = await runWasmMainWithGc(wasm);
-    expect(result).toBe(21);
+    expect(result).toBe(22);
 });

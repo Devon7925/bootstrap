@@ -903,10 +903,8 @@ fn try_record_call_failure_with_location(
     message: [u8; MESSAGE_LEN],
 ) -> bool {
     if !store_call_failure_location(out_ptr, ast_base, caller_func_index, location_offset) {
+        write_failure_detail(out_ptr, MESSAGE_LEN, message);
         return false;
-    }
-    if load_u8(out_ptr) != 0 {
-        return true;
     }
     write_failure_detail(out_ptr, MESSAGE_LEN, message);
     true
@@ -1035,6 +1033,41 @@ fn collect_call_const_arguments(
             let arg_expr_index: i32 = load_i32(args_base + param_idx * WORD_SIZE);
             if arg_expr_index < 0 {
                 return -1;
+            }
+            let arg_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, arg_expr_index);
+            let arg_kind: i32 = load_i32(arg_entry_ptr);
+            if arg_kind == 8 {
+                if caller_func_index >= 0 {
+                    let local_index: i32 = load_i32(arg_entry_ptr + WORD_SIZE);
+                    if local_index >= 0 {
+                        let caller_param_total: i32 =
+                            ast_function_param_count(ast_base, caller_func_index);
+                        if caller_param_total >= 0 {
+                            if local_index >= caller_param_total {
+                                let recorded: bool =
+                                    try_record_call_failure_with_location(
+                                        out_ptr,
+                                        ast_base,
+                                        caller_func_index,
+                                        resolved_location_offset,
+                                        56,
+                                        "const parameter arguments must be compile-time constants",
+                                    );
+                                if !recorded {
+                                    record_failure_with_location(
+                                        out_ptr,
+                                        ast_base,
+                                        caller_func_index,
+                                        resolved_location_offset,
+                                        56,
+                                        "const parameter arguments must be compile-time constants",
+                                    );
+                                }
+                                return -1;
+                            }
+                        }
+                    }
+                }
             }
             let saved_top: i32 = load_i32(eval_stack_top_ptr);
             store_i32(eval_stack_top_ptr, 0);
@@ -1180,6 +1213,21 @@ fn collect_call_const_arguments(
     let key_ptr: i32 =
         ast_function_canonicalize_const_env(ast_base, func_index, env_copy_ptr);
     if key_ptr < 0 {
+        let recorded: bool = try_record_call_failure_with_location(
+            out_ptr,
+            ast_base,
+            func_index,
+            resolved_location_offset,
+            56,
+            "const parameter arguments must be compile-time constants",
+        );
+        if !recorded {
+            record_failure_detail(
+                out_ptr,
+                56,
+                "const parameter arguments must be compile-time constants",
+            );
+        }
         return -1;
     }
     store_i32(key_slot_ptr, key_ptr);
@@ -1235,6 +1283,149 @@ fn resolve_call_metadata(
     }
     if call_name_len < 0 {
         return -1;
+    }
+    let recorded_callee: i32 =
+        load_i32(call_metadata_callee_index_ptr(current_metadata));
+    if call_metadata_is_param_callee(recorded_callee) {
+        if caller_func_index < 0 {
+            return -1;
+        }
+        let param_index: i32 = call_metadata_param_index(recorded_callee);
+        if param_index < 0 {
+            return -1;
+        }
+        let param_count: i32 = ast_function_param_count(ast_base, caller_func_index);
+        if param_count < 0 {
+            return -1;
+        }
+        if param_index >= param_count {
+            return -1;
+        }
+        if !ast_function_param_is_const(ast_base, caller_func_index, param_index) {
+            let recorded: bool = try_record_call_failure_with_location(
+                out_ptr,
+                ast_base,
+                caller_func_index,
+                resolved_location_offset,
+                34,
+                "call references undefined function",
+            );
+            if !recorded {
+                record_failure_detail(out_ptr, 34, "call references undefined function");
+            }
+            return -1;
+        }
+        let param_types_ptr: i32 =
+            load_i32(ast_function_entry_ptr(ast_base, caller_func_index) + 24);
+        if param_count > 0 && param_types_ptr < 0 {
+            return -1;
+        }
+        let param_type_id: i32 =
+            load_i32(param_types_ptr + param_index * WORD_SIZE);
+        let resolved_param_type: i32 = resolve_type_id(
+            out_ptr,
+            ast_base,
+            param_type_id,
+        );
+        if resolved_param_type < 0 {
+            return -1;
+        }
+        if !type_id_is_function(resolved_param_type) {
+            let recorded: bool = try_record_call_failure_with_location(
+                out_ptr,
+                ast_base,
+                caller_func_index,
+                resolved_location_offset,
+                34,
+                "call references undefined function",
+            );
+            if !recorded {
+                record_failure_detail(out_ptr, 34, "call references undefined function");
+            }
+            return -1;
+        }
+        let expected_params: i32 =
+            function_type_param_count(ast_base, resolved_param_type);
+        if expected_params < 0 {
+            return -1;
+        }
+        if expected_params != arg_count {
+            let recorded: bool = try_record_call_failure_with_location(
+                out_ptr,
+                ast_base,
+                caller_func_index,
+                resolved_location_offset,
+                28,
+                "call argument count mismatch",
+            );
+            if !recorded {
+                record_failure_detail(out_ptr, 28, "call argument count mismatch");
+            }
+            return -1;
+        }
+        if arg_count > 0 {
+            if args_base < 0 {
+                return -1;
+            }
+        }
+        let mut verify_idx: i32 = 0;
+        loop {
+            if verify_idx >= arg_count {
+                break;
+            }
+            let expected_type: i32 = function_type_param_type(
+                ast_base,
+                resolved_param_type,
+                verify_idx,
+            );
+            if expected_type < 0 {
+                return -1;
+            }
+            let resolved_expected: i32 = resolve_type_id(
+                out_ptr,
+                ast_base,
+                expected_type,
+            );
+            if resolved_expected < 0 {
+                return -1;
+            }
+            let arg_expr_index: i32 =
+                load_i32(args_base + verify_idx * WORD_SIZE);
+            if arg_expr_index < 0 {
+                return -1;
+            }
+            let mut arg_type: i32 = ast_expr_type(ast_base, arg_expr_index);
+            if arg_type < 0 {
+                return -1;
+            }
+            let resolved_arg: i32 = resolve_type_id(
+                out_ptr,
+                ast_base,
+                arg_type,
+            );
+            if resolved_arg < 0 {
+                return -1;
+            }
+            if resolved_arg != arg_type {
+                ast_expr_set_type(ast_base, arg_expr_index, resolved_arg);
+            }
+            if resolved_arg != resolved_expected {
+                let recorded: bool = try_record_call_failure_with_location(
+                    out_ptr,
+                    ast_base,
+                    caller_func_index,
+                    resolved_location_offset,
+                    27,
+                    "call argument type mismatch",
+                );
+                if !recorded {
+                    record_failure_detail(out_ptr, 27, "call argument type mismatch");
+                }
+                return -1;
+            }
+            verify_idx = verify_idx + 1;
+        };
+        return current_metadata;
     }
     if call_name_len == 6 {
         let mut match_idx: i32 = 0;
@@ -3061,6 +3252,51 @@ fn resolve_expression_internal(
                     }
                 }
             }
+            return 0;
+        }
+        if call_metadata_is_param_callee(callee_index) {
+            if caller_func_index < 0 {
+                return -1;
+            }
+            let param_index: i32 = call_metadata_param_index(callee_index);
+            if param_index < 0 {
+                return -1;
+            }
+            let param_count: i32 = ast_function_param_count(ast_base, caller_func_index);
+            if param_count < 0 {
+                return -1;
+            }
+            if param_index >= param_count {
+                return -1;
+            }
+            let param_types_ptr: i32 =
+                load_i32(ast_function_entry_ptr(ast_base, caller_func_index) + 24);
+            if param_count > 0 && param_types_ptr < 0 {
+                return -1;
+            }
+            let param_type_id: i32 =
+                load_i32(param_types_ptr + param_index * WORD_SIZE);
+            let resolved_param_type: i32 = resolve_type_id(
+                out_ptr,
+                ast_base,
+                param_type_id,
+            );
+            if resolved_param_type < 0 {
+                return -1;
+            }
+            if !type_id_is_function(resolved_param_type) {
+                return -1;
+            }
+            let return_type_id: i32 =
+                function_type_return_type(ast_base, resolved_param_type);
+            if return_type_id < 0 {
+                return -1;
+            }
+            let resolved_return: i32 = resolve_type_id(out_ptr, ast_base, return_type_id);
+            if resolved_return < 0 {
+                return -1;
+            }
+            ast_expr_set_type(ast_base, expr_index, resolved_return);
             return 0;
         }
         if callee_index < 0 {

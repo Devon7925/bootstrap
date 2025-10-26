@@ -1299,6 +1299,7 @@ fn parse_basic_expression(
             store_i32(const_usage_slot + 8, 0);
             store_i32(const_usage_slot + 12, 0);
             store_i32(const_usage_slot + 16, 0);
+            let callee_ptr: i32 = call_metadata_callee_index_ptr(metadata_ptr);
             if ident_len == 6 {
                 let literal: [u8; 6] = "struct";
                 let mut match_idx: i32 = 0;
@@ -1315,8 +1316,20 @@ fn parse_basic_expression(
                     match_idx = match_idx + 1;
                 };
                 if match_idx == 6 {
-                    let callee_ptr: i32 = call_metadata_callee_index_ptr(metadata_ptr);
                     store_i32(callee_ptr, CALL_METADATA_INTRINSIC_STRUCT);
+                }
+            }
+            if load_i32(callee_ptr) == -1 {
+                let param_index: i32 = find_parameter_index(
+                    base,
+                    params_table_ptr,
+                    params_count,
+                    ident_start,
+                    ident_len,
+                );
+                if param_index >= 0 {
+                    let encoded: i32 = call_metadata_encode_param_callee(param_index);
+                    store_i32(callee_ptr, encoded);
                 }
             }
             store_i32(out_kind_ptr, 1);

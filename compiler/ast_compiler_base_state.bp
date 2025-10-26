@@ -1123,6 +1123,14 @@ fn clone_const_specialization_call_metadata(
         return -1;
     }
     let callee_index: i32 = load_i32(call_metadata_callee_index_ptr(metadata_ptr));
+    let param_callee: bool = call_metadata_is_param_callee(callee_index);
+    let mut param_index: i32 = -1;
+    if param_callee {
+        param_index = call_metadata_param_index(callee_index);
+        if param_index < 0 {
+            return -1;
+        }
+    }
     let trim_const_args: bool = callee_index >= 0
         && !ast_function_has_const_params(ast_base, callee_index);
     let mut runtime_arg_count: i32 = arg_count;
@@ -1194,6 +1202,30 @@ fn clone_const_specialization_call_metadata(
         if runtime_idx != arg_count {
             return -1;
         }
+    }
+    if param_callee {
+        if key_ptr <= 0 {
+            return -1;
+        }
+        let captured: ConstSpecializationEntry =
+            const_specialization_lookup_entry(key_ptr, param_index);
+        if captured.type < 0 {
+            return -1;
+        }
+        if !type_id_is_function(captured.type) {
+            return -1;
+        }
+        let target_index: i32 = captured.value;
+        if target_index < 0 {
+            return -1;
+        }
+        let target_entry_ptr: i32 = ast_function_entry_ptr(ast_base, target_index);
+        let target_name_ptr: i32 = load_i32(target_entry_ptr);
+        let target_name_len: i32 = load_i32(target_entry_ptr + 4);
+        store_i32(new_metadata, target_name_ptr);
+        store_i32(new_metadata + WORD_SIZE, target_name_len);
+        store_i32(new_metadata + 2 * WORD_SIZE, runtime_arg_count);
+        store_i32(new_metadata + 3 * WORD_SIZE, target_index);
     }
     let original_extra: i32 = call_metadata_extra_slot_base(metadata_ptr);
     let new_extra: i32 = call_metadata_extra_slot_base(new_metadata);
@@ -3008,6 +3040,21 @@ fn canonicalize_const_value(
         store_i32(out_type_ptr, BUILTIN_TYPE_ID_TYPE);
         return 0;
     }
+    if type_id_is_function(raw_type) {
+        if raw_value < 0 {
+            return -1;
+        }
+        let func_count: i32 = ast_functions_count(ast_base);
+        if func_count < 0 {
+            return -1;
+        }
+        if raw_value >= func_count {
+            return -1;
+        }
+        store_i32(out_value_ptr, raw_value);
+        store_i32(out_type_ptr, raw_type);
+        return 0;
+    }
     if type_id_is_tuple(raw_type) {
         let tuple_idx: i32 = tuple_type_index(raw_type);
         if tuple_idx < 0 {
@@ -3207,6 +3254,7 @@ fn ast_reset(ast_base: i32) {
     ast_array_types_reset(ast_base);
     ast_tuple_types_reset(ast_base);
     ast_struct_types_reset(ast_base);
+    ast_function_types_reset(ast_base);
     ast_expr_reset(ast_base);
 }
 
@@ -3804,6 +3852,21 @@ const AST_STRUCT_TYPES_SECTION_SIZE: i32 =
 
 const AST_STRUCT_HEAP_INDEX_SECTION_SIZE: i32 = STRUCT_TYPE_CAPACITY * WORD_SIZE;
 
+const AST_FUNCTION_TYPES_CAPACITY: i32 = FUNCTION_TYPE_CAPACITY;
+
+const AST_FUNCTION_TYPE_ENTRY_SIZE: i32 = 16;
+
+const AST_FUNCTION_TYPE_PARAM_COUNT_OFFSET: i32 = 0;
+
+const AST_FUNCTION_TYPE_RETURN_TYPE_OFFSET: i32 = 4;
+
+const AST_FUNCTION_TYPE_PARAMS_PTR_OFFSET: i32 = 8;
+
+const AST_FUNCTION_TYPE_FLAGS_PTR_OFFSET: i32 = 12;
+
+const AST_FUNCTION_TYPES_SECTION_SIZE: i32 =
+    WORD_SIZE + AST_FUNCTION_TYPES_CAPACITY * AST_FUNCTION_TYPE_ENTRY_SIZE;
+
 fn ast_tuple_heap_index_ptr(ast_base: i32, index: i32) -> i32 {
     ast_tuple_heap_indices_base(ast_base) + index * WORD_SIZE
 }
@@ -3860,6 +3923,52 @@ fn ast_struct_types_count(ast_base: i32) -> i32 {
 
 fn ast_struct_types_reset(ast_base: i32) {
     store_i32(ast_struct_types_count_ptr(ast_base), 0);
+}
+
+fn ast_function_types_count_ptr(ast_base: i32) -> i32 {
+    ast_struct_heap_indices_base(ast_base) + AST_STRUCT_HEAP_INDEX_SECTION_SIZE
+}
+
+fn ast_function_type_entry_ptr(ast_base: i32, index: i32) -> i32 {
+    ast_function_types_count_ptr(ast_base)
+        + WORD_SIZE
+        + index * AST_FUNCTION_TYPE_ENTRY_SIZE
+}
+
+fn ast_function_types_count(ast_base: i32) -> i32 {
+    load_i32(ast_function_types_count_ptr(ast_base))
+}
+
+fn ast_function_types_reset(ast_base: i32) {
+    store_i32(ast_function_types_count_ptr(ast_base), 0);
+}
+
+fn ast_function_type_param_count(ast_base: i32, index: i32) -> i32 {
+    load_i32(
+        ast_function_type_entry_ptr(ast_base, index)
+            + AST_FUNCTION_TYPE_PARAM_COUNT_OFFSET,
+    )
+}
+
+fn ast_function_type_return_type(ast_base: i32, index: i32) -> i32 {
+    load_i32(
+        ast_function_type_entry_ptr(ast_base, index)
+            + AST_FUNCTION_TYPE_RETURN_TYPE_OFFSET,
+    )
+}
+
+fn ast_function_type_params_ptr(ast_base: i32, index: i32) -> i32 {
+    load_i32(
+        ast_function_type_entry_ptr(ast_base, index)
+            + AST_FUNCTION_TYPE_PARAMS_PTR_OFFSET,
+    )
+}
+
+fn ast_function_type_flags_ptr(ast_base: i32, index: i32) -> i32 {
+    load_i32(
+        ast_function_type_entry_ptr(ast_base, index)
+            + AST_FUNCTION_TYPE_FLAGS_PTR_OFFSET,
+    )
 }
 
 fn ast_struct_type_field_count(ast_base: i32, index: i32) -> i32 {
@@ -4217,6 +4326,69 @@ fn struct_type_id(index: i32) -> i32 {
 
 fn struct_type_index(type_id: i32) -> i32 {
     type_id - TYPE_ID_STRUCT_BASE
+}
+
+fn function_type_id(index: i32) -> i32 {
+    TYPE_ID_FUNCTION_BASE + index
+}
+
+fn function_type_index(type_id: i32) -> i32 {
+    type_id - TYPE_ID_FUNCTION_BASE
+}
+
+fn function_type_param_count(ast_base: i32, type_id: i32) -> i32 {
+    if !type_id_is_function(type_id) {
+        return -1;
+    }
+    let index: i32 = function_type_index(type_id);
+    if index < 0 {
+        return -1;
+    }
+    if index >= ast_function_types_count(ast_base) {
+        return -1;
+    }
+    ast_function_type_param_count(ast_base, index)
+}
+
+fn function_type_return_type(ast_base: i32, type_id: i32) -> i32 {
+    if !type_id_is_function(type_id) {
+        return -1;
+    }
+    let index: i32 = function_type_index(type_id);
+    if index < 0 {
+        return -1;
+    }
+    if index >= ast_function_types_count(ast_base) {
+        return -1;
+    }
+    ast_function_type_return_type(ast_base, index)
+}
+
+fn function_type_param_type(ast_base: i32, type_id: i32, param_index: i32) -> i32 {
+    if param_index < 0 {
+        return -1;
+    }
+    let count: i32 = function_type_param_count(ast_base, type_id);
+    if count < 0 {
+        return -1;
+    }
+    if param_index >= count {
+        return -1;
+    }
+    let index: i32 = function_type_index(type_id);
+    if index < 0 {
+        return -1;
+    }
+    let params_ptr: i32 = ast_function_type_params_ptr(ast_base, index);
+    if count > 0 {
+        if params_ptr < 0 {
+            return -1;
+        }
+    }
+    if count == 0 {
+        return -1;
+    }
+    load_i32(params_ptr + param_index * WORD_SIZE)
 }
 
 fn array_type_heap_index(ast_base: i32, type_id: i32) -> i32 {
@@ -4734,6 +4906,102 @@ fn ast_register_struct_type(
     struct_type_id(count)
 }
 
+fn ast_register_function_type(
+    ast_base: i32,
+    param_types_ptr: i32,
+    param_count: i32,
+    param_flags_ptr: i32,
+    return_type_id: i32,
+) -> i32 {
+    if param_count < 0 {
+        return -1;
+    }
+    if param_count > 0 {
+        if param_types_ptr < 0 {
+            return -1;
+        }
+    }
+    let count_ptr: i32 = ast_function_types_count_ptr(ast_base);
+    let count: i32 = load_i32(count_ptr);
+    let mut idx: i32 = 0;
+    while idx < count {
+        let entry_ptr: i32 = ast_function_type_entry_ptr(ast_base, idx);
+        let existing_count: i32 =
+            load_i32(entry_ptr + AST_FUNCTION_TYPE_PARAM_COUNT_OFFSET);
+        if existing_count != param_count {
+            idx = idx + 1;
+            continue;
+        }
+        let existing_return: i32 =
+            load_i32(entry_ptr + AST_FUNCTION_TYPE_RETURN_TYPE_OFFSET);
+        if existing_return != return_type_id {
+            idx = idx + 1;
+            continue;
+        }
+        let existing_params_ptr: i32 =
+            load_i32(entry_ptr + AST_FUNCTION_TYPE_PARAMS_PTR_OFFSET);
+        let existing_flags_ptr: i32 =
+            load_i32(entry_ptr + AST_FUNCTION_TYPE_FLAGS_PTR_OFFSET);
+        let mut matches: bool = true;
+        if param_count > 0 {
+            if existing_params_ptr < 0 {
+                return -1;
+            }
+            let mut param_idx: i32 = 0;
+            while param_idx < param_count {
+                let existing_type: i32 =
+                    load_i32(existing_params_ptr + param_idx * WORD_SIZE);
+                let new_type: i32 =
+                    load_i32(param_types_ptr + param_idx * WORD_SIZE);
+                if existing_type != new_type {
+                    matches = false;
+                    break;
+                }
+                param_idx = param_idx + 1;
+            };
+            if matches {
+                if existing_flags_ptr != param_flags_ptr {
+                    matches = false;
+                }
+            }
+        } else {
+            if existing_params_ptr != 0 {
+                matches = false;
+            }
+            if existing_flags_ptr != param_flags_ptr {
+                matches = false;
+            }
+        }
+        if matches {
+            return function_type_id(idx);
+        }
+        idx = idx + 1;
+    };
+    if count >= AST_FUNCTION_TYPES_CAPACITY {
+        return -1;
+    }
+    let entry_ptr: i32 = ast_function_type_entry_ptr(ast_base, count);
+    store_i32(
+        entry_ptr + AST_FUNCTION_TYPE_PARAM_COUNT_OFFSET,
+        param_count,
+    );
+    store_i32(
+        entry_ptr + AST_FUNCTION_TYPE_RETURN_TYPE_OFFSET,
+        return_type_id,
+    );
+    if param_count > 0 {
+        store_i32(
+            entry_ptr + AST_FUNCTION_TYPE_PARAMS_PTR_OFFSET,
+            param_types_ptr,
+        );
+    } else {
+        store_i32(entry_ptr + AST_FUNCTION_TYPE_PARAMS_PTR_OFFSET, 0);
+    }
+    store_i32(entry_ptr + AST_FUNCTION_TYPE_FLAGS_PTR_OFFSET, param_flags_ptr);
+    store_i32(count_ptr, count + 1);
+    function_type_id(count)
+}
+
 fn ensure_array_type_metadata(out_ptr: i32, ast_base: i32, index: i32, type_id: i32) -> i32 {
     if index < 0 {
         return -1;
@@ -4825,6 +5093,9 @@ fn ensure_struct_type_metadata(out_ptr: i32, ast_base: i32, index: i32, type_id:
 
 fn type_id_contains_only_type_values(ast_base: i32, type_id: i32) -> bool {
     if type_id < 0 {
+        return false;
+    }
+    if type_id_is_function(type_id) {
         return false;
     }
     if type_id == BUILTIN_TYPE_ID_TYPE {
@@ -5214,6 +5485,9 @@ fn resolve_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
     if type_id_is_struct(type_id) {
         return resolve_struct_type_id(out_ptr, ast_base, type_id);
     }
+    if type_id_is_function(type_id) {
+        return type_id;
+    }
     if type_id_is_builtin(type_id) {
         return type_id;
     }
@@ -5223,7 +5497,7 @@ fn resolve_type_id(out_ptr: i32, ast_base: i32, type_id: i32) -> i32 {
 }
 
 fn ast_extra_base(ast_base: i32) -> i32 {
-    ast_struct_heap_indices_base(ast_base) + AST_STRUCT_HEAP_INDEX_SECTION_SIZE
+    ast_function_types_count_ptr(ast_base) + AST_FUNCTION_TYPES_SECTION_SIZE
 }
 
 const AST_EXPR_ENTRY_SIZE: i32 = 20;
@@ -6541,7 +6815,45 @@ fn resolve_constant_reference(ast_base: i32, expr_index: i32) -> i32 {
         true,
     );
     if const_index < 0 {
-        return -1;
+        let func_index: i32 = find_function_entry_index(
+            source_base,
+            ast_base,
+            ident_start,
+            ident_len,
+            true,
+        );
+        if func_index < 0 {
+            return -1;
+        }
+        let func_entry_ptr: i32 = ast_function_entry_ptr(ast_base, func_index);
+        let param_count: i32 = load_i32(func_entry_ptr + 8);
+        if param_count < 0 {
+            return -1;
+        }
+        let param_types_ptr: i32 = load_i32(func_entry_ptr + 24);
+        if param_count > 0 && param_types_ptr < 0 {
+            return -1;
+        }
+        let return_type_id: i32 = load_i32(func_entry_ptr + 28);
+        if return_type_id < 0 {
+            return -1;
+        }
+        let function_type_id_value: i32 = ast_register_function_type(
+            ast_base,
+            param_types_ptr,
+            param_count,
+            0,
+            return_type_id,
+        );
+        if function_type_id_value < 0 {
+            return -1;
+        }
+        store_i32(entry_ptr, 0);
+        store_i32(entry_ptr + 4, func_index);
+        store_i32(entry_ptr + 8, 0);
+        store_i32(entry_ptr + 12, 0);
+        ast_expr_set_type(ast_base, expr_index, function_type_id_value);
+        return 0;
     }
     let const_entry_ptr: i32 = ast_constant_entry_ptr(ast_base, const_index);
     if interpret_constant_entry(ast_base, const_entry_ptr) < 0 {
