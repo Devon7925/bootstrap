@@ -118,7 +118,7 @@ test("array literal length accepts constant expressions", async () => {
   expect(result).toBe(6);
 });
 
-test.todo("array literal supports empty list syntax", async () => {
+test("array literal supports empty list syntax", async () => {
   const wasm = await compileWithAstCompiler(`
     fn main() -> i32 {
         let empty: [i32; 0] = [];

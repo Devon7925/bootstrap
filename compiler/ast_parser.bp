@@ -432,6 +432,20 @@ fn parse_basic_expression(
             nested_temp_base + 16 + MAX_ARRAY_LITERAL_ELEMENTS * WORD_SIZE + 64;
         let mut array_cursor: i32 = cursor + 1;
         array_cursor = skip_whitespace(base, len, array_cursor);
+        if array_cursor < len {
+            let first_delimiter: i32 = load_u8(base + array_cursor);
+            if first_delimiter == ']' {
+                let expr_index: i32 =
+                    ast_expr_alloc_array_list(ast_base, 0, 0, cursor);
+                if expr_index < 0 {
+                    return -1;
+                }
+                store_i32(out_kind_ptr, 37);
+                store_i32(out_data0_ptr, expr_index);
+                store_i32(out_data1_ptr, 0);
+                return skip_whitespace(base, len, array_cursor + 1);
+            }
+        }
         array_cursor = parse_expression(
             base,
             len,
