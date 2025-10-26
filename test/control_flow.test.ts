@@ -199,7 +199,7 @@ test("if conditions require boolean values", async () => {
   expect(failure.failure.detail).toBe("/entry.bp:3:12: if condition type mismatch");
 });
 
-test.todo(
+test(
   "if expressions used as variable initializers require else branches",
   async () => {
     const failure = await expectCompileFailure(`
@@ -217,7 +217,7 @@ test.todo(
   },
 );
 
-test.todo("returning if expressions without else reports diagnostics", async () => {
+test("returning if expressions without else reports diagnostics", async () => {
   const failure = await expectCompileFailure(`
     fn choose(flag: bool) -> i32 {
         return if flag {

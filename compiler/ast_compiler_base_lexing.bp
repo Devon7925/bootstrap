@@ -1085,6 +1085,37 @@ fn expression_guaranteed_diverges(ast_base: i32, expr_index: i32) -> bool {
     false
 }
 
+fn expression_requires_else_value(
+    ast_base: i32,
+    expr_kind: i32,
+    expr_data0: i32,
+    expr_data1: i32,
+    existing_index: i32,
+) -> bool {
+    if expr_data1 >= 0 {
+        return false;
+    }
+    if expr_kind == 7 {
+        return true;
+    }
+    if expr_kind == 2 {
+        let mut expr_index: i32 = existing_index;
+        if expr_index < 0 {
+            expr_index = expression_node_from_parts(ast_base, expr_kind, expr_data0, expr_data1);
+        }
+        if expr_index >= 0 {
+            let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+            if entry_ptr > 0 {
+                let underlying_kind: i32 = load_i32(entry_ptr);
+                if underlying_kind == 7 {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
 const LOOP_FLAG_NONE: i32 = 0;
 const LOOP_FLAG_DISALLOW_BREAK_VALUES: i32 = 1;
 
@@ -1353,6 +1384,31 @@ fn parse_block_expression_body(
             let init_index: i32 =
                 expression_node_from_parts(ast_base, init_kind, init_data0, init_data1);
             if init_index < 0 {
+                store_i32(locals_stack_count_ptr, saved_stack_count);
+                store_i32(locals_next_index_ptr, saved_next_index);
+                return -1;
+            }
+            if expression_requires_else_value(
+                ast_base,
+                init_kind,
+                init_data0,
+                init_data1,
+                init_index,
+            ) {
+                let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+                if detail_out_ptr > 0 {
+                    if load_u8(detail_out_ptr) == 0 {
+                        write_failure_detail_with_location(
+                            detail_out_ptr,
+                            scratch_module_index(detail_out_ptr),
+                            base,
+                            len,
+                            init_start,
+                            52,
+                            "if expressions used as values require an else branch",
+                        );
+                    }
+                }
                 store_i32(locals_stack_count_ptr, saved_stack_count);
                 store_i32(locals_next_index_ptr, saved_next_index);
                 return -1;
@@ -1699,6 +1755,7 @@ fn parse_block_expression_body(
                 is_bare_return = 1;
                 after_return = skip_whitespace(base, len, after_return + 1);
             } else {
+                let value_start: i32 = after_return;
                 after_return = parse_expression(
                     base,
                     len,
@@ -1732,6 +1789,31 @@ fn parse_block_expression_body(
                     value_data1,
                 );
                 if value_index < 0 {
+                    store_i32(locals_stack_count_ptr, saved_stack_count);
+                    store_i32(locals_next_index_ptr, saved_next_index);
+                    return -1;
+                }
+                if expression_requires_else_value(
+                    ast_base,
+                    value_kind,
+                    value_data0,
+                    value_data1,
+                    value_index,
+                ) {
+                    let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+                    if detail_out_ptr > 0 {
+                        if load_u8(detail_out_ptr) == 0 {
+                            write_failure_detail_with_location(
+                                detail_out_ptr,
+                                scratch_module_index(detail_out_ptr),
+                                base,
+                                len,
+                                value_start,
+                                52,
+                                "if expressions used as values require an else branch",
+                            );
+                        }
+                    }
                     store_i32(locals_stack_count_ptr, saved_stack_count);
                     store_i32(locals_next_index_ptr, saved_next_index);
                     return -1;
@@ -2417,27 +2499,14 @@ fn parse_block_expression_body(
         }
 
         let expr_metadata: i32 = load_i32(stmt_expr_data1_ptr);
-        let mut metadata_requires_value: bool = false;
-        if expr_kind == 7 {
-            metadata_requires_value = true;
-        } else if expr_kind == 2 && expr_metadata < 0 {
-            let expr_index: i32 = expression_node_from_parts(
-                ast_base,
-                expr_kind,
-                expr_data0,
-                expr_data1,
-            );
-            if expr_index >= 0 {
-                let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
-                if entry_ptr > 0 {
-                    let underlying_kind: i32 = load_i32(entry_ptr);
-                    if underlying_kind == 7 {
-                        metadata_requires_value = true;
-                    }
-                }
-            }
-        }
-        if metadata_requires_value && expr_metadata < 0 {
+        let requires_else_value: bool = expression_requires_else_value(
+            ast_base,
+            expr_kind,
+            expr_data0,
+            expr_metadata,
+            -1,
+        );
+        if requires_else_value {
             if allow_empty_value {
                 if next_cursor < len {
                     let after_byte: i32 = load_u8(base + next_cursor);
