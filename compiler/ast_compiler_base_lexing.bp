@@ -1331,8 +1331,8 @@ fn parse_block_expression_body(
                 store_i32(stmt_local_type_ptr, inferred_type);
             }
             let local_type_id: i32 = load_i32(stmt_local_type_ptr);
+            let init_type: i32 = ast_expr_type(ast_base, init_index);
             if local_type_id == BUILTIN_TYPE_ID_BOOL {
-                let init_type: i32 = ast_expr_type(ast_base, init_index);
                 if init_type >= 0 && init_type != BUILTIN_TYPE_ID_BOOL {
                     let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
                     if detail_out_ptr > 0 {
@@ -1355,6 +1355,38 @@ fn parse_block_expression_body(
                                 len,
                                 location_offset,
                                 41,
+                                message,
+                            );
+                        }
+                    }
+                    store_i32(locals_stack_count_ptr, saved_stack_count);
+                    store_i32(locals_next_index_ptr, saved_next_index);
+                    return -1;
+                }
+            }
+            if type_id_is_integer(local_type_id) {
+                if init_type == BUILTIN_TYPE_ID_BOOL {
+                    let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
+                    if detail_out_ptr > 0 {
+                        if load_u8(detail_out_ptr) == 0 {
+                            let mut location_offset: i32 =
+                                ast_expr_location(ast_base, init_index);
+                            if location_offset <= 0 {
+                                if init_start >= 0 {
+                                    location_offset = init_start;
+                                } else {
+                                    location_offset = name_start;
+                                }
+                            }
+                            let message: [u8; 31] =
+                                "local initializer type mismatch";
+                            write_failure_detail_with_location(
+                                detail_out_ptr,
+                                scratch_module_index(detail_out_ptr),
+                                base,
+                                len,
+                                location_offset,
+                                31,
                                 message,
                             );
                         }

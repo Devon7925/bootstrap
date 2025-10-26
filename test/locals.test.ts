@@ -78,7 +78,7 @@ test("blocks must end with an expression", async () => {
   expect(error.failure.detail).toBe("/entry.bp:4:5: block must end with expression");
 });
 
-test.todo(
+test(
   "integer locals reject boolean initializers",
   async () => {
     const failure = await expectCompileFailure(`
@@ -87,7 +87,6 @@ test.todo(
           value
       }
     `);
-    expect(failure.failure.detail).toBeDefined();
-    expect(failure.failure.detail).toContain("local initializer type mismatch");
+    expect(failure.failure.detail).toBe("/entry.bp:3:28: local initializer type mismatch");
   },
 );
