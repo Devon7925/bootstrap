@@ -199,6 +199,42 @@ test("if conditions require boolean values", async () => {
   expect(failure.failure.detail).toBe("/entry.bp:3:12: if condition type mismatch");
 });
 
+test.todo(
+  "if expressions used as variable initializers require else branches",
+  async () => {
+    const failure = await expectCompileFailure(`
+      fn main() -> i32 {
+          let value: i32 = if false {
+              1
+          };
+          value
+      }
+    `);
+    expect(failure.failure.detail).toBeDefined();
+    expect(failure.failure.detail).toContain(
+      "if expressions used as values require an else branch",
+    );
+  },
+);
+
+test.todo("returning if expressions without else reports diagnostics", async () => {
+  const failure = await expectCompileFailure(`
+    fn choose(flag: bool) -> i32 {
+        return if flag {
+            1
+        };
+    }
+
+    fn main() -> i32 {
+        choose(false)
+    }
+  `);
+  expect(failure.failure.detail).toBeDefined();
+  expect(failure.failure.detail).toContain(
+    "if expressions used as values require an else branch",
+  );
+});
+
 test("if expressions without else branches cannot produce values", async () => {
   const failure = await expectCompileFailure(`
     fn choose(flag: bool) -> i32 {
