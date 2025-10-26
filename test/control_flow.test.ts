@@ -125,6 +125,28 @@ test("loop break types must match", async () => {
   expect(result).toBe(5);
 });
 
+test.todo(
+  "loop break value types must agree with the loop expression",
+  async () => {
+    const failure = await expectCompileFailure(`
+      fn choose(flag: bool) -> i32 {
+          loop {
+              if flag {
+                  break 1;
+              };
+              break false;
+          }
+      }
+
+      fn main() -> i32 {
+          choose(true)
+      }
+    `);
+    expect(failure.failure.detail).toBeDefined();
+    expect(failure.failure.detail).toContain("loop break value type mismatch");
+  },
+);
+
 test("else if chains execute", async () => {
   const wasm = await compileWithAstCompiler(`
     fn describe(value: i32) -> i32 {
