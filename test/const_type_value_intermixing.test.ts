@@ -350,7 +350,7 @@ test("const fn with only const parameters can return composed array-tuple-array 
     const fn foo(const COUNT: i32) -> [([u8; KEY_NAME_CAP], type); COUNT] {
         let entries: [([u8; KEY_NAME_CAP], type); COUNT] =
             [([0 as u8; KEY_NAME_CAP], i32); COUNT];
-        entries
+        return entries;
     }
 
     const BAR: [([u8; KEY_NAME_CAP], type); KEY_COUNT] = foo(KEY_COUNT);
@@ -372,7 +372,7 @@ test("const fn with only const parameters can return spaced composed array-tuple
         let entries: [([u8; KEY_NAME_CAP], type); COUNT] =
             [([0 as u8; KEY_NAME_CAP], i32); COUNT];
         let idx = 0;
-        entries
+        return entries;
     }
 
     const BAR: [([u8; KEY_NAME_CAP], type); KEY_COUNT] = foo(KEY_COUNT);
@@ -416,7 +416,7 @@ test("const fn with only const parameters can return usable composed array-tuple
         let mut entries: [([u8; KEY_NAME_CAP], type); COUNT] =
             [("abcd", i32); COUNT];
         let mut idx = 0;
-        entries
+        return entries;
     }
 
     const BAR: [([i32; KEY_NAME_CAP], type); KEY_COUNT] = foo(KEY_COUNT);
@@ -484,7 +484,7 @@ test("const fn with only const parameters can divide to produce composed type", 
 
     const fn foo(const COUNT: i32) -> [(i32, type); COUNT] {
         let divided: i32 = COUNT / 10;
-        [(42, i32); COUNT]
+        return [(42, i32); COUNT];
     }
 
     const BAR: [(i32, type); KEY_COUNT] = foo(KEY_COUNT);

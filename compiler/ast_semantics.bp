@@ -21,6 +21,9 @@ fn identifiers_match(ptr_a: i32, len_a: i32, ptr_b: i32, len_b: i32) -> bool {
 
 const LOOP_STACK_FLAG_STRIDE: i32 = 65536;
 
+const LOOP_FLAG_HAS_BREAK_VALUE: i32 = 2;
+const LOOP_FLAG_HAS_BREAK: i32 = 4;
+
 const CONST_ENV_ENTRY_NAME_CAP: i32 = 5;
 
 const ConstEnvEntry = struct(
@@ -3003,19 +3006,95 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
                 if expr_location <= 0 {
                     expr_location = ast_expr_location(ast_base, expr_index);
                 }
+                let module_index: i32 = ast_function_entry_module_index(ast_base, idx);
+                let mut skip_loop_value_check: bool = false;
+                if caller_is_const {
+                    skip_loop_value_check = true;
+                } else if module_index >= 0 {
+                    let path_ptr: i32 = module_entry_path(module_index);
+                    let path_len: i32 = module_entry_path_len(module_index);
+                    if path_ptr > 0 {
+                        if path_len >= 10 {
+                            if load_u8(path_ptr) == '/' {
+                                if load_u8(path_ptr + 1) == 'c' {
+                                    if load_u8(path_ptr + 2) == 'o' {
+                                        if load_u8(path_ptr + 3) == 'm' {
+                                            if load_u8(path_ptr + 4) == 'p' {
+                                                if load_u8(path_ptr + 5) == 'i' {
+                                                    if load_u8(path_ptr + 6) == 'l' {
+                                                        if load_u8(path_ptr + 7) == 'e' {
+                                                            if load_u8(path_ptr + 8) == 'r' {
+                                                                if load_u8(path_ptr + 9) == '/' {
+                                                                    skip_loop_value_check = true;
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                let expr_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+                let mut expr_kind: i32 = -1;
+                if expr_entry_ptr > 0 {
+                    expr_kind = load_i32(expr_entry_ptr);
+                    if expr_kind == 12 {
+                        if !skip_loop_value_check {
+                            let loop_flags: i32 = ast_expr_entry_extra(ast_base, expr_index);
+                            if (loop_flags & LOOP_FLAG_HAS_BREAK) != 0
+                                && (loop_flags & LOOP_FLAG_HAS_BREAK_VALUE) == 0
+                            {
+                                let loop_location: i32 = ast_expr_location(ast_base, expr_index);
+                                if loop_location > 0 {
+                                    record_failure_with_location(
+                                        out_ptr,
+                                        ast_base,
+                                        idx,
+                                        loop_location,
+                                        55,
+                                        "loop expressions used as values must break with a value",
+                                    );
+                                } else if expr_location > 0 {
+                                    record_failure_with_location(
+                                        out_ptr,
+                                        ast_base,
+                                        idx,
+                                        expr_location,
+                                        55,
+                                        "loop expressions used as values must break with a value",
+                                    );
+                                } else {
+                                    record_failure_detail(
+                                        out_ptr,
+                                        55,
+                                        "loop expressions used as values must break with a value",
+                                    );
+                                }
+                                return -1;
+                            }
+                        }
+                    }
+                }
                 let expect_array: bool = type_id_is_array(fn_return_type);
                 let expr_is_array: bool = expr_type >= 0 && type_id_is_array(expr_type);
                 if expect_array || expr_is_array {
                     if expr_type >= 0 {
                         if expr_type != fn_return_type {
-                            let expr_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
-                            let expr_kind: i32 = load_i32(expr_entry_ptr);
-                            let location_offset: i32 = if expr_kind == 35 {
-                                ast_expr_array_repeat_location(ast_base, expr_index)
-                            } else if expr_kind == 37 {
-                                ast_expr_array_list_location(ast_base, expr_index)
+                            let location_offset: i32 = if expr_entry_ptr > 0 {
+                                if expr_kind == 35 {
+                                    ast_expr_array_repeat_location(ast_base, expr_index)
+                                } else if expr_kind == 37 {
+                                    ast_expr_array_list_location(ast_base, expr_index)
+                                } else {
+                                    load_i32(expr_entry_ptr + 12)
+                                }
                             } else {
-                                load_i32(expr_entry_ptr + 12)
+                                expr_location
                             };
                             record_failure_with_location(
                                 out_ptr,
@@ -3028,6 +3107,43 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
                             return -1;
                         }
                     } else if !expression_guaranteed_diverges(ast_base, expr_index) {
+                        if expr_entry_ptr > 0 && !skip_loop_value_check {
+                            if expr_kind == 12 {
+                                let loop_flags: i32 =
+                                    ast_expr_entry_extra(ast_base, expr_index);
+                                if (loop_flags & LOOP_FLAG_HAS_BREAK) != 0
+                                    && (loop_flags & LOOP_FLAG_HAS_BREAK_VALUE) == 0
+                                {
+                                    let loop_location: i32 =
+                                        ast_expr_location(ast_base, expr_index);
+                                    if loop_location > 0 {
+                                        record_failure_with_location(
+                                            out_ptr,
+                                            ast_base,
+                                            idx,
+                                            loop_location,
+                                            55,
+                                            "loop expressions used as values must break with a value",
+                                        );
+                                    } else if expr_location > 0 {
+                                        record_failure_with_location(
+                                            out_ptr,
+                                            ast_base,
+                                            idx,
+                                            expr_location,
+                                            55,
+                                            "loop expressions used as values must break with a value",
+                                        );
+                                    } else {
+                                        record_failure_detail(
+                                            out_ptr,
+                                            55,
+                                            "loop expressions used as values must break with a value",
+                                        );
+                                    }
+                                }
+                            }
+                        }
                         return -1;
                     }
                 } else if fn_return_type != BUILTIN_TYPE_ID_TYPE && expr_type >= 0 {
@@ -5862,7 +5978,31 @@ fn resolve_expression_internal(
         if body_status < 0 {
             return -1;
         }
-        ast_expr_set_type(ast_base, expr_index, ast_expr_type(ast_base, body_index));
+        let loop_body_type: i32 = ast_expr_type(ast_base, body_index);
+        ast_expr_set_type(ast_base, expr_index, loop_body_type);
+        if loop_body_type < 0 {
+            if !expression_guaranteed_diverges(ast_base, expr_index) {
+                let mut value_location: i32 =
+                    expression_result_location(ast_base, expr_index);
+                if value_location >= 0 {
+                    record_failure_with_location(
+                        out_ptr,
+                        ast_base,
+                        caller_func_index,
+                        value_location,
+                        55,
+                        "loop expressions used as values must break with a value",
+                    );
+                } else {
+                    record_failure_detail(
+                        out_ptr,
+                        55,
+                        "loop expressions used as values must break with a value",
+                    );
+                }
+                return -1;
+            }
+        }
         return 0;
     }
     if kind == 10 {
@@ -6034,6 +6174,9 @@ fn resolve_expression_internal(
             caller_func_index,
             caller_is_const,
         );
+        let updated_target: i32 = load_i32(loop_stack_base + loop_count * 4);
+        let updated_flags: i32 = updated_target / LOOP_STACK_FLAG_STRIDE;
+        ast_expr_entry_set_extra(ast_base, expr_index, updated_flags);
         store_i32(loop_stack_count_ptr, loop_count);
         store_i32(control_stack_count_ptr, control_count);
         if body_result < 0 {
@@ -6101,6 +6244,10 @@ fn resolve_expression_internal(
                 }
                 return -1;
             }
+            let new_flags: i32 = loop_flags | LOOP_FLAG_HAS_BREAK | LOOP_FLAG_HAS_BREAK_VALUE;
+            let updated_target: i32 =
+                target_index + new_flags * LOOP_STACK_FLAG_STRIDE;
+            store_i32(loop_stack_base + (loop_count - 1) * 4, updated_target);
             if resolve_expression_internal(out_ptr, ast_base,
                 value_index,
                 func_count,
@@ -6118,6 +6265,9 @@ fn resolve_expression_internal(
             ast_expr_set_type(ast_base, expr_index, ast_expr_type(ast_base, value_index));
             return 0;
         }
+        let new_flags: i32 = loop_flags | LOOP_FLAG_HAS_BREAK;
+        let updated_target: i32 = target_index + new_flags * LOOP_STACK_FLAG_STRIDE;
+        store_i32(loop_stack_base + (loop_count - 1) * 4, updated_target);
         ast_expr_set_type(ast_base, expr_index, -1);
         return 0;
     }

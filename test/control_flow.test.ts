@@ -181,7 +181,7 @@ test("if expressions without else branches cannot produce values", async () => {
   );
 });
 
-test.todo("loop expressions used as values must break with a value", async () => {
+test("loop expressions used as values must break with a value", async () => {
   const failure = await expectCompileFailure(`
     fn main() -> i32 {
         loop {
@@ -190,7 +190,7 @@ test.todo("loop expressions used as values must break with a value", async () =>
     }
   `);
   expect(failure.failure.detail).toBe(
-    "/entry.bp:3:9: loop expressions used as values must break with a value",
+    "/entry.bp:5:9: loop expressions used as values must break with a value",
   );
 });
 
