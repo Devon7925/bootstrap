@@ -118,8 +118,7 @@ test("parser reports diagnostic when function limit is exceeded", async () => {
     return `fn f${index}() -> i32 {\n    ${index}\n}`;
   }).join("\n\n");
   const failure = await expectCompileFailure(source);
-  expect(failure.failure.detail).toBeDefined();
-  expect(failure.failure.detail).toContain("function limit exceeded");
+  expect(failure.failure.detail).toBe("/entry.bp:4097:1: function limit exceeded");
 });
 
 test("functions may omit return types", async () => {

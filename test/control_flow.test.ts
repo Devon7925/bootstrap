@@ -142,8 +142,7 @@ test(
           choose(true)
       }
     `);
-    expect(failure.failure.detail).toBeDefined();
-    expect(failure.failure.detail).toContain("loop break value type mismatch");
+    expect(failure.failure.detail).toBe("/entry.bp:7:15: loop break value type mismatch");
   },
 );
 
@@ -210,9 +209,8 @@ test(
           value
       }
     `);
-    expect(failure.failure.detail).toBeDefined();
-    expect(failure.failure.detail).toContain(
-      "if expressions used as values require an else branch",
+    expect(failure.failure.detail).toBe(
+      "/entry.bp:3:28: if expressions used as values require an else branch",
     );
   },
 );
@@ -229,9 +227,8 @@ test("returning if expressions without else reports diagnostics", async () => {
         choose(false)
     }
   `);
-  expect(failure.failure.detail).toBeDefined();
-  expect(failure.failure.detail).toContain(
-    "if expressions used as values require an else branch",
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:3:16: if expressions used as values require an else branch",
   );
 });
 
