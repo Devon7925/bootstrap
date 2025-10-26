@@ -5962,8 +5962,52 @@ fn resolve_expression_internal(
         }
         store_i32(control_stack_count_ptr, control_count);
         let condition_type: i32 = ast_expr_type(ast_base, condition_index);
-        if !type_id_is_bool(condition_type) {
-            if !type_id_is_integer(condition_type) {
+        if condition_type >= 0 {
+            if !type_id_is_bool(condition_type) {
+                if out_ptr > 0 {
+                    if load_u8(out_ptr) == 0 {
+                        let mut location_offset: i32 = ast_expr_entry_extra(ast_base, expr_index);
+                        if location_offset > 0 {
+                            location_offset = location_offset - 1;
+                        } else {
+                            location_offset = ast_expr_location(ast_base, condition_index);
+                        }
+                        if location_offset >= 0 {
+                            let mut module_index: i32 = -1;
+                            let mut module_base: i32 = 0;
+                            let mut module_len: i32 = 0;
+                            if caller_func_index >= 0 {
+                                module_index = ast_function_entry_module_index(ast_base, caller_func_index);
+                                module_base = ast_function_entry_module_base(ast_base, caller_func_index);
+                                module_len = ast_function_entry_module_len(ast_base, caller_func_index);
+                                if (module_base <= 0 || module_len <= 0) && module_index >= 0 {
+                                    module_base = module_entry_content(module_index);
+                                    module_len = module_entry_content_len(module_index);
+                                }
+                            }
+                            if module_index < 0 {
+                                module_base = scratch_module_base(out_ptr);
+                                module_len = scratch_module_len(out_ptr);
+                            }
+                            let message: [u8; 26] = "if condition type mismatch";
+                            if module_base > 0 && module_len > 0 {
+                                write_failure_detail_with_location(
+                                    out_ptr,
+                                    module_index,
+                                    module_base,
+                                    module_len,
+                                    location_offset,
+                                    26,
+                                    message,
+                                );
+                            } else {
+                                record_failure_detail(out_ptr, 26, message);
+                            }
+                        } else {
+                            record_failure_detail(out_ptr, 26, "if condition type mismatch");
+                        }
+                    }
+                }
                 return -1;
             }
         }

@@ -116,7 +116,7 @@ test("const parameter specialization differentiates functions by identity", asyn
     expect(result).toBe(22);
 });
 
-test.todo(
+test(
     "const parameters accept function references from imported modules",
     async () => {
         const wasm = await compileWithAstCompiler(

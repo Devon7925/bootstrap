@@ -93,6 +93,10 @@ const memoryIntrinsicsSourceUrl = new URL("../stdlib/memory.bp", import.meta.url
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
+function normalizeNewlines(source: string): string {
+  return source.replace(/\r\n?/g, "\n");
+}
+
 export interface TypeEntry {
   readonly nameStart: number;
   readonly nameLength: number;
@@ -813,9 +817,10 @@ export class CompilerInstance {
     const compileFromPath = this.#compileFromPath!;
 
     const loadModuleSource = (path: string, contents: string) => {
+      const normalized = normalizeNewlines(contents);
       try {
         writeModuleString(this.#memory, MODULE_PATH_PTR, path);
-        writeModuleString(this.#memory, MODULE_CONTENT_PTR, contents);
+        writeModuleString(this.#memory, MODULE_CONTENT_PTR, normalized);
       } catch (cause) {
         throw this.#failure(readModuleStorageTop(this.#memory), -1, cause);
       }
