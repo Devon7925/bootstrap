@@ -1028,13 +1028,43 @@ fn collect_call_const_arguments(
     if existing_env_ptr > 0 {
         return existing_env_ptr;
     }
-    if call_metadata_const_usage_count(metadata_ptr) > 0 {
-        return 0;
-    }
     let args_base: i32 = call_metadata_args_base(metadata_ptr);
     if args_base < 0 {
         return -1;
     }
+    let usage_count: i32 = call_metadata_const_usage_count(metadata_ptr);
+    let mut force_collection: bool = false;
+    if usage_count > 0 {
+        // When const parameter usage tracking is active we historically skipped
+        // collecting canonicalized arguments. Inline function literals require the
+        // canonical environment even in that mode so detect them up front.
+        let mut scan_idx: i32 = 0;
+        loop {
+            if scan_idx >= param_count {
+                break;
+            }
+            if ast_function_param_is_const(ast_base, func_index, scan_idx) {
+                let arg_expr_index: i32 = load_i32(args_base + scan_idx * WORD_SIZE);
+                if arg_expr_index >= 0 {
+                    let expr_type: i32 = ast_expr_type(ast_base, arg_expr_index);
+                    if expr_type >= 0 {
+                        if type_id_is_function(expr_type) {
+                            let expr_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, arg_expr_index);
+                            if load_i32(expr_entry_ptr) == 0 {
+                                force_collection = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            scan_idx = scan_idx + 1;
+        };
+        if !force_collection {
+            return 0;
+        }
+    }
+    let allow_usage_fallback: bool = usage_count > 0 && !force_collection;
     let temp_base: i32 = ast_temp_base(ast_base) + CONSTANT_EVAL_SCRATCH_OFFSET;
     let eval_value_ptr: i32 = temp_base;
     let eval_type_ptr: i32 = eval_value_ptr + 4;
@@ -1058,6 +1088,20 @@ fn collect_call_const_arguments(
             }
             let arg_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, arg_expr_index);
             let arg_kind: i32 = load_i32(arg_entry_ptr);
+            if arg_kind == 0 {
+                let literal_type: i32 = ast_expr_type(ast_base, arg_expr_index);
+                if literal_type >= 0 {
+                    if type_id_is_function(literal_type) {
+                        let literal_value: i32 = load_i32(arg_entry_ptr + WORD_SIZE);
+                        env_entries[param_idx] = ConstEnvEntry {
+                            value: literal_value,
+                            type: literal_type,
+                        };
+                        param_idx = param_idx + 1;
+                        continue;
+                    }
+                }
+            }
             if arg_kind == 8 {
                 let mut should_reject: bool = false;
                 let local_index: i32 = load_i32(arg_entry_ptr + WORD_SIZE);
@@ -1074,6 +1118,9 @@ fn collect_call_const_arguments(
                     }
                 }
                 if should_reject {
+                    if allow_usage_fallback {
+                        return 0;
+                    }
                     let recorded: bool = try_record_call_failure_with_location(
                         out_ptr,
                         ast_base,
@@ -1159,7 +1206,13 @@ fn collect_call_const_arguments(
                 }
                 return -1;
             }
-            let const_type: i32 = load_i32(eval_type_ptr);
+            let mut const_type: i32 = load_i32(eval_type_ptr);
+            if const_type < 0 {
+                let expr_type: i32 = ast_expr_type(ast_base, arg_expr_index);
+                if expr_type >= 0 {
+                    const_type = expr_type;
+                }
+            }
             if const_type < 0 {
                 let recorded: bool = try_record_call_failure_with_location(
                     out_ptr,

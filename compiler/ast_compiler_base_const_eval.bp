@@ -316,6 +316,8 @@ fn interpret_constant_expression(
         return CONST_EVAL_STATUS_OK;
     }
     if kind == 6 {
+        store_i32(CONST_EVAL_DEBUG_STEP_OFFSET, 600);
+        store_i32(CONST_EVAL_DEBUG_LOCAL_OFFSET, load_i32(entry_ptr + 4));
         if param_count <= 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;

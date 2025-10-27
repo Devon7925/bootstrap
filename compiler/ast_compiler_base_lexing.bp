@@ -3633,8 +3633,16 @@ fn parse_type(
         }
         cursor = skip_whitespace(base, len, cursor);
         let scratch_base: i32 = parser_temp_scratch_base(ast_base, params_table_ptr);
-        let mut temp_types_ptr: i32 = scratch_base;
+        let temp_types_ptr: i32 = scratch_base;
+        let const_mask_ptr: i32 = temp_types_ptr + MAX_PARAMS * WORD_SIZE;
+        let const_mask_words: i32 = (MAX_PARAMS + 31) >> 5;
+        let mut mask_clear_idx: i32 = 0;
+        while mask_clear_idx < const_mask_words {
+            store_i32(const_mask_ptr + mask_clear_idx * WORD_SIZE, 0);
+            mask_clear_idx = mask_clear_idx + 1;
+        };
         let mut param_count: i32 = 0;
+        let mut const_params_count: i32 = 0;
         if cursor < len {
             let maybe_close: i32 = load_u8(base + cursor);
             if maybe_close != ')' {
@@ -3642,12 +3650,60 @@ fn parse_type(
                     if param_count >= MAX_PARAMS {
                         return -1;
                     }
+                    let mut qualifier_cursor: i32 = cursor;
+                    let mut param_is_const: bool = false;
+                    loop {
+                        let maybe_const_cursor: i32 = expect_keyword_const(
+                            base,
+                            len,
+                            qualifier_cursor,
+                        );
+                        if maybe_const_cursor < 0 {
+                            break;
+                        }
+                        let after_const_cursor: i32 =
+                            skip_whitespace(base, len, maybe_const_cursor);
+                        if after_const_cursor <= maybe_const_cursor {
+                            return -1;
+                        }
+                        if after_const_cursor >= len {
+                            return -1;
+                        }
+                        if param_is_const {
+                            return -1;
+                        }
+                        param_is_const = true;
+                        qualifier_cursor = after_const_cursor;
+                    };
+                    cursor = qualifier_cursor;
+                    let mut type_cursor: i32 = cursor;
+                    let mut consumed_name: bool = false;
+                    if type_cursor < len {
+                        let ident: IdentifierParse =
+                            parse_identifier(base, len, type_cursor);
+                        let ident_cursor: i32 = ident.cursor;
+                        if ident_cursor >= 0 {
+                            let after_ident: i32 =
+                                skip_whitespace(base, len, ident_cursor);
+                            if after_ident < len {
+                                let delimiter: i32 = load_u8(base + after_ident);
+                                if delimiter == ':' {
+                                    consumed_name = true;
+                                    type_cursor =
+                                        skip_whitespace(base, len, after_ident + 1);
+                                }
+                            }
+                        }
+                    }
+                    if !consumed_name {
+                        type_cursor = cursor;
+                    }
                     store_i32(type_template_sink_ptr, 0);
                     store_i32(type_template_sink_ptr + 4, 0);
                     cursor = parse_type(
                         base,
                         len,
-                        cursor,
+                        type_cursor,
                         ast_base,
                         params_table_ptr,
                         params_count,
@@ -3660,6 +3716,14 @@ fn parse_type(
                     }
                     let param_type_id: i32 = load_i32(out_type_ptr);
                     store_i32(temp_types_ptr + param_count * WORD_SIZE, param_type_id);
+                    if param_is_const {
+                        let mask_word_index: i32 = param_count >> 5;
+                        let mask_bit_index: i32 = param_count & 31;
+                        let mask_ptr: i32 = const_mask_ptr + mask_word_index * WORD_SIZE;
+                        let existing_mask: i32 = load_i32(mask_ptr);
+                        store_i32(mask_ptr, existing_mask | (1 << mask_bit_index));
+                        const_params_count = const_params_count + 1;
+                    }
                     param_count = param_count + 1;
                     cursor = skip_whitespace(base, len, cursor);
                     if cursor >= len {
@@ -3711,10 +3775,14 @@ fn parse_type(
             return -1;
         }
         let return_type_id: i32 = load_i32(out_type_ptr);
+        let call_data_used_ptr: i32 = ast_call_data_len_ptr(ast_base);
+        let saved_call_data_used: i32 = load_i32(call_data_used_ptr);
+        let type_count_before: i32 = ast_function_types_count(ast_base);
         let mut param_types_ptr: i32 = 0;
         if param_count > 0 {
             param_types_ptr = ast_call_data_alloc(ast_base, param_count);
             if param_types_ptr < 0 {
+                store_i32(call_data_used_ptr, saved_call_data_used);
                 return -1;
             }
             let mut copy_idx: i32 = 0;
@@ -3725,15 +3793,44 @@ fn parse_type(
                 copy_idx = copy_idx + 1;
             };
         }
+        let mut param_flags_ptr: i32 = 0;
+        if const_params_count > 0 {
+            let mut mask_word_count: i32 = (param_count + 31) >> 5;
+            if mask_word_count <= 0 {
+                mask_word_count = 1;
+            }
+            let payload_words: i32 = 1 + mask_word_count;
+            param_flags_ptr = ast_call_data_alloc(ast_base, payload_words);
+            if param_flags_ptr < 0 {
+                store_i32(call_data_used_ptr, saved_call_data_used);
+                return -1;
+            }
+            store_i32(param_flags_ptr, const_params_count);
+            let mut mask_copy_idx: i32 = 0;
+            while mask_copy_idx < mask_word_count {
+                let mask_word_value: i32 =
+                    load_i32(const_mask_ptr + mask_copy_idx * WORD_SIZE);
+                store_i32(
+                    param_flags_ptr + WORD_SIZE + mask_copy_idx * WORD_SIZE,
+                    mask_word_value,
+                );
+                mask_copy_idx = mask_copy_idx + 1;
+            };
+        }
         let function_type_id_value: i32 = ast_register_function_type(
             ast_base,
             param_types_ptr,
             param_count,
-            0,
+            param_flags_ptr,
             return_type_id,
         );
         if function_type_id_value < 0 {
+            store_i32(call_data_used_ptr, saved_call_data_used);
             return -1;
+        }
+        let type_count_after: i32 = ast_function_types_count(ast_base);
+        if type_count_after == type_count_before {
+            store_i32(call_data_used_ptr, saved_call_data_used);
         }
         store_i32(out_type_ptr, function_type_id_value);
         return cursor;

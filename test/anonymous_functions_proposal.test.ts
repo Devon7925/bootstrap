@@ -6,7 +6,7 @@ import {
   runWasmMainWithGc,
 } from "./helpers";
 
-test.todo("evaluates inline anonymous function via const parameter", async () => {
+test("evaluates inline anonymous function via const parameter", async () => {
   const wasm = await compileWithAstCompiler(`
     fn map_pair(const F: fn(i32) -> i32, lhs: i32, rhs: i32) -> (i32, i32) {
         (F(lhs), F(rhs))

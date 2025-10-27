@@ -207,6 +207,35 @@ fn main() -> i32 {
 `,
   },
   {
+    label: "anon-make",
+    source: `
+const fn make_incrementer() -> fn(const x: i32) -> i32 {
+    fn(const x: i32) -> i32 { x + 1 }
+}
+
+fn apply(const F: fn(const input: i32) -> i32, value: i32) -> i32 {
+    F(value)
+}
+
+fn main() -> i32 {
+    apply(make_incrementer(), 41)
+}
+`,
+  },
+  {
+    label: "map-pair",
+    source: `
+fn map_pair(const F: fn(i32) -> i32, lhs: i32, rhs: i32) -> (i32, i32) {
+    (F(lhs), F(rhs))
+}
+
+fn main() -> i32 {
+    let pair = map_pair(fn(x: i32) -> i32 { x + x }, 4, 7);
+    pair.0 + pair.1
+}
+`,
+  },
+  {
     label: "failing",
     source: `
 const KEY_COUNT: i32 = 12;

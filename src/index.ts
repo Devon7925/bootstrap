@@ -32,6 +32,13 @@ const SCRATCH_FAILURE_PATH_PTR_OFFSET = 4_048;
 const SCRATCH_FAILURE_PATH_LEN_OFFSET = 4_052;
 const SCRATCH_FAILURE_LINE_OFFSET = 4_056;
 const SCRATCH_FAILURE_COLUMN_OFFSET = 4_060;
+const SCRATCH_TYPE_METADATA_DEBUG_CONTEXT_OFFSET = 4_032;
+const SCRATCH_TYPE_METADATA_DEBUG_SUBJECT_OFFSET = 4_036;
+const SCRATCH_TYPE_METADATA_DEBUG_EXTRA_OFFSET = 4_040;
+const SCRATCH_TYPE_METADATA_DEBUG_FAILURE_COUNT_OFFSET = 4_044;
+const TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET = 5_020;
+const TYPE_METADATA_DEBUG_LAST_SUBJECT_OFFSET = 5_024;
+const TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET = 5_028;
 
 export interface CompilerModuleSource {
   readonly path: string;
@@ -146,6 +153,36 @@ export function describeCompilationFailure(
     if (text.length > 0) {
       detail = text;
     }
+  }
+
+  const metadataFailureCount = safeReadI32(
+    view,
+    outputPtr + SCRATCH_TYPE_METADATA_DEBUG_FAILURE_COUNT_OFFSET,
+  );
+  const recordedContext = safeReadI32(
+    view,
+    outputPtr + SCRATCH_TYPE_METADATA_DEBUG_CONTEXT_OFFSET,
+  );
+  const recordedSubject = safeReadI32(
+    view,
+    outputPtr + SCRATCH_TYPE_METADATA_DEBUG_SUBJECT_OFFSET,
+  );
+  const recordedExtra = safeReadI32(view, outputPtr + SCRATCH_TYPE_METADATA_DEBUG_EXTRA_OFFSET);
+  if (
+    metadataFailureCount > 0 &&
+    (!detail || detail.includes("type metadata resolution failed"))
+  ) {
+    const metadataContext = safeReadI32(
+      view,
+      outputPtr + TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET,
+    );
+    const metadataSubject = safeReadI32(
+      view,
+      outputPtr + TYPE_METADATA_DEBUG_LAST_SUBJECT_OFFSET,
+    );
+    const metadataExtra = safeReadI32(view, outputPtr + TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET);
+    const debugInfo = `type-metadata context=${metadataContext} subject=${metadataSubject} extra=${metadataExtra} recorded=${recordedContext}/${recordedSubject}/${recordedExtra} failures=${metadataFailureCount}`;
+    detail = detail ? `${detail} (${debugInfo})` : `type metadata resolution failed (${debugInfo})`;
   }
 
   const line = safeReadI32(view, outputPtr + SCRATCH_FAILURE_LINE_OFFSET);
