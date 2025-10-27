@@ -54,17 +54,6 @@ test("non-const parameters cannot accept anonymous functions", async () => {
   );
 });
 
-test.todo("returning anonymous functions enforces const signatures", async () => {
-  const failure = await expectCompileFailure(`
-    const fn make_identity() -> fn(x: i32) -> i32 {
-        fn(x: i32) -> i32 { x }
-    }
-  `);
-  expect(failure.failure.detail).toContain(
-    "anonymous functions returned from const fn must accept only const parameters",
-  );
-});
-
 test.todo("anonymous functions remain const-only values", async () => {
   const failure = await expectCompileFailure(`
     fn main() -> i32 {
