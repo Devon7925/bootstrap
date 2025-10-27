@@ -142,7 +142,5 @@ test("cyclic const type aliases report metadata diagnostics", async () => {
         0
     }
   `);
-    expect(failure.failure.detail).toBe(
-        "type metadata resolution failed (type-metadata context=0 subject=0 extra=0 recorded=255/0/0 failures=1)",
-    );
+    expect(failure.failure.detail).toBe("/entry.bp:2:11: cyclic const type alias");
 });

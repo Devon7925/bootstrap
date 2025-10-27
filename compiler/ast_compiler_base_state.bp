@@ -4261,6 +4261,91 @@ fn record_type_metadata_debug(out_ptr: i32, context: i32, subject: i32, extra: i
     store_i32(scratch_base + SCRATCH_TYPE_METADATA_DEBUG_EXTRA_OFFSET, extra);
 }
 
+fn find_const_alias_index_by_type(ast_base: i32, type_id: i32) -> i32 {
+    if type_id < 0 {
+        return -1;
+    }
+    let constants_count: i32 = ast_constants_count(ast_base);
+    if constants_count <= 0 {
+        return -1;
+    }
+    let mut idx: i32 = 0;
+    while idx < constants_count {
+        let const_entry_ptr: i32 = ast_constant_entry_ptr(ast_base, idx);
+        if const_entry_ptr >= 0 {
+            let entry_type: i32 = ast_constant_entry_type(const_entry_ptr);
+            if entry_type == BUILTIN_TYPE_ID_TYPE {
+                let entry_value: i32 = ast_constant_entry_value(const_entry_ptr);
+                if entry_value == type_id {
+                    return idx;
+                }
+            }
+        }
+        idx = idx + 1;
+    };
+    -1
+}
+
+fn try_write_const_alias_failure_detail(
+    out_ptr: i32,
+    ast_base: i32,
+    const_index: i32,
+) -> bool {
+    if out_ptr <= 0 {
+        return false;
+    }
+    if load_u8(out_ptr) != 0 {
+        return false;
+    }
+    if const_index < 0 {
+        return false;
+    }
+    let constants_count: i32 = ast_constants_count(ast_base);
+    if const_index >= constants_count {
+        return false;
+    }
+    let const_entry_ptr: i32 = ast_constant_entry_ptr(ast_base, const_index);
+    if const_entry_ptr < 0 {
+        return false;
+    }
+    let location_offset: i32 = ast_constant_entry_name_start(const_entry_ptr);
+    if location_offset < 0 {
+        return false;
+    }
+    let mut module_index: i32 = ast_constant_entry_module_index(const_entry_ptr);
+    let mut module_base: i32 = 0;
+    let mut module_len: i32 = 0;
+    if module_index >= 0 {
+        module_base = module_entry_content(module_index);
+        module_len = module_entry_content_len(module_index);
+    }
+    if module_base <= 0 || module_len <= 0 {
+        module_base = scratch_module_base(out_ptr);
+        module_len = scratch_module_len(out_ptr);
+        if module_index < 0 {
+            module_index = scratch_module_index(out_ptr);
+        }
+        if (module_base <= 0 || module_len <= 0) && module_index >= 0 {
+            module_base = module_entry_content(module_index);
+            module_len = module_entry_content_len(module_index);
+        }
+    }
+    if module_base <= 0 || module_len <= 0 {
+        return false;
+    }
+    let message: [u8; 23] = "cyclic const type alias";
+    write_failure_detail_with_location(
+        out_ptr,
+        module_index,
+        module_base,
+        module_len,
+        location_offset,
+        23,
+        message,
+    );
+    true
+}
+
 fn record_type_metadata_failure(out_ptr: i32) {
     record_type_metadata_debug(out_ptr, 255, 0, 0);
     let scratch_base: i32 = if out_ptr > 0 { out_ptr } else { 0 };
@@ -4281,6 +4366,29 @@ fn record_type_metadata_failure_with_debug(
     subject: i32,
     extra: i32,
 ) -> i32 {
+    if out_ptr > 0 {
+        if load_u8(out_ptr) == 0 {
+            let module_len: i32 = scratch_module_len(out_ptr);
+            if module_len > 0 {
+                let ast_base: i32 = ast_program_base(out_ptr, module_len);
+                if ast_base > 0 {
+                    let mut recorded: bool = false;
+                    if context == 301 || context == 300 {
+                        recorded = try_write_const_alias_failure_detail(out_ptr, ast_base, subject);
+                    }
+                    if !recorded {
+                        let mut alias_index: i32 = find_const_alias_index_by_type(ast_base, subject);
+                        if alias_index < 0 {
+                            alias_index = find_const_alias_index_by_type(ast_base, extra);
+                        }
+                        if alias_index >= 0 {
+                            recorded = try_write_const_alias_failure_detail(out_ptr, ast_base, alias_index);
+                        }
+                    }
+                }
+            }
+        }
+    }
     record_type_metadata_debug(out_ptr, context, subject, extra);
     record_type_metadata_failure(out_ptr);
     -1
