@@ -143,6 +143,6 @@ test("cyclic const type aliases report metadata diagnostics", async () => {
     }
   `);
     expect(failure.failure.detail).toBe(
-        "type metadata resolution failed",
+        "type metadata resolution failed (type-metadata context=0 subject=0 extra=0 recorded=255/0/0 failures=1)",
     );
 });

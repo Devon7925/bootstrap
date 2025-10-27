@@ -54,7 +54,7 @@ test("non-const parameters cannot accept anonymous functions", async () => {
   );
 });
 
-test.todo("anonymous functions remain const-only values", async () => {
+test("anonymous functions remain const-only values", async () => {
   const failure = await expectCompileFailure(`
     fn main() -> i32 {
         let runtime = fn(x: i32) -> i32 { x };

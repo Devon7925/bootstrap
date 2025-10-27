@@ -6108,6 +6108,38 @@ fn resolve_expression_internal(
         ) < 0 {
             return -1;
         }
+        let mut init_type: i32 = ast_expr_type(ast_base, init_index);
+        if init_type >= 0 {
+            let resolved_init_type: i32 = resolve_type_id(out_ptr, ast_base, init_type);
+            if resolved_init_type < 0 {
+                return -1;
+            }
+            if resolved_init_type != init_type {
+                ast_expr_set_type(ast_base, init_index, resolved_init_type);
+                init_type = resolved_init_type;
+            }
+        }
+        if !caller_is_const {
+            if init_type >= 0 {
+                if type_id_is_function(init_type) {
+                    let mut location: i32 = expression_result_location(ast_base, init_index);
+                    if location < 0 {
+                        location = ast_expr_location(ast_base, init_index);
+                    }
+                    let message: [u8; 52] =
+                        "function values are only permitted in const contexts";
+                    record_failure_with_location(
+                        out_ptr,
+                        ast_base,
+                        caller_func_index,
+                        location,
+                        52,
+                        message,
+                    );
+                    return -1;
+                }
+            }
+        }
         if caller_func_index >= 0 {
             let init_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, init_index);
             let init_kind: i32 = load_i32(init_entry_ptr);

@@ -6982,6 +6982,7 @@ fn resolve_constant_reference(ast_base: i32, expr_index: i32) -> i32 {
         store_i32(entry_ptr + 4, func_index);
         store_i32(entry_ptr + 8, 0);
         store_i32(entry_ptr + 12, 0);
+        ast_expr_entry_set_extra(ast_base, expr_index, ident_start);
         ast_expr_set_type(ast_base, expr_index, function_type_id_value);
         return 0;
     }
@@ -6995,6 +6996,7 @@ fn resolve_constant_reference(ast_base: i32, expr_index: i32) -> i32 {
     store_i32(entry_ptr + 4, const_value);
     store_i32(entry_ptr + 8, 0);
     store_i32(entry_ptr + 12, 0);
+    ast_expr_entry_set_extra(ast_base, expr_index, ident_start);
     ast_expr_set_type(ast_base, expr_index, const_type);
     0
 }
