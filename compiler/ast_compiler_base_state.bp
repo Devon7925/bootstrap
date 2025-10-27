@@ -411,6 +411,7 @@ const FUNCTION_FLAG_CONST: i32 = 1;
 const FUNCTION_FLAG_HAS_CONST_PARAMS: i32 = 2;
 const FUNCTION_FLAG_IMPLICIT_UNIT_RETURN: i32 = 4;
 const FUNCTION_FLAG_ANONYMOUS: i32 = 8;
+const FUNCTION_FLAG_PARAMS_ALL_CONST: i32 = 16;
 
 const AST_NAMES_CAPACITY: i32 = 131072;
 
@@ -801,6 +802,10 @@ fn ast_function_is_const(ast_base: i32, index: i32) -> bool {
 
 fn ast_function_has_const_params(ast_base: i32, index: i32) -> bool {
     (ast_function_flags(ast_base, index) & FUNCTION_FLAG_HAS_CONST_PARAMS) != 0
+}
+
+fn ast_function_params_all_const(ast_base: i32, index: i32) -> bool {
+    (ast_function_flags(ast_base, index) & FUNCTION_FLAG_PARAMS_ALL_CONST) != 0
 }
 
 fn ast_function_has_implicit_unit_return(ast_base: i32, index: i32) -> bool {
@@ -3007,7 +3012,8 @@ fn ast_function_clone_const_template(
     }
     store_i32(dest_ptr + 28, specialized_return_type);
     let original_flags: i32 = load_i32(dest_ptr + 32);
-    let const_mask: i32 = original_flags & FUNCTION_FLAG_HAS_CONST_PARAMS;
+    let const_mask: i32 = original_flags
+        & (FUNCTION_FLAG_HAS_CONST_PARAMS | FUNCTION_FLAG_PARAMS_ALL_CONST);
     let cleared_flags: i32 = original_flags - const_mask;
     store_i32(dest_ptr + 32, cleared_flags);
     store_i32(dest_ptr + 36, 0);
@@ -4431,6 +4437,21 @@ fn function_type_param_type(ast_base: i32, type_id: i32, param_index: i32) -> i3
         return -1;
     }
     load_i32(params_ptr + param_index * WORD_SIZE)
+}
+
+fn function_type_params_all_const(ast_base: i32, type_id: i32) -> bool {
+    if !type_id_is_function(type_id) {
+        return false;
+    }
+    let total: i32 = function_type_param_count(ast_base, type_id);
+    if total <= 0 {
+        return true;
+    }
+    let const_total: i32 = function_type_const_params_count(ast_base, type_id);
+    if const_total < 0 {
+        return false;
+    }
+    const_total == total
 }
 
 fn array_type_heap_index(ast_base: i32, type_id: i32) -> i32 {

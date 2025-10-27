@@ -39,7 +39,7 @@ test.todo("const fn factories can return anonymous functions", async () => {
   expect(result).toBe(42);
 });
 
-test.todo("non-const parameters cannot accept anonymous functions", async () => {
+test("non-const parameters cannot accept anonymous functions", async () => {
   const failure = await expectCompileFailure(`
     fn apply(handler: fn(i32) -> i32, value: i32) -> i32 {
         handler(value)

@@ -1394,11 +1394,15 @@ fn resolve_call_metadata(
                 ast_base,
                 caller_func_index,
                 resolved_location_offset,
-                34,
-                "call references undefined function",
+                56,
+                "const parameter arguments must be compile-time constants",
             );
             if !recorded {
-                record_failure_detail(out_ptr, 34, "call references undefined function");
+                record_failure_detail(
+                    out_ptr,
+                    56,
+                    "const parameter arguments must be compile-time constants",
+                );
             }
             return -1;
         }

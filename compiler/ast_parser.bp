@@ -3316,6 +3316,11 @@ fn parse_function_literal_expression(
     let mut flags: i32 = FUNCTION_FLAG_ANONYMOUS;
     if const_params_ptr > 0 {
         flags = flags | FUNCTION_FLAG_HAS_CONST_PARAMS;
+        if param_count > 0 {
+            if const_params_count == param_count {
+                flags = flags | FUNCTION_FLAG_PARAMS_ALL_CONST;
+            }
+        }
     }
     if implicit_unit_return {
         flags = flags | FUNCTION_FLAG_IMPLICIT_UNIT_RETURN;
@@ -3904,6 +3909,11 @@ fn parse_function(
     }
     if const_params_ptr > 0 {
         flags = flags | FUNCTION_FLAG_HAS_CONST_PARAMS;
+        if param_count > 0 {
+            if const_params_count == param_count {
+                flags = flags | FUNCTION_FLAG_PARAMS_ALL_CONST;
+            }
+        }
     }
     if implicit_unit_return {
         flags = flags | FUNCTION_FLAG_IMPLICIT_UNIT_RETURN;

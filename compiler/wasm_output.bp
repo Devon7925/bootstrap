@@ -139,7 +139,9 @@ fn build_runtime_function_map(ast_base: i32, func_count: i32) -> RuntimeFunction
     let mut runtime_index: i32 = 0;
     let mut idx: i32 = 0;
     while idx < total_functions {
-        if ast_function_has_const_params(ast_base, idx) {
+        if ast_function_is_const(ast_base, idx)
+            || ast_function_has_const_params(ast_base, idx)
+        {
             store_i32(map_ptr + idx * WORD_SIZE, -1);
         } else {
             store_i32(map_ptr + idx * WORD_SIZE, runtime_index);
