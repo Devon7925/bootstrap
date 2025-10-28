@@ -66,12 +66,15 @@ test("anonymous functions remain const-only values", async () => {
   );
 });
 
-test.todo("anonymous functions may not capture non-const locals", async () => {
+test("anonymous functions may not capture non-const locals", async () => {
   const failure = await expectCompileFailure(`
+    fn apply(const F: fn(i32) -> i32, value: i32) -> i32 {
+        F(value)
+    }
+
     fn main() -> i32 {
         let delta = 1;
-        const HANDLER: fn(i32) -> i32 = fn(x: i32) -> i32 { x + delta };
-        HANDLER(5)
+        apply(fn(x: i32) -> i32 { x + delta }, 5)
     }
   `);
   expect(failure.failure.detail).toContain("closures are not yet supported");

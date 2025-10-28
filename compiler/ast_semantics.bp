@@ -3459,14 +3459,27 @@ fn resolve_expression_internal(
     if kind == 43 {
         if resolve_constant_reference(ast_base, expr_index) < 0 {
             let location_offset: i32 = load_i32(entry_ptr + 4);
-            record_failure_with_location(
-                out_ptr,
-                ast_base,
-                caller_func_index,
-                location_offset,
-                20,
-                "identifier not found",
-            );
+            if caller_func_index >= 0
+                && ast_function_is_anonymous(ast_base, caller_func_index)
+            {
+                record_failure_with_location(
+                    out_ptr,
+                    ast_base,
+                    caller_func_index,
+                    location_offset,
+                    30,
+                    "closures are not yet supported",
+                );
+            } else {
+                record_failure_with_location(
+                    out_ptr,
+                    ast_base,
+                    caller_func_index,
+                    location_offset,
+                    20,
+                    "identifier not found",
+                );
+            }
             return -1;
         }
         kind = load_i32(entry_ptr);

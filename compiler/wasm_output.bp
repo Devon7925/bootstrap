@@ -330,6 +330,9 @@ fn type_id_to_wasm_value_type(type_id: i32) -> i32 {
     if type_id_is_integer(type_id) || type_id_is_bool(type_id) {
         return WASM_VALUE_TYPE_I32;
     }
+    if type_id_is_function(type_id) {
+        return WASM_VALUE_TYPE_I32;
+    }
     if type_id == BUILTIN_TYPE_ID_TYPE {
         return WASM_VALUE_TYPE_I32;
     }
