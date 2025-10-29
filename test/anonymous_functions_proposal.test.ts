@@ -21,6 +21,30 @@ test("evaluates inline anonymous function via const parameter", async () => {
   expect(result).toBe(22);
 });
 
+test("const fn factories compile", async () => {
+  await compileWithAstCompiler(`
+    const fn make_incrementer() -> fn(const x: i32) -> i32 {
+        fn(const x: i32) -> i32 { x + 1 }
+    }
+
+    fn main() -> i32 {
+        0
+    }
+  `);
+});
+
+test("const bindings store anonymous functions", async () => {
+  const wasm = await compileWithAstCompiler(`
+    const ADD_ONE: fn(i32) -> i32 = fn(x: i32) -> i32 { x + 1 };
+
+    fn main() -> i32 {
+        ADD_ONE(41)
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(42);
+});
+
 test.todo("const fn factories can return anonymous functions", async () => {
   const wasm = await compileWithAstCompiler(`
     const fn make_incrementer() -> fn(const x: i32) -> i32 {
@@ -77,7 +101,7 @@ test.todo("anonymous functions may not capture non-const locals", async () => {
   expect(failure.failure.detail).toContain("closures are not yet supported");
 });
 
-test.todo("const arrays can store anonymous function literals", async () => {
+test("const arrays can store anonymous function literals", async () => {
   const wasm = await compileWithAstCompiler(`
     const HANDLERS: [fn(i32) -> i32; 2] = [
         fn(x: i32) -> i32 { x + 1 },

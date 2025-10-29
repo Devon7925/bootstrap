@@ -1469,76 +1469,131 @@ fn interpret_constant_expression(
         if callee_index < 0 {
             let call_name_ptr: i32 = call_metadata_name_ptr(metadata_ptr);
             let call_name_len: i32 = call_metadata_name_len(metadata_ptr);
-            let mut struct_match: bool = false;
-            if call_name_len == 6 {
-                let literal: [u8; 6] = "struct";
-                let mut match_idx: i32 = 0;
-                loop {
-                    if match_idx >= 6 {
-                        break;
-                    }
-                    let stored: i32 = if call_name_ptr > 0 {
-                        load_u8(call_name_ptr + match_idx)
-                    } else {
-                        literal[match_idx] as i32
-                    };
-                    let expected: i32 = literal[match_idx] as i32;
-                    if stored != expected {
-                        match_idx = -1;
-                        break;
-                    }
-                    match_idx = match_idx + 1;
-                };
-                if match_idx == 6 {
-                    struct_match = true;
-                }
-            }
-            if struct_match {
-                let arg_count: i32 = call_metadata_arg_count(metadata_ptr);
-                if arg_count != 3 {
+            if call_metadata_is_expr_callee(metadata_ptr) {
+                let callee_expr_index: i32 = call_metadata_expr_callee_index(metadata_ptr);
+                if callee_expr_index < 0 {
                     store_i32(scratch_top_ptr, saved_top);
                     return -1;
                 }
-                store_i32(
-                    call_metadata_callee_index_ptr(metadata_ptr),
-                    CALL_METADATA_INTRINSIC_STRUCT,
-                );
-                let intrinsic_status: i32 = evaluate_struct_intrinsic(
+                let callee_offset: i32 = load_i32(scratch_top_ptr);
+                let callee_value_ptr: i32 = scratch_base + callee_offset;
+                let callee_type_ptr: i32 = callee_value_ptr + 4;
+                store_i32(scratch_top_ptr, callee_offset + 8);
+                let callee_status: i32 = interpret_constant_expression(
                     ast_base,
-                    metadata_ptr,
+                    callee_expr_index,
                     scratch_base,
                     scratch_top_ptr,
-                    saved_top,
-                    out_value_ptr,
-                    out_type_ptr,
+                    callee_value_ptr,
+                    callee_type_ptr,
                     param_values_ptr,
                     param_count,
                     env_values_count,
                 );
-                return intrinsic_status;
-            }
-            if call_name_ptr < 0 {
-                store_i32(scratch_top_ptr, saved_top);
-                return -1;
-            }
-            let total_functions: i32 = load_i32(ast_functions_count_ptr(ast_base));
-            let mut search_idx: i32 = 0;
-            let mut found_index: i32 = -1;
-            while search_idx < total_functions {
-                let search_entry_ptr: i32 = ast_function_entry_ptr(ast_base, search_idx);
-                let search_name_ptr: i32 = load_i32(search_entry_ptr);
-                let search_name_len: i32 = load_i32(search_entry_ptr + 4);
-                if identifiers_match(call_name_ptr, call_name_len, search_name_ptr, search_name_len) {
-                    found_index = search_idx;
-                    break;
+                if callee_status < 0 {
+                    store_i32(scratch_top_ptr, saved_top);
+                    return -1;
                 }
-                search_idx = search_idx + 1;
-            };
-            if found_index < 0 {
-                store_i32(scratch_top_ptr, saved_top);
-                return -1;
+                if callee_status != CONST_EVAL_STATUS_OK {
+                    store_i32(scratch_top_ptr, saved_top);
+                    return callee_status;
+                }
+                let mut callee_type: i32 = load_i32(callee_type_ptr);
+                let callee_value: i32 = load_i32(callee_value_ptr);
+                if callee_value < 0 {
+                    store_i32(scratch_top_ptr, saved_top);
+                    return -1;
+                }
+                if callee_type < 0 || !type_id_is_function(callee_type) {
+                    let inferred_type: i32 =
+                        ast_function_signature_type(ast_base, callee_value);
+                    if inferred_type < 0 {
+                        store_i32(scratch_top_ptr, saved_top);
+                        return -1;
+                    }
+                    callee_type = inferred_type;
+                    store_i32(callee_type_ptr, callee_type);
+                }
+                callee_index = callee_value;
+                store_i32(call_metadata_callee_index_ptr(metadata_ptr), callee_index);
+                store_i32(scratch_top_ptr, callee_offset);
+            } else {
+                let mut struct_match: bool = false;
+                if call_name_len == 6 {
+                    let literal: [u8; 6] = "struct";
+                    let mut match_idx: i32 = 0;
+                    loop {
+                        if match_idx >= 6 {
+                            break;
+                        }
+                        let stored: i32 = if call_name_ptr > 0 {
+                            load_u8(call_name_ptr + match_idx)
+                        } else {
+                            literal[match_idx] as i32
+                        };
+                        let expected: i32 = literal[match_idx] as i32;
+                        if stored != expected {
+                            match_idx = -1;
+                            break;
+                        }
+                        match_idx = match_idx + 1;
+                    };
+                    if match_idx == 6 {
+                        struct_match = true;
+                    }
+                }
+                if struct_match {
+                    let arg_count: i32 = call_metadata_arg_count(metadata_ptr);
+                    if arg_count != 3 {
+                        store_i32(scratch_top_ptr, saved_top);
+                        return -1;
+                    }
+                    store_i32(
+                        call_metadata_callee_index_ptr(metadata_ptr),
+                        CALL_METADATA_INTRINSIC_STRUCT,
+                    );
+                    let intrinsic_status: i32 = evaluate_struct_intrinsic(
+                        ast_base,
+                        metadata_ptr,
+                        scratch_base,
+                        scratch_top_ptr,
+                        saved_top,
+                        out_value_ptr,
+                        out_type_ptr,
+                        param_values_ptr,
+                        param_count,
+                        env_values_count,
+                    );
+                    return intrinsic_status;
+                }
+                if call_name_ptr < 0 {
+                    store_i32(scratch_top_ptr, saved_top);
+                    return -1;
+                }
+                let total_functions: i32 = load_i32(ast_functions_count_ptr(ast_base));
+                let mut search_idx: i32 = 0;
+                let mut found_index: i32 = -1;
+                while search_idx < total_functions {
+                    let search_entry_ptr: i32 = ast_function_entry_ptr(ast_base, search_idx);
+                    let search_name_ptr: i32 = load_i32(search_entry_ptr);
+                    let search_name_len: i32 = load_i32(search_entry_ptr + 4);
+                    if identifiers_match(
+                        call_name_ptr,
+                        call_name_len,
+                        search_name_ptr,
+                        search_name_len,
+                    ) {
+                        found_index = search_idx;
+                        break;
+                    }
+                    search_idx = search_idx + 1;
+                };
+                if found_index < 0 {
+                    store_i32(scratch_top_ptr, saved_top);
+                    return -1;
+                }
+                callee_index = found_index;
             }
-            callee_index = found_index;
         }
         if callee_index < 0 {
             store_i32(scratch_top_ptr, saved_top);
@@ -2564,19 +2619,10 @@ fn interpret_constant_expression(
     -1
 }
 
-fn load_entry_child(entry_ptr: i32, base_offset: i32, index: i32) -> i32 {
-    load_i32(entry_ptr + base_offset + index * WORD_SIZE)
-}
-
-fn load_array_child(array_ptr: i32, _unused: i32, index: i32) -> i32 {
-    load_i32(array_ptr + index * WORD_SIZE)
-}
-
-fn collect_const_param_children(
+fn collect_const_param_children_from_entry(
     ast_base: i32,
-    const child_loader: fn(i32, i32, i32) -> i32,
-    context_ptr: i32,
-    loader_arg: i32,
+    entry_ptr: i32,
+    base_offset: i32,
     child_count: i32,
     params_count: i32,
     const_mask_table_ptr: i32,
@@ -2590,7 +2636,41 @@ fn collect_const_param_children(
     }
     let mut idx: i32 = 0;
     while idx < child_count {
-        let child_expr_index: i32 = child_loader(context_ptr, loader_arg, idx);
+        let child_expr_index: i32 = load_i32(entry_ptr + base_offset + idx * WORD_SIZE);
+        if collect_expression_const_params_visit(
+            ast_base,
+            child_expr_index,
+            params_count,
+            const_mask_table_ptr,
+            usage_mask_low_ptr,
+            usage_mask_high_ptr,
+            usage_list_ptr,
+            usage_count_ptr,
+        ) < 0 {
+            return -1;
+        }
+        idx = idx + 1;
+    };
+    0
+}
+
+fn collect_const_param_children_from_array(
+    ast_base: i32,
+    array_ptr: i32,
+    child_count: i32,
+    params_count: i32,
+    const_mask_table_ptr: i32,
+    usage_mask_low_ptr: i32,
+    usage_mask_high_ptr: i32,
+    usage_list_ptr: i32,
+    usage_count_ptr: i32,
+) -> i32 {
+    if child_count <= 0 {
+        return 0;
+    }
+    let mut idx: i32 = 0;
+    while idx < child_count {
+        let child_expr_index: i32 = load_i32(array_ptr + idx * WORD_SIZE);
         if collect_expression_const_params_visit(
             ast_base,
             child_expr_index,
@@ -2644,11 +2724,9 @@ fn collect_expression_const_params_visit(
                 return -1;
             }
         }
-        return collect_const_param_children(
+        return collect_const_param_children_from_array(
             ast_base,
-            load_array_child,
             args_base,
-            0,
             arg_count,
             params_count,
             const_mask_table_ptr,
@@ -2659,9 +2737,8 @@ fn collect_expression_const_params_visit(
         );
     }
     if kind == 7 {
-        return collect_const_param_children(
+        return collect_const_param_children_from_entry(
             ast_base,
-            load_entry_child,
             entry_ptr,
             4,
             3,
@@ -2674,9 +2751,8 @@ fn collect_expression_const_params_visit(
         );
     }
     if kind == 9 {
-        return collect_const_param_children(
+        return collect_const_param_children_from_entry(
             ast_base,
-            load_entry_child,
             entry_ptr,
             8,
             3,
@@ -2689,9 +2765,8 @@ fn collect_expression_const_params_visit(
         );
     }
     if kind == 10 {
-        return collect_const_param_children(
+        return collect_const_param_children_from_entry(
             ast_base,
-            load_entry_child,
             entry_ptr,
             8,
             1,
@@ -2704,9 +2779,8 @@ fn collect_expression_const_params_visit(
         );
     }
     if kind == 11 {
-        return collect_const_param_children(
+        return collect_const_param_children_from_entry(
             ast_base,
-            load_entry_child,
             entry_ptr,
             4,
             2,
@@ -2719,9 +2793,8 @@ fn collect_expression_const_params_visit(
         );
     }
     if kind == 12 {
-        return collect_const_param_children(
+        return collect_const_param_children_from_entry(
             ast_base,
-            load_entry_child,
             entry_ptr,
             4,
             1,
@@ -2734,9 +2807,8 @@ fn collect_expression_const_params_visit(
         );
     }
     if kind == 13 {
-        return collect_const_param_children(
+        return collect_const_param_children_from_entry(
             ast_base,
-            load_entry_child,
             entry_ptr,
             8,
             1,
@@ -2749,9 +2821,8 @@ fn collect_expression_const_params_visit(
         );
     }
     if kind == 23 {
-        return collect_const_param_children(
+        return collect_const_param_children_from_entry(
             ast_base,
-            load_entry_child,
             entry_ptr,
             4,
             1,
@@ -2767,9 +2838,8 @@ fn collect_expression_const_params_visit(
         return 0;
     }
     if kind == 25 || kind == 26 || kind == 27 || kind == 28 || kind == 32 || kind == 33 || kind == 34 {
-        return collect_const_param_children(
+        return collect_const_param_children_from_entry(
             ast_base,
-            load_entry_child,
             entry_ptr,
             4,
             2,
@@ -2782,9 +2852,8 @@ fn collect_expression_const_params_visit(
         );
     }
     if kind == 29 || kind == 30 || kind == 31 || kind == 38 {
-        return collect_const_param_children(
+        return collect_const_param_children_from_entry(
             ast_base,
-            load_entry_child,
             entry_ptr,
             4,
             1,
@@ -2797,9 +2866,8 @@ fn collect_expression_const_params_visit(
         );
     }
     if kind == 44 {
-        return collect_const_param_children(
+        return collect_const_param_children_from_entry(
             ast_base,
-            load_entry_child,
             entry_ptr,
             4,
             3,

@@ -3313,7 +3313,7 @@ fn parse_function_literal_expression(
     if func_index >= AST_MAX_FUNCTIONS {
         return -1;
     }
-    let mut flags: i32 = FUNCTION_FLAG_ANONYMOUS;
+    let mut flags: i32 = FUNCTION_FLAG_ANONYMOUS | FUNCTION_FLAG_CONST;
     if const_params_ptr > 0 {
         flags = flags | FUNCTION_FLAG_HAS_CONST_PARAMS;
         if param_count > 0 {
@@ -4631,6 +4631,8 @@ fn parse_program(
         let const_cursor: i32 =
             parse_constant_declaration(base, len, cursor, ast_base, count, current_module_index);
         if const_cursor >= 0 {
+            count = ast_functions_count(ast_base);
+            store_i32(ast_functions_count_ptr(ast_base), count);
             cursor = skip_whitespace(base, len, const_cursor);
             continue;
         }

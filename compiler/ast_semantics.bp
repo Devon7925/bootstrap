@@ -1089,10 +1089,19 @@ fn collect_call_const_arguments(
             let arg_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, arg_expr_index);
             let arg_kind: i32 = load_i32(arg_entry_ptr);
             if arg_kind == 0 {
-                let literal_type: i32 = ast_expr_type(ast_base, arg_expr_index);
+                let literal_value: i32 = load_i32(arg_entry_ptr + WORD_SIZE);
+                let mut literal_type: i32 = ast_expr_type(ast_base, arg_expr_index);
+                if literal_type < 0 || !type_id_is_function(literal_type) {
+                    if literal_value >= 0 {
+                        let inferred: i32 =
+                            ast_function_signature_type(ast_base, literal_value);
+                        if inferred >= 0 {
+                            literal_type = inferred;
+                        }
+                    }
+                }
                 if literal_type >= 0 {
                     if type_id_is_function(literal_type) {
-                        let literal_value: i32 = load_i32(arg_entry_ptr + WORD_SIZE);
                         env_entries[param_idx] = ConstEnvEntry {
                             value: literal_value,
                             type: literal_type,
@@ -1207,10 +1216,19 @@ fn collect_call_const_arguments(
                 return -1;
             }
             let mut const_type: i32 = load_i32(eval_type_ptr);
+            let mut const_value: i32 = load_i32(eval_value_ptr);
             if const_type < 0 {
                 let expr_type: i32 = ast_expr_type(ast_base, arg_expr_index);
                 if expr_type >= 0 {
                     const_type = expr_type;
+                }
+            }
+            if (const_type < 0 || !type_id_is_function(const_type)) && const_value >= 0 {
+                let inferred: i32 =
+                    ast_function_signature_type(ast_base, const_value);
+                if inferred >= 0 {
+                    const_type = inferred;
+                    store_i32(eval_type_ptr, const_type);
                 }
             }
             if const_type < 0 {
@@ -1234,7 +1252,6 @@ fn collect_call_const_arguments(
                 }
                 return -1;
             }
-            let mut const_value: i32 = load_i32(eval_value_ptr);
             if const_type == BUILTIN_TYPE_ID_TYPE {
                 if const_value < 0 {
                     return -1;
@@ -1365,14 +1382,63 @@ fn resolve_call_metadata(
 
     let call_name_ptr: i32 = call_metadata_name_ptr(current_metadata);
     let call_name_len: i32 = call_metadata_name_len(current_metadata);
-    if call_name_ptr <= 0 {
-        return -1;
-    }
     if call_name_len < 0 {
         return -1;
     }
     let recorded_callee: i32 =
         load_i32(call_metadata_callee_index_ptr(current_metadata));
+    let mut direct_callee_idx: i32 = -1;
+    if !call_metadata_is_param_callee(recorded_callee) {
+        if recorded_callee >= 0 {
+            if recorded_callee >= func_count {
+                return -1;
+            }
+            direct_callee_idx = recorded_callee;
+        }
+    }
+    if call_name_ptr <= 0 {
+        if direct_callee_idx < 0 {
+            return -1;
+        }
+    }
+    let mut found_idx: i32 = -1;
+    let fallback_module_base: i32 = scratch_module_base(out_ptr);
+    if call_name_ptr > 0 && call_name_len > 0 {
+        let constant_index: i32 = find_constant_entry_index_by_name_ptr(
+            ast_base,
+            call_name_ptr,
+            call_name_len,
+            fallback_module_base,
+        );
+        if constant_index >= 0 {
+            let const_entry_ptr: i32 = ast_constant_entry_ptr(ast_base, constant_index);
+            if interpret_constant_entry(ast_base, const_entry_ptr) < 0 {
+                return -1;
+            }
+            let const_type: i32 = ast_constant_entry_type(const_entry_ptr);
+            if !type_id_is_function(const_type) {
+                let recorded: bool = try_record_call_failure_with_location(
+                    out_ptr,
+                    ast_base,
+                    caller_func_index,
+                    resolved_location_offset,
+                    34,
+                    "call references undefined function",
+                );
+                if !recorded {
+                    record_failure_detail(out_ptr, 34, "call references undefined function");
+                }
+                return -1;
+            }
+            let func_index: i32 = ast_constant_entry_value(const_entry_ptr);
+            if func_index < 0 {
+                return -1;
+            }
+            store_i32(call_metadata_callee_index_ptr(current_metadata), func_index);
+            direct_callee_idx = func_index;
+            found_idx = func_index;
+        }
+    }
     if call_metadata_is_param_callee(recorded_callee) {
         if caller_func_index < 0 {
             return -1;
@@ -1518,76 +1584,100 @@ fn resolve_call_metadata(
         };
         return current_metadata;
     }
-    if call_name_len == 6 {
-        let mut match_idx: i32 = 0;
-        let literal: [u8; 6] = "struct";
-        loop {
-            if match_idx >= 6 {
-                break;
-            }
-            let stored: i32 = load_u8(call_name_ptr + match_idx);
-            let expected: i32 = literal[match_idx] as i32;
-            if stored != expected {
-                match_idx = -1;
-                break;
-            }
-            match_idx = match_idx + 1;
-        };
-        if match_idx == 6 {
-            if !caller_is_const {
-                let recorded: bool = try_record_call_failure_with_location(
-                    out_ptr,
-                    ast_base,
-                    caller_func_index,
-                    resolved_location_offset,
-                    51,
-                    "struct intrinsic must be evaluated in const context",
-                );
-                if !recorded {
-                    record_failure_detail(
+    if found_idx < 0 {
+        if call_name_ptr > 0 {
+            if call_name_len == 6 {
+                let mut match_idx: i32 = 0;
+                let literal: [u8; 6] = "struct";
+                loop {
+                    if match_idx >= 6 {
+                        break;
+                }
+                let stored: i32 = load_u8(call_name_ptr + match_idx);
+                let expected: i32 = literal[match_idx] as i32;
+                if stored != expected {
+                    match_idx = -1;
+                    break;
+                }
+                match_idx = match_idx + 1;
+            };
+            if match_idx == 6 {
+                if !caller_is_const {
+                    let recorded: bool = try_record_call_failure_with_location(
                         out_ptr,
+                        ast_base,
+                        caller_func_index,
+                        resolved_location_offset,
                         51,
                         "struct intrinsic must be evaluated in const context",
                     );
+                    if !recorded {
+                        record_failure_detail(
+                            out_ptr,
+                            51,
+                            "struct intrinsic must be evaluated in const context",
+                        );
+                    }
+                    return -1;
                 }
-                return -1;
-            }
-            if arg_count != 3 {
-                let recorded: bool = try_record_call_failure_with_location(
-                    out_ptr,
-                    ast_base,
-                    caller_func_index,
-                    resolved_location_offset,
-                    40,
-                    "struct intrinsic expects three arguments",
-                );
-                if !recorded {
-                    record_failure_detail(
+                if arg_count != 3 {
+                    let recorded: bool = try_record_call_failure_with_location(
                         out_ptr,
+                        ast_base,
+                        caller_func_index,
+                        resolved_location_offset,
                         40,
                         "struct intrinsic expects three arguments",
                     );
+                    if !recorded {
+                        record_failure_detail(
+                            out_ptr,
+                            40,
+                            "struct intrinsic expects three arguments",
+                        );
+                    }
+                    return -1;
                 }
-                return -1;
+                store_i32(
+                    call_metadata_callee_index_ptr(current_metadata),
+                    CALL_METADATA_INTRINSIC_STRUCT,
+                );
+                return current_metadata;
             }
-            store_i32(
-                call_metadata_callee_index_ptr(current_metadata),
-                CALL_METADATA_INTRINSIC_STRUCT,
-            );
-            return current_metadata;
         }
     }
-    let mut target_idx: i32 = 0;
-    let mut found_idx: i32 = -1;
-    loop {
-        if target_idx >= func_count {
-            break;
-        }
-        let target_entry_ptr: i32 = ast_function_entry_ptr(ast_base, target_idx);
-        let target_name_ptr: i32 = load_i32(target_entry_ptr);
-        let target_name_len: i32 = load_i32(target_entry_ptr + 4);
-        if call_name_len == target_name_len {
-            if identifiers_match(call_name_ptr, call_name_len, target_name_ptr, target_name_len) {
+    if found_idx < 0 {
+        let mut target_idx: i32 = 0;
+        loop {
+            if target_idx >= func_count {
+                break;
+            }
+            let target_entry_ptr: i32 = ast_function_entry_ptr(ast_base, target_idx);
+            let target_name_ptr: i32 = load_i32(target_entry_ptr);
+            let target_name_len: i32 = load_i32(target_entry_ptr + 4);
+            let mut matches: bool = false;
+            if direct_callee_idx >= 0 {
+                if target_idx == direct_callee_idx {
+                    matches = true;
+                }
+            }
+            if !matches {
+                if call_name_ptr > 0 {
+                    if call_name_len == target_name_len {
+                        if call_name_len > 0 {
+                            if identifiers_match(
+                                call_name_ptr,
+                                call_name_len,
+                                target_name_ptr,
+                                target_name_len,
+                            ) {
+                                matches = true;
+                            }
+                        }
+                    }
+                }
+            }
+            if matches {
                 let expected_params: i32 = load_i32(target_entry_ptr + 8);
                 if expected_params != arg_count {
                     let recorded: bool = try_record_call_failure_with_location(
@@ -2070,6 +2160,7 @@ fn resolve_call_metadata(
         }
         target_idx = target_idx + 1;
     };
+    }
     if found_idx < 0 {
         let recorded: bool = try_record_call_failure_with_location(
             out_ptr,
@@ -2976,7 +3067,7 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
             let other_entry_ptr: i32 = ast_function_entry_ptr(ast_base, other_idx);
             let other_name_ptr: i32 = load_i32(other_entry_ptr);
             let other_name_len: i32 = load_i32(other_entry_ptr + 4);
-            if name_len == other_name_len {
+            if name_len > 0 && other_name_len > 0 && name_ptr > 0 && other_name_ptr > 0 {
                 if identifiers_match(name_ptr, name_len, other_name_ptr, other_name_len) {
                     if out_ptr > 0 {
                         if load_u8(out_ptr) == 0 {
@@ -3013,7 +3104,12 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
         if param_count > 0 {
             let param_types_ptr: i32 = load_i32(entry_ptr + 24);
             if param_types_ptr < 0 {
-                return -1;
+                return record_type_metadata_failure_with_debug(
+                    out_ptr,
+                    310,
+                    idx,
+                    param_count,
+                );
             }
             let mut param_idx: i32 = 0;
             loop {
@@ -3024,7 +3120,12 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
                 let param_type_id: i32 = load_i32(param_type_ptr);
                 if param_type_id < 0 {
                     if !ast_function_param_requires_specialization(ast_base, idx, param_idx) {
-                        return -1;
+                        return record_type_metadata_failure_with_debug(
+                            out_ptr,
+                            311,
+                            idx,
+                            param_idx,
+                        );
                     }
                     param_idx = param_idx + 1;
                     continue;
@@ -3032,7 +3133,12 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
                 let resolved_param_type: i32 =
                     resolve_type_id(out_ptr, ast_base, param_type_id);
                 if resolved_param_type < 0 {
-                    return -1;
+                    return record_type_metadata_failure_with_debug(
+                        out_ptr,
+                        312,
+                        idx,
+                        param_idx,
+                    );
                 }
                 if resolved_param_type != param_type_id {
                     store_i32(param_type_ptr, resolved_param_type);

@@ -659,6 +659,39 @@ fn ast_function_const_params_ptr(ast_base: i32, index: i32) -> i32 {
     load_i32(ast_function_const_params_ptr_ptr(ast_base, index))
 }
 
+fn ast_function_signature_type(ast_base: i32, index: i32) -> i32 {
+    if index < 0 {
+        return -1;
+    }
+    let func_total: i32 = ast_functions_count(ast_base);
+    if index >= func_total {
+        return -1;
+    }
+    let param_count: i32 = ast_function_param_count(ast_base, index);
+    if param_count < 0 {
+        return -1;
+    }
+    let entry_ptr: i32 = ast_function_entry_ptr(ast_base, index);
+    let param_types_ptr: i32 = load_i32(entry_ptr + 24);
+    if param_count > 0 {
+        if param_types_ptr < 0 {
+            return -1;
+        }
+    }
+    let const_params_ptr: i32 = ast_function_const_params_ptr(ast_base, index);
+    let return_type_id: i32 = load_i32(entry_ptr + 28);
+    if return_type_id < 0 {
+        return -1;
+    }
+    ast_register_function_type(
+        ast_base,
+        param_types_ptr,
+        param_count,
+        const_params_ptr,
+        return_type_id,
+    )
+}
+
 fn ast_function_template_owner_index(ast_base: i32, index: i32) -> i32 {
     load_i32(ast_function_template_owner_index_ptr(ast_base, index))
 }
@@ -3182,6 +3215,8 @@ fn ast_function_canonicalize_const_env(
     if env_param_count != param_count {
         return -1;
     }
+    let function_entry_ptr: i32 = ast_function_entry_ptr(ast_base, index);
+    let param_types_ptr: i32 = load_i32(function_entry_ptr + 24);
     let const_count: i32 = ast_function_const_params_count(ast_base, index);
     if const_count <= 0 {
         return 0;
@@ -3221,6 +3256,16 @@ fn ast_function_canonicalize_const_env(
             ) < 0 {
                 store_i32(call_data_used_ptr, saved_call_data_used);
                 return -1;
+            }
+            if param_types_ptr >= 0 {
+                let stored_type_ptr: i32 = entry_ptr + 2 * WORD_SIZE;
+                let stored_type: i32 = load_i32(stored_type_ptr);
+                if !type_id_is_function(stored_type) {
+                    let expected_type: i32 = load_i32(param_types_ptr + param_index * WORD_SIZE);
+                    if expected_type >= 0 && type_id_is_function(expected_type) {
+                        store_i32(stored_type_ptr, expected_type);
+                    }
+                }
             }
             collected = collected + 1;
         }
@@ -3682,6 +3727,83 @@ fn ast_constant_entry_eval_state(entry_ptr: i32) -> i32 {
 
 fn ast_constant_entry_module_index(entry_ptr: i32) -> i32 {
     load_i32(entry_ptr + AST_CONSTANT_ENTRY_MODULE_INDEX_OFFSET)
+}
+
+fn constant_entry_name_matches_name_ptr(
+    ast_base: i32,
+    entry_ptr: i32,
+    name_ptr: i32,
+    name_len: i32,
+    fallback_module_base: i32,
+) -> bool {
+    if name_ptr <= 0 {
+        return false;
+    }
+    if name_len <= 0 {
+        return false;
+    }
+    let stored_len: i32 = ast_constant_entry_name_len(entry_ptr);
+    if stored_len != name_len {
+        return false;
+    }
+    let name_start: i32 = ast_constant_entry_name_start(entry_ptr);
+    if name_start < 0 {
+        return false;
+    }
+    let module_index: i32 = ast_constant_entry_module_index(entry_ptr);
+    let mut module_base: i32 = 0;
+    if module_index >= 0 {
+        module_base = module_entry_content(module_index);
+    }
+    if module_base <= 0 {
+        module_base = fallback_module_base;
+    }
+    if module_base <= 0 {
+        return false;
+    }
+    let mut idx: i32 = 0;
+    while idx < name_len {
+        let recorded: i32 = load_u8(module_base + name_start + idx);
+        let provided: i32 = load_u8(name_ptr + idx);
+        if recorded != provided {
+            return false;
+        }
+        idx = idx + 1;
+    };
+    true
+}
+
+fn find_constant_entry_index_by_name_ptr(
+    ast_base: i32,
+    name_ptr: i32,
+    name_len: i32,
+    fallback_module_base: i32,
+) -> i32 {
+    if name_ptr <= 0 {
+        return -1;
+    }
+    if name_len <= 0 {
+        return -1;
+    }
+    let count: i32 = ast_constants_count(ast_base);
+    if count <= 0 {
+        return -1;
+    }
+    let mut idx: i32 = 0;
+    while idx < count {
+        let entry_ptr: i32 = ast_constant_entry_ptr(ast_base, idx);
+        if constant_entry_name_matches_name_ptr(
+            ast_base,
+            entry_ptr,
+            name_ptr,
+            name_len,
+            fallback_module_base,
+        ) {
+            return idx;
+        }
+        idx = idx + 1;
+    };
+    -1
 }
 
 fn ast_constant_entry_set_name(entry_ptr: i32, name_start: i32, name_len: i32) {
@@ -4347,8 +4469,12 @@ fn try_write_const_alias_failure_detail(
 }
 
 fn record_type_metadata_failure(out_ptr: i32) {
-    record_type_metadata_debug(out_ptr, 255, 0, 0);
     let scratch_base: i32 = if out_ptr > 0 { out_ptr } else { 0 };
+    let existing_context: i32 =
+        load_i32(scratch_base + SCRATCH_TYPE_METADATA_DEBUG_CONTEXT_OFFSET);
+    if existing_context == 0 {
+        record_type_metadata_debug(out_ptr, 255, 0, 0);
+    }
     let failure_count_ptr: i32 = scratch_base + SCRATCH_TYPE_METADATA_DEBUG_FAILURE_COUNT_OFFSET;
     let current: i32 = load_i32(failure_count_ptr);
     store_i32(failure_count_ptr, current + 1);
@@ -4845,6 +4971,35 @@ fn assign_heap_type_indices(out_ptr: i32, ast_base: i32) -> i32 {
             node = node + 1;
         };
         if !progress {
+            let mut unresolved_node: i32 = -1;
+            let mut unresolved_type: i32 = -1;
+            let mut scan: i32 = 0;
+            while scan < total {
+                if load_i32(resolved_ptr + scan * WORD_SIZE) == 0 {
+                    unresolved_node = scan;
+                    break;
+                }
+                scan = scan + 1;
+            };
+            if unresolved_node >= 0 {
+                if unresolved_node < array_count {
+                    unresolved_type = array_type_id(unresolved_node);
+                } else {
+                    let tuple_node: i32 = unresolved_node - array_count;
+                    if tuple_node < tuple_count {
+                        unresolved_type = tuple_type_id(tuple_node);
+                    } else {
+                        let struct_node: i32 = tuple_node - tuple_count;
+                        if struct_node >= 0 && struct_node < struct_count {
+                            unresolved_type = struct_type_id(struct_node);
+                        }
+                    }
+                }
+            }
+            store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, 4000);
+            store_i32(TYPE_METADATA_DEBUG_LAST_SUBJECT_OFFSET, unresolved_type);
+            store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, unresolved_node);
+            record_type_metadata_failure(out_ptr);
             return -1;
         }
     };
