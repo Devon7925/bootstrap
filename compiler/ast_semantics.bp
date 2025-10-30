@@ -571,6 +571,7 @@ fn resolve_struct_get_expression(
     local_stack_count_ptr: i32,
     caller_func_index: i32,
     caller_is_const: bool,
+    anon_capture_limit: i32,
 ) -> i32 {
     if metadata_ptr <= 0 {
         return -1;
@@ -609,6 +610,7 @@ fn resolve_struct_get_expression(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             return -1;
         }
@@ -3442,6 +3444,7 @@ fn resolve_expression_internal(
     local_stack_count_ptr: i32,
     caller_func_index: i32,
     caller_is_const: bool,
+    anon_capture_limit: i32,
 ) -> i32 {
     if expr_index < 0 {
         return -1;
@@ -3890,6 +3893,7 @@ fn resolve_expression_internal(
                         local_stack_count_ptr,
                         caller_func_index,
                         caller_is_const,
+                        anon_capture_limit,
                     ) < 0 {
                         return -1;
                     }
@@ -3918,6 +3922,7 @@ fn resolve_expression_internal(
         let mut recorded_type: i32 = -1;
         let mut recorded_entry_offset: i32 = -1;
         let mut init_expr_index: i32 = -1;
+        let mut matched_stack_idx: i32 = -1;
         if local_stack_base > 0 && local_stack_count_ptr > 0 {
             let local_index: i32 = load_i32(entry_ptr + 4);
             if local_index >= 0 {
@@ -3932,6 +3937,7 @@ fn resolve_expression_internal(
                     let recorded_index: i32 = load_i32(entry_offset);
                     if recorded_index == local_index {
                         recorded_entry_offset = entry_offset;
+                        matched_stack_idx = stack_idx;
                         init_expr_index = load_i32(entry_offset + 4);
                         let mut stack_type: i32 = load_i32(entry_offset + 8);
                         if stack_type < 0 {
@@ -3953,6 +3959,22 @@ fn resolve_expression_internal(
                     }
                     stack_idx = stack_idx - 1;
                 };
+            }
+        }
+        if matched_stack_idx >= 0 {
+            if anon_capture_limit >= 0 {
+                if matched_stack_idx < anon_capture_limit {
+                    let capture_location: i32 = ast_expr_location(ast_base, expr_index);
+                    record_failure_with_location(
+                        out_ptr,
+                        ast_base,
+                        caller_func_index,
+                        capture_location,
+                        30,
+                        "closures are not yet supported",
+                    );
+                    return -1;
+                }
             }
         }
         if expr_type >= 0 {
@@ -4056,6 +4078,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             return -1;
         }
@@ -4142,6 +4165,7 @@ fn resolve_expression_internal(
                 local_stack_count_ptr,
                 caller_func_index,
                 caller_is_const,
+                anon_capture_limit,
             ) < 0 {
                 return -1;
             }
@@ -4212,6 +4236,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             return -1;
         }
@@ -4228,6 +4253,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             return -1;
         }
@@ -4398,6 +4424,7 @@ fn resolve_expression_internal(
                 local_stack_count_ptr,
                 caller_func_index,
                 caller_is_const,
+                anon_capture_limit,
             ) < 0 {
                 return -1;
             }
@@ -4526,6 +4553,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             return -1;
         }
@@ -4542,6 +4570,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             return -1;
         }
@@ -4558,6 +4587,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             return -1;
         }
@@ -4649,6 +4679,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             return -1;
         }
@@ -4665,6 +4696,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             return -1;
         }
@@ -4764,6 +4796,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             return -1;
         }
@@ -4865,6 +4898,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             return -1;
         }
@@ -5012,6 +5046,7 @@ fn resolve_expression_internal(
                 local_stack_count_ptr,
                 caller_func_index,
                 caller_is_const,
+                anon_capture_limit,
             ) < 0 {
                 store_i32(call_data_used_ptr, saved_used);
                 return -1;
@@ -5079,6 +5114,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             return -1;
         }
@@ -5236,6 +5272,7 @@ fn resolve_expression_internal(
                     local_stack_count_ptr,
                     caller_func_index,
                     caller_is_const,
+                    anon_capture_limit,
                 ) < 0 {
                     return -1;
                 }
@@ -5457,6 +5494,7 @@ fn resolve_expression_internal(
                 local_stack_count_ptr,
                 caller_func_index,
                 caller_is_const,
+                anon_capture_limit,
             ) < 0 {
                 return -1;
             }
@@ -5541,6 +5579,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             return -1;
         }
@@ -5560,12 +5599,25 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             return -1;
         }
         return 0;
     }
     if kind == 49 {
+        let literal_location: i32 = ast_anon_function_location(ast_base, expr_index);
+        if !caller_is_const {
+            record_failure_with_location(
+                out_ptr,
+                ast_base,
+                caller_func_index,
+                literal_location,
+                52,
+                "function values are only permitted in const contexts",
+            );
+            return -1;
+        }
         let signature_ptr: i32 = ast_anon_function_signature_ptr(ast_base, expr_index);
         let resolved_return: i32 =
             canonicalize_anon_function_signature(out_ptr, ast_base, signature_ptr);
@@ -5574,6 +5626,26 @@ fn resolve_expression_internal(
         }
         let param_count: i32 = ast_anon_function_signature_param_count(signature_ptr);
         if param_count < 0 {
+            return -1;
+        }
+        let mut param_idx: i32 = 0;
+        let mut has_non_const_param: bool = false;
+        while param_idx < param_count {
+            if !ast_anon_function_signature_param_is_const(signature_ptr, param_idx) {
+                has_non_const_param = true;
+                break;
+            }
+            param_idx = param_idx + 1;
+        };
+        if has_non_const_param {
+            record_failure_with_location(
+                out_ptr,
+                ast_base,
+                caller_func_index,
+                literal_location,
+                76,
+                "anonymous functions returned from const fn must accept only const parameters",
+            );
             return -1;
         }
         let param_types_ptr: i32 = ast_anon_function_signature_param_types_ptr(signature_ptr);
@@ -5591,6 +5663,65 @@ fn resolve_expression_internal(
             return -1;
         }
         ast_expr_set_type(ast_base, expr_index, function_type_id_value);
+        let body_count: i32 = ast_anon_function_body_expr_count(ast_base, expr_index);
+        if body_count < 0 {
+            return -1;
+        }
+        let body_ptr: i32 = ast_anon_function_body_exprs_ptr(ast_base, expr_index);
+        if body_count > 0 {
+            if body_ptr <= 0 {
+                return -1;
+            }
+        }
+        let saved_control_count: i32 =
+            if control_stack_count_ptr > 0 { load_i32(control_stack_count_ptr) } else { 0 };
+        let saved_loop_count: i32 =
+            if loop_stack_count_ptr > 0 { load_i32(loop_stack_count_ptr) } else { 0 };
+        let saved_local_count: i32 =
+            if local_stack_count_ptr > 0 { load_i32(local_stack_count_ptr) } else { 0 };
+        if control_stack_count_ptr > 0 {
+            store_i32(control_stack_count_ptr, 0);
+        }
+        if loop_stack_count_ptr > 0 {
+            store_i32(loop_stack_count_ptr, 0);
+        }
+        let body_capture_limit: i32 = saved_local_count;
+        let mut body_status: i32 = 0;
+        let mut body_idx: i32 = 0;
+        while body_idx < body_count {
+            let body_expr_index: i32 = load_i32(body_ptr + body_idx * WORD_SIZE);
+            body_status = resolve_expression_internal(
+                out_ptr,
+                ast_base,
+                body_expr_index,
+                func_count,
+                control_stack_base,
+                control_stack_count_ptr,
+                loop_stack_base,
+                loop_stack_count_ptr,
+                local_stack_base,
+                local_stack_count_ptr,
+                caller_func_index,
+                false,
+                body_capture_limit,
+            );
+            if body_status < 0 {
+                break;
+            }
+            body_idx = body_idx + 1;
+        };
+        if control_stack_count_ptr > 0 {
+            store_i32(control_stack_count_ptr, saved_control_count);
+        }
+        if loop_stack_count_ptr > 0 {
+            store_i32(loop_stack_count_ptr, saved_loop_count);
+        }
+        if local_stack_count_ptr > 0 {
+            store_i32(local_stack_count_ptr, saved_local_count);
+        }
+        if body_status < 0 {
+            return -1;
+        }
         return 0;
     }
     if kind == 42 {
@@ -5617,6 +5748,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             return -1;
         }
@@ -5640,6 +5772,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             return -1;
         }
@@ -5658,6 +5791,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             return -1;
         }
@@ -5681,6 +5815,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             return -1;
         }
@@ -5739,6 +5874,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             return -1;
         }
@@ -5753,6 +5889,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             return -1;
         }
@@ -5899,6 +6036,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             return -1;
         }
@@ -5931,6 +6069,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             return -1;
         }
@@ -6001,6 +6140,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             return -1;
         }
@@ -6021,6 +6161,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             store_i32(control_stack_count_ptr, control_count);
             return -1;
@@ -6036,6 +6177,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             store_i32(control_stack_count_ptr, control_count);
             return -1;
@@ -6128,6 +6270,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             return -1;
         }
@@ -6187,7 +6330,9 @@ fn resolve_expression_internal(
             store_i32(local_stack_count_ptr, stack_count + 1);
             pushed = true;
         }
-        let body_status: i32 = resolve_expression_internal(out_ptr, ast_base,
+        let body_status: i32 = resolve_expression_internal(
+            out_ptr,
+            ast_base,
             body_index,
             func_count,
             control_stack_base,
@@ -6198,6 +6343,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         );
         if pushed {
             let stack_count: i32 = load_i32(local_stack_count_ptr);
@@ -6250,6 +6396,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             return -1;
         }
@@ -6353,6 +6500,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             return -1;
         }
@@ -6367,6 +6515,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         ) < 0 {
             return -1;
         }
@@ -6409,7 +6558,9 @@ fn resolve_expression_internal(
             store_i32(local_stack_count_ptr, stack_count + 1);
             loop_type_pushed = true;
         }
-        let body_result: i32 = resolve_expression_internal(out_ptr, ast_base,
+        let body_result: i32 = resolve_expression_internal(
+            out_ptr,
+            ast_base,
             body_index,
             func_count,
             control_stack_base,
@@ -6420,6 +6571,7 @@ fn resolve_expression_internal(
             local_stack_count_ptr,
             caller_func_index,
             caller_is_const,
+            anon_capture_limit,
         );
         if loop_type_entry_offset >= 0 {
             loop_break_location = load_i32(loop_type_entry_offset + 4);
@@ -6566,6 +6718,7 @@ fn resolve_expression_internal(
                 local_stack_count_ptr,
                 caller_func_index,
                 caller_is_const,
+                anon_capture_limit,
             ) < 0 {
                 return -1;
             }
@@ -6663,6 +6816,7 @@ fn resolve_expression(
         local_stack_count_ptr,
         caller_func_index,
         caller_is_const,
+        -1,
     );
     store_i32(control_count_ptr, saved_control_count);
     store_i32(loop_count_ptr, saved_loop_count);
