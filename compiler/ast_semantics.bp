@@ -115,6 +115,579 @@ fn canonicalize_anon_function_signature(
     resolved_return
 }
 
+fn function_type_flags_ptr(ast_base: i32, type_id: i32) -> i32 {
+    if !type_id_is_function(type_id) {
+        return 0;
+    }
+    let index: i32 = function_type_index(type_id);
+    if index < 0 {
+        return 0;
+    }
+    if index >= ast_function_types_count(ast_base) {
+        return 0;
+    }
+    ast_function_type_flags_ptr(ast_base, index)
+}
+
+fn function_type_const_params_count(ast_base: i32, type_id: i32) -> i32 {
+    let flags_ptr: i32 = function_type_flags_ptr(ast_base, type_id);
+    if flags_ptr <= 0 {
+        return 0;
+    }
+    load_i32(flags_ptr)
+}
+
+fn function_type_param_is_const(
+    ast_base: i32,
+    type_id: i32,
+    param_index: i32,
+) -> bool {
+    if param_index < 0 {
+        return false;
+    }
+    let count: i32 = function_type_param_count(ast_base, type_id);
+    if count <= 0 {
+        return false;
+    }
+    if param_index >= count {
+        return false;
+    }
+    let flags_ptr: i32 = function_type_flags_ptr(ast_base, type_id);
+    if flags_ptr <= 0 {
+        return false;
+    }
+    let mask_ptr: i32 = flags_ptr + WORD_SIZE;
+    let mut mask_word_count: i32 = (count + 31) >> 5;
+    if mask_word_count <= 0 {
+        mask_word_count = 1;
+    }
+    let mask_word_index: i32 = param_index >> 5;
+    if mask_word_index >= mask_word_count {
+        return false;
+    }
+    let mask_word_value: i32 = load_i32(mask_ptr + mask_word_index * WORD_SIZE);
+    if mask_word_value == 0 {
+        return false;
+    }
+    let mask_bit: i32 = 1 << (param_index & 31);
+    (mask_word_value & mask_bit) != 0
+}
+
+fn function_type_all_params_const(ast_base: i32, type_id: i32) -> bool {
+    let param_count: i32 = function_type_param_count(ast_base, type_id);
+    if param_count <= 0 {
+        return true;
+    }
+    if function_type_const_params_count(ast_base, type_id) != param_count {
+        return false;
+    }
+    let mut param_idx: i32 = 0;
+    while param_idx < param_count {
+        if !function_type_param_is_const(ast_base, type_id, param_idx) {
+            return false;
+        }
+        param_idx = param_idx + 1;
+    };
+    true
+}
+
+fn anon_function_outer_local_index(
+    local_stack_base: i32,
+    outer_local_count: i32,
+    local_index: i32,
+) -> bool {
+    if local_index < 0 {
+        return false;
+    }
+    if local_stack_base <= 0 {
+        return false;
+    }
+    if outer_local_count <= 0 {
+        return false;
+    }
+    let mut stack_idx: i32 = 0;
+    while stack_idx < outer_local_count {
+        let entry_offset: i32 =
+            local_stack_base + stack_idx * RESOLVE_LOCAL_STACK_ENTRY_SIZE;
+        let recorded_index: i32 = load_i32(entry_offset);
+        if recorded_index == local_index {
+            return true;
+        }
+        stack_idx = stack_idx + 1;
+    };
+    false
+}
+
+fn anon_function_visit_capture(
+    out_ptr: i32,
+    ast_base: i32,
+    expr_index: i32,
+    local_stack_base: i32,
+    outer_local_count: i32,
+    caller_func_index: i32,
+) -> i32 {
+    if expr_index < 0 {
+        return 0;
+    }
+    if expr_index >= ast_expr_count(ast_base) {
+        return -1;
+    }
+    if outer_local_count <= 0 {
+        return 0;
+    }
+    if local_stack_base <= 0 {
+        return 0;
+    }
+    let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+    let kind: i32 = load_i32(entry_ptr);
+    if kind == 0 {
+        return 0;
+    }
+    if kind == 8 {
+        let local_index: i32 = load_i32(entry_ptr + WORD_SIZE);
+        if anon_function_outer_local_index(local_stack_base, outer_local_count, local_index) {
+            let location_offset: i32 = ast_expr_location(ast_base, expr_index);
+            record_failure_with_location(
+                out_ptr,
+                ast_base,
+                caller_func_index,
+                location_offset,
+                30,
+                "closures are not yet supported",
+            );
+            return -1;
+        }
+        return 0;
+    }
+    if kind == 1 {
+        let metadata_ptr: i32 = load_i32(entry_ptr + WORD_SIZE);
+        if metadata_ptr <= 0 {
+            return -1;
+        }
+        let arg_count: i32 = call_metadata_arg_count(metadata_ptr);
+        if arg_count < 0 {
+            return -1;
+        }
+        let args_base: i32 = call_metadata_args_base(metadata_ptr);
+        if arg_count > 0 {
+            if args_base <= 0 {
+                return -1;
+            }
+        }
+        let mut arg_idx: i32 = 0;
+        while arg_idx < arg_count {
+            let arg_expr_index: i32 = load_i32(args_base + arg_idx * WORD_SIZE);
+            if anon_function_visit_capture(
+                out_ptr,
+                ast_base,
+                arg_expr_index,
+                local_stack_base,
+                outer_local_count,
+                caller_func_index,
+            ) < 0 {
+                return -1;
+            }
+            arg_idx = arg_idx + 1;
+        };
+        return 0;
+    }
+    if kind == 7 {
+        let cond_index: i32 = load_i32(entry_ptr + WORD_SIZE);
+        if anon_function_visit_capture(
+            out_ptr,
+            ast_base,
+            cond_index,
+            local_stack_base,
+            outer_local_count,
+            caller_func_index,
+        ) < 0 {
+            return -1;
+        }
+        let then_index: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
+        if anon_function_visit_capture(
+            out_ptr,
+            ast_base,
+            then_index,
+            local_stack_base,
+            outer_local_count,
+            caller_func_index,
+        ) < 0 {
+            return -1;
+        }
+        let else_index: i32 = load_i32(entry_ptr + 3 * WORD_SIZE);
+        return anon_function_visit_capture(
+            out_ptr,
+            ast_base,
+            else_index,
+            local_stack_base,
+            outer_local_count,
+            caller_func_index,
+        );
+    }
+    if kind == 9 {
+        let init_index: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
+        if anon_function_visit_capture(
+            out_ptr,
+            ast_base,
+            init_index,
+            local_stack_base,
+            outer_local_count,
+            caller_func_index,
+        ) < 0 {
+            return -1;
+        }
+        let body_index: i32 = load_i32(entry_ptr + 3 * WORD_SIZE);
+        return anon_function_visit_capture(
+            out_ptr,
+            ast_base,
+            body_index,
+            local_stack_base,
+            outer_local_count,
+            caller_func_index,
+        );
+    }
+    if kind == 10 {
+        let value_index: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
+        return anon_function_visit_capture(
+            out_ptr,
+            ast_base,
+            value_index,
+            local_stack_base,
+            outer_local_count,
+            caller_func_index,
+        );
+    }
+    if kind == 11 {
+        let first_index: i32 = load_i32(entry_ptr + WORD_SIZE);
+        if anon_function_visit_capture(
+            out_ptr,
+            ast_base,
+            first_index,
+            local_stack_base,
+            outer_local_count,
+            caller_func_index,
+        ) < 0 {
+            return -1;
+        }
+        let then_index: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
+        return anon_function_visit_capture(
+            out_ptr,
+            ast_base,
+            then_index,
+            local_stack_base,
+            outer_local_count,
+            caller_func_index,
+        );
+    }
+    if kind == 12 {
+        let body_index: i32 = load_i32(entry_ptr + WORD_SIZE);
+        return anon_function_visit_capture(
+            out_ptr,
+            ast_base,
+            body_index,
+            local_stack_base,
+            outer_local_count,
+            caller_func_index,
+        );
+    }
+    if kind == 13 {
+        let value_index: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
+        return anon_function_visit_capture(
+            out_ptr,
+            ast_base,
+            value_index,
+            local_stack_base,
+            outer_local_count,
+            caller_func_index,
+        );
+    }
+    if kind == 22 {
+        let value_index: i32 = load_i32(entry_ptr + WORD_SIZE);
+        return anon_function_visit_capture(
+            out_ptr,
+            ast_base,
+            value_index,
+            local_stack_base,
+            outer_local_count,
+            caller_func_index,
+        );
+    }
+    if kind == 23 {
+        let value_index: i32 = load_i32(entry_ptr + WORD_SIZE);
+        return anon_function_visit_capture(
+            out_ptr,
+            ast_base,
+            value_index,
+            local_stack_base,
+            outer_local_count,
+            caller_func_index,
+        );
+    }
+    if (kind >= 2 && kind <= 5)
+        || (kind >= 14 && kind <= 21)
+        || (kind >= 25 && kind <= 34)
+    {
+        let left_index: i32 = load_i32(entry_ptr + WORD_SIZE);
+        if anon_function_visit_capture(
+            out_ptr,
+            ast_base,
+            left_index,
+            local_stack_base,
+            outer_local_count,
+            caller_func_index,
+        ) < 0 {
+            return -1;
+        }
+        let right_index: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
+        return anon_function_visit_capture(
+            out_ptr,
+            ast_base,
+            right_index,
+            local_stack_base,
+            outer_local_count,
+            caller_func_index,
+        );
+    }
+    if kind == 35 {
+        let element_index: i32 = load_i32(entry_ptr + WORD_SIZE);
+        if anon_function_visit_capture(
+            out_ptr,
+            ast_base,
+            element_index,
+            local_stack_base,
+            outer_local_count,
+            caller_func_index,
+        ) < 0 {
+            return -1;
+        }
+        let length_expr: i32 = ast_expr_array_repeat_length_expr(ast_base, expr_index);
+        return anon_function_visit_capture(
+            out_ptr,
+            ast_base,
+            length_expr,
+            local_stack_base,
+            outer_local_count,
+            caller_func_index,
+        );
+    }
+    if kind == 39 {
+        let element_count: i32 = ast_expr_tuple_element_count(ast_base, expr_index);
+        if element_count < 0 {
+            return -1;
+        }
+        let elements_ptr: i32 = ast_expr_tuple_elements_ptr(ast_base, expr_index);
+        if element_count > 0 {
+            if elements_ptr <= 0 {
+                return -1;
+            }
+        }
+        let mut elem_idx: i32 = 0;
+        while elem_idx < element_count {
+            let element_index: i32 = load_i32(elements_ptr + elem_idx * WORD_SIZE);
+            if anon_function_visit_capture(
+                out_ptr,
+                ast_base,
+                element_index,
+                local_stack_base,
+                outer_local_count,
+                caller_func_index,
+            ) < 0 {
+                return -1;
+            }
+            elem_idx = elem_idx + 1;
+        };
+        return 0;
+    }
+    if kind == 40 {
+        let element_count: i32 = ast_expr_array_literal_element_count(ast_base, expr_index);
+        if element_count < 0 {
+            return -1;
+        }
+        let elements_ptr: i32 = ast_expr_array_literal_elements_ptr(ast_base, expr_index);
+        if element_count > 0 {
+            if elements_ptr <= 0 {
+                return -1;
+            }
+        }
+        let mut elem_idx: i32 = 0;
+        while elem_idx < element_count {
+            let element_index: i32 = load_i32(elements_ptr + elem_idx * WORD_SIZE);
+            if anon_function_visit_capture(
+                out_ptr,
+                ast_base,
+                element_index,
+                local_stack_base,
+                outer_local_count,
+                caller_func_index,
+            ) < 0 {
+                return -1;
+            }
+            elem_idx = elem_idx + 1;
+        };
+        return 0;
+    }
+    if kind == 41 {
+        let type_expr_index: i32 = ast_expr_cast_type_expr(ast_base, expr_index);
+        if anon_function_visit_capture(
+            out_ptr,
+            ast_base,
+            type_expr_index,
+            local_stack_base,
+            outer_local_count,
+            caller_func_index,
+        ) < 0 {
+            return -1;
+        }
+        let value_index: i32 = load_i32(entry_ptr + WORD_SIZE);
+        return anon_function_visit_capture(
+            out_ptr,
+            ast_base,
+            value_index,
+            local_stack_base,
+            outer_local_count,
+            caller_func_index,
+        );
+    }
+    if kind == 47 {
+        let type_expr_index: i32 = ast_expr_struct_literal_type_expr(ast_base, expr_index);
+        if anon_function_visit_capture(
+            out_ptr,
+            ast_base,
+            type_expr_index,
+            local_stack_base,
+            outer_local_count,
+            caller_func_index,
+        ) < 0 {
+            return -1;
+        }
+        let metadata_ptr: i32 = ast_expr_struct_literal_metadata(ast_base, expr_index);
+        if metadata_ptr <= 0 {
+            return -1;
+        }
+        let field_count: i32 = ast_expr_struct_literal_field_count(ast_base, expr_index);
+        if field_count < 0 {
+            return -1;
+        }
+        let mut field_idx: i32 = 0;
+        while field_idx < field_count {
+            let field_ptr: i32 = struct_literal_field_entry_ptr(metadata_ptr, field_idx);
+            if field_ptr <= 0 {
+                return -1;
+            }
+            let label_kind: i32 = struct_literal_field_label_kind(field_ptr);
+            if label_kind == STRUCT_LITERAL_LABEL_KIND_EXPRESSION {
+                let label_expr: i32 = struct_literal_field_label_data(field_ptr);
+                if anon_function_visit_capture(
+                    out_ptr,
+                    ast_base,
+                    label_expr,
+                    local_stack_base,
+                    outer_local_count,
+                    caller_func_index,
+                ) < 0 {
+                    return -1;
+                }
+            }
+            let value_index: i32 = struct_literal_field_value_index(field_ptr);
+            if anon_function_visit_capture(
+                out_ptr,
+                ast_base,
+                value_index,
+                local_stack_base,
+                outer_local_count,
+                caller_func_index,
+            ) < 0 {
+                return -1;
+            }
+            field_idx = field_idx + 1;
+        };
+        return 0;
+    }
+    if kind == 48 {
+        let base_index: i32 = ast_expr_struct_get_base(ast_base, expr_index);
+        if anon_function_visit_capture(
+            out_ptr,
+            ast_base,
+            base_index,
+            local_stack_base,
+            outer_local_count,
+            caller_func_index,
+        ) < 0 {
+            return -1;
+        }
+        let metadata_ptr: i32 = ast_expr_struct_get_metadata(ast_base, expr_index);
+        if metadata_ptr <= 0 {
+            return -1;
+        }
+        let label_kind: i32 = struct_get_label_kind(metadata_ptr);
+        if label_kind == STRUCT_LITERAL_LABEL_KIND_EXPRESSION {
+            let label_expr: i32 = struct_get_label_data(metadata_ptr);
+            return anon_function_visit_capture(
+                out_ptr,
+                ast_base,
+                label_expr,
+                local_stack_base,
+                outer_local_count,
+                caller_func_index,
+            );
+        }
+        return 0;
+    }
+    if kind == 52 {
+        let element_count: i32 = ast_expr_tuple_element_count(ast_base, expr_index);
+        if element_count < 0 {
+            return -1;
+        }
+        let elements_ptr: i32 = ast_expr_tuple_elements_ptr(ast_base, expr_index);
+        if element_count > 0 {
+            if elements_ptr <= 0 {
+                return -1;
+            }
+        }
+        let mut elem_idx: i32 = 0;
+        while elem_idx < element_count {
+            let element_expr: i32 = load_i32(elements_ptr + elem_idx * WORD_SIZE);
+            if anon_function_visit_capture(
+                out_ptr,
+                ast_base,
+                element_expr,
+                local_stack_base,
+                outer_local_count,
+                caller_func_index,
+            ) < 0 {
+                return -1;
+            }
+            elem_idx = elem_idx + 1;
+        };
+        return 0;
+    }
+    0
+}
+
+fn anon_function_check_captures(
+    out_ptr: i32,
+    ast_base: i32,
+    expr_index: i32,
+    local_stack_base: i32,
+    outer_local_count: i32,
+    caller_func_index: i32,
+) -> i32 {
+    if outer_local_count <= 0 {
+        return 0;
+    }
+    if local_stack_base <= 0 {
+        return 0;
+    }
+    anon_function_visit_capture(
+        out_ptr,
+        ast_base,
+        expr_index,
+        local_stack_base,
+        outer_local_count,
+        caller_func_index,
+    )
+}
+
 fn record_failure_detail(
     out_ptr: i32,
     const MESSAGE_LEN: i32,
@@ -5579,6 +6152,36 @@ fn resolve_expression_internal(
         let param_types_ptr: i32 = ast_anon_function_signature_param_types_ptr(signature_ptr);
         let const_params_ptr: i32 =
             ast_anon_function_signature_const_params_ptr(signature_ptr);
+        let body_count: i32 = ast_anon_function_body_expr_count(ast_base, expr_index);
+        if body_count < 0 {
+            return -1;
+        }
+        let body_ptr: i32 = ast_anon_function_body_exprs_ptr(ast_base, expr_index);
+        if body_count > 0 {
+            if body_ptr <= 0 {
+                return -1;
+            }
+        }
+        let mut outer_local_count: i32 = 0;
+        if local_stack_count_ptr > 0 {
+            outer_local_count = load_i32(local_stack_count_ptr);
+        }
+        let mut body_idx: i32 = 0;
+        while body_idx < body_count {
+            let body_expr_index: i32 =
+                load_i32(body_ptr + body_idx * WORD_SIZE);
+            if anon_function_check_captures(
+                out_ptr,
+                ast_base,
+                body_expr_index,
+                local_stack_base,
+                outer_local_count,
+                caller_func_index,
+            ) < 0 {
+                return -1;
+            }
+            body_idx = body_idx + 1;
+        };
         let type_param_ptr: i32 = if param_count > 0 { param_types_ptr } else { 0 };
         let function_type_id_value: i32 = ast_register_function_type(
             ast_base,
@@ -5934,7 +6537,17 @@ fn resolve_expression_internal(
         ) < 0 {
             return -1;
         }
-        let value_type: i32 = ast_expr_type(ast_base, value_index);
+        let mut value_type: i32 = ast_expr_type(ast_base, value_index);
+        if value_type >= 0 {
+            let resolved_value: i32 = resolve_type_id(out_ptr, ast_base, value_type);
+            if resolved_value < 0 {
+                return -1;
+            }
+            if resolved_value != value_type {
+                ast_expr_set_type(ast_base, value_index, resolved_value);
+                value_type = resolved_value;
+            }
+        }
         if caller_func_index >= 0 {
             let caller_entry_ptr: i32 = ast_function_entry_ptr(ast_base, caller_func_index);
             let mut expected_return: i32 = load_i32(caller_entry_ptr + 28);
@@ -5980,6 +6593,30 @@ fn resolve_expression_internal(
                         }
                     }
                     return -1;
+                }
+            }
+            if caller_is_const {
+                if value_type >= 0 {
+                    if type_id_is_function(value_type) {
+                        let value_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, value_index);
+                        if value_entry_ptr > 0 {
+                            let value_kind: i32 = load_i32(value_entry_ptr);
+                            if value_kind == 49 {
+                                if !function_type_all_params_const(ast_base, value_type) {
+                                    let location_offset: i32 = load_i32(entry_ptr + 12);
+                                    record_failure_with_location(
+                                        out_ptr,
+                                        ast_base,
+                                        caller_func_index,
+                                        location_offset,
+                                        76,
+                                        "anonymous functions returned from const fn must accept only const parameters",
+                                    );
+                                    return -1;
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -6171,6 +6808,31 @@ fn resolve_expression_internal(
                         }
                     }
                 }
+            }
+        }
+        let mut init_type: i32 = ast_expr_type(ast_base, init_index);
+        if init_type >= 0 {
+            let resolved_init: i32 = resolve_type_id(out_ptr, ast_base, init_type);
+            if resolved_init < 0 {
+                return -1;
+            }
+            if resolved_init != init_type {
+                ast_expr_set_type(ast_base, init_index, resolved_init);
+                init_type = resolved_init;
+            }
+        }
+        if init_type >= 0 {
+            if type_id_is_function(init_type) {
+                let location: i32 = ast_expr_location(ast_base, init_index);
+                record_failure_with_location(
+                    out_ptr,
+                    ast_base,
+                    caller_func_index,
+                    location,
+                    52,
+                    "function values are only permitted in const contexts",
+                );
+                return -1;
             }
         }
         let mut pushed: bool = false;
