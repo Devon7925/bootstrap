@@ -31,6 +31,8 @@ const LOOP_INFO_LOCATION_MAX: i32 = (1 << LOOP_INFO_LOCATION_BITS) - 1;
 
 const CONST_ENV_ENTRY_NAME_CAP: i32 = 5;
 
+const ANON_FUNCTION_SIGNATURE_RETURN_TYPE_OFFSET: i32 = 3;
+
 const ConstEnvEntry = struct(
     CONST_ENV_ENTRY_NAME_CAP,
     2,
@@ -61,6 +63,56 @@ fn const_env_entry_load(ptr: i32) -> ConstEnvEntry {
         value: load_i32(ptr),
         type: load_i32(ptr + WORD_SIZE),
     }
+}
+
+fn canonicalize_anon_function_signature(
+    out_ptr: i32,
+    ast_base: i32,
+    signature_ptr: i32,
+) -> i32 {
+    if signature_ptr <= 0 {
+        return -1;
+    }
+    let param_count: i32 = ast_anon_function_signature_param_count(signature_ptr);
+    if param_count < 0 {
+        return -1;
+    }
+    let param_types_ptr: i32 = ast_anon_function_signature_param_types_ptr(signature_ptr);
+    if param_count > 0 {
+        if param_types_ptr <= 0 {
+            return -1;
+        }
+        let mut param_idx: i32 = 0;
+        while param_idx < param_count {
+            let type_slot: i32 = param_types_ptr + param_idx * WORD_SIZE;
+            let recorded_type: i32 = load_i32(type_slot);
+            if recorded_type < 0 {
+                return -1;
+            }
+            let resolved_type: i32 = resolve_type_id(out_ptr, ast_base, recorded_type);
+            if resolved_type < 0 {
+                return -1;
+            }
+            if resolved_type != recorded_type {
+                store_i32(type_slot, resolved_type);
+            }
+            param_idx = param_idx + 1;
+        };
+    }
+    let return_slot: i32 =
+        signature_ptr + ANON_FUNCTION_SIGNATURE_RETURN_TYPE_OFFSET * WORD_SIZE;
+    let recorded_return: i32 = load_i32(return_slot);
+    if recorded_return < 0 {
+        return -1;
+    }
+    let resolved_return: i32 = resolve_type_id(out_ptr, ast_base, recorded_return);
+    if resolved_return < 0 {
+        return -1;
+    }
+    if resolved_return != recorded_return {
+        store_i32(return_slot, resolved_return);
+    }
+    resolved_return
 }
 
 fn record_failure_detail(
@@ -5511,6 +5563,34 @@ fn resolve_expression_internal(
         ) < 0 {
             return -1;
         }
+        return 0;
+    }
+    if kind == 49 {
+        let signature_ptr: i32 = ast_anon_function_signature_ptr(ast_base, expr_index);
+        let resolved_return: i32 =
+            canonicalize_anon_function_signature(out_ptr, ast_base, signature_ptr);
+        if resolved_return < 0 {
+            return -1;
+        }
+        let param_count: i32 = ast_anon_function_signature_param_count(signature_ptr);
+        if param_count < 0 {
+            return -1;
+        }
+        let param_types_ptr: i32 = ast_anon_function_signature_param_types_ptr(signature_ptr);
+        let const_params_ptr: i32 =
+            ast_anon_function_signature_const_params_ptr(signature_ptr);
+        let type_param_ptr: i32 = if param_count > 0 { param_types_ptr } else { 0 };
+        let function_type_id_value: i32 = ast_register_function_type(
+            ast_base,
+            type_param_ptr,
+            param_count,
+            const_params_ptr,
+            resolved_return,
+        );
+        if function_type_id_value < 0 {
+            return -1;
+        }
+        ast_expr_set_type(ast_base, expr_index, function_type_id_value);
         return 0;
     }
     if kind == 42 {
