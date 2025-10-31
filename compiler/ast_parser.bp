@@ -35,7 +35,7 @@ fn prepare_module_prefixed_failure_detail(
     module_base: i32,
     module_len: i32,
     location_offset: i32,
-    const MESSAGE_LEN: i32,
+    message_len: i32,
 ) -> bool {
     let mut effective_base: i32 = module_base;
     let mut effective_len: i32 = module_len;
@@ -87,7 +87,7 @@ fn prepare_module_prefixed_failure_detail(
         location_offset
     };
     let suffix_len: i32 = decimal_length(line) + decimal_length(column) + 4;
-    let required_len: i32 = path_len + suffix_len + MESSAGE_LEN;
+    let required_len: i32 = path_len + suffix_len + message_len;
     if required_len > FAILURE_DETAIL_CAPACITY {
         return false;
     }

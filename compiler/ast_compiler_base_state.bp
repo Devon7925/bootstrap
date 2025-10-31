@@ -36,6 +36,9 @@ const CONST_EVAL_DEBUG_LOCAL_OFFSET: i32 = 5044;
 const CLONE_DEBUG_LOCAL_INDEX_OFFSET: i32 = 5048;
 const CLONE_DEBUG_INIT_TYPE_OFFSET: i32 = 5052;
 const CLONE_DEBUG_PUSHED_OFFSET: i32 = 5056;
+const CLONE_DEBUG_TARGET_FUNC_OFFSET: i32 = 5060;
+const CLONE_DEBUG_CALLER_FUNC_OFFSET: i32 = 5064;
+const CLONE_DEBUG_LOCATION_OFFSET: i32 = 5068;
 
 
 const SCRATCH_MODULE_BASE_OFFSET: i32 = 4080;
@@ -4582,6 +4585,67 @@ fn function_type_param_type(ast_base: i32, type_id: i32, param_index: i32) -> i3
         return -1;
     }
     load_i32(params_ptr + param_index * WORD_SIZE)
+}
+
+fn function_type_const_params_ptr(ast_base: i32, type_id: i32) -> i32 {
+    if !type_id_is_function(type_id) {
+        return 0;
+    }
+    let index: i32 = function_type_index(type_id);
+    if index < 0 {
+        return 0;
+    }
+    ast_function_type_flags_ptr(ast_base, index)
+}
+
+fn function_type_const_params_count(ast_base: i32, type_id: i32) -> i32 {
+    let ptr: i32 = function_type_const_params_ptr(ast_base, type_id);
+    if ptr <= 0 {
+        return 0;
+    }
+    load_i32(ptr)
+}
+
+fn function_type_const_params_mask_ptr(ast_base: i32, type_id: i32) -> i32 {
+    let ptr: i32 = function_type_const_params_ptr(ast_base, type_id);
+    if ptr <= 0 {
+        return 0;
+    }
+    ptr + WORD_SIZE
+}
+
+fn function_type_param_is_const(ast_base: i32, type_id: i32, param_index: i32) -> bool {
+    if param_index < 0 {
+        return false;
+    }
+    if !type_id_is_function(type_id) {
+        return false;
+    }
+    let param_count: i32 = function_type_param_count(ast_base, type_id);
+    if param_count <= 0 {
+        return false;
+    }
+    if param_index >= param_count {
+        return false;
+    }
+    let mask_ptr: i32 = function_type_const_params_mask_ptr(ast_base, type_id);
+    if mask_ptr <= 0 {
+        return false;
+    }
+    let mut mask_word_count: i32 = (param_count + 31) >> 5;
+    if mask_word_count <= 0 {
+        mask_word_count = 1;
+    }
+    let mask_word_index: i32 = param_index >> 5;
+    if mask_word_index >= mask_word_count {
+        return false;
+    }
+    let mask_word_value: i32 = load_i32(mask_ptr + mask_word_index * WORD_SIZE);
+    if mask_word_value == 0 {
+        return false;
+    }
+    let mask_bit: i32 = 1 << (param_index & 31);
+    (mask_word_value & mask_bit) != 0
 }
 
 fn array_type_heap_index(ast_base: i32, type_id: i32) -> i32 {

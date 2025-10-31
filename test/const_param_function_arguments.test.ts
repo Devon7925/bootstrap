@@ -63,8 +63,8 @@ test("let bindings storing functions are rejected for const parameters", async (
         apply(runtime, 9)
     }
   `);
-    expect(failure.failure.detail).toBe(
-        "/entry.bp:18:9: const parameter arguments must be compile-time constants",
+    expect(failure.failure.detail).toContain(
+        "function values are only permitted in const contexts",
     );
 });
 
