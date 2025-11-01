@@ -1122,6 +1122,12 @@ fn collect_call_const_arguments(
     if const_count <= 0 {
         return 0;
     }
+    let recorded_callee_index: i32 = load_i32(call_metadata_callee_index_ptr(metadata_ptr));
+    if recorded_callee_index >= 0 {
+        if !ast_function_has_const_params(ast_base, recorded_callee_index) {
+            return 0;
+        }
+    }
     let env_slot_ptr: i32 = call_metadata_const_env_ptr_ptr(metadata_ptr);
     if env_slot_ptr <= 0 {
         return -1;

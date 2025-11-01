@@ -1146,14 +1146,95 @@ fn clone_const_specialization_call_metadata(
             return -1;
         }
     }
-    let trim_const_args: bool = callee_index >= 0
-        && !ast_function_has_const_params(ast_base, callee_index);
+    let mut resolved_callee_index: i32 = callee_index;
+    let mut resolved_name_ptr: i32 = name_ptr;
+    let mut resolved_name_len: i32 = name_len;
+    let mut trim_source_index: i32 = -1;
+    if param_callee {
+        if key_ptr <= 0 {
+            return -1;
+        }
+        let captured: ConstSpecializationEntry =
+            const_specialization_lookup_entry(key_ptr, param_index);
+        if captured.type < 0 {
+            return -1;
+        }
+        if !type_id_is_function(captured.type) {
+            return -1;
+        }
+        let mut target_index: i32 = captured.value;
+        if target_index < 0 {
+            return -1;
+        }
+        let call_data_base: i32 = ast_call_data_base(ast_base);
+        let call_data_limit: i32 = call_data_base + AST_CALL_DATA_CAPACITY * WORD_SIZE;
+        let function_count: i32 = ast_functions_count(ast_base);
+        if function_count < 0 {
+            return -1;
+        }
+        if target_index >= call_data_base && target_index < call_data_limit {
+            let original_index: i32 = load_i32(target_index);
+            let runtime_index: i32 = load_i32(target_index + WORD_SIZE);
+            if original_index < 0 {
+                return -1;
+            }
+            if runtime_index < 0 {
+                return -1;
+            }
+            if original_index >= function_count {
+                return -1;
+            }
+            if runtime_index >= function_count {
+                return -1;
+            }
+            trim_source_index = original_index;
+            target_index = runtime_index;
+        } else {
+            if target_index >= function_count {
+                return -1;
+            }
+        }
+        resolved_callee_index = target_index;
+        let target_entry_ptr: i32 = ast_function_entry_ptr(ast_base, target_index);
+        resolved_name_ptr = load_i32(target_entry_ptr);
+        resolved_name_len = load_i32(target_entry_ptr + WORD_SIZE);
+    }
+    if trim_source_index < 0 {
+        if resolved_callee_index >= 0 {
+            if !ast_function_has_const_params(ast_base, resolved_callee_index) {
+                trim_source_index = resolved_callee_index;
+            }
+        }
+    }
+    let mut trim_args: bool = false;
+    if trim_source_index >= 0 {
+        if ast_function_has_const_params(ast_base, trim_source_index) {
+            trim_args = true;
+            let original_param_total: i32 =
+                ast_function_param_count(ast_base, trim_source_index);
+            if original_param_total < 0 {
+                return -1;
+            }
+            if original_param_total != arg_count {
+                let runtime_param_total: i32 =
+                    ast_function_runtime_param_count(ast_base, trim_source_index);
+                if runtime_param_total < 0 {
+                    return -1;
+                }
+                if runtime_param_total == arg_count {
+                    trim_args = false;
+                } else {
+                    return -1;
+                }
+            }
+        }
+    }
     let mut runtime_arg_count: i32 = arg_count;
-    if trim_const_args {
+    if trim_args {
         runtime_arg_count = 0;
         let mut count_idx: i32 = 0;
         while count_idx < arg_count {
-            if !ast_function_param_is_const(ast_base, callee_index, count_idx) {
+            if !ast_function_param_is_const(ast_base, trim_source_index, count_idx) {
                 runtime_arg_count = runtime_arg_count + 1;
             }
             count_idx = count_idx + 1;
@@ -1167,10 +1248,10 @@ fn clone_const_specialization_call_metadata(
     if new_metadata < 0 {
         return -1;
     }
-    store_i32(new_metadata, name_ptr);
-    store_i32(new_metadata + WORD_SIZE, name_len);
+    store_i32(new_metadata, resolved_name_ptr);
+    store_i32(new_metadata + WORD_SIZE, resolved_name_len);
     store_i32(new_metadata + 2 * WORD_SIZE, runtime_arg_count);
-    store_i32(new_metadata + 3 * WORD_SIZE, callee_index);
+    store_i32(new_metadata + 3 * WORD_SIZE, resolved_callee_index);
     let original_args_base: i32 = call_metadata_args_base(metadata_ptr);
     if arg_count > 0 && original_args_base < 0 {
         return -1;
@@ -1180,25 +1261,25 @@ fn clone_const_specialization_call_metadata(
     let mut runtime_idx: i32 = 0;
     while arg_idx < arg_count {
         let original_arg: i32 = load_i32(original_args_base + arg_idx * WORD_SIZE);
-        let skip_arg: bool = trim_const_args
-            && ast_function_param_is_const(ast_base, callee_index, arg_idx);
+        let skip_arg: bool = trim_args
+            && ast_function_param_is_const(ast_base, trim_source_index, arg_idx);
         if !skip_arg {
-        let cloned_arg: i32 = clone_const_specialization_expr(
-            ast_base,
-            template_index,
-            key_ptr,
-            removed_const_count,
-            original_arg,
-            env_values_ptr,
-            param_count,
-            eval_stack_base,
-            eval_stack_top_ptr,
-            eval_value_ptr,
-            eval_type_ptr,
-            local_type_stack_ptr,
-            local_type_stack_top_ptr,
-            local_type_stack_capacity,
-        );
+            let cloned_arg: i32 = clone_const_specialization_expr(
+                ast_base,
+                template_index,
+                key_ptr,
+                removed_const_count,
+                original_arg,
+                env_values_ptr,
+                param_count,
+                eval_stack_base,
+                eval_stack_top_ptr,
+                eval_value_ptr,
+                eval_type_ptr,
+                local_type_stack_ptr,
+                local_type_stack_top_ptr,
+                local_type_stack_capacity,
+            );
             if cloned_arg < 0 {
                 return -1;
             }
@@ -1209,7 +1290,7 @@ fn clone_const_specialization_call_metadata(
         }
         arg_idx = arg_idx + 1;
     };
-    if trim_const_args {
+    if trim_args {
         if runtime_idx != runtime_arg_count {
             return -1;
         }
@@ -1219,28 +1300,17 @@ fn clone_const_specialization_call_metadata(
         }
     }
     if param_callee {
-        if key_ptr <= 0 {
+        if resolved_callee_index < 0 {
             return -1;
         }
-        let captured: ConstSpecializationEntry =
-            const_specialization_lookup_entry(key_ptr, param_index);
-        if captured.type < 0 {
+        let runtime_param_total: i32 =
+            ast_function_param_count(ast_base, resolved_callee_index);
+        if runtime_param_total < 0 {
             return -1;
         }
-        if !type_id_is_function(captured.type) {
+        if runtime_param_total != runtime_arg_count {
             return -1;
         }
-        let target_index: i32 = captured.value;
-        if target_index < 0 {
-            return -1;
-        }
-        let target_entry_ptr: i32 = ast_function_entry_ptr(ast_base, target_index);
-        let target_name_ptr: i32 = load_i32(target_entry_ptr);
-        let target_name_len: i32 = load_i32(target_entry_ptr + 4);
-        store_i32(new_metadata, target_name_ptr);
-        store_i32(new_metadata + WORD_SIZE, target_name_len);
-        store_i32(new_metadata + 2 * WORD_SIZE, runtime_arg_count);
-        store_i32(new_metadata + 3 * WORD_SIZE, target_index);
     }
     let original_extra: i32 = call_metadata_extra_slot_base(metadata_ptr);
     let new_extra: i32 = call_metadata_extra_slot_base(new_metadata);
