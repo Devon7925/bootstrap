@@ -1,4 +1,5 @@
 use "./ast_compiler_base_lexing.bp";
+use "./utils.bp";
 
 fn identifiers_match(ptr_a: i32, len_a: i32, ptr_b: i32, len_b: i32) -> bool {
     if len_a != len_b {
@@ -174,46 +175,26 @@ fn record_failure_with_location(
     0
 }
 
-fn module_index_is_compiler(module_index: i32) -> bool {
+fn module_path_starts_with(
+    module_index: i32,
+    const PREFIX_LEN: i32,
+    prefix: [u8; PREFIX_LEN],
+) -> bool {
     if module_index < 0 {
         return false;
     }
     let path_ptr: i32 = module_entry_path(module_index);
     let path_len: i32 = module_entry_path_len(module_index);
-    if path_ptr <= 0 {
-        return false;
+    memory_starts_with(path_ptr, path_len, PREFIX_LEN, prefix)
+}
+
+fn module_index_is_compiler(module_index: i32) -> bool {
+    let root_prefix: [u8; 10] = "/compiler/";
+    if module_path_starts_with(module_index, 10, root_prefix) {
+        return true;
     }
-    if path_len < 10 {
-        return false;
-    }
-    if load_u8(path_ptr) != '/' {
-        return false;
-    }
-    if load_u8(path_ptr + 1) != 'c' {
-        return false;
-    }
-    if load_u8(path_ptr + 2) != 'o' {
-        return false;
-    }
-    if load_u8(path_ptr + 3) != 'm' {
-        return false;
-    }
-    if load_u8(path_ptr + 4) != 'p' {
-        return false;
-    }
-    if load_u8(path_ptr + 5) != 'i' {
-        return false;
-    }
-    if load_u8(path_ptr + 6) != 'l' {
-        return false;
-    }
-    if load_u8(path_ptr + 7) != 'e' {
-        return false;
-    }
-    if load_u8(path_ptr + 8) != 'r' {
-        return false;
-    }
-    load_u8(path_ptr + 9) == '/'
+    let relative_prefix: [u8; 9] = "compiler/";
+    module_path_starts_with(module_index, 9, relative_prefix)
 }
 
 fn function_entry_is_compiler(ast_base: i32, func_index: i32) -> bool {
@@ -3219,37 +3200,9 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
                     expr_location = ast_expr_location(ast_base, expr_index);
                 }
                 let module_index: i32 = ast_function_entry_module_index(ast_base, idx);
-                let mut skip_loop_value_check: bool = false;
-                if caller_is_const {
-                    skip_loop_value_check = true;
-                } else if module_index >= 0 {
-                    let path_ptr: i32 = module_entry_path(module_index);
-                    let path_len: i32 = module_entry_path_len(module_index);
-                    if path_ptr > 0 {
-                        if path_len >= 10 {
-                            if load_u8(path_ptr) == '/' {
-                                if load_u8(path_ptr + 1) == 'c' {
-                                    if load_u8(path_ptr + 2) == 'o' {
-                                        if load_u8(path_ptr + 3) == 'm' {
-                                            if load_u8(path_ptr + 4) == 'p' {
-                                                if load_u8(path_ptr + 5) == 'i' {
-                                                    if load_u8(path_ptr + 6) == 'l' {
-                                                        if load_u8(path_ptr + 7) == 'e' {
-                                                            if load_u8(path_ptr + 8) == 'r' {
-                                                                if load_u8(path_ptr + 9) == '/' {
-                                                                    skip_loop_value_check = true;
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                let mut skip_loop_value_check: bool = caller_is_const;
+                if !skip_loop_value_check {
+                    skip_loop_value_check = module_index_is_compiler(module_index);
                 }
                 let expr_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
                 let mut expr_kind: i32 = -1;
