@@ -3502,18 +3502,27 @@ fn emit_type_section(
         heap_idx = heap_idx + 1;
     };
 
-    let mut idx: i32 = 0;
-    while idx < func_count {
-        let runtime_index: i32 = if runtime_map.ptr > 0 {
-            load_i32(runtime_map.ptr + idx * WORD_SIZE)
-        } else {
-            -1
-        };
-        if runtime_index < 0 {
-            idx = idx + 1;
-            continue;
+    if runtime_map.count > 0 {
+        if runtime_map.ptr <= 0 {
+            return -1;
         }
-        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
+    }
+    let mut runtime_idx: i32 = 0;
+    while runtime_idx < runtime_map.count {
+        let mut func_index: i32 = -1;
+        let mut search_idx: i32 = 0;
+        while search_idx < func_count {
+            let stored: i32 = load_i32(runtime_map.ptr + search_idx * WORD_SIZE);
+            if stored == runtime_idx {
+                func_index = search_idx;
+                break;
+            }
+            search_idx = search_idx + 1;
+        };
+        if func_index < 0 {
+            return -1;
+        }
+        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, func_index);
         let param_count: i32 = load_i32(entry_ptr + 8);
         let param_types_ptr: i32 = load_i32(entry_ptr + 24);
         if param_count > 0 {
@@ -3544,7 +3553,7 @@ fn emit_type_section(
             entry_size = entry_size + leb_u32_len(0);
         }
         payload_size = payload_size + entry_size;
-        idx = idx + 1;
+        runtime_idx = runtime_idx + 1;
     };
 
     let mut out: i32 = offset;
@@ -3672,18 +3681,22 @@ fn emit_type_section(
         heap_idx = heap_idx + 1;
     };
 
-    idx = 0;
-    while idx < func_count {
-        let runtime_index: i32 = if runtime_map.ptr > 0 {
-            load_i32(runtime_map.ptr + idx * WORD_SIZE)
-        } else {
-            -1
+    runtime_idx = 0;
+    while runtime_idx < runtime_map.count {
+        let mut func_index: i32 = -1;
+        let mut search_idx: i32 = 0;
+        while search_idx < func_count {
+            let stored: i32 = load_i32(runtime_map.ptr + search_idx * WORD_SIZE);
+            if stored == runtime_idx {
+                func_index = search_idx;
+                break;
+            }
+            search_idx = search_idx + 1;
         };
-        if runtime_index < 0 {
-            idx = idx + 1;
-            continue;
+        if func_index < 0 {
+            return -1;
         }
-        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
+        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, func_index);
         let param_count: i32 = load_i32(entry_ptr + 8);
         let param_types_ptr: i32 = load_i32(entry_ptr + 24);
         if param_count > 0 {
@@ -3724,7 +3737,7 @@ fn emit_type_section(
         } else {
             out = write_u32_leb(base, out, 0);
         }
-        idx = idx + 1;
+        runtime_idx = runtime_idx + 1;
     };
     out
 }
@@ -3746,40 +3759,48 @@ fn emit_function_section(
         return -1;
     }
     let mut payload_size: i32 = leb_u32_len(runtime_map.count);
-    let mut idx: i32 = 0;
-    while idx < func_count {
-        let runtime_index: i32 = if runtime_map.ptr > 0 {
-            load_i32(runtime_map.ptr + idx * WORD_SIZE)
-        } else {
-            -1
+    let mut runtime_idx: i32 = 0;
+    while runtime_idx < runtime_map.count {
+        let mut func_index: i32 = -1;
+        let mut search_idx: i32 = 0;
+        while search_idx < func_count {
+            let stored: i32 = load_i32(runtime_map.ptr + search_idx * WORD_SIZE);
+            if stored == runtime_idx {
+                func_index = search_idx;
+                break;
+            }
+            search_idx = search_idx + 1;
         };
-        if runtime_index < 0 {
-            idx = idx + 1;
-            continue;
+        if func_index < 0 {
+            return -1;
         }
-        let type_index: i32 = array_count + tuple_count + struct_count + runtime_index;
+        let type_index: i32 = array_count + tuple_count + struct_count + runtime_idx;
         payload_size = payload_size + leb_u32_len(type_index);
-        idx = idx + 1;
+        runtime_idx = runtime_idx + 1;
     };
 
     let mut out: i32 = offset;
     out = write_byte(base, out, 3);
     out = write_u32_leb(base, out, payload_size);
     out = write_u32_leb(base, out, runtime_map.count);
-    idx = 0;
-    while idx < func_count {
-        let runtime_index: i32 = if runtime_map.ptr > 0 {
-            load_i32(runtime_map.ptr + idx * WORD_SIZE)
-        } else {
-            -1
+    runtime_idx = 0;
+    while runtime_idx < runtime_map.count {
+        let mut func_index: i32 = -1;
+        let mut search_idx: i32 = 0;
+        while search_idx < func_count {
+            let stored: i32 = load_i32(runtime_map.ptr + search_idx * WORD_SIZE);
+            if stored == runtime_idx {
+                func_index = search_idx;
+                break;
+            }
+            search_idx = search_idx + 1;
         };
-        if runtime_index < 0 {
-            idx = idx + 1;
-            continue;
+        if func_index < 0 {
+            return -1;
         }
-        let type_index: i32 = array_count + tuple_count + struct_count + runtime_index;
+        let type_index: i32 = array_count + tuple_count + struct_count + runtime_idx;
         out = write_u32_leb(base, out, type_index);
-        idx = idx + 1;
+        runtime_idx = runtime_idx + 1;
     };
     out
 }
@@ -3931,18 +3952,22 @@ fn emit_code_section(
         }
     }
     let mut payload_size: i32 = leb_u32_len(runtime_map.count);
-    let mut idx: i32 = 0;
-    while idx < func_count {
-        let runtime_index: i32 = if runtime_map.ptr > 0 {
-            load_i32(runtime_map.ptr + idx * WORD_SIZE)
-        } else {
-            -1
+    let mut runtime_idx: i32 = 0;
+    while runtime_idx < runtime_map.count {
+        let mut func_index: i32 = -1;
+        let mut search_idx: i32 = 0;
+        while search_idx < func_count {
+            let stored: i32 = load_i32(runtime_map.ptr + search_idx * WORD_SIZE);
+            if stored == runtime_idx {
+                func_index = search_idx;
+                break;
+            }
+            search_idx = search_idx + 1;
         };
-        if runtime_index < 0 {
-            idx = idx + 1;
-            continue;
+        if func_index < 0 {
+            return -1;
         }
-        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
+        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, func_index);
         let body_kind: i32 = load_i32(entry_ptr + 12);
         let param_count: i32 = load_i32(entry_ptr + 8);
         let locals_count: i32 = load_i32(entry_ptr + 20);
@@ -4040,7 +4065,7 @@ fn emit_code_section(
             body_size = locals_decl_size + expr_size + 1;
         }
         payload_size = payload_size + leb_u32_len(body_size) + body_size;
-        idx = idx + 1;
+        runtime_idx = runtime_idx + 1;
     };
 
     let mut out: i32 = offset;
@@ -4048,18 +4073,22 @@ fn emit_code_section(
     out = write_u32_leb(base, out, payload_size);
     out = write_u32_leb(base, out, runtime_map.count);
 
-    idx = 0;
-    while idx < func_count {
-        let runtime_index: i32 = if runtime_map.ptr > 0 {
-            load_i32(runtime_map.ptr + idx * WORD_SIZE)
-        } else {
-            -1
+    runtime_idx = 0;
+    while runtime_idx < runtime_map.count {
+        let mut func_index: i32 = -1;
+        let mut search_idx: i32 = 0;
+        while search_idx < func_count {
+            let stored: i32 = load_i32(runtime_map.ptr + search_idx * WORD_SIZE);
+            if stored == runtime_idx {
+                func_index = search_idx;
+                break;
+            }
+            search_idx = search_idx + 1;
         };
-        if runtime_index < 0 {
-            idx = idx + 1;
-            continue;
+        if func_index < 0 {
+            return -1;
         }
-        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
+        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, func_index);
         let body_kind: i32 = load_i32(entry_ptr + 12);
         let param_count: i32 = load_i32(entry_ptr + 8);
         let locals_count: i32 = load_i32(entry_ptr + 20);
@@ -4247,7 +4276,7 @@ fn emit_code_section(
             }
             out = write_byte(base, out, 11);
         }
-        idx = idx + 1;
+        runtime_idx = runtime_idx + 1;
     };
     out
 }
