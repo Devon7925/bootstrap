@@ -41,6 +41,11 @@ const CLONE_DEBUG_CALLER_FUNC_OFFSET: i32 = 5064;
 const CLONE_DEBUG_LOCATION_OFFSET: i32 = 5068;
 const CONST_FN_LITERAL_CACHE_HEAD_OFFSET: i32 = 5072;
 const CONST_FN_LITERAL_CACHE_COUNT_OFFSET: i32 = 5076;
+const CONST_FN_RUNTIME_WRAPPER_CACHE_HEAD_OFFSET: i32 = 5080;
+const CONST_FN_RUNTIME_WRAPPER_CACHE_ENTRY_WORDS: i32 = 4;
+const CONST_FN_RUNTIME_WRAPPER_CACHE_ORIGINAL_OFFSET: i32 = 1;
+const CONST_FN_RUNTIME_WRAPPER_CACHE_WRAPPER_OFFSET: i32 = 2;
+const CONST_FN_RUNTIME_WRAPPER_CACHE_TYPE_OFFSET: i32 = 3;
 
 
 const SCRATCH_MODULE_BASE_OFFSET: i32 = 4080;
@@ -3089,6 +3094,141 @@ fn ast_function_clone_const_template(
     new_index
 }
 
+fn const_fn_runtime_wrapper_cache_head() -> i32 {
+    load_i32(CONST_FN_RUNTIME_WRAPPER_CACHE_HEAD_OFFSET)
+}
+
+fn const_fn_runtime_wrapper_cache_set_head(value: i32) {
+    store_i32(CONST_FN_RUNTIME_WRAPPER_CACHE_HEAD_OFFSET, value);
+}
+
+fn const_fn_runtime_wrapper_cache_find(original_index: i32) -> i32 {
+    let mut node_ptr: i32 = const_fn_runtime_wrapper_cache_head();
+    while node_ptr > 0 {
+        let recorded_index: i32 = load_i32(
+            node_ptr + CONST_FN_RUNTIME_WRAPPER_CACHE_ORIGINAL_OFFSET * WORD_SIZE,
+        );
+        if recorded_index == original_index {
+            return node_ptr;
+        }
+        node_ptr = load_i32(node_ptr);
+    };
+    0
+}
+
+fn const_fn_runtime_wrapper_cache_record(
+    ast_base: i32,
+    original_index: i32,
+    wrapper_index: i32,
+    runtime_type_id: i32,
+) -> i32 {
+    let entry_ptr: i32 =
+        ast_call_data_alloc(ast_base, CONST_FN_RUNTIME_WRAPPER_CACHE_ENTRY_WORDS);
+    if entry_ptr < 0 {
+        return -1;
+    }
+    store_i32(entry_ptr, const_fn_runtime_wrapper_cache_head());
+    store_i32(
+        entry_ptr + CONST_FN_RUNTIME_WRAPPER_CACHE_ORIGINAL_OFFSET * WORD_SIZE,
+        original_index,
+    );
+    store_i32(
+        entry_ptr + CONST_FN_RUNTIME_WRAPPER_CACHE_WRAPPER_OFFSET * WORD_SIZE,
+        wrapper_index,
+    );
+    store_i32(
+        entry_ptr + CONST_FN_RUNTIME_WRAPPER_CACHE_TYPE_OFFSET * WORD_SIZE,
+        runtime_type_id,
+    );
+    const_fn_runtime_wrapper_cache_set_head(entry_ptr);
+    entry_ptr
+}
+
+fn ast_function_runtime_wrapper_entry(
+    ast_base: i32,
+    index: i32,
+) -> (i32, i32) {
+    if index < 0 {
+        return (-1, -1);
+    }
+    let current_count: i32 = ast_functions_count(ast_base);
+    if current_count < 0 {
+        return (-1, -1);
+    }
+    if index >= current_count {
+        return (-1, -1);
+    }
+    if !ast_function_has_const_params(ast_base, index) {
+        return (-1, -1);
+    }
+    let existing_entry: i32 = const_fn_runtime_wrapper_cache_find(index);
+    if existing_entry > 0 {
+        let runtime_type_id: i32 = load_i32(
+            existing_entry + CONST_FN_RUNTIME_WRAPPER_CACHE_TYPE_OFFSET * WORD_SIZE,
+        );
+        if runtime_type_id < 0 {
+            return (-1, -1);
+        }
+        return (existing_entry, runtime_type_id);
+    }
+    let source_ptr: i32 = ast_function_entry_ptr(ast_base, index);
+    let param_count: i32 = load_i32(source_ptr + 8);
+    if param_count < 0 {
+        return (-1, -1);
+    }
+    let param_types_ptr: i32 = load_i32(source_ptr + 24);
+    if param_count > 0 && param_types_ptr < 0 {
+        return (-1, -1);
+    }
+    let return_type_id: i32 = load_i32(source_ptr + 28);
+    if return_type_id < 0 {
+        return (-1, -1);
+    }
+    let type_param_ptr: i32 = if param_count > 0 { param_types_ptr } else { 0 };
+    let runtime_type_id: i32 = ast_register_function_type(
+        ast_base,
+        type_param_ptr,
+        param_count,
+        0,
+        return_type_id,
+    );
+    if runtime_type_id < 0 {
+        return (-1, -1);
+    }
+    let new_index: i32 = current_count;
+    if new_index >= AST_MAX_FUNCTIONS {
+        return (-1, -1);
+    }
+    let dest_ptr: i32 = ast_function_entry_ptr(ast_base, new_index);
+    let mut word_idx: i32 = 0;
+    let total_words: i32 = AST_FUNCTION_ENTRY_SIZE >> 2;
+    while word_idx < total_words {
+        let value: i32 = load_i32(source_ptr + word_idx * WORD_SIZE);
+        store_i32(dest_ptr + word_idx * WORD_SIZE, value);
+        word_idx = word_idx + 1;
+    };
+    store_i32(dest_ptr, 0);
+    store_i32(dest_ptr + 4, 0);
+    let original_flags: i32 = load_i32(dest_ptr + 32);
+    let const_mask: i32 = original_flags & FUNCTION_FLAG_HAS_CONST_PARAMS;
+    let cleared_flags: i32 = original_flags - const_mask;
+    store_i32(dest_ptr + 32, cleared_flags);
+    store_i32(dest_ptr + 36, 0);
+    ast_function_set_template_owner_index(ast_base, new_index, 0);
+    ast_functions_set_count(ast_base, new_index + 1);
+    let entry_ptr: i32 = const_fn_runtime_wrapper_cache_record(
+        ast_base,
+        index,
+        new_index,
+        runtime_type_id,
+    );
+    if entry_ptr < 0 {
+        ast_functions_set_count(ast_base, current_count);
+        return (-1, -1);
+    }
+    (entry_ptr, runtime_type_id)
+}
+
 fn canonicalize_const_value(
     ast_base: i32,
     raw_value: i32,
@@ -3133,6 +3273,30 @@ fn canonicalize_const_value(
         }
         if raw_value >= func_count {
             return -1;
+        }
+        let const_param_count: i32 = function_type_const_params_count(ast_base, raw_type);
+        if const_param_count > 0 {
+            if !ast_function_has_const_params(ast_base, raw_value) {
+                return -1;
+            }
+            let wrapper_result: (i32, i32) =
+                ast_function_runtime_wrapper_entry(ast_base, raw_value);
+            let wrapper_entry: i32 = wrapper_result.0;
+            let runtime_type_id: i32 = wrapper_result.1;
+            if wrapper_entry <= 0 {
+                return -1;
+            }
+            if runtime_type_id < 0 {
+                return -1;
+            }
+            let canonical_ptr: i32 =
+                wrapper_entry + CONST_FN_RUNTIME_WRAPPER_CACHE_ORIGINAL_OFFSET * WORD_SIZE;
+            if canonical_ptr <= 0 {
+                return -1;
+            }
+            store_i32(out_value_ptr, canonical_ptr);
+            store_i32(out_type_ptr, runtime_type_id);
+            return 0;
         }
         store_i32(out_value_ptr, raw_value);
         store_i32(out_type_ptr, raw_type);
@@ -3332,6 +3496,7 @@ fn ast_reset(ast_base: i32) {
     store_i32(ast_functions_count_ptr(ast_base), 0);
     store_i32(ast_names_len_ptr(ast_base), 0);
     store_i32(ast_call_data_len_ptr(ast_base), 1);
+    const_fn_runtime_wrapper_cache_set_head(0);
     ast_const_specialization_registry_set_head(ast_base, 0);
     ast_constants_reset(ast_base);
     ast_array_types_reset(ast_base);
