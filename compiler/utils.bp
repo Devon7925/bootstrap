@@ -15,6 +15,32 @@ fn memory_equal(a_ptr: i32, b_ptr: i32, len: i32) -> bool {
     true
 }
 
+fn memory_starts_with(
+    ptr: i32,
+    len: i32,
+    const PREFIX_LEN: i32,
+    prefix: [u8; PREFIX_LEN],
+) -> bool {
+    if PREFIX_LEN <= 0 {
+        return true;
+    }
+    if ptr <= 0 {
+        return false;
+    }
+    if len < PREFIX_LEN {
+        return false;
+    }
+    let mut idx: i32 = 0;
+    while idx < PREFIX_LEN {
+        let byte: i32 = load_u8(ptr + idx);
+        if byte != prefix[idx] as i32 {
+            return false;
+        }
+        idx = idx + 1;
+    };
+    true
+}
+
 fn string_length(ptr: i32) -> i32 {
     if ptr <= 0 {
         return -1;
