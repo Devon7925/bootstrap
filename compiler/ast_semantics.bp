@@ -318,7 +318,7 @@ fn block_tail_expression_location(ast_base: i32, caller_func_index: i32) -> i32 
             break;
         }
         let byte: i32 = load_u8(module_base + cursor);
-        if byte == '\n' || byte == ';' || byte == '{' {
+        if is_line_terminator(byte) || byte == ';' || byte == '{' {
             cursor = cursor + 1;
             break;
         }
@@ -332,8 +332,8 @@ fn block_tail_expression_location(ast_base: i32, caller_func_index: i32) -> i32 
             return -1;
         }
         let byte: i32 = load_u8(module_base + cursor);
-        if byte == '\n' {
-            cursor = cursor + 1;
+        if is_line_terminator(byte) {
+            cursor = skip_line_terminator(module_base, module_len, cursor);
             continue;
         }
         if !is_whitespace(byte) {
@@ -958,19 +958,10 @@ fn store_call_failure_location(
     } else {
         location_offset
     };
-    let mut line: i32 = 1;
-    let mut column: i32 = 1;
-    let mut offset_idx: i32 = 0;
-    while offset_idx < effective_offset {
-        let byte: i32 = load_u8(module_base + offset_idx);
-        if byte == '\n' {
-            line = line + 1;
-            column = 1;
-        } else {
-            column = column + 1;
-        }
-        offset_idx = offset_idx + 1;
-    };
+    let location: (i32, i32) =
+        compute_line_and_column(module_base, module_len, effective_offset);
+    let line: i32 = location.0;
+    let column: i32 = location.1;
     if line <= 0 {
         return false;
     }
