@@ -5220,7 +5220,34 @@ fn ast_register_function_type(
             };
             if matches {
                 if existing_flags_ptr != param_flags_ptr {
-                    matches = false;
+                    if existing_flags_ptr <= 0 || param_flags_ptr <= 0 {
+                        matches = false;
+                    } else {
+                        let existing_count: i32 = load_i32(existing_flags_ptr);
+                        let new_count: i32 = load_i32(param_flags_ptr);
+                        if existing_count != new_count {
+                            matches = false;
+                        } else {
+                            let mut mask_word_count: i32 = (param_count + 31) >> 5;
+                            if mask_word_count <= 0 {
+                                mask_word_count = 1;
+                            }
+                            let mut mask_idx: i32 = 0;
+                            while mask_idx < mask_word_count {
+                                let existing_word: i32 = load_i32(
+                                    existing_flags_ptr + WORD_SIZE + mask_idx * WORD_SIZE,
+                                );
+                                let new_word: i32 = load_i32(
+                                    param_flags_ptr + WORD_SIZE + mask_idx * WORD_SIZE,
+                                );
+                                if existing_word != new_word {
+                                    matches = false;
+                                    break;
+                                }
+                                mask_idx = mask_idx + 1;
+                            };
+                        }
+                    }
                 }
             }
         } else {

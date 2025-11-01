@@ -2005,6 +2005,10 @@ fn interpret_constant_expression(
             if call_type != result_type {
                 if has_const_params {
                     ast_expr_set_type(ast_base, expr_index, result_type);
+                } else if type_id_is_function(call_type)
+                    && type_id_is_function(result_type)
+                {
+                    ast_expr_set_type(ast_base, expr_index, result_type);
                 } else {
                     store_i32(scratch_top_ptr, saved_top);
                     return -1;
