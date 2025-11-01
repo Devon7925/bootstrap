@@ -36,6 +36,16 @@ const CONST_EVAL_DEBUG_LOCAL_OFFSET: i32 = 5044;
 const CLONE_DEBUG_LOCAL_INDEX_OFFSET: i32 = 5048;
 const CLONE_DEBUG_INIT_TYPE_OFFSET: i32 = 5052;
 const CLONE_DEBUG_PUSHED_OFFSET: i32 = 5056;
+const CLONE_DEBUG_TARGET_FUNC_OFFSET: i32 = 5060;
+const CLONE_DEBUG_CALLER_FUNC_OFFSET: i32 = 5064;
+const CLONE_DEBUG_LOCATION_OFFSET: i32 = 5068;
+const CONST_FN_LITERAL_CACHE_HEAD_OFFSET: i32 = 5072;
+const CONST_FN_LITERAL_CACHE_COUNT_OFFSET: i32 = 5076;
+const CONST_FN_RUNTIME_WRAPPER_CACHE_HEAD_OFFSET: i32 = 5080;
+const CONST_FN_RUNTIME_WRAPPER_CACHE_ENTRY_WORDS: i32 = 4;
+const CONST_FN_RUNTIME_WRAPPER_CACHE_ORIGINAL_OFFSET: i32 = 1;
+const CONST_FN_RUNTIME_WRAPPER_CACHE_WRAPPER_OFFSET: i32 = 2;
+const CONST_FN_RUNTIME_WRAPPER_CACHE_TYPE_OFFSET: i32 = 3;
 
 
 const SCRATCH_MODULE_BASE_OFFSET: i32 = 4080;
@@ -1136,14 +1146,95 @@ fn clone_const_specialization_call_metadata(
             return -1;
         }
     }
-    let trim_const_args: bool = callee_index >= 0
-        && !ast_function_has_const_params(ast_base, callee_index);
+    let mut resolved_callee_index: i32 = callee_index;
+    let mut resolved_name_ptr: i32 = name_ptr;
+    let mut resolved_name_len: i32 = name_len;
+    let mut trim_source_index: i32 = -1;
+    if param_callee {
+        if key_ptr <= 0 {
+            return -1;
+        }
+        let captured: ConstSpecializationEntry =
+            const_specialization_lookup_entry(key_ptr, param_index);
+        if captured.type < 0 {
+            return -1;
+        }
+        if !type_id_is_function(captured.type) {
+            return -1;
+        }
+        let mut target_index: i32 = captured.value;
+        if target_index < 0 {
+            return -1;
+        }
+        let call_data_base: i32 = ast_call_data_base(ast_base);
+        let call_data_limit: i32 = call_data_base + AST_CALL_DATA_CAPACITY * WORD_SIZE;
+        let function_count: i32 = ast_functions_count(ast_base);
+        if function_count < 0 {
+            return -1;
+        }
+        if target_index >= call_data_base && target_index < call_data_limit {
+            let original_index: i32 = load_i32(target_index);
+            let runtime_index: i32 = load_i32(target_index + WORD_SIZE);
+            if original_index < 0 {
+                return -1;
+            }
+            if runtime_index < 0 {
+                return -1;
+            }
+            if original_index >= function_count {
+                return -1;
+            }
+            if runtime_index >= function_count {
+                return -1;
+            }
+            trim_source_index = original_index;
+            target_index = runtime_index;
+        } else {
+            if target_index >= function_count {
+                return -1;
+            }
+        }
+        resolved_callee_index = target_index;
+        let target_entry_ptr: i32 = ast_function_entry_ptr(ast_base, target_index);
+        resolved_name_ptr = load_i32(target_entry_ptr);
+        resolved_name_len = load_i32(target_entry_ptr + WORD_SIZE);
+    }
+    if trim_source_index < 0 {
+        if resolved_callee_index >= 0 {
+            if !ast_function_has_const_params(ast_base, resolved_callee_index) {
+                trim_source_index = resolved_callee_index;
+            }
+        }
+    }
+    let mut trim_args: bool = false;
+    if trim_source_index >= 0 {
+        if ast_function_has_const_params(ast_base, trim_source_index) {
+            trim_args = true;
+            let original_param_total: i32 =
+                ast_function_param_count(ast_base, trim_source_index);
+            if original_param_total < 0 {
+                return -1;
+            }
+            if original_param_total != arg_count {
+                let runtime_param_total: i32 =
+                    ast_function_runtime_param_count(ast_base, trim_source_index);
+                if runtime_param_total < 0 {
+                    return -1;
+                }
+                if runtime_param_total == arg_count {
+                    trim_args = false;
+                } else {
+                    return -1;
+                }
+            }
+        }
+    }
     let mut runtime_arg_count: i32 = arg_count;
-    if trim_const_args {
+    if trim_args {
         runtime_arg_count = 0;
         let mut count_idx: i32 = 0;
         while count_idx < arg_count {
-            if !ast_function_param_is_const(ast_base, callee_index, count_idx) {
+            if !ast_function_param_is_const(ast_base, trim_source_index, count_idx) {
                 runtime_arg_count = runtime_arg_count + 1;
             }
             count_idx = count_idx + 1;
@@ -1157,10 +1248,10 @@ fn clone_const_specialization_call_metadata(
     if new_metadata < 0 {
         return -1;
     }
-    store_i32(new_metadata, name_ptr);
-    store_i32(new_metadata + WORD_SIZE, name_len);
+    store_i32(new_metadata, resolved_name_ptr);
+    store_i32(new_metadata + WORD_SIZE, resolved_name_len);
     store_i32(new_metadata + 2 * WORD_SIZE, runtime_arg_count);
-    store_i32(new_metadata + 3 * WORD_SIZE, callee_index);
+    store_i32(new_metadata + 3 * WORD_SIZE, resolved_callee_index);
     let original_args_base: i32 = call_metadata_args_base(metadata_ptr);
     if arg_count > 0 && original_args_base < 0 {
         return -1;
@@ -1170,25 +1261,25 @@ fn clone_const_specialization_call_metadata(
     let mut runtime_idx: i32 = 0;
     while arg_idx < arg_count {
         let original_arg: i32 = load_i32(original_args_base + arg_idx * WORD_SIZE);
-        let skip_arg: bool = trim_const_args
-            && ast_function_param_is_const(ast_base, callee_index, arg_idx);
+        let skip_arg: bool = trim_args
+            && ast_function_param_is_const(ast_base, trim_source_index, arg_idx);
         if !skip_arg {
-        let cloned_arg: i32 = clone_const_specialization_expr(
-            ast_base,
-            template_index,
-            key_ptr,
-            removed_const_count,
-            original_arg,
-            env_values_ptr,
-            param_count,
-            eval_stack_base,
-            eval_stack_top_ptr,
-            eval_value_ptr,
-            eval_type_ptr,
-            local_type_stack_ptr,
-            local_type_stack_top_ptr,
-            local_type_stack_capacity,
-        );
+            let cloned_arg: i32 = clone_const_specialization_expr(
+                ast_base,
+                template_index,
+                key_ptr,
+                removed_const_count,
+                original_arg,
+                env_values_ptr,
+                param_count,
+                eval_stack_base,
+                eval_stack_top_ptr,
+                eval_value_ptr,
+                eval_type_ptr,
+                local_type_stack_ptr,
+                local_type_stack_top_ptr,
+                local_type_stack_capacity,
+            );
             if cloned_arg < 0 {
                 return -1;
             }
@@ -1199,7 +1290,7 @@ fn clone_const_specialization_call_metadata(
         }
         arg_idx = arg_idx + 1;
     };
-    if trim_const_args {
+    if trim_args {
         if runtime_idx != runtime_arg_count {
             return -1;
         }
@@ -1209,28 +1300,17 @@ fn clone_const_specialization_call_metadata(
         }
     }
     if param_callee {
-        if key_ptr <= 0 {
+        if resolved_callee_index < 0 {
             return -1;
         }
-        let captured: ConstSpecializationEntry =
-            const_specialization_lookup_entry(key_ptr, param_index);
-        if captured.type < 0 {
+        let runtime_param_total: i32 =
+            ast_function_param_count(ast_base, resolved_callee_index);
+        if runtime_param_total < 0 {
             return -1;
         }
-        if !type_id_is_function(captured.type) {
+        if runtime_param_total != runtime_arg_count {
             return -1;
         }
-        let target_index: i32 = captured.value;
-        if target_index < 0 {
-            return -1;
-        }
-        let target_entry_ptr: i32 = ast_function_entry_ptr(ast_base, target_index);
-        let target_name_ptr: i32 = load_i32(target_entry_ptr);
-        let target_name_len: i32 = load_i32(target_entry_ptr + 4);
-        store_i32(new_metadata, target_name_ptr);
-        store_i32(new_metadata + WORD_SIZE, target_name_len);
-        store_i32(new_metadata + 2 * WORD_SIZE, runtime_arg_count);
-        store_i32(new_metadata + 3 * WORD_SIZE, target_index);
     }
     let original_extra: i32 = call_metadata_extra_slot_base(metadata_ptr);
     let new_extra: i32 = call_metadata_extra_slot_base(new_metadata);
@@ -2632,6 +2712,79 @@ fn clone_const_specialization_expr(
         }
         return new_index;
     }
+    if kind == 49 {
+        let signature_ptr: i32 = ast_anon_function_signature_ptr(ast_base, expr_index);
+        let mut cloned_signature_ptr: i32 = signature_ptr;
+        if signature_ptr > 0 {
+            let mut word_idx: i32 = 0;
+            if ANON_FUNCTION_SIGNATURE_WORD_COUNT > 0 {
+                cloned_signature_ptr = ast_call_data_alloc(ast_base, ANON_FUNCTION_SIGNATURE_WORD_COUNT);
+                if cloned_signature_ptr < 0 {
+                    return -1;
+                }
+                while word_idx < ANON_FUNCTION_SIGNATURE_WORD_COUNT {
+                    let value: i32 =
+                        load_i32(signature_ptr + word_idx * WORD_SIZE);
+                    store_i32(cloned_signature_ptr + word_idx * WORD_SIZE, value);
+                    word_idx = word_idx + 1;
+                };
+            }
+        }
+        let body_count: i32 = ast_anon_function_body_expr_count(ast_base, expr_index);
+        let body_ptr: i32 = ast_anon_function_body_exprs_ptr(ast_base, expr_index);
+        let mut cloned_body_ptr: i32 = body_ptr;
+        if body_count > 0 {
+            if body_ptr <= 0 {
+                return -1;
+            }
+            cloned_body_ptr = ast_call_data_alloc(ast_base, body_count);
+            if cloned_body_ptr < 0 {
+                return -1;
+            }
+            let mut body_idx: i32 = 0;
+            while body_idx < body_count {
+                let original_body_expr: i32 =
+                    load_i32(body_ptr + body_idx * WORD_SIZE);
+                let cloned_body_expr: i32 = clone_const_specialization_expr(
+                    ast_base,
+                    template_index,
+                    key_ptr,
+                    removed_const_count,
+                    original_body_expr,
+                    env_values_ptr,
+                    param_count,
+                    eval_stack_base,
+                    eval_stack_top_ptr,
+                    eval_value_ptr,
+                    eval_type_ptr,
+                    local_type_stack_ptr,
+                    local_type_stack_top_ptr,
+                    local_type_stack_capacity,
+                );
+                if cloned_body_expr < 0 {
+                    return -1;
+                }
+                store_i32(cloned_body_ptr + body_idx * WORD_SIZE, cloned_body_expr);
+                body_idx = body_idx + 1;
+            };
+        }
+        let location_offset: i32 = ast_anon_function_location(ast_base, expr_index);
+        let new_index: i32 = ast_expr_alloc_anon_fn(
+            ast_base,
+            cloned_signature_ptr,
+            cloned_body_ptr,
+            body_count,
+            location_offset,
+        );
+        if new_index < 0 {
+            return -1;
+        }
+        let expr_type: i32 = ast_expr_type(ast_base, expr_index);
+        if expr_type >= 0 {
+            ast_expr_set_type(ast_base, new_index, expr_type);
+        }
+        return new_index;
+    }
     if kind == 42 {
         let bytes_ptr: i32 = load_i32(entry_ptr + WORD_SIZE);
         let byte_count: i32 = load_i32(entry_ptr + 2 * WORD_SIZE);
@@ -3011,6 +3164,141 @@ fn ast_function_clone_const_template(
     new_index
 }
 
+fn const_fn_runtime_wrapper_cache_head() -> i32 {
+    load_i32(CONST_FN_RUNTIME_WRAPPER_CACHE_HEAD_OFFSET)
+}
+
+fn const_fn_runtime_wrapper_cache_set_head(value: i32) {
+    store_i32(CONST_FN_RUNTIME_WRAPPER_CACHE_HEAD_OFFSET, value);
+}
+
+fn const_fn_runtime_wrapper_cache_find(original_index: i32) -> i32 {
+    let mut node_ptr: i32 = const_fn_runtime_wrapper_cache_head();
+    while node_ptr > 0 {
+        let recorded_index: i32 = load_i32(
+            node_ptr + CONST_FN_RUNTIME_WRAPPER_CACHE_ORIGINAL_OFFSET * WORD_SIZE,
+        );
+        if recorded_index == original_index {
+            return node_ptr;
+        }
+        node_ptr = load_i32(node_ptr);
+    };
+    0
+}
+
+fn const_fn_runtime_wrapper_cache_record(
+    ast_base: i32,
+    original_index: i32,
+    wrapper_index: i32,
+    runtime_type_id: i32,
+) -> i32 {
+    let entry_ptr: i32 =
+        ast_call_data_alloc(ast_base, CONST_FN_RUNTIME_WRAPPER_CACHE_ENTRY_WORDS);
+    if entry_ptr < 0 {
+        return -1;
+    }
+    store_i32(entry_ptr, const_fn_runtime_wrapper_cache_head());
+    store_i32(
+        entry_ptr + CONST_FN_RUNTIME_WRAPPER_CACHE_ORIGINAL_OFFSET * WORD_SIZE,
+        original_index,
+    );
+    store_i32(
+        entry_ptr + CONST_FN_RUNTIME_WRAPPER_CACHE_WRAPPER_OFFSET * WORD_SIZE,
+        wrapper_index,
+    );
+    store_i32(
+        entry_ptr + CONST_FN_RUNTIME_WRAPPER_CACHE_TYPE_OFFSET * WORD_SIZE,
+        runtime_type_id,
+    );
+    const_fn_runtime_wrapper_cache_set_head(entry_ptr);
+    entry_ptr
+}
+
+fn ast_function_runtime_wrapper_entry(
+    ast_base: i32,
+    index: i32,
+) -> (i32, i32) {
+    if index < 0 {
+        return (-1, -1);
+    }
+    let current_count: i32 = ast_functions_count(ast_base);
+    if current_count < 0 {
+        return (-1, -1);
+    }
+    if index >= current_count {
+        return (-1, -1);
+    }
+    if !ast_function_has_const_params(ast_base, index) {
+        return (-1, -1);
+    }
+    let existing_entry: i32 = const_fn_runtime_wrapper_cache_find(index);
+    if existing_entry > 0 {
+        let runtime_type_id: i32 = load_i32(
+            existing_entry + CONST_FN_RUNTIME_WRAPPER_CACHE_TYPE_OFFSET * WORD_SIZE,
+        );
+        if runtime_type_id < 0 {
+            return (-1, -1);
+        }
+        return (existing_entry, runtime_type_id);
+    }
+    let source_ptr: i32 = ast_function_entry_ptr(ast_base, index);
+    let param_count: i32 = load_i32(source_ptr + 8);
+    if param_count < 0 {
+        return (-1, -1);
+    }
+    let param_types_ptr: i32 = load_i32(source_ptr + 24);
+    if param_count > 0 && param_types_ptr < 0 {
+        return (-1, -1);
+    }
+    let return_type_id: i32 = load_i32(source_ptr + 28);
+    if return_type_id < 0 {
+        return (-1, -1);
+    }
+    let type_param_ptr: i32 = if param_count > 0 { param_types_ptr } else { 0 };
+    let runtime_type_id: i32 = ast_register_function_type(
+        ast_base,
+        type_param_ptr,
+        param_count,
+        0,
+        return_type_id,
+    );
+    if runtime_type_id < 0 {
+        return (-1, -1);
+    }
+    let new_index: i32 = current_count;
+    if new_index >= AST_MAX_FUNCTIONS {
+        return (-1, -1);
+    }
+    let dest_ptr: i32 = ast_function_entry_ptr(ast_base, new_index);
+    let mut word_idx: i32 = 0;
+    let total_words: i32 = AST_FUNCTION_ENTRY_SIZE >> 2;
+    while word_idx < total_words {
+        let value: i32 = load_i32(source_ptr + word_idx * WORD_SIZE);
+        store_i32(dest_ptr + word_idx * WORD_SIZE, value);
+        word_idx = word_idx + 1;
+    };
+    store_i32(dest_ptr, 0);
+    store_i32(dest_ptr + 4, 0);
+    let original_flags: i32 = load_i32(dest_ptr + 32);
+    let const_mask: i32 = original_flags & FUNCTION_FLAG_HAS_CONST_PARAMS;
+    let cleared_flags: i32 = original_flags - const_mask;
+    store_i32(dest_ptr + 32, cleared_flags);
+    store_i32(dest_ptr + 36, 0);
+    ast_function_set_template_owner_index(ast_base, new_index, 0);
+    ast_functions_set_count(ast_base, new_index + 1);
+    let entry_ptr: i32 = const_fn_runtime_wrapper_cache_record(
+        ast_base,
+        index,
+        new_index,
+        runtime_type_id,
+    );
+    if entry_ptr < 0 {
+        ast_functions_set_count(ast_base, current_count);
+        return (-1, -1);
+    }
+    (entry_ptr, runtime_type_id)
+}
+
 fn canonicalize_const_value(
     ast_base: i32,
     raw_value: i32,
@@ -3055,6 +3343,30 @@ fn canonicalize_const_value(
         }
         if raw_value >= func_count {
             return -1;
+        }
+        let const_param_count: i32 = function_type_const_params_count(ast_base, raw_type);
+        if const_param_count > 0 {
+            if !ast_function_has_const_params(ast_base, raw_value) {
+                return -1;
+            }
+            let wrapper_result: (i32, i32) =
+                ast_function_runtime_wrapper_entry(ast_base, raw_value);
+            let wrapper_entry: i32 = wrapper_result.0;
+            let runtime_type_id: i32 = wrapper_result.1;
+            if wrapper_entry <= 0 {
+                return -1;
+            }
+            if runtime_type_id < 0 {
+                return -1;
+            }
+            let canonical_ptr: i32 =
+                wrapper_entry + CONST_FN_RUNTIME_WRAPPER_CACHE_ORIGINAL_OFFSET * WORD_SIZE;
+            if canonical_ptr <= 0 {
+                return -1;
+            }
+            store_i32(out_value_ptr, canonical_ptr);
+            store_i32(out_type_ptr, runtime_type_id);
+            return 0;
         }
         store_i32(out_value_ptr, raw_value);
         store_i32(out_type_ptr, raw_type);
@@ -3254,6 +3566,7 @@ fn ast_reset(ast_base: i32) {
     store_i32(ast_functions_count_ptr(ast_base), 0);
     store_i32(ast_names_len_ptr(ast_base), 0);
     store_i32(ast_call_data_len_ptr(ast_base), 1);
+    const_fn_runtime_wrapper_cache_set_head(0);
     ast_const_specialization_registry_set_head(ast_base, 0);
     ast_constants_reset(ast_base);
     ast_array_types_reset(ast_base);
@@ -3854,6 +4167,20 @@ const STRUCT_GET_LABEL_KIND_OFFSET: i32 = 0;
 const STRUCT_GET_LABEL_DATA_OFFSET: i32 = 1;
 
 const STRUCT_GET_LABEL_EXTRA_OFFSET: i32 = 2;
+
+const ANON_FUNCTION_SIGNATURE_WORD_COUNT: i32 = 6;
+
+const ANON_FUNCTION_SIGNATURE_PARAM_COUNT_OFFSET: i32 = 0;
+
+const ANON_FUNCTION_SIGNATURE_PARAMS_PTR_OFFSET: i32 = 1;
+
+const ANON_FUNCTION_SIGNATURE_PARAM_TYPES_PTR_OFFSET: i32 = 2;
+
+const ANON_FUNCTION_SIGNATURE_RETURN_TYPE_OFFSET: i32 = 3;
+
+const ANON_FUNCTION_SIGNATURE_FLAGS_OFFSET: i32 = 4;
+
+const ANON_FUNCTION_SIGNATURE_CONST_PARAMS_PTR_OFFSET: i32 = 5;
 const AST_STRUCT_TYPES_SECTION_SIZE: i32 =
     WORD_SIZE + AST_STRUCT_TYPES_CAPACITY * AST_STRUCT_TYPE_ENTRY_SIZE;
 
@@ -4193,6 +4520,105 @@ fn struct_get_label_set_extra(metadata_ptr: i32, value: i32) {
     }
 }
 
+fn ast_anon_function_signature_param_count(signature_ptr: i32) -> i32 {
+    if signature_ptr <= 0 {
+        return 0;
+    }
+    load_i32(signature_ptr + ANON_FUNCTION_SIGNATURE_PARAM_COUNT_OFFSET * WORD_SIZE)
+}
+
+fn ast_anon_function_signature_params_ptr(signature_ptr: i32) -> i32 {
+    if signature_ptr <= 0 {
+        return 0;
+    }
+    load_i32(signature_ptr + ANON_FUNCTION_SIGNATURE_PARAMS_PTR_OFFSET * WORD_SIZE)
+}
+
+fn ast_anon_function_signature_param_types_ptr(signature_ptr: i32) -> i32 {
+    if signature_ptr <= 0 {
+        return 0;
+    }
+    load_i32(signature_ptr + ANON_FUNCTION_SIGNATURE_PARAM_TYPES_PTR_OFFSET * WORD_SIZE)
+}
+
+fn ast_anon_function_signature_return_type(signature_ptr: i32) -> i32 {
+    if signature_ptr <= 0 {
+        return -1;
+    }
+    load_i32(signature_ptr + ANON_FUNCTION_SIGNATURE_RETURN_TYPE_OFFSET * WORD_SIZE)
+}
+
+fn ast_anon_function_signature_flags(signature_ptr: i32) -> i32 {
+    if signature_ptr <= 0 {
+        return 0;
+    }
+    load_i32(signature_ptr + ANON_FUNCTION_SIGNATURE_FLAGS_OFFSET * WORD_SIZE)
+}
+
+fn ast_anon_function_signature_const_params_ptr(signature_ptr: i32) -> i32 {
+    if signature_ptr <= 0 {
+        return 0;
+    }
+    load_i32(signature_ptr + ANON_FUNCTION_SIGNATURE_CONST_PARAMS_PTR_OFFSET * WORD_SIZE)
+}
+
+fn ast_anon_function_signature_const_params_count(signature_ptr: i32) -> i32 {
+    let ptr: i32 = ast_anon_function_signature_const_params_ptr(signature_ptr);
+    if ptr <= 0 {
+        return 0;
+    }
+    load_i32(ptr)
+}
+
+fn ast_anon_function_signature_const_params_mask_ptr(signature_ptr: i32) -> i32 {
+    let ptr: i32 = ast_anon_function_signature_const_params_ptr(signature_ptr);
+    if ptr <= 0 {
+        return 0;
+    }
+    ptr + WORD_SIZE
+}
+
+fn ast_anon_function_signature_has_const_params(signature_ptr: i32) -> bool {
+    (ast_anon_function_signature_flags(signature_ptr) & FUNCTION_FLAG_HAS_CONST_PARAMS) != 0
+}
+
+fn ast_anon_function_signature_param_is_const(
+    signature_ptr: i32,
+    param_index: i32,
+) -> bool {
+    if param_index < 0 {
+        return false;
+    }
+    if !ast_anon_function_signature_has_const_params(signature_ptr) {
+        return false;
+    }
+    let param_count: i32 = ast_anon_function_signature_param_count(signature_ptr);
+    if param_count <= 0 {
+        return false;
+    }
+    if param_index >= param_count {
+        return false;
+    }
+    let mask_ptr: i32 = ast_anon_function_signature_const_params_mask_ptr(signature_ptr);
+    if mask_ptr <= 0 {
+        return false;
+    }
+    let mut mask_word_count: i32 = (param_count + 31) >> 5;
+    if mask_word_count <= 0 {
+        mask_word_count = 1;
+    }
+    let mask_word_index: i32 = param_index >> 5;
+    if mask_word_index >= mask_word_count {
+        return false;
+    }
+    let mask_word_value: i32 = load_i32(mask_ptr + mask_word_index * WORD_SIZE);
+    if mask_word_value == 0 {
+        return false;
+    }
+    let mask_bit: i32 = 1 << (param_index & 31);
+    (mask_word_value & mask_bit) != 0
+}
+
 
 fn ast_struct_type_field_canonical_byte(
     ast_base: i32,
@@ -4396,6 +4822,67 @@ fn function_type_param_type(ast_base: i32, type_id: i32, param_index: i32) -> i3
         return -1;
     }
     load_i32(params_ptr + param_index * WORD_SIZE)
+}
+
+fn function_type_const_params_ptr(ast_base: i32, type_id: i32) -> i32 {
+    if !type_id_is_function(type_id) {
+        return 0;
+    }
+    let index: i32 = function_type_index(type_id);
+    if index < 0 {
+        return 0;
+    }
+    ast_function_type_flags_ptr(ast_base, index)
+}
+
+fn function_type_const_params_count(ast_base: i32, type_id: i32) -> i32 {
+    let ptr: i32 = function_type_const_params_ptr(ast_base, type_id);
+    if ptr <= 0 {
+        return 0;
+    }
+    load_i32(ptr)
+}
+
+fn function_type_const_params_mask_ptr(ast_base: i32, type_id: i32) -> i32 {
+    let ptr: i32 = function_type_const_params_ptr(ast_base, type_id);
+    if ptr <= 0 {
+        return 0;
+    }
+    ptr + WORD_SIZE
+}
+
+fn function_type_param_is_const(ast_base: i32, type_id: i32, param_index: i32) -> bool {
+    if param_index < 0 {
+        return false;
+    }
+    if !type_id_is_function(type_id) {
+        return false;
+    }
+    let param_count: i32 = function_type_param_count(ast_base, type_id);
+    if param_count <= 0 {
+        return false;
+    }
+    if param_index >= param_count {
+        return false;
+    }
+    let mask_ptr: i32 = function_type_const_params_mask_ptr(ast_base, type_id);
+    if mask_ptr <= 0 {
+        return false;
+    }
+    let mut mask_word_count: i32 = (param_count + 31) >> 5;
+    if mask_word_count <= 0 {
+        mask_word_count = 1;
+    }
+    let mask_word_index: i32 = param_index >> 5;
+    if mask_word_index >= mask_word_count {
+        return false;
+    }
+    let mask_word_value: i32 = load_i32(mask_ptr + mask_word_index * WORD_SIZE);
+    if mask_word_value == 0 {
+        return false;
+    }
+    let mask_bit: i32 = 1 << (param_index & 31);
+    (mask_word_value & mask_bit) != 0
 }
 
 fn array_type_heap_index(ast_base: i32, type_id: i32) -> i32 {
@@ -4968,7 +5455,34 @@ fn ast_register_function_type(
             };
             if matches {
                 if existing_flags_ptr != param_flags_ptr {
-                    matches = false;
+                    if existing_flags_ptr <= 0 || param_flags_ptr <= 0 {
+                        matches = false;
+                    } else {
+                        let existing_count: i32 = load_i32(existing_flags_ptr);
+                        let new_count: i32 = load_i32(param_flags_ptr);
+                        if existing_count != new_count {
+                            matches = false;
+                        } else {
+                            let mut mask_word_count: i32 = (param_count + 31) >> 5;
+                            if mask_word_count <= 0 {
+                                mask_word_count = 1;
+                            }
+                            let mut mask_idx: i32 = 0;
+                            while mask_idx < mask_word_count {
+                                let existing_word: i32 = load_i32(
+                                    existing_flags_ptr + WORD_SIZE + mask_idx * WORD_SIZE,
+                                );
+                                let new_word: i32 = load_i32(
+                                    param_flags_ptr + WORD_SIZE + mask_idx * WORD_SIZE,
+                                );
+                                if existing_word != new_word {
+                                    matches = false;
+                                    break;
+                                }
+                                mask_idx = mask_idx + 1;
+                            };
+                        }
+                    }
                 }
             }
         } else {
@@ -5858,6 +6372,104 @@ fn ast_expr_alloc_struct_get(
     }
     ast_expr_set_type(ast_base, index, -1);
     index
+}
+
+fn ast_expr_alloc_anon_fn(
+    ast_base: i32,
+    signature_ptr: i32,
+    body_exprs_ptr: i32,
+    body_expr_count: i32,
+    location_offset: i32,
+) -> i32 {
+    if signature_ptr < 0 {
+        return -1;
+    }
+    if body_expr_count < 0 {
+        return -1;
+    }
+    if body_expr_count > 0 && body_exprs_ptr <= 0 {
+        return -1;
+    }
+    let index: i32 =
+        ast_expr_alloc(ast_base, 49, signature_ptr, body_exprs_ptr, body_expr_count);
+    if index < 0 {
+        return -1;
+    }
+    ast_expr_set_type(ast_base, index, -1);
+    ast_expr_entry_set_extra(ast_base, index, location_offset);
+    index
+}
+
+fn ast_anon_function_signature_ptr(ast_base: i32, expr_index: i32) -> i32 {
+    let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+    load_i32(entry_ptr + WORD_SIZE)
+}
+
+fn ast_anon_function_body_exprs_ptr(ast_base: i32, expr_index: i32) -> i32 {
+    let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+    load_i32(entry_ptr + 2 * WORD_SIZE)
+}
+
+fn ast_anon_function_body_expr_count(ast_base: i32, expr_index: i32) -> i32 {
+    let entry_ptr: i32 = ast_expr_entry_ptr(ast_base, expr_index);
+    load_i32(entry_ptr + 3 * WORD_SIZE)
+}
+
+fn ast_anon_function_location(ast_base: i32, expr_index: i32) -> i32 {
+    ast_expr_entry_extra(ast_base, expr_index)
+}
+
+fn ast_anon_function_body_expr_index(
+    ast_base: i32,
+    expr_index: i32,
+    body_index: i32,
+) -> i32 {
+    if body_index < 0 {
+        return -1;
+    }
+    let total: i32 = ast_anon_function_body_expr_count(ast_base, expr_index);
+    if body_index >= total {
+        return -1;
+    }
+    let list_ptr: i32 = ast_anon_function_body_exprs_ptr(ast_base, expr_index);
+    if list_ptr <= 0 {
+        return -1;
+    }
+    load_i32(list_ptr + body_index * WORD_SIZE)
+}
+
+fn ast_anon_function_param_count(ast_base: i32, expr_index: i32) -> i32 {
+    let signature_ptr: i32 = ast_anon_function_signature_ptr(ast_base, expr_index);
+    ast_anon_function_signature_param_count(signature_ptr)
+}
+
+fn ast_anon_function_param_is_const(
+    ast_base: i32,
+    expr_index: i32,
+    param_index: i32,
+) -> bool {
+    let signature_ptr: i32 = ast_anon_function_signature_ptr(ast_base, expr_index);
+    ast_anon_function_signature_param_is_const(signature_ptr, param_index)
+}
+
+fn ast_anon_function_has_const_params(ast_base: i32, expr_index: i32) -> bool {
+    let signature_ptr: i32 = ast_anon_function_signature_ptr(ast_base, expr_index);
+    ast_anon_function_signature_has_const_params(signature_ptr)
+}
+
+fn ast_anon_function_const_params_ptr(ast_base: i32, expr_index: i32) -> i32 {
+    let signature_ptr: i32 = ast_anon_function_signature_ptr(ast_base, expr_index);
+    ast_anon_function_signature_const_params_ptr(signature_ptr)
+}
+
+fn ast_anon_function_const_params_mask_ptr(ast_base: i32, expr_index: i32) -> i32 {
+    let signature_ptr: i32 = ast_anon_function_signature_ptr(ast_base, expr_index);
+    ast_anon_function_signature_const_params_mask_ptr(signature_ptr)
+}
+
+fn ast_anon_function_const_params_count(ast_base: i32, expr_index: i32) -> i32 {
+    let signature_ptr: i32 = ast_anon_function_signature_ptr(ast_base, expr_index);
+    ast_anon_function_signature_const_params_count(signature_ptr)
 }
 
 fn ast_expr_alloc_const_ref(

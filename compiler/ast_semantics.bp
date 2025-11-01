@@ -31,6 +31,8 @@ const LOOP_INFO_LOCATION_MAX: i32 = (1 << LOOP_INFO_LOCATION_BITS) - 1;
 
 const CONST_ENV_ENTRY_NAME_CAP: i32 = 5;
 
+const ANON_FUNCTION_SIGNATURE_RETURN_TYPE_OFFSET: i32 = 3;
+
 const ConstEnvEntry = struct(
     CONST_ENV_ENTRY_NAME_CAP,
     2,
@@ -61,6 +63,56 @@ fn const_env_entry_load(ptr: i32) -> ConstEnvEntry {
         value: load_i32(ptr),
         type: load_i32(ptr + WORD_SIZE),
     }
+}
+
+fn canonicalize_anon_function_signature(
+    out_ptr: i32,
+    ast_base: i32,
+    signature_ptr: i32,
+) -> i32 {
+    if signature_ptr <= 0 {
+        return -1;
+    }
+    let param_count: i32 = ast_anon_function_signature_param_count(signature_ptr);
+    if param_count < 0 {
+        return -1;
+    }
+    let param_types_ptr: i32 = ast_anon_function_signature_param_types_ptr(signature_ptr);
+    if param_count > 0 {
+        if param_types_ptr <= 0 {
+            return -1;
+        }
+        let mut param_idx: i32 = 0;
+        while param_idx < param_count {
+            let type_slot: i32 = param_types_ptr + param_idx * WORD_SIZE;
+            let recorded_type: i32 = load_i32(type_slot);
+            if recorded_type < 0 {
+                return -1;
+            }
+            let resolved_type: i32 = resolve_type_id(out_ptr, ast_base, recorded_type);
+            if resolved_type < 0 {
+                return -1;
+            }
+            if resolved_type != recorded_type {
+                store_i32(type_slot, resolved_type);
+            }
+            param_idx = param_idx + 1;
+        };
+    }
+    let return_slot: i32 =
+        signature_ptr + ANON_FUNCTION_SIGNATURE_RETURN_TYPE_OFFSET * WORD_SIZE;
+    let recorded_return: i32 = load_i32(return_slot);
+    if recorded_return < 0 {
+        return -1;
+    }
+    let resolved_return: i32 = resolve_type_id(out_ptr, ast_base, recorded_return);
+    if resolved_return < 0 {
+        return -1;
+    }
+    if resolved_return != recorded_return {
+        store_i32(return_slot, resolved_return);
+    }
+    resolved_return
 }
 
 fn record_failure_detail(
@@ -120,6 +172,56 @@ fn record_failure_with_location(
         message,
     );
     0
+}
+
+fn module_index_is_compiler(module_index: i32) -> bool {
+    if module_index < 0 {
+        return false;
+    }
+    let path_ptr: i32 = module_entry_path(module_index);
+    let path_len: i32 = module_entry_path_len(module_index);
+    if path_ptr <= 0 {
+        return false;
+    }
+    if path_len < 10 {
+        return false;
+    }
+    if load_u8(path_ptr) != '/' {
+        return false;
+    }
+    if load_u8(path_ptr + 1) != 'c' {
+        return false;
+    }
+    if load_u8(path_ptr + 2) != 'o' {
+        return false;
+    }
+    if load_u8(path_ptr + 3) != 'm' {
+        return false;
+    }
+    if load_u8(path_ptr + 4) != 'p' {
+        return false;
+    }
+    if load_u8(path_ptr + 5) != 'i' {
+        return false;
+    }
+    if load_u8(path_ptr + 6) != 'l' {
+        return false;
+    }
+    if load_u8(path_ptr + 7) != 'e' {
+        return false;
+    }
+    if load_u8(path_ptr + 8) != 'r' {
+        return false;
+    }
+    load_u8(path_ptr + 9) == '/'
+}
+
+fn function_entry_is_compiler(ast_base: i32, func_index: i32) -> bool {
+    if func_index < 0 {
+        return false;
+    }
+    let module_index: i32 = ast_function_entry_module_index(ast_base, func_index);
+    module_index_is_compiler(module_index)
 }
 
 fn expression_result_location(ast_base: i32, expr_index: i32) -> i32 {
@@ -1019,6 +1121,12 @@ fn collect_call_const_arguments(
     let const_count: i32 = ast_function_const_params_count(ast_base, func_index);
     if const_count <= 0 {
         return 0;
+    }
+    let recorded_callee_index: i32 = load_i32(call_metadata_callee_index_ptr(metadata_ptr));
+    if recorded_callee_index >= 0 {
+        if !ast_function_has_const_params(ast_base, recorded_callee_index) {
+            return 0;
+        }
     }
     let env_slot_ptr: i32 = call_metadata_const_env_ptr_ptr(metadata_ptr);
     if env_slot_ptr <= 0 {
@@ -1968,6 +2076,9 @@ fn resolve_call_metadata(
                         if existing_specialization >= 0 {
                             resolved_target_idx = existing_specialization;
                         } else {
+                            store_i32(CLONE_DEBUG_TARGET_FUNC_OFFSET, target_idx);
+                            store_i32(CLONE_DEBUG_CALLER_FUNC_OFFSET, caller_func_index);
+                            store_i32(CLONE_DEBUG_LOCATION_OFFSET, resolved_location_offset);
                             let new_specialization: i32 = ast_function_clone_const_template(
                                 ast_base,
                                 target_idx,
@@ -2980,6 +3091,25 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
                 if resolved_param_type != param_type_id {
                     store_i32(param_type_ptr, resolved_param_type);
                 }
+                if type_id_is_function(resolved_param_type) {
+                    if !ast_function_param_is_const(ast_base, idx, param_idx) {
+                        if !function_entry_is_compiler(ast_base, idx) {
+                            let location_offset: i32 =
+                                ast_function_entry_name_start(ast_base, idx);
+                            let message: [u8; 52] =
+                                "function values are only permitted in const contexts";
+                            record_failure_with_location(
+                                out_ptr,
+                                ast_base,
+                                idx,
+                                location_offset,
+                                52,
+                                message,
+                            );
+                            return -1;
+                        }
+                    }
+                }
                 param_idx = param_idx + 1;
             };
         }
@@ -3264,6 +3394,49 @@ fn validate_program(out_ptr: i32, ast_base: i32, func_count: i32) -> i32 {
                             "return expression type does not match function return type",
                         );
                         return -1;
+                    }
+                    if caller_is_const {
+                        let mut returned_type: i32 = fn_return_type;
+                        if returned_type < 0 {
+                            returned_type = expr_type;
+                        }
+                        if returned_type >= 0 {
+                            if type_id_is_function(returned_type) {
+                                if !function_entry_is_compiler(ast_base, idx) {
+                                    let param_total: i32 =
+                                        function_type_param_count(ast_base, returned_type);
+                                    if param_total < 0 {
+                                        return -1;
+                                    }
+                                    if param_total > 0 {
+                                        let mut verify_param: i32 = 0;
+                                        loop {
+                                            if verify_param >= param_total {
+                                                break;
+                                            }
+                                            if !function_type_param_is_const(
+                                                ast_base,
+                                                returned_type,
+                                                verify_param,
+                                            ) {
+                                                let message: [u8; 76] =
+                                                    "anonymous functions returned from const fn must accept only const parameters";
+                                                record_failure_with_location(
+                                                    out_ptr,
+                                                    ast_base,
+                                                    idx,
+                                                    expr_location,
+                                                    76,
+                                                    message,
+                                                );
+                                                return -1;
+                                            }
+                                            verify_param = verify_param + 1;
+                                        };
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -5513,6 +5686,34 @@ fn resolve_expression_internal(
         }
         return 0;
     }
+    if kind == 49 {
+        let signature_ptr: i32 = ast_anon_function_signature_ptr(ast_base, expr_index);
+        let resolved_return: i32 =
+            canonicalize_anon_function_signature(out_ptr, ast_base, signature_ptr);
+        if resolved_return < 0 {
+            return -1;
+        }
+        let param_count: i32 = ast_anon_function_signature_param_count(signature_ptr);
+        if param_count < 0 {
+            return -1;
+        }
+        let param_types_ptr: i32 = ast_anon_function_signature_param_types_ptr(signature_ptr);
+        let const_params_ptr: i32 =
+            ast_anon_function_signature_const_params_ptr(signature_ptr);
+        let type_param_ptr: i32 = if param_count > 0 { param_types_ptr } else { 0 };
+        let function_type_id_value: i32 = ast_register_function_type(
+            ast_base,
+            type_param_ptr,
+            param_count,
+            const_params_ptr,
+            resolved_return,
+        );
+        if function_type_id_value < 0 {
+            return -1;
+        }
+        ast_expr_set_type(ast_base, expr_index, function_type_id_value);
+        return 0;
+    }
     if kind == 42 {
         let bytes_ptr: i32 = load_i32(entry_ptr + 4);
         let byte_count: i32 = load_i32(entry_ptr + 8);
@@ -6050,6 +6251,33 @@ fn resolve_expression_internal(
             caller_is_const,
         ) < 0 {
             return -1;
+        }
+        let mut init_type: i32 = ast_expr_type(ast_base, init_index);
+        if init_type >= 0 {
+            let resolved_init_type: i32 = resolve_type_id(out_ptr, ast_base, init_type);
+            if resolved_init_type < 0 {
+                return -1;
+            }
+            if resolved_init_type != init_type {
+                ast_expr_set_type(ast_base, init_index, resolved_init_type);
+                init_type = resolved_init_type;
+            }
+            if type_id_is_function(init_type) {
+                if !function_entry_is_compiler(ast_base, caller_func_index) {
+                    let location_offset: i32 = ast_expr_location(ast_base, init_index);
+                    let message: [u8; 52] =
+                        "function values are only permitted in const contexts";
+                    record_failure_with_location(
+                        out_ptr,
+                        ast_base,
+                        caller_func_index,
+                        location_offset,
+                        52,
+                        message,
+                    );
+                    return -1;
+                }
+            }
         }
         if caller_func_index >= 0 {
             let init_entry_ptr: i32 = ast_expr_entry_ptr(ast_base, init_index);

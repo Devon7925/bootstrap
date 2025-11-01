@@ -49,6 +49,107 @@ const RuntimeFunctionMap = struct(
     ],
 );
 
+fn function_is_anonymous(ast_base: i32, index: i32) -> bool {
+    ast_function_entry_module_index(ast_base, index) < 0
+}
+
+fn anon_decimal_length(value: i32) -> i32 {
+    if value <= 0 {
+        return 1;
+    }
+    let mut length: i32 = 0;
+    let mut remaining: i32 = value;
+    loop {
+        length = length + 1;
+        remaining = remaining / 10;
+        if remaining == 0 {
+            break;
+        }
+    };
+    length
+}
+
+fn write_decimal_digits(base: i32, offset: i32, value: i32) -> i32 {
+    if value <= 0 {
+        return write_byte(base, offset, '0');
+    }
+    let digits: i32 = anon_decimal_length(value);
+    let mut divisor: i32 = 1;
+    let mut idx: i32 = 1;
+    while idx < digits {
+        divisor = divisor * 10;
+        idx = idx + 1;
+    };
+    let mut out: i32 = offset;
+    let mut remaining: i32 = value;
+    let mut written: i32 = 0;
+    while written < digits {
+        let digit: i32 = remaining / divisor;
+        out = write_byte(base, out, digit + '0');
+        remaining = remaining - digit * divisor;
+        if divisor <= 1 {
+            divisor = 1;
+        } else {
+            divisor = divisor / 10;
+        }
+        written = written + 1;
+    };
+    out
+}
+
+fn parse_anon_line_from_name(name_ptr: i32, name_len: i32) -> i32 {
+    if name_ptr <= 0 {
+        return 0;
+    }
+    if name_len <= 0 {
+        return 0;
+    }
+    let mut idx: i32 = 0;
+    let mut saw_at: bool = false;
+    let mut value: i32 = 0;
+    while idx < name_len {
+        let byte: i32 = load_u8(name_ptr + idx);
+        if !saw_at {
+            if byte == '@' {
+                saw_at = true;
+                value = 0;
+            }
+        } else {
+            if byte >= '0' && byte <= '9' {
+                value = value * 10 + (byte - '0');
+            } else {
+                break;
+            }
+        }
+        idx = idx + 1;
+    };
+    if !saw_at {
+        return 0;
+    }
+    value
+}
+
+fn anon_placeholder_length(line: i32) -> i32 {
+    let digits: i32 = if line <= 0 { 1 } else { anon_decimal_length(line) };
+    15 + digits
+}
+
+fn write_anon_placeholder_name(base: i32, offset: i32, line: i32) -> i32 {
+    let prefix: [u8; 14] = "<anon@unknown:";
+    let mut out: i32 = offset;
+    let mut idx: i32 = 0;
+    while idx < 14 {
+        out = write_byte(base, out, prefix[idx] as i32);
+        idx = idx + 1;
+    };
+    out = if line <= 0 {
+        write_byte(base, out, '0')
+    } else {
+        write_decimal_digits(base, out, line)
+    };
+    write_byte(base, out, '>')
+}
+
 const LOCAL_COUNTS_BASE: i32 = 1024;
 
 fn record_emit_failure(out_ptr: i32, const MESSAGE_LEN: i32, message: [u8; MESSAGE_LEN]) {
@@ -136,16 +237,55 @@ fn build_runtime_function_map(ast_base: i32, func_count: i32) -> RuntimeFunction
         return RuntimeFunctionMap { ptr: 0, count: 0 };
     }
     let map_ptr: i32 = ast_temp_base(ast_base);
+    let anon_list_ptr: i32 = map_ptr + func_count * WORD_SIZE;
+    let mut anon_count: i32 = 0;
     let mut runtime_index: i32 = 0;
     let mut idx: i32 = 0;
     while idx < total_functions {
-        if ast_function_has_const_params(ast_base, idx) {
+        if function_is_anonymous(ast_base, idx) {
+            store_i32(map_ptr + idx * WORD_SIZE, -1);
+            store_i32(anon_list_ptr + anon_count * 2 * WORD_SIZE, idx);
+            let literal_start: i32 = load_i32(ast_function_entry_ptr(ast_base, idx) + 56);
+            store_i32(anon_list_ptr + anon_count * 2 * WORD_SIZE + WORD_SIZE, literal_start);
+            anon_count = anon_count + 1;
+        } else if ast_function_has_const_params(ast_base, idx) {
             store_i32(map_ptr + idx * WORD_SIZE, -1);
         } else {
             store_i32(map_ptr + idx * WORD_SIZE, runtime_index);
             runtime_index = runtime_index + 1;
         }
         idx = idx + 1;
+    };
+    if anon_count > 1 {
+        let mut outer: i32 = 0;
+        while outer < anon_count - 1 {
+            let mut inner: i32 = outer + 1;
+            while inner < anon_count {
+                let left_key: i32 =
+                    load_i32(anon_list_ptr + outer * 2 * WORD_SIZE + WORD_SIZE);
+                let right_key: i32 =
+                    load_i32(anon_list_ptr + inner * 2 * WORD_SIZE + WORD_SIZE);
+                if right_key < left_key {
+                    let left_index_ptr: i32 = anon_list_ptr + outer * 2 * WORD_SIZE;
+                    let right_index_ptr: i32 = anon_list_ptr + inner * 2 * WORD_SIZE;
+                    let temp_index: i32 = load_i32(left_index_ptr);
+                    let temp_key: i32 = load_i32(left_index_ptr + WORD_SIZE);
+                    store_i32(left_index_ptr, load_i32(right_index_ptr));
+                    store_i32(left_index_ptr + WORD_SIZE, load_i32(right_index_ptr + WORD_SIZE));
+                    store_i32(right_index_ptr, temp_index);
+                    store_i32(right_index_ptr + WORD_SIZE, temp_key);
+                }
+                inner = inner + 1;
+            };
+            outer = outer + 1;
+        };
+    }
+    let mut anon_idx: i32 = 0;
+    while anon_idx < anon_count {
+        let func_index: i32 = load_i32(anon_list_ptr + anon_idx * 2 * WORD_SIZE);
+        store_i32(map_ptr + func_index * WORD_SIZE, runtime_index);
+        runtime_index = runtime_index + 1;
+        anon_idx = anon_idx + 1;
     };
     RuntimeFunctionMap {
         ptr: map_ptr,
@@ -163,15 +303,50 @@ fn normalize_runtime_function_map(
     if func_count <= 0 {
         return RuntimeFunctionMap { ptr: map.ptr, count: 0 };
     }
-    let mut next_index: i32 = 0;
+    let order_ptr: i32 = map.ptr + func_count * WORD_SIZE;
+    let mut collected: i32 = 0;
     let mut idx: i32 = 0;
     while idx < func_count {
         let stored_index: i32 = load_i32(map.ptr + idx * WORD_SIZE);
         if stored_index >= 0 {
-            store_i32(map.ptr + idx * WORD_SIZE, next_index);
-            next_index = next_index + 1;
+            store_i32(order_ptr + collected * 2 * WORD_SIZE, stored_index);
+            store_i32(order_ptr + collected * 2 * WORD_SIZE + WORD_SIZE, idx);
+            collected = collected + 1;
         }
         idx = idx + 1;
+    };
+    if collected > 1 {
+        let mut outer: i32 = 0;
+        while outer < collected - 1 {
+            let mut inner: i32 = outer + 1;
+            while inner < collected {
+                let left_value: i32 =
+                    load_i32(order_ptr + outer * 2 * WORD_SIZE);
+                let right_value: i32 =
+                    load_i32(order_ptr + inner * 2 * WORD_SIZE);
+                if right_value < left_value {
+                    let left_index_ptr: i32 = order_ptr + outer * 2 * WORD_SIZE;
+                    let right_index_ptr: i32 = order_ptr + inner * 2 * WORD_SIZE;
+                    let temp_value: i32 = load_i32(left_index_ptr);
+                    let temp_index: i32 = load_i32(left_index_ptr + WORD_SIZE);
+                    store_i32(left_index_ptr, load_i32(right_index_ptr));
+                    store_i32(left_index_ptr + WORD_SIZE, load_i32(right_index_ptr + WORD_SIZE));
+                    store_i32(right_index_ptr, temp_value);
+                    store_i32(right_index_ptr + WORD_SIZE, temp_index);
+                }
+                inner = inner + 1;
+            };
+            outer = outer + 1;
+        };
+    }
+    let mut next_index: i32 = 0;
+    let mut order_idx: i32 = 0;
+    while order_idx < collected {
+        let func_index: i32 =
+            load_i32(order_ptr + order_idx * 2 * WORD_SIZE + WORD_SIZE);
+        store_i32(map.ptr + func_index * WORD_SIZE, next_index);
+        next_index = next_index + 1;
+        order_idx = order_idx + 1;
     };
     RuntimeFunctionMap {
         ptr: map.ptr,
@@ -3327,18 +3502,27 @@ fn emit_type_section(
         heap_idx = heap_idx + 1;
     };
 
-    let mut idx: i32 = 0;
-    while idx < func_count {
-        let runtime_index: i32 = if runtime_map.ptr > 0 {
-            load_i32(runtime_map.ptr + idx * WORD_SIZE)
-        } else {
-            -1
-        };
-        if runtime_index < 0 {
-            idx = idx + 1;
-            continue;
+    if runtime_map.count > 0 {
+        if runtime_map.ptr <= 0 {
+            return -1;
         }
-        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
+    }
+    let mut runtime_idx: i32 = 0;
+    while runtime_idx < runtime_map.count {
+        let mut func_index: i32 = -1;
+        let mut search_idx: i32 = 0;
+        while search_idx < func_count {
+            let stored: i32 = load_i32(runtime_map.ptr + search_idx * WORD_SIZE);
+            if stored == runtime_idx {
+                func_index = search_idx;
+                break;
+            }
+            search_idx = search_idx + 1;
+        };
+        if func_index < 0 {
+            return -1;
+        }
+        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, func_index);
         let param_count: i32 = load_i32(entry_ptr + 8);
         let param_types_ptr: i32 = load_i32(entry_ptr + 24);
         if param_count > 0 {
@@ -3369,7 +3553,7 @@ fn emit_type_section(
             entry_size = entry_size + leb_u32_len(0);
         }
         payload_size = payload_size + entry_size;
-        idx = idx + 1;
+        runtime_idx = runtime_idx + 1;
     };
 
     let mut out: i32 = offset;
@@ -3497,18 +3681,22 @@ fn emit_type_section(
         heap_idx = heap_idx + 1;
     };
 
-    idx = 0;
-    while idx < func_count {
-        let runtime_index: i32 = if runtime_map.ptr > 0 {
-            load_i32(runtime_map.ptr + idx * WORD_SIZE)
-        } else {
-            -1
+    runtime_idx = 0;
+    while runtime_idx < runtime_map.count {
+        let mut func_index: i32 = -1;
+        let mut search_idx: i32 = 0;
+        while search_idx < func_count {
+            let stored: i32 = load_i32(runtime_map.ptr + search_idx * WORD_SIZE);
+            if stored == runtime_idx {
+                func_index = search_idx;
+                break;
+            }
+            search_idx = search_idx + 1;
         };
-        if runtime_index < 0 {
-            idx = idx + 1;
-            continue;
+        if func_index < 0 {
+            return -1;
         }
-        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
+        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, func_index);
         let param_count: i32 = load_i32(entry_ptr + 8);
         let param_types_ptr: i32 = load_i32(entry_ptr + 24);
         if param_count > 0 {
@@ -3549,7 +3737,7 @@ fn emit_type_section(
         } else {
             out = write_u32_leb(base, out, 0);
         }
-        idx = idx + 1;
+        runtime_idx = runtime_idx + 1;
     };
     out
 }
@@ -3571,40 +3759,48 @@ fn emit_function_section(
         return -1;
     }
     let mut payload_size: i32 = leb_u32_len(runtime_map.count);
-    let mut idx: i32 = 0;
-    while idx < func_count {
-        let runtime_index: i32 = if runtime_map.ptr > 0 {
-            load_i32(runtime_map.ptr + idx * WORD_SIZE)
-        } else {
-            -1
+    let mut runtime_idx: i32 = 0;
+    while runtime_idx < runtime_map.count {
+        let mut func_index: i32 = -1;
+        let mut search_idx: i32 = 0;
+        while search_idx < func_count {
+            let stored: i32 = load_i32(runtime_map.ptr + search_idx * WORD_SIZE);
+            if stored == runtime_idx {
+                func_index = search_idx;
+                break;
+            }
+            search_idx = search_idx + 1;
         };
-        if runtime_index < 0 {
-            idx = idx + 1;
-            continue;
+        if func_index < 0 {
+            return -1;
         }
-        let type_index: i32 = array_count + tuple_count + struct_count + runtime_index;
+        let type_index: i32 = array_count + tuple_count + struct_count + runtime_idx;
         payload_size = payload_size + leb_u32_len(type_index);
-        idx = idx + 1;
+        runtime_idx = runtime_idx + 1;
     };
 
     let mut out: i32 = offset;
     out = write_byte(base, out, 3);
     out = write_u32_leb(base, out, payload_size);
     out = write_u32_leb(base, out, runtime_map.count);
-    idx = 0;
-    while idx < func_count {
-        let runtime_index: i32 = if runtime_map.ptr > 0 {
-            load_i32(runtime_map.ptr + idx * WORD_SIZE)
-        } else {
-            -1
+    runtime_idx = 0;
+    while runtime_idx < runtime_map.count {
+        let mut func_index: i32 = -1;
+        let mut search_idx: i32 = 0;
+        while search_idx < func_count {
+            let stored: i32 = load_i32(runtime_map.ptr + search_idx * WORD_SIZE);
+            if stored == runtime_idx {
+                func_index = search_idx;
+                break;
+            }
+            search_idx = search_idx + 1;
         };
-        if runtime_index < 0 {
-            idx = idx + 1;
-            continue;
+        if func_index < 0 {
+            return -1;
         }
-        let type_index: i32 = array_count + tuple_count + struct_count + runtime_index;
+        let type_index: i32 = array_count + tuple_count + struct_count + runtime_idx;
         out = write_u32_leb(base, out, type_index);
-        idx = idx + 1;
+        runtime_idx = runtime_idx + 1;
     };
     out
 }
@@ -3620,6 +3816,49 @@ fn emit_memory_section(base: i32, offset: i32) -> i32 {
     out = write_byte(base, out, 1);
     out = write_u32_leb(base, out, pages);
     out = write_u32_leb(base, out, pages);
+    out
+}
+
+
+fn function_export_name_length(ast_base: i32, func_index: i32) -> i32 {
+    if function_is_anonymous(ast_base, func_index) {
+        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, func_index);
+        let stored_name_ptr: i32 = load_i32(entry_ptr);
+        let stored_name_len: i32 = load_i32(entry_ptr + WORD_SIZE);
+        let line: i32 = parse_anon_line_from_name(stored_name_ptr, stored_name_len);
+        return anon_placeholder_length(line);
+    }
+    let entry_ptr: i32 = ast_function_entry_ptr(ast_base, func_index);
+    let stored_len: i32 = load_i32(entry_ptr + WORD_SIZE);
+    if stored_len <= 0 {
+        return 0;
+    }
+    stored_len
+}
+
+fn write_function_export_name(
+    base: i32,
+    offset: i32,
+    ast_base: i32,
+    func_index: i32,
+) -> i32 {
+    if function_is_anonymous(ast_base, func_index) {
+        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, func_index);
+        let stored_name_ptr: i32 = load_i32(entry_ptr);
+        let stored_name_len: i32 = load_i32(entry_ptr + WORD_SIZE);
+        let line: i32 = parse_anon_line_from_name(stored_name_ptr, stored_name_len);
+        return write_anon_placeholder_name(base, offset, line);
+    }
+    let entry_ptr: i32 = ast_function_entry_ptr(ast_base, func_index);
+    let name_ptr: i32 = load_i32(entry_ptr);
+    let name_len: i32 = load_i32(entry_ptr + WORD_SIZE);
+    let mut out: i32 = offset;
+    let mut byte_idx: i32 = 0;
+    while byte_idx < name_len {
+        let byte: i32 = load_u8(name_ptr + byte_idx);
+        out = write_byte(base, out, byte);
+        byte_idx = byte_idx + 1;
+    };
     out
 }
 
@@ -3641,8 +3880,7 @@ fn emit_export_section(
     while idx < func_count {
         let runtime_index: i32 = load_i32(runtime_map_ptr + idx * WORD_SIZE);
         if runtime_index >= 0 {
-            let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
-            let name_len: i32 = load_i32(entry_ptr + 4);
+            let name_len: i32 = function_export_name_length(ast_base, idx);
             if name_len > 0 {
                 exported_functions = exported_functions + 1;
             }
@@ -3656,8 +3894,7 @@ fn emit_export_section(
     while idx < func_count {
         let runtime_index: i32 = load_i32(runtime_map_ptr + idx * WORD_SIZE);
         if runtime_index >= 0 {
-            let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
-            let name_len: i32 = load_i32(entry_ptr + 4);
+            let name_len: i32 = function_export_name_length(ast_base, idx);
             if name_len > 0 {
                 payload_size = payload_size
                     + leb_u32_len(name_len)
@@ -3688,17 +3925,10 @@ fn emit_export_section(
     while idx < func_count {
         let runtime_index: i32 = load_i32(runtime_map_ptr + idx * WORD_SIZE);
         if runtime_index >= 0 {
-            let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
-            let name_ptr: i32 = load_i32(entry_ptr);
-            let name_len: i32 = load_i32(entry_ptr + 4);
+            let name_len: i32 = function_export_name_length(ast_base, idx);
             if name_len > 0 {
                 out = write_u32_leb(base, out, name_len);
-                let mut byte_idx: i32 = 0;
-                while byte_idx < name_len {
-                    let byte: i32 = load_u8(name_ptr + byte_idx);
-                    out = write_byte(base, out, byte);
-                    byte_idx = byte_idx + 1;
-                };
+                out = write_function_export_name(base, out, ast_base, idx);
                 out = write_byte(base, out, '\0');
                 out = write_u32_leb(base, out, runtime_index);
             }
@@ -3722,18 +3952,22 @@ fn emit_code_section(
         }
     }
     let mut payload_size: i32 = leb_u32_len(runtime_map.count);
-    let mut idx: i32 = 0;
-    while idx < func_count {
-        let runtime_index: i32 = if runtime_map.ptr > 0 {
-            load_i32(runtime_map.ptr + idx * WORD_SIZE)
-        } else {
-            -1
+    let mut runtime_idx: i32 = 0;
+    while runtime_idx < runtime_map.count {
+        let mut func_index: i32 = -1;
+        let mut search_idx: i32 = 0;
+        while search_idx < func_count {
+            let stored: i32 = load_i32(runtime_map.ptr + search_idx * WORD_SIZE);
+            if stored == runtime_idx {
+                func_index = search_idx;
+                break;
+            }
+            search_idx = search_idx + 1;
         };
-        if runtime_index < 0 {
-            idx = idx + 1;
-            continue;
+        if func_index < 0 {
+            return -1;
         }
-        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
+        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, func_index);
         let body_kind: i32 = load_i32(entry_ptr + 12);
         let param_count: i32 = load_i32(entry_ptr + 8);
         let locals_count: i32 = load_i32(entry_ptr + 20);
@@ -3831,7 +4065,7 @@ fn emit_code_section(
             body_size = locals_decl_size + expr_size + 1;
         }
         payload_size = payload_size + leb_u32_len(body_size) + body_size;
-        idx = idx + 1;
+        runtime_idx = runtime_idx + 1;
     };
 
     let mut out: i32 = offset;
@@ -3839,18 +4073,22 @@ fn emit_code_section(
     out = write_u32_leb(base, out, payload_size);
     out = write_u32_leb(base, out, runtime_map.count);
 
-    idx = 0;
-    while idx < func_count {
-        let runtime_index: i32 = if runtime_map.ptr > 0 {
-            load_i32(runtime_map.ptr + idx * WORD_SIZE)
-        } else {
-            -1
+    runtime_idx = 0;
+    while runtime_idx < runtime_map.count {
+        let mut func_index: i32 = -1;
+        let mut search_idx: i32 = 0;
+        while search_idx < func_count {
+            let stored: i32 = load_i32(runtime_map.ptr + search_idx * WORD_SIZE);
+            if stored == runtime_idx {
+                func_index = search_idx;
+                break;
+            }
+            search_idx = search_idx + 1;
         };
-        if runtime_index < 0 {
-            idx = idx + 1;
-            continue;
+        if func_index < 0 {
+            return -1;
         }
-        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, idx);
+        let entry_ptr: i32 = ast_function_entry_ptr(ast_base, func_index);
         let body_kind: i32 = load_i32(entry_ptr + 12);
         let param_count: i32 = load_i32(entry_ptr + 8);
         let locals_count: i32 = load_i32(entry_ptr + 20);
@@ -4038,7 +4276,7 @@ fn emit_code_section(
             }
             out = write_byte(base, out, 11);
         }
-        idx = idx + 1;
+        runtime_idx = runtime_idx + 1;
     };
     out
 }

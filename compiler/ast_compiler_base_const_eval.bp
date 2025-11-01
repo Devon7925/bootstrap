@@ -1,6 +1,8 @@
 use "./ast_compiler_base_lexing.bp";
 use "./ast_compiler_base_state.bp";
 
+const CONST_FN_LITERAL_CACHE_ENTRY_WORDS: i32 = 5;
+
 fn unsigned_divide(dividend: i32, divisor: i32) -> i32 {
     let mut quotient: i32 = 0;
     let mut remainder: i32 = 0;
@@ -89,6 +91,169 @@ fn clone_constant_value_deep(ast_base: i32, value: i32, type_id: i32) -> i32 {
         return clone_constant_value_elements(ast_base, value, element_count);
     }
     value
+}
+
+fn const_function_literal_cache_find(expr_index: i32) -> i32 {
+    let mut node_ptr: i32 = load_i32(CONST_FN_LITERAL_CACHE_HEAD_OFFSET);
+    while node_ptr > 0 {
+        let stored_expr: i32 = load_i32(node_ptr + WORD_SIZE);
+        if stored_expr == expr_index {
+            return load_i32(node_ptr + 2 * WORD_SIZE);
+        }
+        node_ptr = load_i32(node_ptr);
+    };
+    -1
+}
+
+fn const_function_literal_cache_record(
+    ast_base: i32,
+    expr_index: i32,
+    function_index: i32,
+    signature_ptr: i32,
+    body_expr_index: i32,
+) -> i32 {
+    let entry_ptr: i32 = ast_call_data_alloc(ast_base, CONST_FN_LITERAL_CACHE_ENTRY_WORDS);
+    if entry_ptr < 0 {
+        return -1;
+    }
+    store_i32(entry_ptr, load_i32(CONST_FN_LITERAL_CACHE_HEAD_OFFSET));
+    store_i32(entry_ptr + WORD_SIZE, expr_index);
+    store_i32(entry_ptr + 2 * WORD_SIZE, function_index);
+    store_i32(entry_ptr + 3 * WORD_SIZE, signature_ptr);
+    store_i32(entry_ptr + 4 * WORD_SIZE, body_expr_index);
+    store_i32(CONST_FN_LITERAL_CACHE_HEAD_OFFSET, entry_ptr);
+    let previous_count: i32 = load_i32(CONST_FN_LITERAL_CACHE_COUNT_OFFSET);
+    store_i32(CONST_FN_LITERAL_CACHE_COUNT_OFFSET, previous_count + 1);
+    function_index
+}
+
+fn const_function_literal_body_expr(ast_base: i32, expr_index: i32) -> i32 {
+    let body_count: i32 = ast_anon_function_body_expr_count(ast_base, expr_index);
+    if body_count <= 0 {
+        return -1;
+    }
+    ast_anon_function_body_expr_index(ast_base, expr_index, body_count - 1)
+}
+
+fn const_function_literal_create(
+    ast_base: i32,
+    expr_index: i32,
+    signature_ptr: i32,
+    function_type_id: i32,
+    body_expr_index: i32,
+) -> i32 {
+    if !type_id_is_function(function_type_id) {
+        return -1;
+    }
+    let param_count: i32 = ast_anon_function_param_count(ast_base, expr_index);
+    if param_count < 0 {
+        return -1;
+    }
+    let param_types_ptr: i32 = ast_anon_function_signature_param_types_ptr(signature_ptr);
+    if param_count > 0 {
+        if param_types_ptr <= 0 {
+            return -1;
+        }
+    }
+    let const_params_ptr: i32 = ast_anon_function_const_params_ptr(ast_base, expr_index);
+    let signature_flags: i32 = ast_anon_function_signature_flags(signature_ptr);
+    let return_type_id: i32 = ast_anon_function_signature_return_type(signature_ptr);
+    if return_type_id < 0 {
+        return -1;
+    }
+    if body_expr_index < 0 {
+        return -1;
+    }
+    let current_count: i32 = ast_functions_count(ast_base);
+    if current_count < 0 {
+        return -1;
+    }
+    if current_count >= AST_MAX_FUNCTIONS {
+        return -1;
+    }
+    let params_metadata_ptr: i32 = ast_anon_function_signature_params_ptr(signature_ptr);
+    let mut name_ptr: i32 = 0;
+    let mut name_len: i32 = 0;
+    let mut literal_start: i32 = ast_anon_function_location(ast_base, expr_index);
+    let mut type_template_handles_ptr: i32 = 0;
+    if params_metadata_ptr > 0 {
+        name_ptr = load_i32(params_metadata_ptr);
+        name_len = load_i32(params_metadata_ptr + WORD_SIZE);
+        let stored_start: i32 = load_i32(params_metadata_ptr + 2 * WORD_SIZE);
+        if stored_start >= 0 {
+            literal_start = stored_start;
+        }
+        let stored_handles: i32 = load_i32(params_metadata_ptr + 4 * WORD_SIZE);
+        if stored_handles > 0 {
+            type_template_handles_ptr = stored_handles;
+        }
+    }
+    if literal_start < 0 {
+        literal_start = 0;
+    }
+    let mut flags: i32 = signature_flags & FUNCTION_FLAG_IMPLICIT_UNIT_RETURN;
+    if const_params_ptr > 0 {
+        flags = flags | FUNCTION_FLAG_HAS_CONST_PARAMS;
+    }
+    let param_types_field: i32 = if param_count > 0 { param_types_ptr } else { -1 };
+    let const_params_field: i32 = if const_params_ptr > 0 { const_params_ptr } else { 0 };
+    ast_write_function_entry(
+        ast_base,
+        current_count,
+        name_ptr,
+        name_len,
+        param_count,
+        2,
+        body_expr_index,
+        0,
+        param_types_field,
+        return_type_id,
+        flags,
+        const_params_field,
+        type_template_handles_ptr,
+        0,
+        0,
+        -1,
+        literal_start,
+        0,
+        0,
+    );
+    ast_function_set_template_owner_index(ast_base, current_count, 0);
+    ast_functions_set_count(ast_base, current_count + 1);
+    current_count
+}
+
+fn const_function_literal_intern(
+    ast_base: i32,
+    expr_index: i32,
+    signature_ptr: i32,
+    function_type_id: i32,
+) -> i32 {
+    let existing_index: i32 = const_function_literal_cache_find(expr_index);
+    if existing_index >= 0 {
+        return existing_index;
+    }
+    let body_expr_index: i32 = const_function_literal_body_expr(ast_base, expr_index);
+    if body_expr_index < 0 {
+        return -1;
+    }
+    let created_index: i32 = const_function_literal_create(
+        ast_base,
+        expr_index,
+        signature_ptr,
+        function_type_id,
+        body_expr_index,
+    );
+    if created_index < 0 {
+        return -1;
+    }
+    const_function_literal_cache_record(
+        ast_base,
+        expr_index,
+        created_index,
+        signature_ptr,
+        body_expr_index,
+    )
 }
 
 fn evaluate_integer_binary_operation(
@@ -355,6 +520,32 @@ fn interpret_constant_expression(
         }
         store_i32(out_value_ptr, value);
         store_i32(out_type_ptr, value_type);
+        store_i32(scratch_top_ptr, saved_top);
+        return CONST_EVAL_STATUS_OK;
+    }
+    if kind == 49 {
+        let signature_ptr: i32 = ast_anon_function_signature_ptr(ast_base, expr_index);
+        if signature_ptr <= 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        }
+        let function_type_id: i32 = ast_expr_type(ast_base, expr_index);
+        if function_type_id < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        }
+        let function_index: i32 = const_function_literal_intern(
+            ast_base,
+            expr_index,
+            signature_ptr,
+            function_type_id,
+        );
+        if function_index < 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        }
+        store_i32(out_value_ptr, function_index);
+        store_i32(out_type_ptr, function_type_id);
         store_i32(scratch_top_ptr, saved_top);
         return CONST_EVAL_STATUS_OK;
     }
@@ -1813,6 +2004,10 @@ fn interpret_constant_expression(
         if call_type >= 0 && result_type >= 0 {
             if call_type != result_type {
                 if has_const_params {
+                    ast_expr_set_type(ast_base, expr_index, result_type);
+                } else if type_id_is_function(call_type)
+                    && type_id_is_function(result_type)
+                {
                     ast_expr_set_type(ast_base, expr_index, result_type);
                 } else {
                     store_i32(scratch_top_ptr, saved_top);
