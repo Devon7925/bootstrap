@@ -35,13 +35,31 @@ test("evaluates inline anonymous function via const parameter", async () => {
   expect(result).toBe(22);
 });
 
-test.todo("const fn factories can return anonymous functions", async () => {
+test.todo("const fn factories can return anonymous functions with const parameters", async () => {
   const wasm = await compileWithAstCompiler(`
-    const fn make_incrementer() -> fn(const x: i32) -> i32 {
+    const fn make_incrementer() -> fn(const i32) -> i32 {
         fn(const x: i32) -> i32 { x + 1 }
     }
 
-    fn apply(const F: fn(const input: i32) -> i32, value: i32) -> i32 {
+    fn apply(const F: fn(const i32) -> i32, const value: i32) -> i32 {
+        F(value)
+    }
+
+    fn main() -> i32 {
+        apply(make_incrementer(), 41)
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(42);
+});
+
+test.todo("const fn factories can return anonymous functions without const parameters", async () => {
+  const wasm = await compileWithAstCompiler(`
+    const fn make_incrementer() -> fn(i32) -> i32 {
+        fn(const x: i32) -> i32 { x + 1 }
+    }
+
+    fn apply(const F: fn(i32) -> i32, value: i32) -> i32 {
         F(value)
     }
 
