@@ -54,8 +54,8 @@ fn skip_whitespace(base: i32, len: i32, offset: i32) -> i32 {
                     idx = idx + 2;
                     while idx < len {
                         let comment_byte: i32 = load_u8(base + idx);
-                        if comment_byte == '\n' {
-                            idx = idx + 1;
+                        if is_line_terminator(comment_byte) {
+                            idx = skip_line_terminator(base, len, idx);
                             break;
                         }
                         idx = idx + 1;
@@ -70,6 +70,74 @@ fn skip_whitespace(base: i32, len: i32, offset: i32) -> i32 {
         idx = idx + 1;
     };
     idx
+}
+
+fn is_line_terminator(byte: i32) -> bool {
+    byte == '\n' || byte == '\r'
+}
+
+fn skip_line_terminator(base: i32, len: i32, offset: i32) -> i32 {
+    if offset >= len {
+        return offset;
+    }
+    if base <= 0 {
+        return offset + 1;
+    }
+    let byte: i32 = load_u8(base + offset);
+    if byte == '\r' {
+        let mut next_offset: i32 = offset + 1;
+        if next_offset < len {
+            let next_byte: i32 = load_u8(base + next_offset);
+            if next_byte == '\n' {
+                next_offset = next_offset + 1;
+            }
+        }
+        return next_offset;
+    }
+    if byte == '\n' {
+        return offset + 1;
+    }
+    offset + 1
+}
+
+fn compute_line_and_column(base: i32, len: i32, offset: i32) -> (i32, i32) {
+    if base < 0 {
+        return (0, 0);
+    }
+    if len <= 0 {
+        return (0, 0);
+    }
+    if offset < 0 {
+        return (0, 0);
+    }
+    let mut line: i32 = 1;
+    let mut column: i32 = 1;
+    let mut idx: i32 = 0;
+    let limit: i32 = if offset > len { len } else { offset };
+    while idx < limit {
+        let byte: i32 = load_u8(base + idx);
+        if byte == '\r' {
+            line = line + 1;
+            column = 1;
+            idx = idx + 1;
+            if idx < limit {
+                let next_byte: i32 = load_u8(base + idx);
+                if next_byte == '\n' {
+                    idx = idx + 1;
+                }
+            }
+            continue;
+        }
+        if byte == '\n' {
+            line = line + 1;
+            column = 1;
+            idx = idx + 1;
+            continue;
+        }
+        column = column + 1;
+        idx = idx + 1;
+    };
+    (line, column)
 }
 
 fn expect_char(base: i32, len: i32, offset: i32, expected: i32) -> i32 {
