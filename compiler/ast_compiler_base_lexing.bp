@@ -990,6 +990,50 @@ fn expect_keyword_let(base: i32, len: i32, offset: i32) -> i32 {
     expect_keyword_literal(base, len, offset, 3, "let")
 }
 
+// Scans for an optional leading `const` qualifier at `cursor`, enforcing the
+// parser's whitespace and repetition rules. Returns the position where type or
+// identifier parsing should resume, whether a qualifier was consumed, and
+// whether an error occurred. When `require_identifier_follow` is `true`, a
+// non-identifier character after `const` will abort the scan without consuming
+// the qualifier so declarations like `const_value` remain valid identifiers.
+fn scan_const_qualifier(
+    base: i32,
+    len: i32,
+    cursor: i32,
+    require_identifier_follow: bool,
+) -> (i32, bool, bool) {
+    if cursor < 0 {
+        return (cursor, false, true);
+    }
+    let mut qualifier_cursor: i32 = cursor;
+    let mut found_const: bool = false;
+    loop {
+        let maybe_const_cursor: i32 = expect_keyword_const(base, len, qualifier_cursor);
+        if maybe_const_cursor < 0 {
+            break;
+        }
+        let after_const_cursor: i32 = skip_whitespace(base, len, maybe_const_cursor);
+        if after_const_cursor == maybe_const_cursor {
+            break;
+        }
+        if after_const_cursor >= len {
+            return (qualifier_cursor, found_const, true);
+        }
+        if found_const {
+            return (qualifier_cursor, found_const, true);
+        }
+        if require_identifier_follow {
+            let after_const_byte: i32 = load_u8(base + after_const_cursor);
+            if !is_identifier_start(after_const_byte) {
+                break;
+            }
+        }
+        found_const = true;
+        qualifier_cursor = after_const_cursor;
+    };
+    (qualifier_cursor, found_const, false)
+}
+
 const MAX_LOCALS: i32 = 512;
 
 const LOCALS_ENTRY_SIZE: i32 = 20;
@@ -3835,27 +3879,17 @@ fn parse_type(
                     if param_count >= MAX_PARAMS {
                         return -1;
                     }
-                    let mut param_is_const: bool = false;
-                    let mut qualifier_cursor: i32 = cursor;
-                    loop {
-                        let maybe_const_cursor: i32 = expect_keyword_const(base, len, qualifier_cursor);
-                        if maybe_const_cursor < 0 {
-                            break;
-                        }
-                        let after_const_cursor: i32 = skip_whitespace(base, len, maybe_const_cursor);
-                        if after_const_cursor == maybe_const_cursor {
-                            break;
-                        }
-                        if after_const_cursor >= len {
-                            return -1;
-                        }
-                        if param_is_const {
-                            return -1;
-                        }
-                        param_is_const = true;
-                        qualifier_cursor = after_const_cursor;
-                    };
-                    let mut type_cursor_start: i32 = qualifier_cursor;
+                    let qualifier_scan: (i32, bool, bool) = scan_const_qualifier(
+                        base,
+                        len,
+                        cursor,
+                        false,
+                    );
+                    if qualifier_scan.2 {
+                        return -1;
+                    }
+                    let param_is_const: bool = qualifier_scan.1;
+                    let mut type_cursor_start: i32 = qualifier_scan.0;
                     if type_cursor_start >= len {
                         return -1;
                     }

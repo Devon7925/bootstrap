@@ -500,31 +500,17 @@ fn parse_param_list(
         if param_count >= MAX_PARAMS {
             return (-1, 0, 0, false);
         }
-        let mut param_is_const: bool = false;
-        let mut qualifier_cursor: i32 = param_cursor;
-        loop {
-            let maybe_const_cursor: i32 = expect_keyword_const(base, len, qualifier_cursor);
-            if maybe_const_cursor < 0 {
-                break;
-            }
-            let after_const_cursor: i32 = skip_whitespace(base, len, maybe_const_cursor);
-            if after_const_cursor == maybe_const_cursor {
-                break;
-            }
-            if after_const_cursor >= len {
-                return (-1, 0, 0, false);
-            }
-            let after_const_byte: i32 = load_u8(base + after_const_cursor);
-            if !is_identifier_start(after_const_byte) {
-                break;
-            }
-            if param_is_const {
-                return (-1, 0, 0, false);
-            }
-            param_is_const = true;
-            qualifier_cursor = after_const_cursor;
-        };
-        param_cursor = qualifier_cursor;
+        let qualifier_scan: (i32, bool, bool) = scan_const_qualifier(
+            base,
+            len,
+            param_cursor,
+            true,
+        );
+        if qualifier_scan.2 {
+            return (-1, 0, 0, false);
+        }
+        let param_is_const: bool = qualifier_scan.1;
+        param_cursor = qualifier_scan.0;
         let param_ident: IdentifierParse = parse_identifier(base, len, param_cursor);
         param_cursor = param_ident.cursor;
         if param_cursor < 0 {
