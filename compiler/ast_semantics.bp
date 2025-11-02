@@ -935,16 +935,21 @@ fn store_call_failure_location(
     if location_offset < 0 {
         return false;
     }
+    let mut module_index: i32 = scratch_module_index(out_ptr);
     let mut module_base: i32 = scratch_module_base(out_ptr);
     let mut module_len: i32 = scratch_module_len(out_ptr);
     if caller_func_index >= 0 {
         let func_base: i32 = ast_function_entry_module_base(ast_base, caller_func_index);
         let func_len: i32 = ast_function_entry_module_len(ast_base, caller_func_index);
+        let func_index: i32 = ast_function_entry_module_index(ast_base, caller_func_index);
         if func_base > 0 {
             module_base = func_base;
         }
         if func_len > 0 {
             module_len = func_len;
+        }
+        if func_index >= 0 {
+            module_index = func_index;
         }
     }
     if module_base <= 0 {
@@ -958,8 +963,12 @@ fn store_call_failure_location(
     } else {
         location_offset
     };
-    let location: (i32, i32) =
-        compute_line_and_column(module_base, module_len, effective_offset);
+    let location: (i32, i32) = compute_line_and_column_for_module(
+        module_index,
+        module_base,
+        module_len,
+        effective_offset,
+    );
     let line: i32 = location.0;
     let column: i32 = location.1;
     if line <= 0 {
@@ -971,7 +980,6 @@ fn store_call_failure_location(
     let mut path_ptr: i32 = scratch_failure_path_ptr(out_ptr);
     let mut path_len: i32 = scratch_failure_path_len(out_ptr);
     if path_ptr <= 0 || path_len <= 0 {
-        let module_index: i32 = scratch_module_index(out_ptr);
         if module_index >= 0 {
             let entry_path_ptr: i32 = module_entry_path(module_index);
             let entry_path_len: i32 = module_entry_path_len(module_index);

@@ -47,8 +47,12 @@ fn prepare_module_prefixed_failure_detail(
     if path_len > FAILURE_DETAIL_CAPACITY {
         return false;
     }
-    let location: (i32, i32) =
-        compute_line_and_column(effective_base, effective_len, location_offset);
+    let location: (i32, i32) = compute_line_and_column_for_module(
+        effective_index,
+        effective_base,
+        effective_len,
+        location_offset,
+    );
     let line: i32 = location.0;
     let column: i32 = location.1;
     if line <= 0 || column <= 0 {
@@ -195,6 +199,7 @@ fn write_decimal_to_buffer(
 
 fn synthesize_anon_function_name(
     ast_base: i32,
+    module_index: i32,
     module_base: i32,
     module_len: i32,
     location_offset: i32,
@@ -219,7 +224,12 @@ fn synthesize_anon_function_name(
         write_offset = write_offset + 1;
         prefix_idx = prefix_idx + 1;
     };
-    let location: (i32, i32) = compute_line_and_column(module_base, module_len, location_offset);
+    let location: (i32, i32) = compute_line_and_column_for_module(
+        module_index,
+        module_base,
+        module_len,
+        location_offset,
+    );
     let mut line: i32 = location.0;
     let mut column: i32 = location.1;
     if line <= 0 {
@@ -1654,6 +1664,7 @@ fn parse_basic_expression(
             store_i32(name_len_ptr, 0);
             let name_ptr: i32 = synthesize_anon_function_name(
                 ast_base,
+                current_module_index,
                 base,
                 len,
                 literal_start,

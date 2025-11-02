@@ -147,7 +147,7 @@ fn skip_block_comment(base: i32, len: i32, offset: i32) -> i32 {
     len
 }
 
-fn compute_line_and_column(base: i32, len: i32, offset: i32) -> (i32, i32) {
+fn compute_line_and_column_fallback(base: i32, len: i32, offset: i32) -> (i32, i32) {
     if base < 0 {
         return (0, 0);
     }
@@ -185,6 +185,75 @@ fn compute_line_and_column(base: i32, len: i32, offset: i32) -> (i32, i32) {
         idx = idx + 1;
     };
     (line, column)
+}
+
+fn compute_line_and_column_for_module(
+    module_index: i32,
+    base: i32,
+    len: i32,
+    offset: i32,
+) -> (i32, i32) {
+    if base < 0 {
+        return (0, 0);
+    }
+    if len <= 0 {
+        return (0, 0);
+    }
+    if offset < 0 {
+        return (0, 0);
+    }
+    let limit: i32 = if offset > len { len } else { offset };
+    let mut resolved_index: i32 = module_index;
+    if resolved_index >= 0 {
+        let entry_base: i32 = module_entry_content(resolved_index);
+        if entry_base != base && base > 0 {
+            resolved_index = module_find_index_by_content_ptr(base);
+        }
+    } else if base > 0 {
+        resolved_index = module_find_index_by_content_ptr(base);
+    }
+    if resolved_index >= 0 {
+        let line_index_ptr: i32 = module_ensure_line_index(resolved_index);
+        if line_index_ptr > 0 {
+            let line_count: i32 = module_line_index_count(line_index_ptr);
+            if line_count > 0 {
+                if line_count > len + 1 {
+                    return compute_line_and_column_fallback(base, len, offset);
+                }
+                let data_ptr: i32 = module_line_index_data(line_index_ptr);
+                if data_ptr <= 0 {
+                    return compute_line_and_column_fallback(base, len, offset);
+                }
+                let mut low: i32 = 0;
+                let mut high: i32 = line_count - 1;
+                let mut chosen: i32 = 0;
+                while low <= high {
+                    let mid: i32 = (low + high) >> 1;
+                    let start: i32 = load_i32(data_ptr + mid * WORD_SIZE);
+                    if start <= limit {
+                        chosen = mid;
+                        low = mid + 1;
+                    } else {
+                        high = mid - 1;
+                    }
+                };
+                let line_start: i32 = load_i32(data_ptr + chosen * WORD_SIZE);
+                if line_start < 0 || line_start > len {
+                    return compute_line_and_column_fallback(base, len, offset);
+                }
+                let mut column: i32 = limit - line_start + 1;
+                if column <= 0 {
+                    column = 1;
+                }
+                return (chosen + 1, column);
+            }
+        }
+    }
+    compute_line_and_column_fallback(base, len, offset)
+}
+
+fn compute_line_and_column(base: i32, len: i32, offset: i32) -> (i32, i32) {
+    compute_line_and_column_for_module(-1, base, len, offset)
 }
 
 fn expect_char(base: i32, len: i32, offset: i32, expected: i32) -> i32 {

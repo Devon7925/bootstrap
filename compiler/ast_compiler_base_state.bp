@@ -90,7 +90,21 @@ const MODULE_TABLE_OFFSET: i32 = 8;
 
 const MODULE_MAX_COUNT: i32 = 256;
 
-const MODULE_ENTRY_SIZE: i32 = 20;
+const MODULE_ENTRY_FIELD_COUNT: i32 = 6;
+
+const MODULE_ENTRY_SIZE: i32 = MODULE_ENTRY_FIELD_COUNT * WORD_SIZE;
+
+const MODULE_ENTRY_PATH_PTR_FIELD: i32 = 0;
+
+const MODULE_ENTRY_PATH_LEN_FIELD: i32 = 1;
+
+const MODULE_ENTRY_CONTENT_PTR_FIELD: i32 = 2;
+
+const MODULE_ENTRY_CONTENT_LEN_FIELD: i32 = 3;
+
+const MODULE_ENTRY_LINE_INDEX_FIELD: i32 = 4;
+
+const MODULE_ENTRY_FLAGS_FIELD: i32 = 5;
 
 const MODULE_FLAG_IMPORTED: i32 = 1;
 
@@ -98,7 +112,6 @@ const MODULE_FLAG_IMPORTING: i32 = 2;
 
 const MODULE_PATH_MAX_LENGTH: i32 = 1024;
 
-const MODULE_ENTRY_FIELD_COUNT: i32 = 5;
 
 const MODULE_CONTENT_BASE_OFFSET: i32 = MODULE_TABLE_OFFSET + MODULE_MAX_COUNT * MODULE_ENTRY_SIZE;
 
@@ -135,22 +148,21 @@ fn module_entry_field(index: i32, field: i32) -> i32 {
     load_i32(entry_ptr + field * WORD_SIZE)
 }
 
+fn module_entry_set_field(index: i32, field: i32, value: i32) -> i32 {
+    if field < 0 || field >= MODULE_ENTRY_FIELD_COUNT {
+        return 0;
+    }
+    let entry_ptr: i32 = module_entry_ptr(index);
+    store_i32(entry_ptr + field * WORD_SIZE, value);
+    0
+}
+
 fn module_entry_flags(index: i32) -> i32 {
-    module_entry_field(index, 4)
+    module_entry_field(index, MODULE_ENTRY_FLAGS_FIELD)
 }
 
 fn module_entry_set_flags(index: i32, flags: i32) {
-    module_entry_store(
-        index,
-        MODULE_ENTRY_FIELD_COUNT,
-        [
-            module_entry_field(index, 0),
-            module_entry_field(index, 1),
-            module_entry_field(index, 2),
-            module_entry_field(index, 3),
-            flags,
-        ],
-    );
+    module_entry_set_field(index, MODULE_ENTRY_FLAGS_FIELD, flags);
 }
 
 fn module_clear_flags() {
@@ -228,9 +240,9 @@ fn module_find_index(path_ptr: i32, path_len: i32) -> i32 {
     }
     let mut index: i32 = 0;
     while index < count {
-        let stored_len: i32 = module_entry_field(index, 1);
+        let stored_len: i32 = module_entry_field(index, MODULE_ENTRY_PATH_LEN_FIELD);
         if stored_len == path_len {
-            let stored_ptr: i32 = module_entry_field(index, 0);
+            let stored_ptr: i32 = module_entry_field(index, MODULE_ENTRY_PATH_PTR_FIELD);
             if stored_ptr > 0 && memory_equal(stored_ptr, path_ptr, path_len) {
                 return index;
             }
@@ -259,23 +271,161 @@ fn module_find_index_by_content_ptr(content_ptr: i32) -> i32 {
 }
 
 fn module_entry_path(index: i32) -> i32 {
-    module_entry_field(index, 0)
+    module_entry_field(index, MODULE_ENTRY_PATH_PTR_FIELD)
 }
 
 fn module_entry_path_len(index: i32) -> i32 {
-    module_entry_field(index, 1)
+    module_entry_field(index, MODULE_ENTRY_PATH_LEN_FIELD)
 }
 
 fn module_entry_content(index: i32) -> i32 {
-    module_entry_field(index, 2)
+    module_entry_field(index, MODULE_ENTRY_CONTENT_PTR_FIELD)
 }
 
 fn module_entry_content_len(index: i32) -> i32 {
-    module_entry_field(index, 3)
+    module_entry_field(index, MODULE_ENTRY_CONTENT_LEN_FIELD)
 }
 
 fn module_write_entry(index: i32, path_ptr: i32, path_len: i32, content_ptr: i32, content_len: i32) {
-    module_entry_store(index, MODULE_ENTRY_FIELD_COUNT, [path_ptr, path_len, content_ptr, content_len, 0]);
+    module_entry_store(
+        index,
+        MODULE_ENTRY_FIELD_COUNT,
+        [path_ptr, path_len, content_ptr, content_len, 0, 0],
+    );
+    if content_ptr > 0 {
+        if content_len >= 0 {
+            module_build_line_index(index, content_ptr, content_len);
+        }
+    }
+}
+
+fn module_entry_line_index(index: i32) -> i32 {
+    module_entry_field(index, MODULE_ENTRY_LINE_INDEX_FIELD)
+}
+
+fn module_entry_set_line_index(index: i32, ptr: i32) {
+    module_entry_set_field(index, MODULE_ENTRY_LINE_INDEX_FIELD, ptr);
+}
+
+fn module_line_index_count(ptr: i32) -> i32 {
+    if ptr <= 0 {
+        return 0;
+    }
+    load_i32(ptr)
+}
+
+fn module_line_index_source_len(ptr: i32) -> i32 {
+    if ptr <= 0 {
+        return 0;
+    }
+    load_i32(ptr + WORD_SIZE)
+}
+
+fn module_line_index_data(ptr: i32) -> i32 {
+    if ptr <= 0 {
+        return 0;
+    }
+    ptr + WORD_SIZE * 2
+}
+
+fn module_build_line_index(index: i32, content_ptr: i32, content_len: i32) -> i32 {
+    if index < 0 {
+        return 0;
+    }
+    let mut line_count: i32 = 1;
+    if content_ptr > 0 && content_len > 0 {
+        let mut scan_idx: i32 = 0;
+        while scan_idx < content_len {
+            let byte: i32 = load_u8(content_ptr + scan_idx);
+            if byte == '\r' {
+                scan_idx = scan_idx + 1;
+                if scan_idx < content_len {
+                    let next_byte: i32 = load_u8(content_ptr + scan_idx);
+                    if next_byte == '\n' {
+                        scan_idx = scan_idx + 1;
+                    }
+                }
+                line_count = line_count + 1;
+                continue;
+            }
+            if byte == '\n' {
+                scan_idx = scan_idx + 1;
+                line_count = line_count + 1;
+                continue;
+            }
+            scan_idx = scan_idx + 1;
+        };
+    }
+    let total_words: i32 = line_count + 2;
+    let allocation_bytes: i32 = total_words * WORD_SIZE;
+    let table_ptr: i32 = module_allocate_bytes(allocation_bytes);
+    if table_ptr <= 0 {
+        return 0;
+    }
+    store_i32(table_ptr, line_count);
+    store_i32(table_ptr + WORD_SIZE, content_len);
+    let data_ptr: i32 = table_ptr + WORD_SIZE * 2;
+    store_i32(data_ptr, 0);
+    if content_ptr > 0 && content_len > 0 {
+        let mut scan_idx: i32 = 0;
+        let mut entry_idx: i32 = 1;
+        while scan_idx < content_len && entry_idx < line_count {
+            let byte: i32 = load_u8(content_ptr + scan_idx);
+            if byte == '\r' {
+                scan_idx = scan_idx + 1;
+                if scan_idx < content_len {
+                    let next_byte: i32 = load_u8(content_ptr + scan_idx);
+                    if next_byte == '\n' {
+                        scan_idx = scan_idx + 1;
+                    }
+                }
+                store_i32(data_ptr + entry_idx * WORD_SIZE, scan_idx);
+                entry_idx = entry_idx + 1;
+                continue;
+            }
+            if byte == '\n' {
+                scan_idx = scan_idx + 1;
+                store_i32(data_ptr + entry_idx * WORD_SIZE, scan_idx);
+                entry_idx = entry_idx + 1;
+                continue;
+            }
+            scan_idx = scan_idx + 1;
+        };
+        while entry_idx < line_count {
+            store_i32(data_ptr + entry_idx * WORD_SIZE, content_len);
+            entry_idx = entry_idx + 1;
+        };
+    } else {
+        let mut entry_idx: i32 = 1;
+        while entry_idx < line_count {
+            store_i32(data_ptr + entry_idx * WORD_SIZE, 0);
+            entry_idx = entry_idx + 1;
+        };
+    }
+    module_entry_set_line_index(index, table_ptr);
+    table_ptr
+}
+
+fn module_ensure_line_index(index: i32) -> i32 {
+    if index < 0 {
+        return 0;
+    }
+    let content_ptr: i32 = module_entry_content(index);
+    let content_len: i32 = module_entry_content_len(index);
+    if content_ptr <= 0 {
+        return 0;
+    }
+    if content_len < 0 {
+        return 0;
+    }
+    let existing_ptr: i32 = module_entry_line_index(index);
+    if existing_ptr > 0 {
+        let stored_len: i32 = module_line_index_source_len(existing_ptr);
+        if stored_len == content_len {
+            return existing_ptr;
+        }
+    }
+    module_build_line_index(index, content_ptr, content_len)
 }
 
 fn scratch_instr_offset_ptr(out_ptr: i32) -> i32 {
