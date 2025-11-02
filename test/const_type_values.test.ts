@@ -134,7 +134,7 @@ test("nested const type functions support conditional selection", async () => {
 });
 
 test("cyclic const type aliases report metadata diagnostics", async () => {
-    const failure = await expectCompileFailure(`
+  const failure = await expectCompileFailure(`
     const First: type = (Second,);
     const Second: type = [First; 1];
 
@@ -142,7 +142,7 @@ test("cyclic const type aliases report metadata diagnostics", async () => {
         0
     }
   `);
-    expect(failure.failure.detail).toBe(
-        "type metadata resolution failed",
-    );
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:2:25: const initializer has cyclic dependency",
+  );
 });

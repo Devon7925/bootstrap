@@ -22,6 +22,16 @@ const SCRATCH_FAILURE_COLUMN_OFFSET: i32 = 4060;
 const SCRATCH_FAILURE_CHARACTER_OFFSET: i32 = 4064;
 
 const SCRATCH_FAILURE_OFFSET_OFFSET: i32 = 4068;
+
+const SCRATCH_AST_BASE_OFFSET: i32 = 4072;
+
+const SCRATCH_INPUT_LEN_OFFSET: i32 = 4076;
+
+const CONST_EVAL_STEP_DIVISION_BY_ZERO: i32 = 901;
+
+const CONST_EVAL_STEP_MODULO_BY_ZERO: i32 = 902;
+
+const CONST_EVAL_STEP_CONST_CYCLE: i32 = 950;
 const CONST_ARRAY_DEBUG_EXPR_TYPE_OFFSET: i32 = 5000;
 const CONST_ARRAY_DEBUG_ELEMENT_TYPE_OFFSET: i32 = 5004;
 const CONST_ARRAY_DEBUG_ENV_COUNT_OFFSET: i32 = 5008;
@@ -514,6 +524,30 @@ fn scratch_failure_character(out_ptr: i32) -> i32 {
 
 fn scratch_failure_offset(out_ptr: i32) -> i32 {
     load_i32(scratch_failure_offset_ptr(out_ptr))
+}
+
+fn scratch_ast_base_ptr(out_ptr: i32) -> i32 {
+    out_ptr + SCRATCH_AST_BASE_OFFSET
+}
+
+fn scratch_input_len_ptr(out_ptr: i32) -> i32 {
+    out_ptr + SCRATCH_INPUT_LEN_OFFSET
+}
+
+fn scratch_ast_base(out_ptr: i32) -> i32 {
+    load_i32(scratch_ast_base_ptr(out_ptr))
+}
+
+fn scratch_set_ast_base(out_ptr: i32, value: i32) {
+    if out_ptr > 0 {
+        store_i32(scratch_ast_base_ptr(out_ptr), value);
+    }
+}
+
+fn scratch_set_input_len(out_ptr: i32, value: i32) {
+    if out_ptr > 0 {
+        store_i32(scratch_input_len_ptr(out_ptr), value);
+    }
 }
 
 fn scratch_module_base_ptr(out_ptr: i32) -> i32 {
@@ -4878,15 +4912,41 @@ fn record_type_metadata_debug(out_ptr: i32, context: i32, subject: i32, extra: i
 }
 
 fn record_type_metadata_failure(out_ptr: i32) {
-    record_type_metadata_debug(out_ptr, 255, 0, 0);
     let scratch_base: i32 = if out_ptr > 0 { out_ptr } else { 0 };
-    let failure_count_ptr: i32 = scratch_base + SCRATCH_TYPE_METADATA_DEBUG_FAILURE_COUNT_OFFSET;
-    let current: i32 = load_i32(failure_count_ptr);
-    store_i32(failure_count_ptr, current + 1);
+    let existing_context: i32 = if scratch_base > 0 {
+        load_i32(scratch_base + SCRATCH_TYPE_METADATA_DEBUG_CONTEXT_OFFSET)
+    } else {
+        0
+    };
+    let existing_subject: i32 = if scratch_base > 0 {
+        load_i32(scratch_base + SCRATCH_TYPE_METADATA_DEBUG_SUBJECT_OFFSET)
+    } else {
+        0
+    };
+    let existing_extra: i32 = if scratch_base > 0 {
+        load_i32(scratch_base + SCRATCH_TYPE_METADATA_DEBUG_EXTRA_OFFSET)
+    } else {
+        0
+    };
+    record_type_metadata_debug(out_ptr, 255, 0, 0);
+    if scratch_base > 0 {
+        let failure_count_ptr: i32 =
+            scratch_base + SCRATCH_TYPE_METADATA_DEBUG_FAILURE_COUNT_OFFSET;
+        let current: i32 = load_i32(failure_count_ptr);
+        store_i32(failure_count_ptr, current + 1);
+    }
     if out_ptr > 0 {
-        if load_u8(out_ptr) == 0 {
-            let message: [u8; 31] = "type metadata resolution failed";
-            write_failure_detail(out_ptr, 31, message);
+        if failure_detail_is_empty(out_ptr) {
+            let recorded: bool = try_write_type_metadata_failure_detail(
+                out_ptr,
+                existing_context,
+                existing_subject,
+                existing_extra,
+            );
+            if !recorded {
+                let message: [u8; 31] = "type metadata resolution failed";
+                write_failure_detail(out_ptr, 31, message);
+            }
         }
     }
 }
@@ -4900,6 +4960,225 @@ fn record_type_metadata_failure_with_debug(
     record_type_metadata_debug(out_ptr, context, subject, extra);
     record_type_metadata_failure(out_ptr);
     -1
+}
+
+fn record_type_metadata_failure_with_fallback(
+    out_ptr: i32,
+    context: i32,
+    subject: i32,
+    extra: i32,
+) -> i32 {
+    if out_ptr > 0 {
+        let scratch_base: i32 = out_ptr;
+        let current_context: i32 =
+            load_i32(scratch_base + SCRATCH_TYPE_METADATA_DEBUG_CONTEXT_OFFSET);
+        if current_context == 0 || current_context == 255 {
+            record_type_metadata_debug(out_ptr, context, subject, extra);
+        }
+    }
+    record_type_metadata_failure(out_ptr);
+    -1
+}
+
+fn try_write_type_metadata_failure_detail(
+    out_ptr: i32,
+    context: i32,
+    subject: i32,
+    extra: i32,
+) -> bool {
+    if out_ptr <= 0 {
+        return false;
+    }
+    if context == 200 {
+        return try_write_const_eval_failure_detail(out_ptr, subject, extra);
+    }
+    if context == 300 {
+        return try_write_const_type_failure_detail(out_ptr, subject);
+    }
+    false
+}
+
+fn try_write_const_eval_failure_detail(
+    out_ptr: i32,
+    const_index: i32,
+    entry_ptr_hint: i32,
+) -> bool {
+    if out_ptr <= 0 {
+        return false;
+    }
+    let ast_base: i32 = scratch_ast_base(out_ptr);
+    if ast_base <= 0 {
+        return false;
+    }
+    let mut const_entry_ptr: i32 = entry_ptr_hint;
+    if const_entry_ptr <= 0 {
+        if const_index < 0 {
+            return false;
+        }
+        let total: i32 = ast_constants_count(ast_base);
+        if const_index < 0 || const_index >= total {
+            return false;
+        }
+        const_entry_ptr = ast_constant_entry_ptr(ast_base, const_index);
+    }
+    if const_entry_ptr <= 0 {
+        return false;
+    }
+    let expr_index: i32 = ast_constant_entry_expr_index(const_entry_ptr);
+    let mut location_offset: i32 = -1;
+    if expr_index >= 0 {
+        location_offset = ast_expr_location(ast_base, expr_index);
+    }
+    if location_offset < 0 {
+        location_offset = ast_constant_entry_name_start(const_entry_ptr);
+    }
+    if location_offset < 0 {
+        return false;
+    }
+    let module_index: i32 = ast_constant_entry_module_index(const_entry_ptr);
+    let mut module_base: i32 = 0;
+    let mut module_len: i32 = 0;
+    if module_index >= 0 {
+        module_base = module_entry_content(module_index);
+        module_len = module_entry_content_len(module_index);
+    } else {
+        module_base = scratch_module_base(out_ptr);
+        module_len = scratch_module_len(out_ptr);
+    }
+    let resolved: (i32, i32, i32) = resolve_failure_module_context(
+        out_ptr,
+        module_index,
+        module_base,
+        module_len,
+    );
+    let resolved_index: i32 = resolved.0;
+    let resolved_base: i32 = resolved.1;
+    let resolved_len: i32 = resolved.2;
+    let step: i32 = load_i32(CONST_EVAL_DEBUG_STEP_OFFSET);
+    let kind: i32 = load_i32(CONST_EVAL_DEBUG_KIND_OFFSET);
+    if step == CONST_EVAL_STEP_DIVISION_BY_ZERO {
+        let message: [u8; 33] = "const expression division by zero";
+        write_failure_detail_with_location(
+            out_ptr,
+            resolved_index,
+            resolved_base,
+            resolved_len,
+            location_offset,
+            33,
+            message,
+        );
+        return true;
+    }
+    if step == CONST_EVAL_STEP_MODULO_BY_ZERO {
+        let message: [u8; 31] = "const expression modulo by zero";
+        write_failure_detail_with_location(
+            out_ptr,
+            resolved_index,
+            resolved_base,
+            resolved_len,
+            location_offset,
+            31,
+            message,
+        );
+        return true;
+    }
+    if step == CONST_EVAL_STEP_CONST_CYCLE {
+        let message: [u8; 39] = "const initializer has cyclic dependency";
+        write_failure_detail_with_location(
+            out_ptr,
+            resolved_index,
+            resolved_base,
+            resolved_len,
+            location_offset,
+            39,
+            message,
+        );
+        return true;
+    }
+    if kind == 49 {
+        let message: [u8; 59] =
+            "anonymous function literals cannot initialize constants yet";
+        write_failure_detail_with_location(
+            out_ptr,
+            resolved_index,
+            resolved_base,
+            resolved_len,
+            location_offset,
+            59,
+            message,
+        );
+        return true;
+    }
+    let message: [u8; 35] = "const initializer evaluation failed";
+    write_failure_detail_with_location(
+        out_ptr,
+        resolved_index,
+        resolved_base,
+        resolved_len,
+        location_offset,
+        35,
+        message,
+    );
+    true
+}
+
+fn try_write_const_type_failure_detail(
+    out_ptr: i32,
+    const_index: i32,
+) -> bool {
+    if out_ptr <= 0 {
+        return false;
+    }
+    if const_index < 0 {
+        return false;
+    }
+    let ast_base: i32 = scratch_ast_base(out_ptr);
+    if ast_base <= 0 {
+        return false;
+    }
+    let total: i32 = ast_constants_count(ast_base);
+    if const_index < 0 || const_index >= total {
+        return false;
+    }
+    let const_entry_ptr: i32 = ast_constant_entry_ptr(ast_base, const_index);
+    let expr_index: i32 = ast_constant_entry_expr_index(const_entry_ptr);
+    let mut location_offset: i32 = -1;
+    if expr_index >= 0 {
+        location_offset = ast_expr_location(ast_base, expr_index);
+    }
+    if location_offset < 0 {
+        location_offset = ast_constant_entry_name_start(const_entry_ptr);
+    }
+    if location_offset < 0 {
+        return false;
+    }
+    let module_index: i32 = ast_constant_entry_module_index(const_entry_ptr);
+    let mut module_base: i32 = 0;
+    let mut module_len: i32 = 0;
+    if module_index >= 0 {
+        module_base = module_entry_content(module_index);
+        module_len = module_entry_content_len(module_index);
+    } else {
+        module_base = scratch_module_base(out_ptr);
+        module_len = scratch_module_len(out_ptr);
+    }
+    let resolved: (i32, i32, i32) = resolve_failure_module_context(
+        out_ptr,
+        module_index,
+        module_base,
+        module_len,
+    );
+    let message: [u8; 37] = "const type metadata resolution failed";
+    write_failure_detail_with_location(
+        out_ptr,
+        resolved.0,
+        resolved.1,
+        resolved.2,
+        location_offset,
+        37,
+        message,
+    );
+    true
 }
 
 fn array_type_cached_id(ast_base: i32, index: i32) -> i32 {

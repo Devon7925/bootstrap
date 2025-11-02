@@ -115,7 +115,18 @@ test("const modulo by zero is rejected", async () => {
   const failure = await expectCompileFailure(`
     const VALUE: i32 = 10 % 0;
   `);
-  expect(failure.failure.detail).toBe("type metadata resolution failed");
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:2:24: const expression modulo by zero",
+  );
+});
+
+test("const division by zero is rejected", async () => {
+  const failure = await expectCompileFailure(`
+    const VALUE: i32 = 10 / 0;
+  `);
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:2:24: const expression division by zero",
+  );
 });
 
 test("const functions can be used in constant initializers", async () => {

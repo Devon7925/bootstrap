@@ -1,6 +1,12 @@
 use "./ast_compiler_base_lexing.bp";
 use "./utils.bp";
 
+const CONST_EVAL_DEBUG_EXPR_OFFSET: i32 = 5032;
+
+const CONST_EVAL_DEBUG_STEP_OFFSET: i32 = 5040;
+
+const CONST_EVAL_STEP_CONST_CYCLE: i32 = 950;
+
 fn identifiers_match(ptr_a: i32, len_a: i32, ptr_b: i32, len_b: i32) -> bool {
     if len_a != len_b {
         return false;
@@ -2651,6 +2657,11 @@ fn interpret_constant_entry(ast_base: i32, const_entry_ptr: i32) -> i32 {
         return 0;
     }
     if eval_state == AST_CONSTANT_EVAL_STATE_EVALUATING {
+        let expr_index_hint: i32 = ast_constant_entry_expr_index(const_entry_ptr);
+        if expr_index_hint >= 0 {
+            store_i32(CONST_EVAL_DEBUG_EXPR_OFFSET, expr_index_hint);
+        }
+        store_i32(CONST_EVAL_DEBUG_STEP_OFFSET, CONST_EVAL_STEP_CONST_CYCLE);
         return -1;
     }
     let expr_index: i32 = ast_constant_entry_expr_index(const_entry_ptr);

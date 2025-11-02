@@ -3,6 +3,12 @@ use "./ast_compiler_base_state.bp";
 
 const CONST_FN_LITERAL_CACHE_ENTRY_WORDS: i32 = 5;
 
+const CONST_EVAL_STEP_DIVISION_BY_ZERO: i32 = 901;
+
+const CONST_EVAL_STEP_MODULO_BY_ZERO: i32 = 902;
+
+const CONST_EVAL_STEP_CONST_CYCLE: i32 = 950;
+
 fn unsigned_divide_internal(dividend: i32, divisor: i32, return_remainder: bool) -> i32 {
     let mut quotient: i32 = 0;
     let mut remainder: i32 = 0;
@@ -416,6 +422,7 @@ fn evaluate_integer_binary_operation(
         computed = left_value * right_value;
     } else if kind == 5 {
         if right_value == 0 {
+            store_i32(CONST_EVAL_DEBUG_STEP_OFFSET, CONST_EVAL_STEP_DIVISION_BY_ZERO);
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         }
@@ -426,6 +433,7 @@ fn evaluate_integer_binary_operation(
         }
     } else if kind == 46 {
         if right_value == 0 {
+            store_i32(CONST_EVAL_DEBUG_STEP_OFFSET, CONST_EVAL_STEP_MODULO_BY_ZERO);
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         }
