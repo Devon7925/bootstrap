@@ -10,16 +10,15 @@ fn prepare_module_prefixed_failure_detail(
     location_offset: i32,
     message_len: i32,
 ) -> bool {
-    let mut effective_base: i32 = module_base;
-    let mut effective_len: i32 = module_len;
-    let mut effective_index: i32 = module_index;
-    if (effective_base < 0 || effective_len <= 0) && effective_index >= 0 {
-        effective_base = module_entry_content(effective_index);
-        effective_len = module_entry_content_len(effective_index);
-    }
-    if effective_index < 0 {
-        effective_index = module_find_index_by_content_ptr(effective_base);
-    }
+    let resolved: (i32, i32, i32) = resolve_failure_module_context(
+        detail_out_ptr,
+        module_index,
+        module_base,
+        module_len,
+    );
+    let effective_index: i32 = resolved.0;
+    let effective_base: i32 = resolved.1;
+    let effective_len: i32 = resolved.2;
     if effective_base < 0 {
         return false;
     }
@@ -80,15 +79,12 @@ fn prepare_module_prefixed_failure_detail(
         store_i32(scratch_failure_column_ptr(detail_out_ptr), column);
         store_i32(scratch_failure_character_ptr(detail_out_ptr), limited_offset + 1);
         store_i32(scratch_failure_offset_ptr(detail_out_ptr), limited_offset);
-        if effective_base > 0 {
-            store_i32(scratch_module_base_ptr(detail_out_ptr), effective_base);
-        }
-        if effective_len > 0 {
-            store_i32(scratch_module_len_ptr(detail_out_ptr), effective_len);
-        }
-        if effective_index >= 0 {
-            store_i32(scratch_module_index_ptr(detail_out_ptr), effective_index);
-        }
+        store_failure_module_context(
+            detail_out_ptr,
+            effective_index,
+            effective_base,
+            effective_len,
+        );
         if use_fallback_path {
             let mut prefix_idx: i32 = 0;
             while prefix_idx < path_len {
@@ -136,7 +132,7 @@ fn record_duplicate_param_failure(
 ) {
     let detail_out_ptr: i32 = ast_base - ast_output_reserve(input_len);
     if detail_out_ptr > 0 {
-        if load_u8(detail_out_ptr) == 0 {
+        if failure_detail_is_empty(detail_out_ptr) {
             let message: [u8; 24] = "duplicate parameter name";
             write_failure_detail_with_location(
                 detail_out_ptr,
@@ -607,7 +603,7 @@ fn parse_basic_expression(
             if if_cursor < 0 {
                 let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
                 if detail_out_ptr > 0 {
-                    if load_u8(detail_out_ptr) == 0 {
+                    if failure_detail_is_empty(detail_out_ptr) {
                         write_failure_detail_with_location(
                             detail_out_ptr,
                             scratch_module_index(detail_out_ptr),
@@ -838,7 +834,7 @@ fn parse_basic_expression(
                 if length < 0 {
                     let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
                     if detail_out_ptr > 0 {
-                        if load_u8(detail_out_ptr) == 0 {
+                        if failure_detail_is_empty(detail_out_ptr) {
                             write_failure_detail_with_location(
                                 detail_out_ptr,
                                 scratch_module_index(detail_out_ptr),
@@ -990,7 +986,7 @@ fn parse_basic_expression(
                     if length < 0 {
                         let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
                         if detail_out_ptr > 0 {
-                            if load_u8(detail_out_ptr) == 0 {
+                            if failure_detail_is_empty(detail_out_ptr) {
                                 write_failure_detail_with_location(
                                     detail_out_ptr,
                                     scratch_module_index(detail_out_ptr),
@@ -1012,7 +1008,7 @@ fn parse_basic_expression(
             if array_cursor < 0 {
                 let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
                 if detail_out_ptr > 0 {
-                    if load_u8(detail_out_ptr) == 0 {
+                    if failure_detail_is_empty(detail_out_ptr) {
                         write_failure_detail_with_location(
                             detail_out_ptr,
                             scratch_module_index(detail_out_ptr),
@@ -1432,7 +1428,7 @@ fn parse_basic_expression(
         if next_cursor < 0 {
             let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
             if detail_out_ptr > 0 {
-                if load_u8(detail_out_ptr) == 0 {
+                if failure_detail_is_empty(detail_out_ptr) {
                     write_failure_detail_with_location(
                         detail_out_ptr,
                         scratch_module_index(detail_out_ptr),
@@ -1872,7 +1868,7 @@ fn parse_basic_expression(
                     ) < 0 {
                         let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
                         if detail_out_ptr > 0 {
-                            if load_u8(detail_out_ptr) == 0 {
+                            if failure_detail_is_empty(detail_out_ptr) {
                                 write_failure_detail_with_location(
                                     detail_out_ptr,
                                     scratch_module_index(detail_out_ptr),
@@ -3768,7 +3764,7 @@ fn parse_function(
             ) {
                 let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
                 if detail_out_ptr > 0 {
-                    if load_u8(detail_out_ptr) == 0 {
+                    if failure_detail_is_empty(detail_out_ptr) {
                         let message: [u8; 37] = "function name conflicts with constant";
                         write_failure_detail_with_location(
                             detail_out_ptr,
@@ -4092,7 +4088,7 @@ fn parse_constant_declaration(
     if find_constant_entry_index(base, ast_base, name_start, name_len, false) >= 0 {
         let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
         if detail_out_ptr > 0 {
-            if load_u8(detail_out_ptr) == 0 {
+            if failure_detail_is_empty(detail_out_ptr) {
                 let message: [u8; 30] = "duplicate constant declaration";
                 write_failure_detail_with_location(
                     detail_out_ptr,
@@ -4128,7 +4124,7 @@ fn parse_constant_declaration(
             if matches {
                 let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
                 if detail_out_ptr > 0 {
-                    if load_u8(detail_out_ptr) == 0 {
+                    if failure_detail_is_empty(detail_out_ptr) {
                         let message: [u8; 30] = "duplicate function declaration";
                         write_failure_detail_with_location(
                             detail_out_ptr,
@@ -4585,7 +4581,7 @@ fn parse_use_declaration(
     if import_index < 0 {
         let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
         if detail_out_ptr > 0 {
-            if load_u8(detail_out_ptr) == 0 {
+            if failure_detail_is_empty(detail_out_ptr) {
                 let message: [u8; 23] = "module import not found";
                 write_failure_detail_with_location(
                     detail_out_ptr,
@@ -4672,7 +4668,7 @@ fn parse_program(
         if count >= AST_MAX_FUNCTIONS {
             let detail_out_ptr: i32 = ast_base - ast_output_reserve(len);
             if detail_out_ptr > 0 {
-                if load_u8(detail_out_ptr) == 0 {
+                if failure_detail_is_empty(detail_out_ptr) {
                     let message: [u8; 23] = "function limit exceeded";
                     write_failure_detail_with_location(
                         detail_out_ptr,

@@ -539,6 +539,91 @@ fn scratch_module_index(out_ptr: i32) -> i32 {
     load_i32(scratch_module_index_ptr(out_ptr))
 }
 
+fn failure_detail_is_empty(out_ptr: i32) -> bool {
+    if out_ptr <= 0 {
+        return false;
+    }
+    load_u8(out_ptr) == 0
+}
+
+fn store_failure_module_context(
+    out_ptr: i32,
+    module_index: i32,
+    module_base: i32,
+    module_len: i32,
+) {
+    if out_ptr > 0 {
+        if module_base > 0 {
+            store_i32(scratch_module_base_ptr(out_ptr), module_base);
+        }
+        if module_len > 0 {
+            store_i32(scratch_module_len_ptr(out_ptr), module_len);
+        }
+        if module_index >= 0 {
+            store_i32(scratch_module_index_ptr(out_ptr), module_index);
+        }
+    }
+}
+
+fn resolve_failure_module_context(
+    out_ptr: i32,
+    module_index: i32,
+    module_base: i32,
+    module_len: i32,
+) -> (i32, i32, i32) {
+    let mut resolved_index: i32 = module_index;
+    let mut resolved_base: i32 = module_base;
+    let mut resolved_len: i32 = module_len;
+    if out_ptr > 0 {
+        if resolved_index < 0 {
+            let scratch_index: i32 = scratch_module_index(out_ptr);
+            if scratch_index >= 0 {
+                resolved_index = scratch_index;
+            }
+        }
+        if resolved_base <= 0 {
+            let scratch_base: i32 = scratch_module_base(out_ptr);
+            if scratch_base > 0 {
+                resolved_base = scratch_base;
+            }
+        }
+        if resolved_len <= 0 {
+            let scratch_len: i32 = scratch_module_len(out_ptr);
+            if scratch_len > 0 {
+                resolved_len = scratch_len;
+            }
+        }
+    }
+    if resolved_index >= 0 {
+        if resolved_base <= 0 {
+            let entry_base: i32 = module_entry_content(resolved_index);
+            if entry_base > 0 {
+                resolved_base = entry_base;
+            }
+        }
+        if resolved_len <= 0 {
+            let entry_len: i32 = module_entry_content_len(resolved_index);
+            if entry_len > 0 {
+                resolved_len = entry_len;
+            }
+        }
+    } else if resolved_base > 0 {
+        let inferred_index: i32 = module_find_index_by_content_ptr(resolved_base);
+        if inferred_index >= 0 {
+            resolved_index = inferred_index;
+            let entry_base: i32 = module_entry_content(inferred_index);
+            if entry_base > 0 {
+                resolved_base = entry_base;
+            }
+            let entry_len: i32 = module_entry_content_len(inferred_index);
+            if entry_len > 0 {
+                resolved_len = entry_len;
+            }
+        }
+    }
+    (resolved_index, resolved_base, resolved_len)
+}
+
 fn scratch_fn_count_ptr(out_ptr: i32) -> i32 {
     out_ptr + SCRATCH_FN_COUNT_OFFSET
 }

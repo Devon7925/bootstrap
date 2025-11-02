@@ -13,9 +13,10 @@ fn compile_impl(
 ) -> i32 {
     initialize_layout(out_ptr);
     record_type_metadata_debug(out_ptr, 0, 0, 0);
-    store_i32(scratch_module_base_ptr(out_ptr), input_ptr);
-    store_i32(scratch_module_len_ptr(out_ptr), input_len);
-    store_i32(scratch_module_index_ptr(out_ptr), current_module_index);
+    store_failure_module_context(out_ptr, current_module_index, input_ptr, input_len);
+    if out_ptr > 0 {
+        store_i32(scratch_module_index_ptr(out_ptr), current_module_index);
+    }
     let ast_base: i32 = ast_program_base(out_ptr, input_len);
     ast_reset(ast_base);
 
@@ -30,30 +31,28 @@ fn compile_impl(
         if ast_constants_count(ast_base) > 0 {
             return record_type_metadata_failure_with_debug(out_ptr, 99, 0, 0);
         }
-        if out_ptr > 0 {
-            if load_u8(out_ptr) == 0 {
-                let message: [u8; 21] = "parsing source failed";
-                write_failure_detail_with_location(
-                    out_ptr,
-                    current_module_index,
-                    input_ptr,
-                    input_len,
-                    0,
-                    21,
-                    message,
-                );
-            }
+        if failure_detail_is_empty(out_ptr) {
+            let message: [u8; 21] = "parsing source failed";
+            write_failure_detail_with_location(
+                out_ptr,
+                current_module_index,
+                input_ptr,
+                input_len,
+                0,
+                21,
+                message,
+            );
         }
         return -1;
     }
     if interpret_program_constants(out_ptr, ast_base, func_count) < 0 {
-        if out_ptr > 0 && load_u8(out_ptr) != 0 {
+        if out_ptr > 0 && !failure_detail_is_empty(out_ptr) {
             return -1;
         }
         return record_type_metadata_failure_with_debug(out_ptr, 100, 0, 0);
     }
     if validate_program(out_ptr, ast_base, func_count) < 0 {
-        if out_ptr > 0 && load_u8(out_ptr) != 0 {
+        if out_ptr > 0 && !failure_detail_is_empty(out_ptr) {
             return -1;
         }
         return record_type_metadata_failure_with_debug(out_ptr, 101, 0, 0);
@@ -267,7 +266,7 @@ fn compileFromPath(path_ptr: i32) -> i32 {
     let status: i32 = compile_impl(input_ptr, input_len, out_ptr, index);
     if status <= 0 {
         if out_ptr > 0 {
-            if load_u8(out_ptr) == 0 {
+            if failure_detail_is_empty(out_ptr) {
                 let message: [u8; 25] = "module compilation failed";
                 write_failure_detail_with_location(
                     out_ptr,
