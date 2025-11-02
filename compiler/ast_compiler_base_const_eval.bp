@@ -3,7 +3,7 @@ use "./ast_compiler_base_state.bp";
 
 const CONST_FN_LITERAL_CACHE_ENTRY_WORDS: i32 = 5;
 
-fn unsigned_divide(dividend: i32, divisor: i32) -> i32 {
+fn unsigned_divide_internal(dividend: i32, divisor: i32, return_remainder: bool) -> i32 {
     let mut quotient: i32 = 0;
     let mut remainder: i32 = 0;
     let mut shift: i32 = 31;
@@ -20,7 +20,15 @@ fn unsigned_divide(dividend: i32, divisor: i32) -> i32 {
         }
         shift = shift - 1;
     };
-    quotient
+    if return_remainder { remainder } else { quotient }
+}
+
+fn unsigned_divide(dividend: i32, divisor: i32) -> i32 {
+    unsigned_divide_internal(dividend, divisor, false)
+}
+
+fn unsigned_remainder(dividend: i32, divisor: i32) -> i32 {
+    unsigned_divide_internal(dividend, divisor, true)
 }
 
 fn constant_value_requires_deep_copy(type_id: i32) -> bool {
@@ -415,6 +423,16 @@ fn evaluate_integer_binary_operation(
             computed = left_value / right_value;
         } else {
             computed = unsigned_divide(left_value, right_value);
+        }
+    } else if kind == 46 {
+        if right_value == 0 {
+            store_i32(scratch_top_ptr, saved_top);
+            return -1;
+        }
+        if type_id_is_signed_integer(target_type) {
+            computed = left_value % right_value;
+        } else {
+            computed = unsigned_remainder(left_value, right_value);
         }
     } else if kind == 25 {
         computed = left_value | right_value;
@@ -2489,6 +2507,7 @@ fn interpret_constant_expression(
         || kind == 3
         || kind == 4
         || kind == 5
+        || kind == 46
         || kind == 14
         || kind == 15
         || kind == 16

@@ -72,6 +72,52 @@ test("non-const function calls in constant initializers are rejected", async () 
   );
 });
 
+test("const modulo expressions support signed operands", async () => {
+  const wasm = await compileWithAstCompiler(`
+    const POSITIVE: i32 = 42 % 5;
+    const NEGATIVE: i32 = -42 % 5;
+    const MIXED_SIGN: i32 = 42 % -5;
+
+    fn main() -> i32 {
+        let mut score: i32 = 0;
+        if POSITIVE == 2 {
+            score = score + 1;
+        };
+        if NEGATIVE == -2 {
+            score = score + 10;
+        };
+        if MIXED_SIGN == 2 {
+            score = score + 100;
+        };
+        score
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(111);
+});
+
+test("const modulo expressions support unsigned operands", async () => {
+  const wasm = await compileWithAstCompiler(`
+    const LARGE: u32 = 4_000_000_005;
+    const STEP: u32 = 3_000_000_002;
+    const REM: u32 = LARGE % STEP;
+    const TARGET: u32 = 1_000_000_003;
+
+    fn main() -> i32 {
+        if REM == TARGET { 1 } else { 0 }
+    }
+  `);
+  const result = await runWasmMainWithGc(wasm);
+  expect(result).toBe(1);
+});
+
+test("const modulo by zero is rejected", async () => {
+  const failure = await expectCompileFailure(`
+    const VALUE: i32 = 10 % 0;
+  `);
+  expect(failure.failure.detail).toBe("type metadata resolution failed");
+});
+
 test("const functions can be used in constant initializers", async () => {
   const wasm = await compileWithAstCompiler(`
     const fn add(a: i32, b: i32) -> i32 {
