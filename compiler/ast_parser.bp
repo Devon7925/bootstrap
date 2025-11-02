@@ -1,4 +1,5 @@
 use "./ast_compiler_base_lexing.bp";
+use "./utils.bp";
 
 const DOC_STRING_BUFFER_CAPACITY: i32 = 4096;
 
@@ -162,35 +163,16 @@ fn write_decimal_to_buffer(
     if offset < 0 {
         return -1;
     }
-    let digits_len: i32 = decimal_length(value);
-    if digits_len <= 0 {
+    let result: (i32, bool) = write_decimal_digits_with_capacity(
+        buffer_ptr,
+        buffer_capacity,
+        offset,
+        value,
+    );
+    if result.1 {
         return -1;
     }
-    if offset + digits_len > buffer_capacity {
-        return -1;
-    }
-    let mut divisor: i32 = 1;
-    let mut divisor_idx: i32 = 1;
-    while divisor_idx < digits_len {
-        divisor = divisor * 10;
-        divisor_idx = divisor_idx + 1;
-    };
-    let mut remaining: i32 = if value <= 0 { 0 } else { value };
-    let mut write_offset: i32 = offset;
-    let mut written: i32 = 0;
-    while written < digits_len {
-        let digit: i32 = remaining / divisor;
-        store_u8(buffer_ptr + write_offset, digit + '0');
-        write_offset = write_offset + 1;
-        remaining = remaining - digit * divisor;
-        if divisor <= 1 {
-            divisor = 1;
-        } else {
-            divisor = divisor / 10;
-        }
-        written = written + 1;
-    };
-    write_offset
+    result.0
 }
 
 fn synthesize_anon_function_name(

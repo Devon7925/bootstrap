@@ -1,4 +1,5 @@
 use "./ast_compiler_base_lexing.bp";
+use "./utils.bp";
 
 const WORD_SIZE: i32 = 4;
 
@@ -682,48 +683,13 @@ const AST_CONSTANTS_SECTION_WORDS: i32 = AST_CONSTANTS_SECTION_SIZE >> 2;
 
 const AST_CALL_DATA_CAPACITY: i32 = 131072 - AST_CONSTANTS_SECTION_WORDS;
 
-fn decimal_length(value: i32) -> i32 {
-    if value <= 0 {
-        return 1;
-    }
-    let mut digits: i32 = 0;
-    let mut remaining: i32 = value;
-    while remaining > 0 {
-        digits = digits + 1;
-        remaining = remaining / 10;
-    };
-    digits
-}
-
 fn append_decimal_component(detail_out_ptr: i32, write_offset: i32, value: i32) -> (i32, bool) {
-    let mut offset: i32 = write_offset;
-    let mut truncated: bool = false;
-    let digits_len: i32 = decimal_length(value);
-    let mut divisor: i32 = 1;
-    let mut divisor_idx: i32 = 1;
-    while divisor_idx < digits_len {
-        divisor = divisor * 10;
-        divisor_idx = divisor_idx + 1;
-    };
-    let mut remaining: i32 = if value <= 0 { 0 } else { value };
-    let mut written: i32 = 0;
-    while written < digits_len {
-        if offset >= FAILURE_DETAIL_CAPACITY {
-            truncated = true;
-            break;
-        }
-        let digit: i32 = remaining / divisor;
-        store_u8(detail_out_ptr + offset, digit + '0');
-        offset = offset + 1;
-        remaining = remaining - digit * divisor;
-        written = written + 1;
-        if divisor <= 1 {
-            divisor = 1;
-        } else {
-            divisor = divisor / 10;
-        }
-    };
-    (offset, truncated)
+    write_decimal_digits_with_capacity(
+        detail_out_ptr,
+        FAILURE_DETAIL_CAPACITY,
+        write_offset,
+        value,
+    )
 }
 
 fn write_failure_detail_suffix(
