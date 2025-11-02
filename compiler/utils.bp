@@ -73,3 +73,77 @@ fn align_to(value: i32, alignment: i32) -> i32 {
 fn is_whitespace(byte: i32) -> bool {
     byte == ' ' || byte == '\t' || byte == '\n' || byte == '\r'
 }
+
+fn decimal_length(value: i32) -> i32 {
+    if value <= 0 {
+        return 1;
+    }
+    let mut digits: i32 = 0;
+    let mut remaining: i32 = value;
+    while remaining > 0 {
+        digits = digits + 1;
+        remaining = remaining / 10;
+    };
+    digits
+}
+
+fn write_decimal_digits_with_capacity(
+    base: i32,
+    capacity: i32,
+    offset: i32,
+    value: i32,
+) -> (i32, bool) {
+    if base <= 0 {
+        return (offset, true);
+    }
+    if capacity <= 0 {
+        return (offset, true);
+    }
+    if offset < 0 {
+        return (offset, true);
+    }
+    let digits_len: i32 = decimal_length(value);
+    let mut divisor: i32 = 1;
+    let mut divisor_idx: i32 = 1;
+    while divisor_idx < digits_len {
+        divisor = divisor * 10;
+        divisor_idx = divisor_idx + 1;
+    };
+    let mut next_offset: i32 = offset;
+    let mut remaining: i32 = if value <= 0 { 0 } else { value };
+    let mut written: i32 = 0;
+    let mut truncated: bool = false;
+    while written < digits_len {
+        if next_offset >= capacity {
+            truncated = true;
+            break;
+        }
+        let digit: i32 = remaining / divisor;
+        store_u8(base + next_offset, digit + '0');
+        next_offset = next_offset + 1;
+        remaining = remaining - digit * divisor;
+        if divisor <= 1 {
+            divisor = 1;
+        } else {
+            divisor = divisor / 10;
+        }
+        written = written + 1;
+    };
+    if written < digits_len {
+        truncated = true;
+    }
+    (next_offset, truncated)
+}
+
+fn write_decimal_digits(base: i32, offset: i32, value: i32) -> i32 {
+    let digits_len: i32 = decimal_length(value);
+    if digits_len <= 0 {
+        return offset;
+    }
+    let capacity: i32 = offset + digits_len;
+    if capacity <= offset {
+        return offset;
+    }
+    let result: (i32, bool) = write_decimal_digits_with_capacity(base, capacity, offset, value);
+    result.0
+}
