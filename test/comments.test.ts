@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 
-import { compileWithAstCompiler, runWasmMainWithGc } from "./helpers";
+import {
+  compileWithAstCompiler,
+  expectCompileFailure,
+  runWasmMainWithGc,
+} from "./helpers";
 
 test("block comments are skipped during lexing", async () => {
   const wasm = await compileWithAstCompiler(`
@@ -22,4 +26,28 @@ test("nested block comments are supported", async () => {
   `);
   const result = await runWasmMainWithGc(wasm);
   expect(result).toBe(42);
+});
+
+test("unterminated block comments report failures", async () => {
+  const failure = await expectCompileFailure(`
+    /* comment start
+    fn main() -> i32 {
+        42
+    }
+  `);
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:2:5: unterminated block comment",
+  );
+});
+
+test("stray block comment terminators report failures", async () => {
+  const failure = await expectCompileFailure(`
+    fn main() -> i32 {
+        */
+        42
+    }
+  `);
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:3:9: unexpected block comment terminator",
+  );
 });
