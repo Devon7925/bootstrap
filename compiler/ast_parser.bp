@@ -3841,18 +3841,8 @@ fn parse_function(
                 return -1;
             }
             cursor = skip_whitespace(base, len, cursor);
-            let mut combined_len: i32 = 0;
-            if doc_string_len > 0 {
-                if doc_string_len >= DOC_STRING_BUFFER_CAPACITY {
-                    return -1;
-                }
-                let mut copy_idx: i32 = 0;
-                while copy_idx < doc_string_len {
-                    let byte: i32 = load_u8(doc_string_ptr + copy_idx);
-                    store_u8(doc_buffer_ptr + copy_idx, byte);
-                    copy_idx = copy_idx + 1;
-                };
-                combined_len = doc_string_len;
+            let mut combined_len: i32 = doc_string_len;
+            if combined_len > 0 {
                 if combined_len >= DOC_STRING_BUFFER_CAPACITY {
                     return -1;
                 }
@@ -3880,10 +3870,6 @@ fn parse_function(
                 return -1;
             }
             let total_len: i32 = combined_len + literal_len;
-            doc_string_ptr = ast_store_name(ast_base, doc_buffer_ptr, 0, total_len);
-            if doc_string_ptr < 0 {
-                return -1;
-            }
             doc_string_len = total_len;
             cursor = skip_whitespace(base, len, literal_cursor);
         } else {
@@ -3895,6 +3881,12 @@ fn parse_function(
         }
         cursor = cursor + 1;
     };
+    if doc_string_len > 0 {
+        doc_string_ptr = ast_store_name(ast_base, doc_buffer_ptr, 0, doc_string_len);
+        if doc_string_ptr < 0 {
+            return -1;
+        }
+    }
     cursor = skip_whitespace(base, len, cursor);
     let mut is_const_fn: bool = false;
     let mut maybe_const: i32 = expect_keyword_const(base, len, cursor);
