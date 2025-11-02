@@ -31,6 +31,42 @@ fn unsigned_remainder(dividend: i32, divisor: i32) -> i32 {
     unsigned_divide_internal(dividend, divisor, true)
 }
 
+fn const_eval_prepare_slot(scratch_base: i32, scratch_top_ptr: i32) -> (i32, i32, i32) {
+    let offset: i32 = load_i32(scratch_top_ptr);
+    let value_ptr: i32 = scratch_base + offset;
+    let type_ptr: i32 = value_ptr + WORD_SIZE;
+    store_i32(scratch_top_ptr, offset + 2 * WORD_SIZE);
+    (value_ptr, type_ptr, offset)
+}
+
+fn const_eval_release_slot(scratch_top_ptr: i32, offset: i32) {
+    store_i32(scratch_top_ptr, offset);
+}
+
+fn const_eval_interpret_expression(
+    ast_base: i32,
+    expr_index: i32,
+    scratch_base: i32,
+    scratch_top_ptr: i32,
+    param_values_ptr: i32,
+    param_count: i32,
+    env_values_count: i32,
+) -> (i32, i32, i32, i32) {
+    let slot: (i32, i32, i32) = const_eval_prepare_slot(scratch_base, scratch_top_ptr);
+    let status: i32 = interpret_constant_expression(
+        ast_base,
+        expr_index,
+        scratch_base,
+        scratch_top_ptr,
+        slot.0,
+        slot.1,
+        param_values_ptr,
+        param_count,
+        env_values_count,
+    );
+    (status, slot.0, slot.1, slot.2)
+}
+
 fn constant_value_requires_deep_copy(type_id: i32) -> bool {
     if type_id < 0 {
         return false;
@@ -280,21 +316,16 @@ fn evaluate_integer_binary_operation(
 ) -> i32 {
     let left_index: i32 = load_i32(entry_ptr + 4);
     let right_index: i32 = load_i32(entry_ptr + 8);
-    let left_offset: i32 = load_i32(scratch_top_ptr);
-    let left_value_ptr: i32 = scratch_base + left_offset;
-    let left_type_ptr: i32 = left_value_ptr + WORD_SIZE;
-    store_i32(scratch_top_ptr, left_offset + 2 * WORD_SIZE);
-    let left_status: i32 = interpret_constant_expression(
+    let left_result: (i32, i32, i32, i32) = const_eval_interpret_expression(
         ast_base,
         left_index,
         scratch_base,
         scratch_top_ptr,
-        left_value_ptr,
-        left_type_ptr,
         param_values_ptr,
         param_count,
         env_values_count,
     );
+    let left_status: i32 = left_result.0;
     if left_status < 0 {
         store_i32(scratch_top_ptr, saved_top);
         return -1;
@@ -303,21 +334,16 @@ fn evaluate_integer_binary_operation(
         store_i32(scratch_top_ptr, saved_top);
         return left_status;
     }
-    let right_offset: i32 = load_i32(scratch_top_ptr);
-    let right_value_ptr: i32 = scratch_base + right_offset;
-    let right_type_ptr: i32 = right_value_ptr + WORD_SIZE;
-    store_i32(scratch_top_ptr, right_offset + 2 * WORD_SIZE);
-    let right_status: i32 = interpret_constant_expression(
+    let right_result: (i32, i32, i32, i32) = const_eval_interpret_expression(
         ast_base,
         right_index,
         scratch_base,
         scratch_top_ptr,
-        right_value_ptr,
-        right_type_ptr,
         param_values_ptr,
         param_count,
         env_values_count,
     );
+    let right_status: i32 = right_result.0;
     if right_status < 0 {
         store_i32(scratch_top_ptr, saved_top);
         return -1;
@@ -326,8 +352,8 @@ fn evaluate_integer_binary_operation(
         store_i32(scratch_top_ptr, saved_top);
         return right_status;
     }
-    let left_type: i32 = load_i32(left_type_ptr);
-    let right_type: i32 = load_i32(right_type_ptr);
+    let left_type: i32 = load_i32(left_result.2);
+    let right_type: i32 = load_i32(right_result.2);
     let is_comparison: bool = kind >= 14 && kind <= 19;
     let mut target_type: i32 = -1;
     if is_comparison {
@@ -362,8 +388,8 @@ fn evaluate_integer_binary_operation(
         }
         target_type = left_type;
     }
-    let left_value: i32 = normalize_integer_value(load_i32(left_value_ptr), target_type);
-    let right_value: i32 = normalize_integer_value(load_i32(right_value_ptr), target_type);
+    let left_value: i32 = normalize_integer_value(load_i32(left_result.1), target_type);
+    let right_value: i32 = normalize_integer_value(load_i32(right_result.1), target_type);
     if is_comparison {
         let mut bool_result: i32 = 0;
         if kind == 14 {
@@ -583,21 +609,16 @@ fn interpret_constant_expression(
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         }
-        let cond_offset: i32 = load_i32(scratch_top_ptr);
-        let cond_value_ptr: i32 = scratch_base + cond_offset;
-        let cond_type_ptr: i32 = cond_value_ptr + 4;
-        store_i32(scratch_top_ptr, cond_offset + 8);
-        let cond_status: i32 = interpret_constant_expression(
+        let cond_result: (i32, i32, i32, i32) = const_eval_interpret_expression(
             ast_base,
             condition_index,
             scratch_base,
             scratch_top_ptr,
-            cond_value_ptr,
-            cond_type_ptr,
             param_values_ptr,
             param_count,
             env_values_count,
         );
+        let cond_status: i32 = cond_result.0;
         if cond_status < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
@@ -606,12 +627,12 @@ fn interpret_constant_expression(
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         }
-        if load_i32(cond_type_ptr) != BUILTIN_TYPE_ID_BOOL {
+        if load_i32(cond_result.2) != BUILTIN_TYPE_ID_BOOL {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         }
-        let cond_bool: i32 = if load_i32(cond_value_ptr) != 0 { 1 } else { 0 };
-        store_i32(scratch_top_ptr, cond_offset);
+        let cond_bool: i32 = if load_i32(cond_result.1) != 0 { 1 } else { 0 };
+        const_eval_release_slot(scratch_top_ptr, cond_result.3);
         let branch_index: i32 = if cond_bool != 0 { then_index } else { else_index };
         let branch_status: i32 = interpret_constant_expression(
             ast_base,
@@ -719,21 +740,16 @@ fn interpret_constant_expression(
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         }
-        let element_offset: i32 = load_i32(scratch_top_ptr);
-        let element_value_ptr: i32 = scratch_base + element_offset;
-        let element_type_ptr: i32 = element_value_ptr + 4;
-        store_i32(scratch_top_ptr, element_offset + 8);
-        let element_status: i32 = interpret_constant_expression(
+        let element_result: (i32, i32, i32, i32) = const_eval_interpret_expression(
             ast_base,
             element_index,
             scratch_base,
             scratch_top_ptr,
-            element_value_ptr,
-            element_type_ptr,
             param_values_ptr,
             param_count,
             env_values_count,
         );
+        let element_status: i32 = element_result.0;
         if element_status < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
@@ -742,6 +758,8 @@ fn interpret_constant_expression(
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         }
+        let element_value_ptr: i32 = element_result.1;
+        let element_type_ptr: i32 = element_result.2;
         let mut element_type: i32 = load_i32(element_type_ptr);
         let mut element_value: i32 = load_i32(element_value_ptr);
         let mut length: i32 = ast_expr_array_repeat_length(ast_base, expr_index);
@@ -752,21 +770,16 @@ fn interpret_constant_expression(
                 store_i32(scratch_top_ptr, saved_top);
                 return -1;
             }
-            let length_offset: i32 = load_i32(scratch_top_ptr);
-            let length_value_ptr: i32 = scratch_base + length_offset;
-            let length_type_ptr: i32 = length_value_ptr + 4;
-            store_i32(scratch_top_ptr, length_offset + 8);
-            let length_status: i32 = interpret_constant_expression(
+            let length_result: (i32, i32, i32, i32) = const_eval_interpret_expression(
                 ast_base,
                 length_expr_index,
                 scratch_base,
                 scratch_top_ptr,
-                length_value_ptr,
-                length_type_ptr,
                 param_values_ptr,
                 param_count,
                 env_values_count,
             );
+            let length_status: i32 = length_result.0;
             if length_status < 0 {
                 store_i32(scratch_top_ptr, saved_top);
                 return -1;
@@ -775,11 +788,13 @@ fn interpret_constant_expression(
                 store_i32(scratch_top_ptr, saved_top);
                 return -1;
             }
+            let length_type_ptr: i32 = length_result.2;
             let length_type: i32 = load_i32(length_type_ptr);
             if !constant_eval_integer_type_supported(length_type) {
                 store_i32(scratch_top_ptr, saved_top);
                 return -1;
             }
+            let length_value_ptr: i32 = length_result.1;
             let length_value: i32 = load_i32(length_value_ptr);
             let normalized_length: i32 =
                 normalize_integer_value(length_value, length_type);
@@ -788,12 +803,13 @@ fn interpret_constant_expression(
                 return -1;
             }
             length = normalized_length;
+            const_eval_release_slot(scratch_top_ptr, length_result.3);
         }
         if length < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         }
-        store_i32(scratch_top_ptr, element_offset);
+        const_eval_release_slot(scratch_top_ptr, element_result.3);
         let expr_result_type: i32 = ast_expr_type(ast_base, expr_index);
         store_i32(CONST_ARRAY_DEBUG_EXPR_TYPE_OFFSET, expr_result_type);
         store_i32(CONST_ARRAY_DEBUG_ELEMENT_TYPE_OFFSET, element_type);
@@ -938,22 +954,16 @@ fn interpret_constant_expression(
     if kind == 36 {
         let array_index: i32 = load_i32(entry_ptr + 4);
         let index_index: i32 = load_i32(entry_ptr + 8);
-        let array_offset: i32 = load_i32(scratch_top_ptr);
-        let array_value_ptr: i32 = scratch_base + array_offset;
-        let array_type_ptr: i32 = array_value_ptr + 4;
-        store_i32(scratch_top_ptr, array_offset + 8);
-        let array_status: i32 = interpret_constant_expression(
+        let array_result: (i32, i32, i32, i32) = const_eval_interpret_expression(
             ast_base,
             array_index,
             scratch_base,
             scratch_top_ptr,
-            array_value_ptr,
-            array_type_ptr,
             param_values_ptr,
             param_count,
             env_values_count,
         );
-        store_i32(scratch_top_ptr, array_offset);
+        let array_status: i32 = array_result.0;
         if array_status < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
@@ -962,7 +972,7 @@ fn interpret_constant_expression(
             store_i32(scratch_top_ptr, saved_top);
             return array_status;
         }
-        let array_type: i32 = load_i32(array_type_ptr);
+        let array_type: i32 = load_i32(array_result.2);
         if array_type < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
@@ -976,23 +986,24 @@ fn interpret_constant_expression(
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         }
-        let array_data_ptr: i32 = load_i32(array_value_ptr);
-        let index_offset: i32 = load_i32(scratch_top_ptr);
-        let index_value_ptr: i32 = scratch_base + index_offset;
-        let index_type_ptr: i32 = index_value_ptr + 4;
-        store_i32(scratch_top_ptr, index_offset + 8);
-        let index_status: i32 = interpret_constant_expression(
+        let array_data_ptr: i32 = load_i32(array_result.1);
+        if array_length > 0 {
+            if array_data_ptr <= 0 {
+                store_i32(scratch_top_ptr, saved_top);
+                return -1;
+            }
+        }
+        const_eval_release_slot(scratch_top_ptr, array_result.3);
+        let index_result: (i32, i32, i32, i32) = const_eval_interpret_expression(
             ast_base,
             index_index,
             scratch_base,
             scratch_top_ptr,
-            index_value_ptr,
-            index_type_ptr,
             param_values_ptr,
             param_count,
             env_values_count,
         );
-        store_i32(scratch_top_ptr, index_offset);
+        let index_status: i32 = index_result.0;
         if index_status < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
@@ -1001,12 +1012,12 @@ fn interpret_constant_expression(
             store_i32(scratch_top_ptr, saved_top);
             return index_status;
         }
-        let index_type: i32 = load_i32(index_type_ptr);
+        let index_type: i32 = load_i32(index_result.2);
         if index_type != BUILTIN_TYPE_ID_I32 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         }
-        let raw_index: i32 = load_i32(index_value_ptr);
+        let raw_index: i32 = load_i32(index_result.1);
         let normalized_index: i32 = normalize_integer_value(raw_index, index_type);
         if normalized_index < 0 {
             store_i32(scratch_top_ptr, saved_top);
@@ -1016,12 +1027,7 @@ fn interpret_constant_expression(
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         }
-        if array_length > 0 {
-            if array_data_ptr <= 0 {
-                store_i32(scratch_top_ptr, saved_top);
-                return -1;
-            }
-        }
+        const_eval_release_slot(scratch_top_ptr, index_result.3);
         let slot_ptr: i32 = array_data_ptr + normalized_index * 2 * WORD_SIZE;
         let element_value: i32 = load_i32(slot_ptr);
         let element_type: i32 = load_i32(slot_ptr + WORD_SIZE);
@@ -1059,21 +1065,16 @@ fn interpret_constant_expression(
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         }
-        let array_offset: i32 = load_i32(scratch_top_ptr);
-        let array_value_ptr: i32 = scratch_base + array_offset;
-        let array_type_ptr: i32 = array_value_ptr + 4;
-        store_i32(scratch_top_ptr, array_offset + 8);
-        let array_status: i32 = interpret_constant_expression(
+        let array_result: (i32, i32, i32, i32) = const_eval_interpret_expression(
             ast_base,
             array_index,
             scratch_base,
             scratch_top_ptr,
-            array_value_ptr,
-            array_type_ptr,
             param_values_ptr,
             param_count,
             env_values_count,
         );
+        let array_status: i32 = array_result.0;
         if array_status < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
@@ -1082,7 +1083,7 @@ fn interpret_constant_expression(
             store_i32(scratch_top_ptr, saved_top);
             return array_status;
         }
-        let array_type: i32 = load_i32(array_type_ptr);
+        let array_type: i32 = load_i32(array_result.2);
         if array_type < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
@@ -1096,30 +1097,24 @@ fn interpret_constant_expression(
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         }
-        let array_data_ptr: i32 = load_i32(array_value_ptr);
+        let array_data_ptr: i32 = load_i32(array_result.1);
         if array_length > 0 {
             if array_data_ptr <= 0 {
                 store_i32(scratch_top_ptr, saved_top);
                 return -1;
             }
         }
-        store_i32(scratch_top_ptr, array_offset);
-        let index_offset: i32 = load_i32(scratch_top_ptr);
-        let index_value_ptr: i32 = scratch_base + index_offset;
-        let index_type_ptr: i32 = index_value_ptr + 4;
-        store_i32(scratch_top_ptr, index_offset + 8);
-        let index_status: i32 = interpret_constant_expression(
+        const_eval_release_slot(scratch_top_ptr, array_result.3);
+        let index_result: (i32, i32, i32, i32) = const_eval_interpret_expression(
             ast_base,
             index_index,
             scratch_base,
             scratch_top_ptr,
-            index_value_ptr,
-            index_type_ptr,
             param_values_ptr,
             param_count,
             env_values_count,
         );
-        store_i32(scratch_top_ptr, index_offset);
+        let index_status: i32 = index_result.0;
         if index_status < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
@@ -1128,12 +1123,12 @@ fn interpret_constant_expression(
             store_i32(scratch_top_ptr, saved_top);
             return index_status;
         }
-        let index_type: i32 = load_i32(index_type_ptr);
+        let index_type: i32 = load_i32(index_result.2);
         if index_type != BUILTIN_TYPE_ID_I32 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         }
-        let raw_index: i32 = load_i32(index_value_ptr);
+        let raw_index: i32 = load_i32(index_result.1);
         let normalized_index: i32 = normalize_integer_value(raw_index, index_type);
         if normalized_index < 0 {
             store_i32(scratch_top_ptr, saved_top);
@@ -1143,21 +1138,17 @@ fn interpret_constant_expression(
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         }
-        let value_offset: i32 = load_i32(scratch_top_ptr);
-        let value_ptr: i32 = scratch_base + value_offset;
-        let value_type_ptr: i32 = value_ptr + 4;
-        store_i32(scratch_top_ptr, value_offset + 8);
-        let value_status: i32 = interpret_constant_expression(
+        const_eval_release_slot(scratch_top_ptr, index_result.3);
+        let value_result: (i32, i32, i32, i32) = const_eval_interpret_expression(
             ast_base,
             value_index,
             scratch_base,
             scratch_top_ptr,
-            value_ptr,
-            value_type_ptr,
             param_values_ptr,
             param_count,
             env_values_count,
         );
+        let value_status: i32 = value_result.0;
         if value_status < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
@@ -1166,9 +1157,9 @@ fn interpret_constant_expression(
             store_i32(scratch_top_ptr, saved_top);
             return value_status;
         }
-        let mut value_type: i32 = load_i32(value_type_ptr);
-        let mut value_value: i32 = load_i32(value_ptr);
-        store_i32(scratch_top_ptr, value_offset);
+        let mut value_type: i32 = load_i32(value_result.2);
+        let mut value_value: i32 = load_i32(value_result.1);
+        const_eval_release_slot(scratch_top_ptr, value_result.3);
         let expected_element: i32 = array_type_element_type(ast_base, array_type);
         if expected_element < 0 {
             store_i32(scratch_top_ptr, saved_top);
@@ -1177,7 +1168,7 @@ fn interpret_constant_expression(
         if value_type != expected_element {
             let converted_type: i32 = convert_constant_value(
                 ast_base,
-                value_ptr,
+                value_result.1,
                 value_type,
                 expected_element,
             );
@@ -1186,8 +1177,8 @@ fn interpret_constant_expression(
                 return -1;
             }
             value_type = converted_type;
-            value_value = load_i32(value_ptr);
-            store_i32(value_type_ptr, value_type);
+            value_value = load_i32(value_result.1);
+            store_i32(value_result.2, value_type);
         }
         let slot_ptr: i32 = array_data_ptr + normalized_index * 2 * WORD_SIZE;
         store_i32(slot_ptr, value_value);
@@ -2543,21 +2534,16 @@ fn interpret_constant_expression(
         }
         let left_index: i32 = load_i32(entry_ptr + 4);
         let right_index: i32 = load_i32(entry_ptr + 8);
-        let left_offset: i32 = load_i32(scratch_top_ptr);
-        let left_value_ptr: i32 = scratch_base + left_offset;
-        let left_type_ptr: i32 = left_value_ptr + 4;
-        store_i32(scratch_top_ptr, left_offset + 8);
-        let left_status: i32 = interpret_constant_expression(
+        let left_result: (i32, i32, i32, i32) = const_eval_interpret_expression(
             ast_base,
             left_index,
             scratch_base,
             scratch_top_ptr,
-            left_value_ptr,
-            left_type_ptr,
             param_values_ptr,
             param_count,
             env_values_count,
         );
+        let left_status: i32 = left_result.0;
         if left_status < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
@@ -2566,11 +2552,11 @@ fn interpret_constant_expression(
             store_i32(scratch_top_ptr, saved_top);
             return left_status;
         }
-        if load_i32(left_type_ptr) != BUILTIN_TYPE_ID_BOOL {
+        if load_i32(left_result.2) != BUILTIN_TYPE_ID_BOOL {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         }
-        let left_bool: i32 = if load_i32(left_value_ptr) != 0 { 1 } else { 0 };
+        let left_bool: i32 = if load_i32(left_result.1) != 0 { 1 } else { 0 };
         if kind == 20 {
             if left_bool != 0 {
                 store_i32(out_value_ptr, 1);
@@ -2586,21 +2572,16 @@ fn interpret_constant_expression(
                 return CONST_EVAL_STATUS_OK;
             }
         }
-        let right_offset: i32 = load_i32(scratch_top_ptr);
-        let right_value_ptr: i32 = scratch_base + right_offset;
-        let right_type_ptr: i32 = right_value_ptr + 4;
-        store_i32(scratch_top_ptr, right_offset + 8);
-        let right_status: i32 = interpret_constant_expression(
+        let right_result: (i32, i32, i32, i32) = const_eval_interpret_expression(
             ast_base,
             right_index,
             scratch_base,
             scratch_top_ptr,
-            right_value_ptr,
-            right_type_ptr,
             param_values_ptr,
             param_count,
             env_values_count,
         );
+        let right_status: i32 = right_result.0;
         if right_status < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
@@ -2609,11 +2590,11 @@ fn interpret_constant_expression(
             store_i32(scratch_top_ptr, saved_top);
             return right_status;
         }
-        if load_i32(right_type_ptr) != BUILTIN_TYPE_ID_BOOL {
+        if load_i32(right_result.2) != BUILTIN_TYPE_ID_BOOL {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         }
-        let right_bool: i32 = if load_i32(right_value_ptr) != 0 { 1 } else { 0 };
+        let right_bool: i32 = if load_i32(right_result.1) != 0 { 1 } else { 0 };
         store_i32(out_value_ptr, right_bool);
         store_i32(out_type_ptr, BUILTIN_TYPE_ID_BOOL);
         store_i32(scratch_top_ptr, saved_top);
@@ -2626,21 +2607,16 @@ fn interpret_constant_expression(
             return -1;
         }
         let value_index: i32 = load_i32(entry_ptr + 4);
-        let value_offset: i32 = load_i32(scratch_top_ptr);
-        let value_ptr: i32 = scratch_base + value_offset;
-        let value_type_ptr: i32 = value_ptr + 4;
-        store_i32(scratch_top_ptr, value_offset + 8);
-        let value_status: i32 = interpret_constant_expression(
+        let value_result: (i32, i32, i32, i32) = const_eval_interpret_expression(
             ast_base,
             value_index,
             scratch_base,
             scratch_top_ptr,
-            value_ptr,
-            value_type_ptr,
             param_values_ptr,
             param_count,
             env_values_count,
         );
+        let value_status: i32 = value_result.0;
         if value_status < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
@@ -2649,11 +2625,11 @@ fn interpret_constant_expression(
             store_i32(scratch_top_ptr, saved_top);
             return value_status;
         }
-        if load_i32(value_type_ptr) != BUILTIN_TYPE_ID_BOOL {
+        if load_i32(value_result.2) != BUILTIN_TYPE_ID_BOOL {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         }
-        let value_bool: i32 = if load_i32(value_ptr) != 0 { 1 } else { 0 };
+        let value_bool: i32 = if load_i32(value_result.1) != 0 { 1 } else { 0 };
         store_i32(out_value_ptr, if value_bool == 0 { 1 } else { 0 });
         store_i32(out_type_ptr, BUILTIN_TYPE_ID_BOOL);
         store_i32(scratch_top_ptr, saved_top);
@@ -2666,21 +2642,16 @@ fn interpret_constant_expression(
             return -1;
         }
         let value_index: i32 = load_i32(entry_ptr + 4);
-        let value_offset: i32 = load_i32(scratch_top_ptr);
-        let value_ptr: i32 = scratch_base + value_offset;
-        let value_type_ptr: i32 = value_ptr + 4;
-        store_i32(scratch_top_ptr, value_offset + 8);
-        let value_status: i32 = interpret_constant_expression(
+        let value_result: (i32, i32, i32, i32) = const_eval_interpret_expression(
             ast_base,
             value_index,
             scratch_base,
             scratch_top_ptr,
-            value_ptr,
-            value_type_ptr,
             param_values_ptr,
             param_count,
             env_values_count,
         );
+        let value_status: i32 = value_result.0;
         if value_status < 0 {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
@@ -2689,12 +2660,12 @@ fn interpret_constant_expression(
             store_i32(scratch_top_ptr, saved_top);
             return value_status;
         }
-        let source_type: i32 = load_i32(value_type_ptr);
+        let source_type: i32 = load_i32(value_result.2);
         if !constant_eval_integer_type_supported(source_type) {
             store_i32(scratch_top_ptr, saved_top);
             return -1;
         }
-        let value: i32 = normalize_integer_value(load_i32(value_ptr), source_type);
+        let value: i32 = normalize_integer_value(load_i32(value_result.1), source_type);
         let cast_value: i32 = normalize_integer_value(value, target_type);
         store_i32(out_value_ptr, cast_value);
         store_i32(out_type_ptr, target_type);
