@@ -4897,6 +4897,9 @@ fn record_type_metadata_failure_with_debug(
     subject: i32,
     extra: i32,
 ) -> i32 {
+    store_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET, context);
+    store_i32(TYPE_METADATA_DEBUG_LAST_SUBJECT_OFFSET, subject);
+    store_i32(TYPE_METADATA_DEBUG_LAST_EXTRA_OFFSET, extra);
     record_type_metadata_debug(out_ptr, context, subject, extra);
     record_type_metadata_failure(out_ptr);
     -1

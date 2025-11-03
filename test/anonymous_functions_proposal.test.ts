@@ -10,7 +10,9 @@ test("anonymous function literals cannot initialize constants yet", async () => 
   const failure = await expectCompileFailure(`
     const HANDLER: fn(i32) -> i32 = fn(x: i32) -> i32 { x };
   `);
-  expect(failure.failure.detail).toBe("type metadata resolution failed");
+  expect(failure.failure.detail).toBe(
+    "/entry.bp:2:11: const initializer type metadata resolution failed for 'HANDLER'",
+  );
 });
 
 test("anonymous function metadata tracks parameter diagnostics", async () => {

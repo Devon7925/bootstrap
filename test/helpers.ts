@@ -684,7 +684,7 @@ export class CompilerInstance {
     const sourceBytes = encoder.encode(source);
     let view = new Uint8Array(this.#memory.buffer);
     if (inputPtr + sourceBytes.length > view.length) {
-      const failure = this.#readFailure(outputPtr, -1);
+      const failure = this.#readFailure(outputPtr, -1, sourceBytes.length);
       throw new Stage1CompileFailure(
         "stage1 compiler memory layout does not leave space for input buffer",
         failure,
@@ -693,7 +693,7 @@ export class CompilerInstance {
 
     const reserved = FUNCTIONS_BASE_OFFSET + STAGE1_MAX_FUNCTIONS * FUNCTION_ENTRY_SIZE;
     if (outputPtr + reserved > view.length) {
-      const failure = this.#readFailure(outputPtr, -1);
+      const failure = this.#readFailure(outputPtr, -1, sourceBytes.length);
       throw new Stage1CompileFailure(
         "stage1 compiler memory layout does not leave space for output buffer",
         failure,
@@ -709,17 +709,17 @@ export class CompilerInstance {
       const result = this.#compile(inputPtr, sourceBytes.length, outputPtr);
       producedLength = coerceToI32(result);
     } catch (cause) {
-      throw this.#failure(outputPtr, -1, cause);
+      throw this.#failure(outputPtr, -1, sourceBytes.length, cause);
     }
 
     view = new Uint8Array(this.#memory.buffer);
 
     if (!Number.isFinite(producedLength)) {
-      throw this.#failure(outputPtr, -1);
+      throw this.#failure(outputPtr, -1, sourceBytes.length);
     }
 
     if (producedLength <= 0) {
-      throw this.#failure(outputPtr, producedLength);
+      throw this.#failure(outputPtr, producedLength, sourceBytes.length);
     }
 
     return view.slice(outputPtr, outputPtr + producedLength);
@@ -737,7 +737,7 @@ export class CompilerInstance {
     const nextOutput = outputPtr + outputStride;
     if (nextInput > this.#memory.buffer.byteLength || nextOutput > this.#memory.buffer.byteLength) {
       // Growing the cursors beyond the memory is unexpected but mirror the Rust harness behaviour.
-      throw this.#failure(outputPtr, -1);
+      throw this.#failure(outputPtr, -1, source.length);
     }
     return wasm;
   }
@@ -786,8 +786,13 @@ export class CompilerInstance {
     };
   }
 
-  #failure(outputPtr: number, producedLength: number, cause?: unknown): Stage1CompileFailure {
-    const failure = this.#readFailure(outputPtr, producedLength);
+  #failure(
+    outputPtr: number,
+    producedLength: number,
+    inputLength: number,
+    cause?: unknown,
+  ): Stage1CompileFailure {
+    const failure = this.#readFailure(outputPtr, producedLength, inputLength);
     const detail = failure.detail ? `, detail=\"${failure.detail}\"` : "";
     return new Stage1CompileFailure(
       `stage1 compilation failed (status ${failure.producedLength}, functions=${failure.functions}, instr_offset=${failure.instructionOffset}, compiled_functions=${failure.compiledFunctions}${detail})`,
@@ -818,26 +823,27 @@ export class CompilerInstance {
 
     const loadModuleSource = (path: string, contents: string) => {
       const normalized = normalizeNewlines(contents);
+      let contentLength = -1;
       try {
         writeModuleString(this.#memory, MODULE_PATH_PTR, path);
-        writeModuleString(this.#memory, MODULE_CONTENT_PTR, normalized);
+        contentLength = writeModuleString(this.#memory, MODULE_CONTENT_PTR, normalized);
       } catch (cause) {
-        throw this.#failure(readModuleStorageTop(this.#memory), -1, cause);
+        throw this.#failure(readModuleStorageTop(this.#memory), -1, contentLength, cause);
       }
 
       let loadResult: number | bigint;
       try {
         loadResult = loadModule(MODULE_PATH_PTR, MODULE_CONTENT_PTR);
       } catch (cause) {
-        throw this.#failure(readModuleStorageTop(this.#memory), -1, cause);
+        throw this.#failure(readModuleStorageTop(this.#memory), -1, contentLength, cause);
       }
 
       const status = coerceToI32(loadResult);
       if (!Number.isFinite(status)) {
-        throw this.#failure(readModuleStorageTop(this.#memory), -1);
+        throw this.#failure(readModuleStorageTop(this.#memory), -1, contentLength);
       }
       if (status < 0) {
-        throw this.#failure(readModuleStorageTop(this.#memory), status);
+        throw this.#failure(readModuleStorageTop(this.#memory), status, contentLength);
       }
     };
 
@@ -852,25 +858,29 @@ export class CompilerInstance {
       const result = compileFromPath(MODULE_PATH_PTR);
       producedLength = coerceToI32(result);
     } catch (cause) {
-      throw this.#failure(readModuleStorageTop(this.#memory), -1, cause);
+      throw this.#failure(readModuleStorageTop(this.#memory), -1, -1, cause);
     }
 
     const outputPtr = readModuleStorageTop(this.#memory);
 
     if (!Number.isFinite(producedLength)) {
-      throw this.#failure(outputPtr, -1);
+      throw this.#failure(outputPtr, -1, -1);
     }
 
     if (producedLength <= 0) {
-      throw this.#failure(outputPtr, producedLength);
+      throw this.#failure(outputPtr, producedLength, -1);
     }
 
     const view = new Uint8Array(this.#memory.buffer);
     return view.slice(outputPtr, outputPtr + producedLength);
   }
 
-  #readFailure(outputPtr: number, producedLength: number): CompileFailureDetails {
-    return describeCompilationFailure(this.#memory, outputPtr, producedLength);
+  #readFailure(
+    outputPtr: number,
+    producedLength: number,
+    inputLength: number,
+  ): CompileFailureDetails {
+    return describeCompilationFailure(this.#memory, outputPtr, producedLength, inputLength);
   }
 }
 
