@@ -540,6 +540,39 @@ fn scratch_module_index(out_ptr: i32) -> i32 {
     load_i32(scratch_module_index_ptr(out_ptr))
 }
 
+fn scratch_type_metadata_debug_context_ptr(out_ptr: i32) -> i32 {
+    out_ptr + SCRATCH_TYPE_METADATA_DEBUG_CONTEXT_OFFSET
+}
+
+fn scratch_type_metadata_debug_subject_ptr(out_ptr: i32) -> i32 {
+    out_ptr + SCRATCH_TYPE_METADATA_DEBUG_SUBJECT_OFFSET
+}
+
+fn scratch_type_metadata_debug_extra_ptr(out_ptr: i32) -> i32 {
+    out_ptr + SCRATCH_TYPE_METADATA_DEBUG_EXTRA_OFFSET
+}
+
+fn scratch_type_metadata_debug_context(out_ptr: i32) -> i32 {
+    if out_ptr <= 0 {
+        return -1;
+    }
+    load_i32(scratch_type_metadata_debug_context_ptr(out_ptr))
+}
+
+fn scratch_type_metadata_debug_subject(out_ptr: i32) -> i32 {
+    if out_ptr <= 0 {
+        return -1;
+    }
+    load_i32(scratch_type_metadata_debug_subject_ptr(out_ptr))
+}
+
+fn scratch_type_metadata_debug_extra(out_ptr: i32) -> i32 {
+    if out_ptr <= 0 {
+        return -1;
+    }
+    load_i32(scratch_type_metadata_debug_extra_ptr(out_ptr))
+}
+
 fn failure_detail_is_empty(out_ptr: i32) -> bool {
     if out_ptr <= 0 {
         return false;
@@ -913,6 +946,219 @@ fn write_failure_detail(
             write_offset = write_offset + 1;
         };
     }
+}
+
+fn write_type_metadata_failure_message(
+    detail_out_ptr: i32,
+    module_base: i32,
+    name_start: i32,
+    name_len: i32,
+) -> bool {
+    if detail_out_ptr <= 0 {
+        return false;
+    }
+    if module_base < 0 {
+        return false;
+    }
+    if name_start < 0 {
+        return false;
+    }
+    if name_len <= 0 {
+        return false;
+    }
+    let prefix: [u8; 55] = "const initializer type metadata resolution failed for '";
+    let path_ptr: i32 = scratch_failure_path_ptr(detail_out_ptr);
+    let path_len: i32 = scratch_failure_path_len(detail_out_ptr);
+    let line: i32 = scratch_failure_line(detail_out_ptr);
+    let column: i32 = scratch_failure_column(detail_out_ptr);
+    let mut offset: i32 = 0;
+    let include_location: bool = path_ptr > 0 && path_len > 0 && line > 0 && column > 0;
+    if include_location {
+        let mut path_idx: i32 = 0;
+        while path_idx < path_len {
+            if offset >= FAILURE_DETAIL_CAPACITY {
+                return false;
+            }
+            let byte: i32 = load_u8(path_ptr + path_idx);
+            store_u8(detail_out_ptr + offset, byte);
+            offset = offset + 1;
+            path_idx = path_idx + 1;
+        };
+    }
+    let suffix_result: (i32, bool) = write_failure_detail_suffix(
+        detail_out_ptr,
+        offset,
+        include_location,
+        line,
+        column,
+        55,
+        prefix,
+    );
+    offset = suffix_result.0;
+    if suffix_result.1 {
+        return false;
+    }
+    let mut name_idx: i32 = 0;
+    while name_idx < name_len {
+        if offset >= FAILURE_DETAIL_CAPACITY {
+            return false;
+        }
+        let byte: i32 = load_u8(module_base + name_start + name_idx);
+        store_u8(detail_out_ptr + offset, byte);
+        offset = offset + 1;
+        name_idx = name_idx + 1;
+    };
+    if offset >= FAILURE_DETAIL_CAPACITY {
+        return false;
+    }
+    store_u8(detail_out_ptr + offset, '\'');
+    offset = offset + 1;
+    while offset < FAILURE_DETAIL_CAPACITY {
+        store_u8(detail_out_ptr + offset, 0);
+        offset = offset + 1;
+    };
+    true
+}
+
+fn infer_type_metadata_failure(ast_base: i32, constant_count: i32) -> (i32, i32, i32) {
+    if ast_base <= 0 {
+        return (-1, -1, -1);
+    }
+    if constant_count <= 0 {
+        return (-1, -1, -1);
+    }
+    let mut index: i32 = 0;
+    loop {
+        if index >= constant_count {
+            break;
+        }
+        let entry_ptr: i32 = ast_constant_entry_ptr(ast_base, index);
+        if entry_ptr <= 0 {
+            index = index + 1;
+            continue;
+        }
+        let eval_state: i32 = ast_constant_entry_eval_state(entry_ptr);
+        if eval_state != AST_CONSTANT_EVAL_STATE_EVALUATED {
+            let type_id: i32 = ast_constant_entry_type(entry_ptr);
+            let module_index: i32 = ast_constant_entry_module_index(entry_ptr);
+            return (index, type_id, module_index);
+        }
+        index = index + 1;
+    };
+    (-1, -1, -1)
+}
+
+fn write_type_metadata_failure_detail(out_ptr: i32) -> bool {
+    if out_ptr <= 0 {
+        return false;
+    }
+    let initial_module_index: i32 = scratch_module_index(out_ptr);
+    let initial_module_base: i32 = scratch_module_base(out_ptr);
+    let initial_module_len: i32 = scratch_module_len(out_ptr);
+    let resolved: (i32, i32, i32) = resolve_failure_module_context(
+        out_ptr,
+        initial_module_index,
+        initial_module_base,
+        initial_module_len,
+    );
+    let mut effective_index: i32 = resolved.0;
+    let mut effective_base: i32 = resolved.1;
+    let mut effective_len: i32 = resolved.2;
+    if effective_base < 0 {
+        return false;
+    }
+    if effective_len <= 0 {
+        return false;
+    }
+    let ast_base: i32 = ast_program_base(out_ptr, effective_len);
+    let constants_count_ptr: i32 = ast_constants_count_ptr(ast_base);
+    if constants_count_ptr <= 0 {
+        return false;
+    }
+    let constant_count: i32 = load_i32(constants_count_ptr);
+    if constant_count <= 0 {
+        return false;
+    }
+    let mut const_index: i32 = -1;
+    let scratch_context: i32 = scratch_type_metadata_debug_context(out_ptr);
+    if scratch_context == 300 {
+        const_index = scratch_type_metadata_debug_subject(out_ptr);
+    }
+    if const_index < 0 {
+        let last_context: i32 = load_i32(TYPE_METADATA_DEBUG_LAST_CONTEXT_OFFSET);
+        if last_context == 300 {
+            const_index = load_i32(TYPE_METADATA_DEBUG_LAST_SUBJECT_OFFSET);
+        }
+    }
+    if const_index < 0 {
+        let inferred: (i32, i32, i32) = infer_type_metadata_failure(ast_base, constant_count);
+        if inferred.0 >= 0 {
+            const_index = inferred.0;
+            if inferred.2 >= 0 {
+                effective_index = inferred.2;
+            }
+        }
+    }
+    if const_index < 0 {
+        return false;
+    }
+    if const_index >= constant_count {
+        return false;
+    }
+    let const_entry_ptr: i32 = ast_constant_entry_ptr(ast_base, const_index);
+    if const_entry_ptr <= 0 {
+        return false;
+    }
+    let name_start: i32 = ast_constant_entry_name_start(const_entry_ptr);
+    let mut name_len: i32 = ast_constant_entry_name_len(const_entry_ptr);
+    if name_start < 0 || name_len <= 0 {
+        return false;
+    }
+    let entry_module_index: i32 = ast_constant_entry_module_index(const_entry_ptr);
+    if entry_module_index >= 0 {
+        effective_index = entry_module_index;
+        let entry_base: i32 = module_entry_content(entry_module_index);
+        let entry_len: i32 = module_entry_content_len(entry_module_index);
+        if entry_base > 0 && entry_len > 0 {
+            effective_base = entry_base;
+            effective_len = entry_len;
+        }
+    }
+    if effective_base < 0 || effective_len <= 0 {
+        return false;
+    }
+    if name_start >= effective_len {
+        return false;
+    }
+    if name_start + name_len > effective_len {
+        name_len = effective_len - name_start;
+    }
+    if name_len <= 0 {
+        return false;
+    }
+    let location_offset: i32 = if name_start < 0 {
+        0
+    } else if name_start > effective_len {
+        effective_len
+    } else {
+        name_start
+    };
+    let message_len: i32 = 55 + name_len + 1;
+    if message_len <= 0 {
+        return false;
+    }
+    let prepared: bool = prepare_module_prefixed_failure_detail(
+        out_ptr,
+        effective_index,
+        effective_base,
+        effective_len,
+        location_offset,
+        message_len,
+    );
+    if !prepared {
+        return false;
+    }
+    write_type_metadata_failure_message(out_ptr, effective_base, name_start, name_len)
 }
 
 fn ast_output_reserve(input_len: i32) -> i32 {
@@ -5005,9 +5251,11 @@ fn record_type_metadata_failure(out_ptr: i32) {
     let current: i32 = load_i32(failure_count_ptr);
     store_i32(failure_count_ptr, current + 1);
     if out_ptr > 0 {
-        if load_u8(out_ptr) == 0 {
-            let message: [u8; 31] = "type metadata resolution failed";
-            write_failure_detail(out_ptr, 31, message);
+        if failure_detail_is_empty(out_ptr) {
+            if !write_type_metadata_failure_detail(out_ptr) {
+                let message: [u8; 31] = "type metadata resolution failed";
+                write_failure_detail(out_ptr, 31, message);
+            }
         }
     }
 }
